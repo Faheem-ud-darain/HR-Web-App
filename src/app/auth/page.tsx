@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useRouter } from 'next/navigation';
 import { hrActions, useProfiles } from '@/lib/hrData';
-import { setSession, generateSessionToken, getDeviceLabel } from '@/lib/session';
+import { setSession, generateSessionToken, getDeviceLabel, getRememberedEmail, setRememberedEmail, clearRememberedEmail } from '@/lib/session';
 import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
 
 export default function AuthPage() {
@@ -31,6 +31,15 @@ export default function AuthPage() {
   const [pendingDashRoute, setPendingDashRoute] = useState<string | null>(null);
   const router = useRouter();
   const { refetch: refetchProfiles } = useProfiles();
+
+  // Pre-fill the email field from a previous "Remember me" login — this is
+  // the only thing that's actually remembered into the form itself; the
+  // password is never stored anywhere (see the comment in lib/session.ts).
+  // Survives an explicit logout, unlike the full session.
+  useEffect(() => {
+    const remembered = getRememberedEmail();
+    if (remembered) setEmail(remembered);
+  }, []);
 
   // Shown once after (dashboard)/layout.tsx force-logs-out a session it
   // detected was superseded by a login elsewhere (see the single-session
@@ -107,6 +116,8 @@ export default function AuthPage() {
 
         const sessionToken = generateSessionToken();
         setSession(cleanEmail, role, rememberMe, sessionToken);
+        if (rememberMe) setRememberedEmail(cleanEmail);
+        else clearRememberedEmail();
         if (role !== 'admin' && role !== 'hr') {
           await hrActions.claimUserSession(cleanEmail, sessionToken, getDeviceLabel());
         }

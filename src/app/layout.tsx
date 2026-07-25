@@ -3,6 +3,7 @@ import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ToastNotification } from "@/components/ui/ToastNotification";
 import { PushWebScript } from "@/components/PushWebScript";
+import { SplashScreenOverlay } from "@/components/SplashScreenOverlay";
 import Providers from "./providers";
 
 // Display font — headings, page titles, stat numbers. Space Grotesk's
@@ -51,6 +52,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
+        <SplashScreenOverlay />
         <PushWebScript />
         <Providers>
           <ToastNotification />

@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
 import { Profile, hrActions, useProfiles } from '@/lib/hrData';
-import { getSessionEmail, getSessionRole, getSessionToken, clearSession } from '@/lib/session';
+import { getSessionEmail, getSessionRole, getSessionToken, clearSession, hydrateSessionFromNativeStorage } from '@/lib/session';
 import { initPush } from '@/lib/push';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -119,15 +119,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [pathname, profile, isProfilesLoading, router]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // On native, restores localStorage from durable Preferences storage
+      // first if the WebView's own copy went missing — see the big comment
+      // in session.ts for why that can happen even with "Remember me"
+      // checked. No-op on web, and a no-op here on every load after the
+      // first (it only does anything when localStorage is actually empty).
+      await hydrateSessionFromNativeStorage();
+      if (cancelled) return;
+
       const savedRole = getSessionRole() as 'admin' | 'hr' | 'employee' | null;
       const savedEmail = getSessionEmail();
-      
+
       if (!savedRole || !savedEmail) {
         router.push('/auth');
       } else {
         setRole(savedRole);
         setEmail(savedEmail);
-        
+
         if (!isProfilesLoading && allProfiles) {
           setDbReady(true);
           const userProfile = allProfiles.find(e => e && e.email && e.email.toLowerCase() === savedEmail.toLowerCase()) as any;
@@ -143,6 +153,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           }
         }
       }
+    })();
+    return () => { cancelled = true; };
   }, [router, allProfiles, isProfilesLoading]);
 
   // Register this device/browser for push notifications and link it to the
