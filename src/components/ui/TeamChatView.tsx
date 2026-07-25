@@ -3,9 +3,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Team, Profile, Message, useMessages, useTeamDocuments, hrActions, displayName } from '@/lib/hrData';
 import { Avatar } from './Avatar';
+import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
+import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -54,6 +56,32 @@ function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onC
         </div>
       ))}
     </div>
+  );
+}
+
+// Tiny "announcement styled" read receipt for a single message — a small
+// overlapping avatar facepile plus a count, tucked right under the bubble.
+// Renders nothing until at least one other person has actually viewed the
+// message (no dashed-placeholder state here, unlike the Announcements
+// panel's version — that would put a "0 viewed" line under every single
+// chat message, which is exactly the UI clutter this was asked to avoid).
+function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; onOpen: () => void }) {
+  if (viewers.length === 0) return null;
+  return (
+    <button
+      onClick={onOpen}
+      className="flex items-center gap-1 mt-1 group"
+      title="See who has viewed this message"
+    >
+      <div className="flex -space-x-1.5">
+        {viewers.slice(0, 3).map(v => (
+          <Avatar key={v.id} src={v.profilePicture} name={v.fullName} size={13} className="ring-1 ring-white" />
+        ))}
+      </div>
+      <span className="text-[8px] font-bold text-slate-400 group-hover:text-orange-600 transition-colors">
+        Seen{viewers.length > 3 ? ` by ${viewers.length}` : ''}
+      </span>
+    </button>
   );
 }
 
@@ -202,6 +230,12 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
   // instead, same as Tickets.
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState<string | undefined>(undefined);
+  // Small "announcement styled" read receipts — see hrActions.getMessageReadMap
+  // / markMessagesSeen in hrData.ts. Kept deliberately tiny (see the facepile
+  // JSX below) so it reads as a subtle detail under your own messages, not a
+  // second UI competing with the chat itself.
+  const [messageReadMap, setMessageReadMap] = useState<Record<string, string[]>>({});
+  const [viewersMsgId, setViewersMsgId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -233,6 +267,29 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length, activeTeamId]);
+
+  // Fetch the read-receipt map for whatever's currently on screen, and mark
+  // it as seen by the current viewer — same "seen on arrival" pattern as
+  // Announcements, just scoped to one channel's currently-loaded messages
+  // rather than the whole list.
+  useEffect(() => {
+    if (!activeTeamId || messages.length === 0 || !currentUserEmail) return;
+    hrActions.getMessageReadMap().then(setMessageReadMap);
+    hrActions.markMessagesSeen(messages, currentUserEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTeamId, messages.length, currentUserEmail]);
+
+  const viewersForMessage = (msgId: string): Profile[] => {
+    const emails = (messageReadMap[msgId] || [])
+      .map(e => e.toLowerCase())
+      .filter(e => e !== currentUserEmail.toLowerCase());
+    return allProfiles.filter(p => emails.includes(normEmail(p.email)));
+  };
+
+  const openMessageViewers = (msgId: string) => {
+    setViewersMsgId(msgId);
+    hrActions.getMessageReadMap().then(setMessageReadMap);
+  };
 
   // Reset search/filter state when switching teams — a filter set up for
   // one channel isn't necessarily meaningful in another.
@@ -467,7 +524,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
         if (p.email.toLowerCase() === currentUserEmail.toLowerCase()) return;
         const senderLabelForRecipient = senderProfile ? displayName(senderProfile, p.role) : currentUserEmail;
         hrActions
-          .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`)
+          .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`, 'chat_mention')
           .catch(err => console.error('Mention notification failed:', err));
       });
     } catch (err) {
@@ -687,6 +744,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
                       </a>
                     )
                   )}
+                  {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
                 </div>
               );
             }
@@ -737,6 +795,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
                       )
                     )}
                   </div>
+                  {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
                 </div>
               </div>
             );
@@ -864,7 +923,11 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
                       setDocTag(null);
                       return;
                     }
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    // Same reasoning as TicketsView's reply box: on the native
+                    // mobile app the keyboard's Enter/Return key should only
+                    // ever insert a newline (there's no Shift key on a phone),
+                    // so gate the "Enter sends" shortcut to desktop web only.
+                    if (e.key === 'Enter' && !e.shiftKey && !isNativeMobileApp()) {
                       e.preventDefault();
                       handleSend();
                     }
@@ -895,6 +958,28 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
         downloadName={lightboxName}
         onClose={() => { setLightboxSrc(null); setLightboxName(undefined); }}
       />
+
+      {/* Read receipt viewers modal — same "viewed by" pattern as
+          Announcements, scoped to a single message. */}
+      <Modal
+        isOpen={!!viewersMsgId}
+        onClose={() => setViewersMsgId(null)}
+        title={viewersMsgId ? `Seen by (${viewersForMessage(viewersMsgId).length})` : 'Seen by'}
+      >
+        {viewersMsgId && (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {viewersForMessage(viewersMsgId).map(v => (
+              <div key={v.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+                <Avatar src={v.profilePicture} name={displayName(v, currentUserRole)} size={36} />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900 truncate">{displayName(v, currentUserRole)}</p>
+                  <p className="text-xs text-slate-400 truncate">{v.email}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

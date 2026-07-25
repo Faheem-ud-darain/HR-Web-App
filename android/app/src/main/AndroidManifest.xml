@@ -15,6 +15,7 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
 
             <intent-filter>
@@ -33,6 +34,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- OneSignal push notification branding — see
+             Notes/PUSH_NOTIFICATIONS_SETUP.md. The small icon itself
+             (ic_stat_onesignal_default.png, all dpi buckets) is a separate
+             set of image files that must exist under res/drawable-*dpi/;
+             this accent color is what tints that icon + the notification's
+             app-name text in the notification shade. FFEA580C = brand
+             orange (Tailwind orange-600, #ea580c) in ARGB. -->
+        <meta-data android:name="com.onesignal.NotificationAccentColor.DEFAULT" android:value="FFEA580C" />
     </application>
 
     <!-- Permissions -->

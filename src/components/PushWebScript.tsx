@@ -9,13 +9,13 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { Capacitor } from '@capacitor/core';
-import { ONESIGNAL_APP_ID } from '@/lib/push';
+import { isPushConfigured } from '@/lib/push';
 
 export function PushWebScript() {
   const [showScript, setShowScript] = useState(false);
 
   useEffect(() => {
-    setShowScript(!Capacitor.isNativePlatform() && !!ONESIGNAL_APP_ID && ONESIGNAL_APP_ID !== 'YOUR_ONESIGNAL_APP_ID');
+    setShowScript(!Capacitor.isNativePlatform() && isPushConfigured());
   }, []);
 
   if (!showScript) return null;

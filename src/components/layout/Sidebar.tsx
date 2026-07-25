@@ -208,11 +208,12 @@ export function Sidebar({ role }: SidebarProps) {
   const mobileQuickLinks = getMobileQuickLinks();
   const mobileSideLinks = links.filter(link => !mobileQuickLinks.some(quick => quick.href === link.href));
   const isChatScreen = pathname.endsWith('/chat') || pathname.endsWith('/team-chats');
-  // Support Tickets has its own bottom-anchored reply composer (like Team
-  // Chat's), so the floating pill nav sitting on top of it is the same
-  // class of overlap problem — hide it there too, not just on chat screens.
-  const isTicketsScreen = pathname.endsWith('/tickets');
-  const hideBottomNav = isChatScreen || isTicketsScreen;
+  // Support Tickets is a list + detail view on the SAME route (no separate
+  // URL for an open ticket) — the list should behave like every other
+  // screen and show the nav; only an actually-open ticket (a full-screen
+  // overlay on mobile) should hide it, which TicketsView now handles
+  // itself via pushModal/popModal, same as any other modal.
+  const hideBottomNav = isChatScreen;
   // Belt-and-suspenders alongside the page-enter containing-block fix: hides
   // the floating pill nav whenever any modal (shared Modal.tsx, or a
   // hand-rolled one like UserProfileModal/the screenshot lightbox) is open,

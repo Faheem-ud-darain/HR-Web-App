@@ -281,6 +281,22 @@ type NotificationClearedMap = Record<string, string[]>;
 // seen it) — kept as its own KV key since hr_announcements is a separate
 // collection from hr_notifications, not a broadcast-notification row.
 type AnnouncementReadMap = Record<string, string[]>;
+// The 4 notification categories an employee can actually toggle on/off in
+// their Settings (see NotificationPreferencesCard.tsx) — 'internal' is a
+// 5th, non-configurable bucket for lower-signal ops notifications that
+// only ever show in the in-app bell (see the comment on addNotification).
+export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'internal';
+export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal'>, boolean>;
+const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true };
+
+// Read receipts for regular Team Chat messages — same shape again (message
+// id -> emails who've viewed it). Kept as its own KV key/blob rather than
+// reusing hr_announcement_reads_v1 since messages are a much higher-volume,
+// ever-growing collection; if this ever becomes large enough to matter,
+// pruning entries for messages older than some retention window (mirroring
+// hrActions.checkScreenshotRetention's pattern) would be the next step —
+// not needed yet at this app's scale.
+type MessageReadMap = Record<string, string[]>;
 
 export interface CareerPosition {
   id: string; title: string; department: string; location: string; description: string; requirements: string[];
@@ -1247,12 +1263,20 @@ export const hrActions = {
     pbUpdate('hr_leaves', id, { status }),
 
   // ── Notifications ─────────────────────────────────────────────────────
-  addNotification: async (email: string, role: string, message: string): Promise<void> => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('newPushNotification', { detail: { recipientEmail: email, recipientRole: role, message } }));
-    }
+  // `category` drives real push notifications (not just the in-app bell):
+  // a PocketBase server-side hook (see pb_hooks/push_notifications.pb.js)
+  // watches every new hr_notifications row, and if it has one of the 4
+  // pushable categories below AND the recipient hasn't turned that category
+  // off in their notification settings, it sends a real OneSignal push.
+  // Omitting `category` (or passing 'internal') means this notification
+  // only ever shows in the in-app bell, never as a push — used for the
+  // many lower-signal/internal-ops notifications (geofencing check-ins,
+  // screenshot retention, new-employee-registered, etc.) that aren't one
+  // of the categories employees can actually configure.
+  addNotification: async (email: string, role: string, message: string, category?: NotificationCategory): Promise<void> => {
     await pbCreate('hr_notifications', {
       recipient_email: email, recipient_role: role, message, read: false,
+      category: category || 'internal',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
   },
@@ -1292,6 +1316,23 @@ export const hrActions = {
       if (!clearers.map(e => e.toLowerCase()).includes(emailLower)) { clearedMap[n.id] = [...clearers, email]; changed = true; }
     });
     if (changed) await pbSetKV('hr_notification_cleared_prod_v1', clearedMap);
+  },
+
+  // ── Push notification preferences (hr_notification_prefs_v1) ───────────
+  // Per-employee opt-in/out for each pushable category — read by the
+  // PocketBase server-side hooks before sending a real OneSignal push (the
+  // in-app bell notification always still gets created regardless; this
+  // only controls whether a push is also sent for it). Missing categories
+  // for a given email default to "on" (opt-out model), both here and in
+  // the hook, so someone who's never opened Settings still gets pushes.
+  getNotificationPrefs: async (email: string): Promise<NotificationPrefs> => {
+    const all = ((await pbGetKV('hr_notification_prefs_v1')) as Record<string, Partial<NotificationPrefs>>) || {};
+    return { ...DEFAULT_NOTIFICATION_PREFS, ...(all[email.toLowerCase()] || {}) };
+  },
+  updateNotificationPrefs: async (email: string, prefs: NotificationPrefs): Promise<void> => {
+    const all = ((await pbGetKV('hr_notification_prefs_v1')) as Record<string, Partial<NotificationPrefs>>) || {};
+    all[email.toLowerCase()] = prefs;
+    await pbSetKV('hr_notification_prefs_v1', all);
   },
 
   // ── Warehouses ────────────────────────────────────────────────────────
@@ -1347,7 +1388,7 @@ export const hrActions = {
       title: task.title, description: task.description, assigned_to: task.assignedTo, assigned_email: task.assignedEmail,
       team: task.team, due_date: task.dueDate, priority: task.priority, status: task.status, created_by: task.createdBy,
     });
-    await hrActions.addNotification(task.assignedEmail, 'employee', `New task assigned: "${task.title}" due ${task.dueDate}.`);
+    await hrActions.addNotification(task.assignedEmail, 'employee', `New task assigned: "${task.title}" due ${task.dueDate}.`, 'leave_task');
   },
   updateTaskStatus: (id: string, status: Task['status']) => pbUpdate('hr_tasks', id, { status }),
   deleteTask: (id: string) => pbDelete('hr_tasks', id),
@@ -1394,25 +1435,25 @@ export const hrActions = {
     });
     // Admin also has a Tickets queue (admin/tickets) — this previously only
     // notified 'hr', same gap as leave requests.
-    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`);
-    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`);
+    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket');
+    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket');
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
     const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
     await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
     if (reply.senderRole === 'hr' || reply.senderRole === 'admin') {
-      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`);
+      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`, 'ticket');
     } else {
-      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`);
-      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`);
+      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket');
+      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket');
     }
   },
   updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
     await pbUpdate('hr_tickets', ticket.id, { status });
-    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`);
-    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`);
-    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`);
+    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket');
+    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket');
+    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket');
     // Starts/clears the 15-day attachment-deletion timer (see
     // checkTicketAttachmentRetention below) — hr_tickets has no closedAt
     // column of its own, so this is tracked in the KV store the same way
@@ -1503,6 +1544,31 @@ export const hrActions = {
         is_announcement: !!isAnnouncement,
       });
     }
+  },
+
+  // ── Team Chat read receipts (hr_message_reads_v1) ──────────────────────
+  // Small, "announcement styled" read receipts for regular chat messages —
+  // same read-tracking pattern as getAnnouncementReadMap/markAnnouncementsSeen
+  // above, scoped to whichever messages are currently loaded (i.e. the
+  // channel someone has open), not the whole message history at once.
+  getMessageReadMap: (): Promise<MessageReadMap> => pbGetKV('hr_message_reads_v1').then(v => v || {}),
+  isMessageRead: (msg: Message, email: string, readMap: MessageReadMap): boolean =>
+    (readMap[msg.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
+  // Called whenever someone has a channel's messages on screen — marks every
+  // currently-loaded message as seen by them (own messages included is
+  // harmless; the UI never shows a viewer facepile that includes the sender
+  // themselves). Deliberately doesn't return the updated map for the same
+  // "seen-on-arrival, not seen-on-render" reasoning as markAnnouncementsSeen.
+  markMessagesSeen: async (messages: Message[], email: string): Promise<void> => {
+    if (!email || messages.length === 0) return;
+    const emailLower = email.toLowerCase();
+    const readMap = ((await pbGetKV('hr_message_reads_v1')) as MessageReadMap) || {};
+    let changed = false;
+    messages.forEach(m => {
+      const readers = readMap[m.id] || [];
+      if (!readers.map(e => e.toLowerCase()).includes(emailLower)) { readMap[m.id] = [...readers, email]; changed = true; }
+    });
+    if (changed) await pbSetKV('hr_message_reads_v1', readMap);
   },
 
   // ── Team Documents (hr_team_documents — see migration_data/create_team_documents_collection.py) ──

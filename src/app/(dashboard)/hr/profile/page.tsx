@@ -7,6 +7,7 @@ import { Profile, useProfiles, hrActions } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
+import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Camera
 } from 'lucide-react';
@@ -225,6 +226,9 @@ export default function HRProfilePage() {
           </button>
         </div>
       </Card>
+
+      {/* Push Notification Preferences */}
+      {profile?.email && <NotificationPreferencesCard email={profile.email} />}
 
       {/* Password Reset Modal */}
       <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">

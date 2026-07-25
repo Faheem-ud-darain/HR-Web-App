@@ -10,6 +10,8 @@ import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE
 import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
+import { pushModal, popModal } from '@/lib/modalStack';
+import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 // Converts an uploaded attachment File to a storable data URL: images are
 // compressed to WebP (max 3 MB), PDFs are stored as-is after a size check
@@ -56,6 +58,20 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [inspectEmployee, setInspectEmployee] = useState<Profile | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState<string | undefined>(undefined);
+
+  // On mobile, an open ticket becomes a fixed full-screen overlay (see the
+  // `selectedTicket ? '... fixed inset-x-0 top-0 bottom-[64px] ...'` panel
+  // below) — visually it IS a full-screen modal, so it should hide the
+  // floating bottom pill nav the same way any other modal does (via
+  // modalStack), rather than hiding the nav for the whole /tickets route
+  // (which incorrectly hid it on the ticket list too, before any ticket
+  // was open).
+  useEffect(() => {
+    if (selectedTicket) {
+      pushModal();
+      return () => popModal();
+    }
+  }, [!!selectedTicket]);
 
   const isPrivileged = role === 'hr' || role === 'admin';
 
@@ -600,7 +616,14 @@ export function TicketsView({ role }: TicketsViewProps) {
                           value={replyMsg}
                           onChange={e => setReplyMsg(e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
+                            // On the native mobile app, the on-screen keyboard's
+                            // Enter/Return key should always insert a line break —
+                            // there's no Shift key on a phone to combine with, so
+                            // treating Enter as "send" there means every attempt
+                            // at a multi-line reply sends the message prematurely.
+                            // Desktop web keeps Enter-to-send / Shift+Enter-for-
+                            // newline, since a physical keyboard has both keys.
+                            if (e.key === 'Enter' && !e.shiftKey && !isNativeMobileApp()) {
                               e.preventDefault();
                               sendReply();
                             }

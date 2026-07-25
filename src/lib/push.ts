@@ -6,8 +6,10 @@
 //
 // Setup (one-time, done in your browser — not from this file):
 //   1. Create a free OneSignal account + app at https://onesignal.com
-//   2. Add an Android platform (needs your Firebase project's Server Key +
-//      Sender ID — added to the OneSignal dashboard, not to this codebase).
+//   2. Add an Android platform — needs your Firebase project's service
+//      account JSON key (Firebase console → Project settings → Service
+//      accounts → Generate new private key), uploaded to the OneSignal
+//      dashboard, not added to this codebase.
 //   3. Add an iOS platform (needs an Apple Push Notification key (.p8) from
 //      your Apple Developer account — also added to the OneSignal dashboard).
 //   4. Add a Web Push platform if you want browser notifications too.
@@ -25,9 +27,17 @@
 import { Capacitor } from '@capacitor/core';
 
 // TODO: replace with your real OneSignal App ID (Settings → Keys & IDs).
-export const ONESIGNAL_APP_ID = 'YOUR_ONESIGNAL_APP_ID';
+// Typed explicitly as `string` (not left as a literal type) — once a real
+// ID is filled in here, TypeScript would otherwise narrow it to that exact
+// literal and flag the `!== 'YOUR_ONESIGNAL_APP_ID'` check below as an
+// "always false" comparison, failing the build (exactly what happened the
+// first time this was wired up).
+export const ONESIGNAL_APP_ID: string = '429b20a0-defd-4807-badd-460ec334cf35';
 
-const isConfigured = () => !!ONESIGNAL_APP_ID && ONESIGNAL_APP_ID !== 'YOUR_ONESIGNAL_APP_ID';
+// Exported (not just used internally) so PushWebScript.tsx can check this
+// too, instead of re-doing the same comparison itself — single source of
+// truth for "is push actually configured".
+export const isPushConfigured = (): boolean => !!ONESIGNAL_APP_ID && ONESIGNAL_APP_ID !== 'YOUR_ONESIGNAL_APP_ID';
 
 let initStarted = false;
 
@@ -43,7 +53,7 @@ let initStarted = false;
  */
 export async function initPush(externalId?: string): Promise<void> {
   if (typeof window === 'undefined') return;
-  if (!isConfigured()) {
+  if (!isPushConfigured()) {
     console.warn('[push] OneSignal App ID not set yet — see src/lib/push.ts. Skipping push init.');
     return;
   }
@@ -117,7 +127,7 @@ async function loginPush(externalId: string): Promise<void> {
  * subscription after they sign out.
  */
 export async function logoutPush(): Promise<void> {
-  if (typeof window === 'undefined' || !isConfigured()) return;
+  if (typeof window === 'undefined' || !isPushConfigured()) return;
   try {
     if (Capacitor.isNativePlatform()) {
       const { default: OneSignal } = await import('@onesignal/capacitor-plugin');
