@@ -30,13 +30,17 @@ onRecordAfterCreateRequest((e) => {
 
     const category = e.record.get("category");
     const pushableCategories = ["ticket", "leave_task", "chat_mention"];
+    console.log("[push_notifications] fired, category=", category);
     if (pushableCategories.indexOf(category) === -1) {
+      console.log("[push_notifications] category not pushable, skipping");
       return;
     }
 
     const recipientEmail = e.record.get("recipient_email");
     const recipientRole = e.record.get("recipient_role");
     const message = e.record.get("message");
+    const pushTitle = e.record.get("push_title");
+    const senderEmail = e.record.get("sender_email");
 
     // Resolve the actual employee email(s) this notification is addressed
     // to — either a single specific person, or every profile with a given
@@ -56,7 +60,9 @@ onRecordAfterCreateRequest((e) => {
       );
       emails = profiles.map((p) => p.get("email")).filter(Boolean);
     }
+    console.log("[push_notifications] resolved recipient emails=", JSON.stringify(emails));
     if (emails.length === 0) {
+      console.log("[push_notifications] no recipient emails resolved, skipping");
       return;
     }
 
@@ -76,9 +82,40 @@ onRecordAfterCreateRequest((e) => {
       const p = prefsMap[email.toLowerCase()];
       return !p || p[category] !== false;
     });
+    console.log("[push_notifications] prefsMap=", JSON.stringify(prefsMap), "allowed=", JSON.stringify(allowed));
 
     if (allowed.length > 0) {
-      onesignal.sendPush(allowed, "Delcargo Internal", message);
+      // WhatsApp-style title: prefer the contextual title the client sent
+      // (ticket subject, Team Chat sender's name, etc. — see the
+      // pushTitle/senderEmail comment on hrActions.addNotification in
+      // hrData.ts), falling back to a generic per-category label if it's
+      // missing (e.g. notifications created before this field existed, or
+      // system actions with no natural "contact").
+      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat" };
+      const title = pushTitle || fallbackTitles[category] || "Delcargo Internal";
+
+      // Resolve the sender's profile picture (if we have their email) to
+      // show as the Android large icon — the WhatsApp-style avatar. Best
+      // effort: a missing/failed lookup just means no avatar, never blocks
+      // the push itself. When there's no real "contact" (system/workflow
+      // notifications like leave decisions or ticket status changes, where
+      // showing a specific person's photo isn't appropriate), fall back to
+      // the app's own logo instead of leaving it blank — that's what was
+      // rendering as a plain grey bell icon before.
+      const APP_LOGO_URL = "https://delcargo-io.vercel.app/AppIcon.png";
+      let largeIcon = APP_LOGO_URL;
+      if (senderEmail) {
+        try {
+          const senderProfile = $app.dao().findFirstRecordByData("hr_profiles", "email", senderEmail);
+          largeIcon = senderProfile.get("profile_picture") || APP_LOGO_URL;
+        } catch (err) {
+          largeIcon = APP_LOGO_URL;
+        }
+      }
+
+      onesignal.sendPush(allowed, title, message, { largeIcon: largeIcon });
+    } else {
+      console.log("[push_notifications] everyone filtered out by prefs, not sending");
     }
   } catch (err) {
     // A hook error here must never break the actual notification/record

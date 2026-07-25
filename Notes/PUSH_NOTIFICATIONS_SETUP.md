@@ -120,13 +120,52 @@ In OneSignal: **Settings → Keys & IDs** — copy the **REST API Key** (this
 is different from the App ID you already pasted into `push.ts`; don't mix
 them up).
 
-### 6b. Add a `category` field to hr_notifications
+### 6b. Add fields to hr_notifications
 
 Open `https://pb.delcargo.us/_/` (PocketBase Admin UI) → **Collections** →
-**hr_notifications** → edit the collection's fields → **+ New field** →
-name it `category`, type **Plain text**, not required. Save.
+**hr_notifications** → edit the collection's fields → **+ New field** for
+each of these three (all **Plain text**, none required):
 
-### 6c. Set the two environment variables on the droplet
+- `category` — drives whether a push is sent at all (see step 6e).
+- `push_title` — the WhatsApp-style bold title (a ticket's subject, the
+  Team Chat sender's name, "Leave Approved", etc.) — see step 6c below.
+- `sender_email` — the "contact" this notification is from, used to look
+  up their profile picture as the Android large icon/avatar.
+
+Save.
+
+### 6c. WhatsApp-style title + avatar (already implemented)
+
+As of this update, notifications no longer show the generic app name
+("Delcargo Internal") as the bold title — Android already shows the app's
+own name/icon in a separate row above every notification automatically,
+so repeating it was redundant. Instead, the title now shows whatever's
+contextually relevant: a ticket's subject line, the Team Chat sender's
+name, "Leave Approved"/"Leave Rejected", etc. (this logic lives in
+`hrData.ts`'s `addNotification` calls and `pb_hooks/push_notifications.pb.js`).
+Where the client passes a sender's email along, the hook looks up their
+`hr_profiles` picture and sends it as the notification's large icon
+(Android only — OneSignal's `large_icon` field). Nothing extra to
+configure here beyond the fields in 6b — this is automatic once the app
+is rebuilt and the fields exist.
+
+**Lock-screen content hiding**: I checked OneSignal's current REST API
+reference (documentation.onesignal.com/reference/push-notification) and
+there is no simple "hide on lock screen" field like `android_visibility`
+in it — I want to flag that clearly rather than guess. The real
+mechanism is an **Android Notification Category (channel)**: in the
+OneSignal dashboard, go to **Settings → Android Notification Categories**,
+create one (e.g. "Private Content") with its **Visibility** set to
+**Private**, and copy its UUID. If you want this, tell me the UUID (or
+create it and share it) and I'll wire `android_channel_id` through the
+hooks so every push uses that channel — I've already added the
+`channelId` option to `pb_hooks/onesignal_helper.js`'s `sendPush`
+function, it just isn't being passed yet since there's no channel UUID
+to put there. You should verify this Visibility behavior against
+OneSignal's dashboard directly, since I'm relying on a documented
+Android-channel concept rather than something I could test myself here.
+
+### 6d. Set the two environment variables on the droplet
 
 In the DigitalOcean web console (same terminal you used for the HTTPS
 setup):
@@ -150,7 +189,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart pocketbase
 ```
 
-### 6a½. PocketBase version matters
+### 6d½. PocketBase version matters
 
 The hook files in `pb_hooks/` are written for **PocketBase v0.22.x**
 (confirmed via `pocketbase --version` on the droplet — this deployment
@@ -168,7 +207,7 @@ reasonable thing to do as part of "securing the app more," just as its
 own separate, deliberate task (schema/data compatibility across that many
 versions needs care), not bundled into this one.
 
-### 6d. Upload the hook files
+### 6e. Upload the hook files
 
 This repo now has a `pb_hooks/` folder with 3 files:
 `onesignal_helper.js`, `push_notifications.pb.js`, `push_announcements.pb.js`.
@@ -182,7 +221,7 @@ anything in `pb_hooks/` — you don't need to restart it manually after
 this step, but a restart doesn't hurt if you want to confirm it picked
 the files up: `sudo systemctl restart pocketbase`.
 
-### 6e. Test it
+### 6f. Test it
 
 Have an employee open a support ticket, or post an announcement, or
 @mention someone in Team Chat — a real push should arrive on whichever

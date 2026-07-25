@@ -1273,10 +1273,21 @@ export const hrActions = {
   // many lower-signal/internal-ops notifications (geofencing check-ins,
   // screenshot retention, new-employee-registered, etc.) that aren't one
   // of the categories employees can actually configure.
-  addNotification: async (email: string, role: string, message: string, category?: NotificationCategory): Promise<void> => {
+  // pushTitle/senderEmail are optional, push-only extras (never shown in the
+  // in-app bell, which always just renders `message`) consumed by
+  // push_notifications.pb.js on the droplet to build a WhatsApp-style
+  // notification: pushTitle becomes the bold title (a ticket's subject, the
+  // Team Chat sender's name, etc. — falls back to a generic per-category
+  // title server-side if omitted) and senderEmail lets the hook look up
+  // that person's profile_picture in hr_profiles to use as the Android
+  // large icon/avatar. Neither field is required — omit senderEmail for
+  // system-generated notifications that don't really have a "contact".
+  addNotification: async (email: string, role: string, message: string, category?: NotificationCategory, pushTitle?: string, senderEmail?: string): Promise<void> => {
     await pbCreate('hr_notifications', {
       recipient_email: email, recipient_role: role, message, read: false,
       category: category || 'internal',
+      push_title: pushTitle || '',
+      sender_email: senderEmail || '',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
   },
@@ -1388,7 +1399,7 @@ export const hrActions = {
       title: task.title, description: task.description, assigned_to: task.assignedTo, assigned_email: task.assignedEmail,
       team: task.team, due_date: task.dueDate, priority: task.priority, status: task.status, created_by: task.createdBy,
     });
-    await hrActions.addNotification(task.assignedEmail, 'employee', `New task assigned: "${task.title}" due ${task.dueDate}.`, 'leave_task');
+    await hrActions.addNotification(task.assignedEmail, 'employee', `New task assigned: "${task.title}" due ${task.dueDate}.`, 'leave_task', task.title);
   },
   updateTaskStatus: (id: string, status: Task['status']) => pbUpdate('hr_tasks', id, { status }),
   deleteTask: (id: string) => pbDelete('hr_tasks', id),
@@ -1435,25 +1446,28 @@ export const hrActions = {
     });
     // Admin also has a Tickets queue (admin/tickets) — this previously only
     // notified 'hr', same gap as leave requests.
-    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket');
-    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket');
+    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail);
+    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail);
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
     const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
     await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
     if (reply.senderRole === 'hr' || reply.senderRole === 'admin') {
-      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`, 'ticket');
+      // reply.senderName is a real-name snapshot, not an email (TicketReply
+      // has no senderEmail field) — pass the title only, no avatar, rather
+      // than guess at an email from a name.
+      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`, 'ticket', ticket.title);
     } else {
-      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket');
-      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket');
+      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail);
+      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail);
     }
   },
   updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
     await pbUpdate('hr_tickets', ticket.id, { status });
-    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket');
-    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket');
-    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket');
+    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket', ticket.title);
+    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title);
+    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title);
     // Starts/clears the 15-day attachment-deletion timer (see
     // checkTicketAttachmentRetention below) — hr_tickets has no closedAt
     // column of its own, so this is tracked in the KV store the same way

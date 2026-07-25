@@ -524,7 +524,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
         if (p.email.toLowerCase() === currentUserEmail.toLowerCase()) return;
         const senderLabelForRecipient = senderProfile ? displayName(senderProfile, p.role) : currentUserEmail;
         hrActions
-          .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`, 'chat_mention')
+          .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`, 'chat_mention', senderLabelForRecipient, currentUserEmail)
           .catch(err => console.error('Mention notification failed:', err));
       });
     } catch (err) {

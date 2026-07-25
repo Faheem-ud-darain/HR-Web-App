@@ -164,8 +164,8 @@ export default function EmployeeLeavesPage() {
       // Both HR and Admin manage leave approvals (see admin/leaves + hr/leaves
       // pages) — this previously only notified 'hr', so Admin never found
       // out a request existed until they happened to open the Leaves page.
-      await hrActions.addNotification('all', 'hr', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task');
-      await hrActions.addNotification('all', 'admin', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task');
+      await hrActions.addNotification('all', 'hr', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email);
+      await hrActions.addNotification('all', 'admin', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email);
       await refetchLeaves();
 
       setSuccess('Leave request submitted!');

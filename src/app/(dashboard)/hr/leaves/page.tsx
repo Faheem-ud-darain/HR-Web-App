@@ -61,10 +61,10 @@ export default function HRLeavesPage() {
     try {
       await hrActions.updateLeaveStatus(l.id, 'hr_approved');
       refetchLeaves();
-      await hrActions.addNotification('all', 'admin', `CEO approval required for ${l.employeeName}'s leave.`, 'leave_task');
+      await hrActions.addNotification('all', 'admin', `CEO approval required for ${l.employeeName}'s leave.`, 'leave_task', `${l.employeeName}'s Leave`);
       // Same gap as the Kanban path — only 'admin' was notified, so HR
       // itself never saw confirmation of its own action in the bell.
-      await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} forwarded to CEO for approval.`, 'leave_task');
+      await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} forwarded to CEO for approval.`, 'leave_task', `${l.employeeName}'s Leave`);
       setSuccessMsg('Sent to CEO!');
       setTimeout(() => setSuccessMsg(''), 1500);
     } finally {
@@ -83,8 +83,8 @@ export default function HRLeavesPage() {
       // path already notified; this brings the History tab's button in
       // line with it.
       const emp = employees.find((e: Profile) => e.fullName === l.employeeName);
-      if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was rejected.`, 'leave_task');
-      await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} rejected by HR.`, 'leave_task');
+      if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was rejected.`, 'leave_task', 'Leave Rejected');
+      await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} rejected by HR.`, 'leave_task', `${l.employeeName}'s Leave`);
       refetchLeaves();
       setSuccessMsg('Rejected!');
       setTimeout(() => setSuccessMsg(''), 1500);
@@ -98,7 +98,7 @@ export default function HRLeavesPage() {
     setProcessingLeaveId(l.id);
     try {
       await hrActions.updateLeaveStatus(l.id, 'pending');
-      await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} re-opened for reconsideration.`, 'leave_task');
+      await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} re-opened for reconsideration.`, 'leave_task', `${l.employeeName}'s Leave`);
       refetchLeaves();
       setSuccessMsg('Re-opened for review!');
       setTimeout(() => setSuccessMsg(''), 1500);
@@ -154,20 +154,20 @@ export default function HRLeavesPage() {
     }
 
     if (targetStatus === 'hr_approved') {
-      await hrActions.addNotification('all', 'admin', `CEO approval required: HR approved leave for ${leaf.employeeName}.`, 'leave_task');
+      await hrActions.addNotification('all', 'admin', `CEO approval required: HR approved leave for ${leaf.employeeName}.`, 'leave_task', `${leaf.employeeName}'s Leave`);
       // This only ever notified 'admin' — the HR user who actually dragged
       // the card got zero feedback in their own bell (only dropping into
       // "CEO Approved" happened to also notify 'hr', which is why that one
       // looked like it "worked" and this one looked broken). Every HR
       // action should show up on the shared HR feed, same as every other
       // action type in this app.
-      await hrActions.addNotification('all', 'hr', `Leave for ${leaf.employeeName} forwarded to CEO for approval.`, 'leave_task');
+      await hrActions.addNotification('all', 'hr', `Leave for ${leaf.employeeName} forwarded to CEO for approval.`, 'leave_task', `${leaf.employeeName}'s Leave`);
     } else if (targetStatus === 'rejected') {
       const emp = employees.find((e: Profile) => e.fullName === leaf.employeeName);
-      if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${leaf.duration.split(' - ')[0]}) was rejected.`, 'leave_task');
-      await hrActions.addNotification('all', 'hr', `Leave for ${leaf.employeeName} rejected by HR.`, 'leave_task');
+      if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${leaf.duration.split(' - ')[0]}) was rejected.`, 'leave_task', 'Leave Rejected');
+      await hrActions.addNotification('all', 'hr', `Leave for ${leaf.employeeName} rejected by HR.`, 'leave_task', `${leaf.employeeName}'s Leave`);
     } else if (targetStatus === 'pending') {
-      await hrActions.addNotification('all', 'hr', `Leave for ${leaf.employeeName} re-opened for reconsideration.`, 'leave_task');
+      await hrActions.addNotification('all', 'hr', `Leave for ${leaf.employeeName} re-opened for reconsideration.`, 'leave_task', `${leaf.employeeName}'s Leave`);
     }
 
     await hrActions.updateLeaveStatus(leaf.id, targetStatus);
