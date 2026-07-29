@@ -42,6 +42,33 @@ function formatBytes(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Shared formatter for every timestamp shown on this screen: Ticket.
+// createdAt (PocketBase's raw `created` system field, e.g. "2026-07-24
+// 16:18:33.852Z") and TicketReply.timestamp (an ISO string as of the
+// addTicketReply fix in hrData.ts — see that comment for why it used to
+// be a bare "04:18 PM" with no date, which silently discarded which day
+// a reply happened on and made multi-day threads unreadable). Formats
+// both the same way — full date + time — so the whole thread reads
+// consistently instead of the opening message showing a real date and
+// every reply after it showing only a time.
+//
+// Legacy replies created before that fix are still stored as a bare
+// "04:18 PM"-style string with no date at all. Handing that straight to
+// `new Date(...)` is a trap: some JS engines will silently parse a
+// time-only string as *today's* date at that time, which would display
+// a wrong, made-up date rather than the honest "we don't know" — worse
+// than the plain time it shows today. The regex below detects that exact
+// legacy shape and returns it unchanged instead of risking a fabricated
+// date.
+const BARE_TIME_ONLY = /^\d{1,2}:\d{2}\s*[AP]M$/i;
+
+function formatTicketDate(raw: string): string {
+  if (BARE_TIME_ONLY.test(raw.trim())) return raw; // legacy format, no date was ever recorded — don't guess one
+  const d = new Date(raw.replace(' ', 'T'));
+  if (isNaN(d.getTime())) return raw; // fall back to the raw string rather than showing "Invalid Date"
+  return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 interface TicketsViewProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead';
 }
@@ -393,7 +420,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                   <p className="text-xs text-slate-500 line-clamp-1 mb-2">{t.description}</p>
                   <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
                     <span className="flex items-center gap-1"><User className="h-3 w-3" /> {nameFor(t.employeeName)}</span>
-                    <span>{t.createdAt}</span>
+                    <span>{formatTicketDate(t.createdAt)}</span>
                   </div>
                 </Card>
               );
@@ -412,7 +439,16 @@ export function TicketsView({ role }: TicketsViewProps) {
             <div className="border-0 lg:border border-slate-200 overflow-hidden flex flex-col h-full lg:h-[calc(100vh-220px)] min-h-[560px] lg:rounded-xl bg-white">
               {/* Header */}
               <div className="px-3.5 lg:px-5 py-2.5 lg:py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
-                <div className="flex items-start gap-2 flex-1 min-w-0 basis-full lg:basis-auto lg:items-center">
+                {/* `grow` (flex-grow only) instead of `flex-1` — flex-1 sets
+                    the `flex` shorthand (flex: 1 1 0%), which stomps on
+                    basis-full's flex-basis: 100% depending on Tailwind's
+                    generated stylesheet order (same same-property cascade
+                    collision as the pt-safe/pb-safe bug — see globals.css).
+                    That silently kept this block from actually taking the
+                    full row width on mobile, so it never wrapped onto its
+                    own line and the Operations button got squeezed onto
+                    the same row instead of the row below it. */}
+                <div className="flex items-start gap-2 grow min-w-0 basis-full lg:basis-auto lg:items-center">
                   <button onClick={() => setSelectedTicket(null)} className="lg:hidden h-8 w-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
@@ -431,15 +467,25 @@ export function TicketsView({ role }: TicketsViewProps) {
                       onClick={() => handleInspectApplicant(selectedTicket.employeeEmail)}
                       className="text-orange-700 hover:underline flex items-center gap-0.5 min-w-0"
                     >
-                      <span className="truncate">{nameFor(selectedTicket.employeeName)} ({selectedTicket.employeeEmail})</span>
+                      <span className="truncate">{nameFor(selectedTicket.employeeName)}</span>
                       <Eye className="h-3 w-3 shrink-0" />
                     </button>
                   </div>
                 </div>
                 </div>
 
-                {/* Operations */}
-                <div className="flex items-center gap-2 shrink-0 ml-10 lg:ml-0">
+                {/* Operations. ml-auto, not a fixed ml-10 — the title/
+                    opened-by block above is basis-full on mobile, so this
+                    div wraps onto its own flex line; a fixed left margin
+                    just offsets it from the left edge on that line instead
+                    of pushing it to the right, which is what left it
+                    stranded near the left with a lot of dead space next
+                    to it. margin-left: auto is what actually pushes an
+                    item to the end of its own flex line. lg:ml-0 cancels
+                    it back out on desktop, where this div already shares
+                    the title's row and justify-between (on the parent)
+                    handles right-alignment on its own. */}
+                <div className="flex items-center gap-2 shrink-0 ml-auto lg:ml-0">
                   {isHR && !isClosed && (
                     <button
                       onClick={() => handleCloseTicket(selectedTicket.id)}
@@ -488,7 +534,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                         </p>
                         <p className="font-medium leading-relaxed whitespace-pre-wrap break-words">{selectedTicket.description}</p>
                         <span className={`block text-[9px] mt-1 text-right ${isAuthorSelf ? 'text-orange-200' : 'text-slate-400'}`}>
-                          {selectedTicket.createdAt}
+                          {formatTicketDate(selectedTicket.createdAt)}
                         </span>
                       </div>
                     </div>
@@ -564,7 +610,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                               ? 'text-orange-700/80'
                               : 'text-slate-400'
                         }`}>
-                          {rep.timestamp}
+                          {formatTicketDate(rep.timestamp)}
                         </span>
                       </div>
                     </div>
@@ -573,10 +619,11 @@ export function TicketsView({ role }: TicketsViewProps) {
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Chat input bar. pb-[calc(...)] instead of `p-3 md:p-4
-                  pb-safe` — both would set padding-bottom at the same
-                  cascade specificity; see globals.css's .pb-safe comment.
-                  Responsive base (0.75rem/1rem) preserved, inset added. */}
+              {/* Chat input bar. Uses arbitrary-value padding-bottom
+                  (below) instead of `p-3 md:p-4 pb-safe` — both would set
+                  padding-bottom at the same cascade specificity; see
+                  globals.css's .pb-safe comment. Responsive base
+                  (0.75rem/1rem) preserved, inset added on top of each. */}
               <div className="px-3 md:px-4 pt-3 md:pt-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-slate-200 bg-white">
                 {isClosed ? (
                   <div className="text-xs text-slate-400 font-semibold italic text-center py-2 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center gap-1 flex-wrap">

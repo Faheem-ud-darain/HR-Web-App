@@ -479,7 +479,13 @@ export function TopNav() {
           the status bar. pt-safe (globals.css) adds
           env(safe-area-inset-top) of padding above the content instead —
           a no-op on web/desktop, where that env() value is 0. */}
-      <header className="min-h-14 md:min-h-16 bg-white/85 backdrop-blur-md border-b border-slate-200/70 flex items-center justify-between px-4 md:px-6 sticky top-0 z-20 gap-3 pt-safe">
+      {/* border-b swapped for an after: gradient fade — this bar is
+          translucent (bg-white/85 backdrop-blur-md), and a hard 1px line
+          under a blurred material reads as a flat panel with a ruled edge
+          rather than a floating glass layer. A soft fade where scrolled
+          content meets the bar underneath is the more native-feeling
+          "scroll edge effect" instead. */}
+      <header className="relative min-h-14 md:min-h-16 bg-white/85 backdrop-blur-md flex items-center justify-between px-4 md:px-6 sticky top-0 z-20 gap-3 pt-safe after:content-[''] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-3 after:bg-gradient-to-b after:from-slate-950/[0.06] after:to-transparent">
 
         {/* Desktop Search Bar — hidden on mobile */}
         <div className="hidden md:flex flex-1 items-center max-w-md relative">

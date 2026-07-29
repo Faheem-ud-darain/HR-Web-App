@@ -33,7 +33,13 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
 };
 
 const SIZE_STYLES: Record<ButtonSize, string> = {
-  sm: 'text-[10px] px-2.5 py-1.5 gap-1',
+  // min-h-[36px] on sm — at text-[10px]/py-1.5 this was resolving to
+  // roughly 26px tall, under any reasonable touch-target floor. 36px
+  // matches the app's own existing convention for compact tappable
+  // controls (see Modal.tsx's icon-only close button) rather than
+  // reaching for Apple's full 44pt, which would make sm visually
+  // indistinguishable from md in this dense ops-dashboard UI.
+  sm: 'text-[10px] px-2.5 py-1.5 gap-1 min-h-[36px]',
   md: 'text-xs px-4 py-2.5 gap-1.5',
   lg: 'text-sm px-5 py-3 gap-2',
 };

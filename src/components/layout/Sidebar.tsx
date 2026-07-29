@@ -226,7 +226,12 @@ export function Sidebar({ role }: SidebarProps) {
           structural improvements kept: refined active state (filled pill +
           dot, not just a color swap), consistent icon sizing, one-time
           mount stagger. */}
-      <aside className={`hidden md:flex ${isCollapsed ? 'w-[68px]' : 'w-64'} border-r border-slate-200 bg-white flex-col h-screen sticky top-0 transition-all duration-200 ease-out`}>
+      {/* transition-[width], not transition-all — the only property that
+          actually changes on this element when isCollapsed toggles is
+          width (the inner header div's padding swap below is instant,
+          not animated), so transition-all was animating a property no
+          one asked it to watch. */}
+      <aside className={`hidden md:flex ${isCollapsed ? 'w-[68px]' : 'w-64'} border-r border-slate-200 bg-white flex-col h-screen sticky top-0 transition-[width] duration-200 ease-out motion-reduce:transition-none`}>
         <div className={`h-16 flex items-center shrink-0 border-b border-slate-200 ${isCollapsed ? 'justify-center px-2' : 'gap-2.5 px-6'}`}>
           <div className="h-8 w-8 rounded-lg bg-orange-600 flex items-center justify-center shrink-0">
             <span className="text-white font-black text-sm">D</span>
@@ -306,14 +311,14 @@ export function Sidebar({ role }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Floating Pill Bottom Tab Bar. bottom-[calc(1.5rem+env(...))]
-          instead of bare bottom-6 — on iPhones with a home indicator
-          (X/11/12+), a fixed 24px gap can sit right on top of the
-          indicator's swipe zone instead of floating clearly above it.
-          `bottom` isn't a padding property so this doesn't hit the same
-          cascade-collision bug as pt-safe/pb-safe; it's just additive by
-          construction. env() resolves to 0 on Android/web, so this is
-          exactly the original 1.5rem there. */}
+      {/* Floating Pill Bottom Tab Bar. Uses an arbitrary-value `bottom`
+          (below) instead of bare bottom-6 — on iPhones with a home
+          indicator (X/11/12+), a fixed 24px gap can sit right on top of
+          the indicator's swipe zone instead of floating clearly above
+          it. `bottom` isn't a padding property so this doesn't hit the
+          same cascade-collision bug as pt-safe/pb-safe; it's just
+          additive by construction. env() resolves to 0 on Android/web,
+          so this is exactly the original 1.5rem there. */}
       {!hideBottomNav && !anyModalOpen && (
         <div
           className="md:hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-full shadow-lg flex justify-around items-center px-2 py-2"

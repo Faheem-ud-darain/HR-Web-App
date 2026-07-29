@@ -1451,7 +1451,16 @@ export const hrActions = {
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
-    const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    // Store a raw, parseable timestamp (not a pre-formatted "05:01 AM"
+    // string) so the date is never permanently discarded — a thread that
+    // spans multiple days needs the date to read correctly, and baking in
+    // a time-only display string at creation time makes that impossible
+    // to recover later no matter how the UI formats it (see TicketsView's
+    // formatTicketDate, which now renders every reply this same way).
+    // Old replies already stored as a bare time string are left as-is —
+    // formatTicketDate falls back to showing them unchanged rather than
+    // guessing a date that was never recorded.
+    const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toISOString() };
     await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
     if (reply.senderRole === 'hr' || reply.senderRole === 'admin') {
       // reply.senderName is a real-name snapshot, not an email (TicketReply

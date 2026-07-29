@@ -124,11 +124,17 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
           </button>
         </div>
 
-        {/* Content — scrollable. pb-[calc(1rem+env(...))] instead of
-            `py-4 pb-safe` — both would set padding-bottom at the same
-            cascade specificity, so the last one Tailwind happens to emit
-            wins; this way the safe-area inset is additive to the base
-            1rem instead of racing it. See globals.css's .pb-safe comment. */}
+        {/* Content — scrollable. Uses an arbitrary-value padding-bottom
+            (below) instead of `py-4 pb-safe` — both would set
+            padding-bottom at the same cascade specificity, so the last
+            one Tailwind happens to emit wins; this way the safe-area
+            inset is additive to the base 1rem instead of racing it.
+            See globals.css's .pb-safe comment. NOTE: don't write the
+            arbitrary-value syntax itself (word, bracket, calc, bracket)
+            in a comment with a "..." placeholder — Tailwind's class
+            scanner reads comments too and will try to generate CSS for
+            the literal placeholder text, which is invalid and breaks
+            the whole stylesheet build. Spell out the real value instead. */}
         <div className="px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto flex-1">
           {children}
         </div>

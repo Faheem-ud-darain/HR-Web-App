@@ -29,6 +29,20 @@
   /* Custom animations matching Emil Kowalski's recommendations */
   --ease-out-snappy: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out-smooth: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* Top of the z-index scale — named instead of the bare z-[999]/z-[9999]
+     these replace. The rest of the app's overlays (dropdowns, sticky
+     headers, the floating pill nav, modals, the fullscreen image/tracking
+     viewers) already sit within Tailwind's own 10/20/40/50/60/100/200
+     scale and aren't touched here; these two are the ones that jumped to
+     an arbitrary "big enough number" with no relation to anything else.
+     --z-splash: the native-splash-to-JS handoff overlay (SplashScreenOverlay)
+     — must outrank every other layer since it covers the entire app while
+     it's mounted. --z-toast: notification toasts — one step above splash
+     so a toast that somehow fires during the splash hand-off (or any
+     future overlay) is never hidden by it. */
+  --z-splash: 1000;
+  --z-toast: 1100;
 }
 
 @theme inline {
@@ -89,13 +103,19 @@ body {
      source. This is the actual reason the iOS status-bar/home-indicator
      overlap fix didn't reliably take even though the classes were
      present in the JSX (see Modal.tsx, TeamChatView.tsx, TicketsView.tsx,
-     auth/page.tsx, Sidebar.tsx's mobile drawer — all fixed to use
-     `pt-[calc(<base>+env(safe-area-inset-top))]` /
-     `pb-[calc(<base>+env(safe-area-inset-bottom))]` instead, which adds
-     the inset on top of the base padding with no cascade ambiguity).
-     Only use the bare .pt-safe/.pb-safe class when nothing else on that
-     element sets the same padding side (e.g. TopNav's header, which
-     sizes with min-h instead of vertical padding). */
+     auth/page.tsx, Sidebar.tsx's mobile drawer — all fixed to use an
+     arbitrary-value padding-top/padding-bottom that adds
+     env(safe-area-inset-top/bottom) on top of the element's base padding
+     inline, instead of a separate class, so there's no cascade
+     ambiguity). Only use the bare .pt-safe/.pb-safe class when nothing
+     else on that element sets the same padding side (e.g. TopNav's
+     header, which sizes with min-h instead of vertical padding).
+     Whatever you do, never write out that arbitrary-value syntax itself
+     with a "..." or "<placeholder>" stand-in inside a comment anywhere
+     in this codebase — Tailwind's class scanner reads comments too and
+     will try to generate CSS for the literal placeholder text, which is
+     invalid and breaks the entire stylesheet build (this happened once
+     already; see git history). Always spell out a real value. */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 20px);
   }

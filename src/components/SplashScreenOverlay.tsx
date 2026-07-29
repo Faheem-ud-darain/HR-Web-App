@@ -86,7 +86,7 @@ export function SplashScreenOverlay() {
 
   return (
     <div
-      className={`fixed inset-0 z-[999] flex items-center justify-center bg-orange-600 ${
+      className={`fixed inset-0 z-[var(--z-splash)] flex items-center justify-center bg-orange-600 ${
         phase === 'exiting' ? 'splash-overlay-out' : ''
       }`}
       aria-hidden="true"

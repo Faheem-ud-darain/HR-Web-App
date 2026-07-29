@@ -85,11 +85,15 @@ export function ToastNotification() {
   };
 
   return (
-    <div className="fixed top-5 left-4 right-4 sm:left-auto sm:right-5 sm:w-[340px] z-[9999] space-y-3 pointer-events-none">
+    <div className="fixed top-5 left-4 right-4 sm:left-auto sm:right-5 sm:w-[340px] z-[var(--z-toast)] space-y-3 pointer-events-none">
       {toasts.map(toast => (
         <div
           key={toast.id}
-          className={`pointer-events-auto bg-white/90 backdrop-blur-md border border-slate-200 shadow-xl rounded-xl p-4 flex gap-3 items-start transition-all duration-300 transform motion-reduce:transition-none motion-reduce:transform-none ${
+          // transition-[transform,opacity], not transition-all — only
+          // those two properties change between the visible/hidden states
+          // below; scoping it keeps this off any other property (e.g.
+          // shadow/border) that isn't meant to be watched.
+          className={`pointer-events-auto bg-white/90 backdrop-blur-md border border-slate-200 shadow-xl rounded-xl p-4 flex gap-3 items-start transition-[transform,opacity] duration-300 transform motion-reduce:transition-none motion-reduce:transform-none ${
             toast.visible 
               ? 'translate-y-0 sm:translate-x-0 opacity-100 scale-100' 
               : 'translate-y-[-12px] sm:translate-x-12 opacity-0 scale-95'

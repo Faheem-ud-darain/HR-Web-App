@@ -166,9 +166,9 @@ export default function AuthPage() {
   const handleForceLoginEverywhere = () => attemptLogin(true);
 
   return (
-    // pt-[calc(1rem+env(...))] instead of `p-4 pt-safe` — both would set
-    // padding-top at the same cascade specificity; see globals.css's
-    // .pt-safe comment for why that silently drops the notch fix.
+    // Uses arbitrary-value padding-top (below) instead of `p-4 pt-safe` —
+    // both would set padding-top at the same cascade specificity; see
+    // globals.css's .pt-safe comment for why that silently drops the fix.
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] font-sans fade-enter">
       <div className="w-full max-w-5xl mb-4">
         <Link
