@@ -48,4 +48,34 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- USA employees are auto clocked in/out by GPS geofence (see
+         src/lib/geofence.ts + src/lib/backgroundGeolocation.ts,
+         powered by @capgo/background-geolocation) — this must keep working
+         with the app backgrounded/screen off, or an employee who leaves a
+         warehouse without the app open never gets auto clocked-out.
+
+         IMPORTANT — this is a real submission blocker, not just a manifest
+         edit: requesting ACCESS_BACKGROUND_LOCATION means Google Play will
+         require you to fill out the "Background location" declaration form
+         in Play Console (App content → Permissions declaration) explaining
+         this exact use case, before the app can be published. That form has
+         to be filled out by you in the Play Console UI — it's not something
+         that can be done from source. Budget a review cycle for it; Google
+         sometimes asks for a demo video of the feature. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Android 14+ (API 34+) requires every foreground service to declare
+         its type; the background-geolocation plugin runs as a
+         location-type foreground service (that's what keeps the persistent
+         "Tracking You" notification + location updates alive while
+         backgrounded). Without these two, the plugin's foreground service
+         will crash on Android 14+. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Android 13+ (API 33+) requires this runtime permission before any
+         app can show notifications at all — including the persistent
+         background-tracking notification above. The plugin requests it
+         automatically after location permission is granted. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

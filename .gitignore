@@ -67,3 +67,23 @@ tracker-agent/*.spec
 tracker-agent/icon.ico
 tracker-agent/icon.icns
 tracker-agent/icon.png
+
+# one-off PocketBase migration scripts with a hardcoded superuser
+# email+password (ADMIN_EMAIL/ADMIN_PASSWORD) — flagged in the security
+# review. Gitignoring stops them from being committed/tracked going
+# forward, but does NOT remove them from existing git history — that
+# password still needs to be rotated on the PocketBase server and scrubbed
+# from history (e.g. git filter-repo / BFG) separately.
+/migration_data/patch_schemas.py
+/migration_data/fix_warehouse_id_mismatch.py
+/migration_data/migrate_kv_to_tables.py
+/migration_data/create_screenshots_collection.py
+/migration_data/create_team_documents_collection.py
+/migration_data/create_messages_collection.py
+/migration_data/create_inactivity_logs_collection.py
+/migration_data/patch_screenshots_mimetypes.py
+
+# Android release signing — real keystore + passwords, never commit these.
+android/keystore.properties
+*.keystore
+*.jks

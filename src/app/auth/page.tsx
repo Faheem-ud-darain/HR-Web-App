@@ -166,7 +166,7 @@ export default function AuthPage() {
   const handleForceLoginEverywhere = () => attemptLogin(true);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 font-sans fade-enter">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 pt-safe font-sans fade-enter">
       <div className="w-full max-w-5xl mb-4">
         <Link
           href="/"
@@ -296,6 +296,13 @@ export default function AuthPage() {
           </CardContent>
         </div>
       </Card>
+
+      <Link
+        href="/privacy"
+        className="mt-4 text-[11px] font-semibold text-slate-400 hover:text-orange-600 transition-colors"
+      >
+        Privacy Policy
+      </Link>
 
       <Modal isOpen={isForgotOpen} onClose={() => setIsForgotOpen(false)} title="Forgot Password">
         <div className="space-y-4">

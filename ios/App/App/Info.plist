@@ -55,5 +55,46 @@
 	     src/lib/pocketbase.ts) instead of a bare HTTP IP — ATS's defaults
 	     allow any HTTPS connection with a valid certificate with no
 	     exception required. -->
+	<!-- Required for location access generally (the initial permission
+	     prompt uses this string). Without an NSLocation*UsageDescription
+	     string at all, iOS terminates the app the moment location access is
+	     requested instead of showing a denial. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Delcargo Internal uses your location to confirm you're at a warehouse when you clock in or out.</string>
+	<!-- USA employees are auto clocked in/out by GPS geofence (see
+	     src/lib/geofence.ts + src/lib/backgroundGeolocation.ts) — this has
+	     to keep working after the app is backgrounded or the phone is
+	     locked, or an employee who leaves a warehouse with the app closed
+	     never gets auto clocked-out. That needs "Always" authorization, not
+	     just "When In Use". iOS shows this exact string as the second
+	     ("upgrade to Always") permission prompt.
+
+	     Heads up for App Review: Apple scrutinizes Always-location requests
+	     closely (Guideline 5.1.1) and may ask you to justify it during
+	     review — have this attendance/clock-in use case ready to explain,
+	     and make sure the in-app disclosure (src/app/privacy/page.tsx +
+	     the first-run consent gate in (dashboard)/layout.tsx) says the same
+	     thing. Employees who aren't on USA/GPS-based auto clock-in never
+	     trigger this prompt at all — they use manual Start/End Shift
+	     buttons instead. -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Delcargo Internal uses your location — including while the app is in the background or your device is locked — to automatically start and end your shift as you arrive at or leave your assigned warehouse.</string>
+	<!-- Lets iOS keep delivering location updates to the app while it's
+	     backgrounded, which @capgo/background-geolocation needs for the
+	     auto clock-in/out geofence to keep working when the app isn't in
+	     the foreground. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<!-- Required because ticket attachments, avatar upload, and career
+	     document upload use <input type="file" accept="image/*" ...>, which
+	     WKWebView can route through the native camera/photo picker. Without
+	     these, tapping "Take Photo" or "Photo Library" from that picker
+	     crashes the app instead of prompting for permission. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Delcargo Internal lets you take a photo to attach to tickets, your profile, or career documents.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Delcargo Internal lets you choose a photo from your library to attach to tickets, your profile, or career documents.</string>
 </dict>
 </plist>

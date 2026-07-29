@@ -472,8 +472,14 @@ export function TopNav() {
 
   return (
     <>
-      {/* Main TopNav bar */}
-      <header className="h-14 md:h-16 bg-white/85 backdrop-blur-md border-b border-slate-200/70 flex items-center justify-between px-4 md:px-6 sticky top-0 z-20 gap-3">
+      {/* Main TopNav bar. min-h-* + pt-safe, not h-14/h-16 — on notched/
+          Dynamic-Island iPhones the WebView draws under the status bar
+          (viewportFit: 'cover' in layout.tsx), so a fixed-height header with
+          no top padding rendered its content (search, bell, avatar) under
+          the status bar. pt-safe (globals.css) adds
+          env(safe-area-inset-top) of padding above the content instead —
+          a no-op on web/desktop, where that env() value is 0. */}
+      <header className="min-h-14 md:min-h-16 bg-white/85 backdrop-blur-md border-b border-slate-200/70 flex items-center justify-between px-4 md:px-6 sticky top-0 z-20 gap-3 pt-safe">
 
         {/* Desktop Search Bar — hidden on mobile */}
         <div className="hidden md:flex flex-1 items-center max-w-md relative">

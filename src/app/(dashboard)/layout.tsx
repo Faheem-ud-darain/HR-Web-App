@@ -1004,6 +1004,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="font-semibold text-slate-800">Please review the following important HR policies:</p>
               
               <ol className="list-decimal pl-5 space-y-2.5">
+                <li>If you're on automatic GPS attendance, this app uses your device's location — including while the app is closed or your screen is locked — solely to detect when you arrive at or leave your assigned warehouse, so your shift can start/end automatically. It is not used to track you outside of that purpose. See our <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-600 underline font-semibold">Privacy Policy</a> for full details on what's collected and why.</li>
                 <li>Your first month’s salary will be reserved and can be claimed upon resignation.</li>
                 <li>Kindly share your CV, clear front and back images of CNIC along with your bank account details.</li>
                 <li>You are entitled to 1 paid time-off (PTO) leave per month.</li>

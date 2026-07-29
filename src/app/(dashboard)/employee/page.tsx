@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Clock, CheckCircle2, ChevronRight, AlertTriangle, Briefcase, Calendar, User, Flag, Monitor, MapPin, LocateFixed, Wifi, WifiOff, Smartphone, Landmark, Gift, Star, Loader2 } from 'lucide-react';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
+import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
 
 const PRIORITY_STYLES: Record<Task['priority'], string> = {
@@ -105,7 +106,7 @@ export default function EmployeeDashboard() {
   const profileRef = useRef<Profile | null>(null);
   const warehousesRef = useRef<Warehouse[]>([]);
   const shiftActiveRef = useRef(false);
-  const watchIdRef = useRef<number | null>(null);
+  const geoWatchRef = useRef<GeoWatchHandle | null>(null);
 
   // Detailed Task Modal state
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -208,17 +209,21 @@ export default function EmployeeDashboard() {
   // warehouse assigned to them. Remote (Pakistan) employees use manual
   // Start/End Shift controls instead (rendered further below) and never
   // trigger this effect.
+  //
+  // watchLocation() (src/lib/backgroundGeolocation.ts) keeps this firing
+  // even while the app is backgrounded/locked on native iOS/Android (via
+  // @capgo/background-geolocation) — required so an employee who leaves a
+  // warehouse without the app open still gets auto clocked-out. On plain
+  // web it falls back to the browser's foreground-only geolocation, same as
+  // before.
   useEffect(() => {
     if (!userProfile || userProfile.region !== 'USA') return;
 
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setGeoPermission('unsupported');
-      return;
-    }
-
+    let cancelled = false;
     setGeoPermission('requesting');
 
-    const handleSuccess = async (position: GeolocationPosition) => {
+    const handleSuccess = async (point: GeoPoint) => {
+      if (cancelled) return;
       setGeoPermission('granted');
       setGeoErrorMsg('');
 
@@ -232,8 +237,8 @@ export default function EmployeeDashboard() {
       }
 
       const { isInside, nearestWarehouse, distanceMeters } = checkGeofence(
-        position.coords.latitude,
-        position.coords.longitude,
+        point.latitude,
+        point.longitude,
         assigned
       );
 
@@ -263,27 +268,32 @@ export default function EmployeeDashboard() {
       }
     };
 
-    const handleError = (err: GeolocationPositionError) => {
+    const handleError = (message: string, code?: string) => {
+      if (cancelled) return;
+      if (code === 'UNSUPPORTED') {
+        setGeoPermission('unsupported');
+        return;
+      }
       setGeoPermission('denied');
       setGeoErrorMsg(
-        err.code === err.PERMISSION_DENIED
-          ? 'Location access denied. Enable location permissions for this site in your browser settings to allow automatic warehouse check-in.'
-          : (err.message || 'Unable to determine your location.')
+        code === 'NOT_AUTHORIZED'
+          ? 'Location access denied. Enable "Always" location permission for Delcargo Internal in your device settings to allow automatic warehouse check-in.'
+          : (message || 'Unable to determine your location.')
       );
     };
 
-    const watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
-      enableHighAccuracy: true,
-      maximumAge: 15000,
-      timeout: 20000,
+    watchLocation(handleSuccess, handleError).then((handle) => {
+      if (cancelled) {
+        handle.stop();
+        return;
+      }
+      geoWatchRef.current = handle;
     });
-    watchIdRef.current = watchId;
 
     return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
+      cancelled = true;
+      geoWatchRef.current?.stop();
+      geoWatchRef.current = null;
     };
   }, [userProfile?.email, userProfile?.region]);
 

@@ -1,5 +1,26 @@
 apply plugin: 'com.android.application'
 
+// Release signing — reads from android/keystore.properties, which is NOT
+// committed (see .gitignore) since it holds your real keystore path/
+// passwords. Google Play requires every release AAB/APK to be signed with a
+// real (non-debug) key before it can be uploaded.
+//
+// This file intentionally does NOT contain or generate an actual keystore —
+// that has to be a secret only you hold. To set this up:
+//   1. Generate a keystore (one-time, keep it forever — losing it means you
+//      can never update this app on Play again under the same listing):
+//        keytool -genkey -v -keystore delcargo-release.keystore -alias delcargo -keyalg RSA -keysize 2048 -validity 10000
+//   2. Copy android/keystore.properties.example to android/keystore.properties
+//      and fill in the real path + passwords.
+//   3. Keep both the .keystore file and keystore.properties out of git —
+//      already covered by the .gitignore entries added alongside this.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasReleaseSigning = keystorePropertiesFile.exists()
+if (hasReleaseSigning) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.delcargo.internal"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +37,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Falls back to Android's default debug signing if
+            // keystore.properties doesn't exist yet, so local/CI debug
+            // builds keep working — but a build signed that way will be
+            // REJECTED by Play Console on upload. Create
+            // android/keystore.properties (see above) before shipping.
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

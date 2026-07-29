@@ -19,6 +19,17 @@ const config: CapacitorConfig = {
   // with a valid HTTPS certificate — see the PocketBase HTTPS migration
   // notes. Until then the app has no way to reach PocketBase at all.
 
+  android: {
+    // Required by @capgo/background-geolocation (see
+    // src/lib/backgroundGeolocation.ts) — without this, Android silently
+    // stops delivering location updates to the WebView bridge ~5 minutes
+    // after the app is backgrounded, which would make USA employees'
+    // auto clock-out stop working exactly when it matters most (after
+    // they've left and closed the app). See
+    // https://github.com/capacitor-community/background-geolocation/issues/89.
+    useLegacyBridge: true,
+  },
+
   plugins: {
     // Native splash screen — this is only the "before the JS engine has
     // even booted" placeholder (a single static image, `@drawable/splash`

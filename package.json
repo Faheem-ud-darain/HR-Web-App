@@ -17,6 +17,7 @@
     "@capacitor/ios": "^8.4.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
+    "@capgo/background-geolocation": "^8.0.32",
     "@duo-icons/tailwind": "*",
     "@onesignal/capacitor-plugin": "^1.1.2",
     "@supabase/supabase-js": "^2.110.0",
