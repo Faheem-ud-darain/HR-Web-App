@@ -306,10 +306,17 @@ export function Sidebar({ role }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Floating Pill Bottom Tab Bar */}
+      {/* Floating Pill Bottom Tab Bar. bottom-[calc(1.5rem+env(...))]
+          instead of bare bottom-6 — on iPhones with a home indicator
+          (X/11/12+), a fixed 24px gap can sit right on top of the
+          indicator's swipe zone instead of floating clearly above it.
+          `bottom` isn't a padding property so this doesn't hit the same
+          cascade-collision bug as pt-safe/pb-safe; it's just additive by
+          construction. env() resolves to 0 on Android/web, so this is
+          exactly the original 1.5rem there. */}
       {!hideBottomNav && !anyModalOpen && (
-        <div 
-          className="md:hidden fixed bottom-6 left-4 right-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-full shadow-lg flex justify-around items-center px-2 py-2"
+        <div
+          className="md:hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-full shadow-lg flex justify-around items-center px-2 py-2"
         >
           {mobileQuickLinks.map((item) => {
             const isActive = pathname === item.href;
@@ -362,12 +369,22 @@ export function Sidebar({ role }: SidebarProps) {
             onClick={() => setIsMobileMenuOpen(false)}
           />
 
-          <div 
+          {/* px-5 + arbitrary pt/pb (not plain p-5) — this is a fixed
+              inset-0, h-full overlay (same class of bug as TopNav/
+              TicketsView/TeamChatView): on notched/Dynamic-Island iPhones
+              its own "DelCargo Menu" header and the Sign Out button at the
+              bottom would otherwise render under the status bar / home
+              indicator. Using calc(1.25rem + env(safe-area-inset-*)) as
+              one arbitrary utility (rather than a separate pt-safe class
+              alongside p-5) avoids relying on which of two same-property
+              utilities wins the cascade — env() resolves to 0 on web/
+              Android, so this is exactly p-5's original 1.25rem there. */}
+          <div
             ref={drawerRef}
-            className={`relative flex flex-col w-64 max-w-xs h-full shadow-2xl p-5 z-50 justify-between drawer-enter-left bg-white/95 backdrop-blur-md border-r border-slate-200/50 rounded-r-2xl`}
-            style={{ 
-              fontFamily: platform === 'ios' 
-                ? '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif' 
+            className={`relative flex flex-col w-64 max-w-xs h-full shadow-2xl px-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(1.25rem+env(safe-area-inset-bottom))] z-50 justify-between drawer-enter-left bg-white/95 backdrop-blur-md border-r border-slate-200/50 rounded-r-2xl`}
+            style={{
+              fontFamily: platform === 'ios'
+                ? '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'
                 : 'Roboto, sans-serif'
             }}
           >

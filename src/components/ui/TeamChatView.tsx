@@ -803,7 +803,11 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
         </div>
         )}
         {activePanel === 'chat' && (
-          <div className="border-t border-slate-200 p-2 md:p-3 pb-safe shrink-0 relative bg-white">
+          {/* pb-[calc(...)] instead of `p-2 md:p-3 pb-safe` — both would set
+              padding-bottom at the same cascade specificity; see
+              globals.css's .pb-safe comment. Responsive base (0.5rem/
+              0.75rem) preserved, safe-area inset added on top of each. */}
+          <div className="border-t border-slate-200 px-2 md:px-3 pt-2 md:pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] shrink-0 relative bg-white">
             {oversight && (
               <p className="text-[9px] text-purple-600 font-bold mb-2 flex items-center gap-1"><Crown className="h-3 w-3" /> Posting as Admin — this message will be highlighted for everyone in {activeTeam?.name || 'this team'}.</p>
             )}

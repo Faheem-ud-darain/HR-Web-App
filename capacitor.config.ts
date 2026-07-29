@@ -54,6 +54,25 @@ const config: CapacitorConfig = {
       splashImmersive: true,
       showSpinner: false,
     },
+
+    // iOS notch/Dynamic Island fix (the header-under-status-bar bug):
+    // Capacitor's WKWebView already draws edge-to-edge under the status bar
+    // once viewport-fit=cover is set (see layout.tsx), which is what lets
+    // env(safe-area-inset-top) resolve to a real value for .pt-safe
+    // (globals.css) to push header content below the notch/status bar. But
+    // that only fully works with the icons/clock visible and correctly
+    // colored if we also explicitly claim the overlay here and set an icon
+    // style — otherwise iOS can fall back to whatever default it likes,
+    // which is exactly the "under the status bar" symptom on some iOS
+    // versions/devices. `overlaysWebView: true` matches the edge-to-edge
+    // webview; `style: 'DARK'` renders dark status bar icons/text, which is
+    // legible against TopNav's light/translucent background
+    // (bg-white/85 backdrop-blur-md). See StatusBarInit in
+    // SplashScreenOverlay.tsx for the JS-side call this config pairs with.
+    StatusBar: {
+      overlaysWebView: true,
+      style: 'DARK',
+    },
   },
 };
 

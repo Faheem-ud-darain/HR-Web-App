@@ -57,6 +57,22 @@ export function SplashScreenOverlay() {
       });
     });
 
+    // iOS status bar setup — pairs with the StatusBar plugin block in
+    // capacitor.config.ts. Belt-and-suspenders alongside viewport-fit=cover
+    // (layout.tsx) + .pt-safe (globals.css): this explicitly tells iOS the
+    // webview owns the area under the status bar (overlay, not push-down)
+    // and forces dark icons so they stay legible over TopNav's light,
+    // translucent background. No-op on Android (status bar there is already
+    // handled by the OS theme) and on web. If this plugin isn't in the
+    // installed build yet (not synced), it just fails silently — the
+    // existing CSS safe-area handling still applies on its own.
+    import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+      StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+    }).catch(() => {
+      // Plugin not installed/synced into this build yet — safe to ignore.
+    });
+
     holdTimer = setTimeout(() => setPhase('exiting'), HOLD_MS);
     exitTimer = setTimeout(() => setPhase('hidden'), HOLD_MS + EXIT_MS);
 

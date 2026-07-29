@@ -573,8 +573,11 @@ export function TicketsView({ role }: TicketsViewProps) {
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Chat input bar */}
-              <div className="p-3 md:p-4 border-t border-slate-200 bg-white pb-safe">
+              {/* Chat input bar. pb-[calc(...)] instead of `p-3 md:p-4
+                  pb-safe` — both would set padding-bottom at the same
+                  cascade specificity; see globals.css's .pb-safe comment.
+                  Responsive base (0.75rem/1rem) preserved, inset added. */}
+              <div className="px-3 md:px-4 pt-3 md:pt-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-slate-200 bg-white">
                 {isClosed ? (
                   <div className="text-xs text-slate-400 font-semibold italic text-center py-2 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center gap-1 flex-wrap">
                     <Lock className="h-3.5 w-3.5 shrink-0" /> This support ticket is closed and read-only.

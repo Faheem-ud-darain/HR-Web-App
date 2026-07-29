@@ -77,6 +77,25 @@ body {
 }
 
 @layer utilities {
+  /* IMPORTANT — do not combine these with a Tailwind padding shorthand
+     that touches the same side (e.g. `p-4 pt-safe`, `py-4 pb-safe`,
+     `p-3 md:p-4 pb-safe`). Both end up in Tailwind v4's generated
+     `utilities` layer at the same specificity, so whichever rule the
+     build happens to emit later silently wins the cascade — meaning
+     this safe-area padding can compile away to nothing (or the reverse:
+     it wins and erases the shorthand's base padding on Android/web,
+     where env() legitimately resolves to 0, not "unsupported") depending
+     on build-time class ordering, with zero visible sign of it in the
+     source. This is the actual reason the iOS status-bar/home-indicator
+     overlap fix didn't reliably take even though the classes were
+     present in the JSX (see Modal.tsx, TeamChatView.tsx, TicketsView.tsx,
+     auth/page.tsx, Sidebar.tsx's mobile drawer — all fixed to use
+     `pt-[calc(<base>+env(safe-area-inset-top))]` /
+     `pb-[calc(<base>+env(safe-area-inset-bottom))]` instead, which adds
+     the inset on top of the base padding with no cascade ambiguity).
+     Only use the bare .pt-safe/.pb-safe class when nothing else on that
+     element sets the same padding side (e.g. TopNav's header, which
+     sizes with min-h instead of vertical padding). */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 20px);
   }
