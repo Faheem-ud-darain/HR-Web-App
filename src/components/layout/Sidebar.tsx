@@ -185,7 +185,7 @@ export function Sidebar({ role }: SidebarProps) {
       return [
         { name: 'Home', href: '/hr', icon: LayoutDashboard },
         { name: 'Tasks', href: '/hr/tasks', icon: ClipboardList },
-        { name: 'Leaves', href: '/hr/leaves', icon: Clock },
+        { name: 'Chats', href: '/hr/team-chats', icon: MessageSquare },
         { name: 'Tickets', href: '/hr/tickets', icon: HelpCircle },
       ];
     }
@@ -193,13 +193,13 @@ export function Sidebar({ role }: SidebarProps) {
       return [
         { name: 'Overview', href: '/admin', icon: LayoutDashboard },
         { name: 'Tasks', href: '/admin/tasks', icon: ClipboardList },
-        { name: 'Leaves', href: '/admin/leaves', icon: Clock },
+        { name: 'Chats', href: '/admin/team-chats', icon: MessageSquare },
         { name: 'Tickets', href: '/admin/tickets', icon: HelpCircle },
       ];
     }
     return [
       { name: 'Dashboard', href: '/employee', icon: LayoutDashboard },
-      { name: 'Leaves', href: '/employee/leaves', icon: Clock },
+      { name: 'Chats', href: '/employee/chat', icon: MessageSquare },
       { name: 'Tickets', href: '/employee/tickets', icon: HelpCircle },
       ...(isTeamLead ? [{ name: 'Team Tasks', href: '/employee/tasks', icon: Star }] : [{ name: 'Salary', href: '/employee/salary', icon: Wallet }]),
     ];

@@ -188,13 +188,27 @@ export function CareersView({ role }: CareersViewProps) {
     // width so overflow-x-auto on the inner row is what scrolls, not body.
     <div className="space-y-16 max-w-6xl mx-auto font-sans min-w-0">
       
-      {/* High-End Editorial Hero Section */}
-      <section className="text-center space-y-4 py-8">
-        <h1 className="text-4xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase" style={{ fontFamily: 'Georgia, serif' }}>
+      {/* High-End Editorial Hero Section. min-w-0 + overflow-hidden + px-4
+          here are a defensive belt-and-suspenders: globals.css sets
+          `text-wrap: balance` globally on every h1/h2/h3 (for nicer
+          multi-line heading breaks elsewhere in the app), but combined with
+          `uppercase` + negative letter-spacing (`tracking-tight`) on this
+          particular heading it was overflowing past the right edge on
+          narrow phone widths instead of wrapping — the inline `textWrap:
+          'wrap'` below overrides the global balance rule (inline styles
+          always win over stylesheet rules) back to plain wrapping for just
+          this heading, and break-words/max-w-full on both the heading and
+          paragraph guarantee neither can push this section wider than the
+          screen even if that still weren't the whole story. */}
+      <section className="text-center space-y-4 py-8 px-4 min-w-0 overflow-hidden">
+        <h1
+          className="text-4xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full"
+          style={{ fontFamily: 'Georgia, serif', textWrap: 'wrap' }}
+        >
           Work with DelCargo
         </h1>
         <div className="h-0.5 w-12 bg-orange-600 mx-auto" />
-        <p className="max-w-2xl mx-auto text-slate-500 text-sm sm:text-base font-light leading-relaxed">
+        <p className="max-w-2xl mx-auto text-slate-500 text-sm sm:text-base font-light leading-relaxed break-words">
           We are building the future of supply-chain technology. Join our collaborative logistics and product teams in creating beautiful, operational-grade software.
         </p>
       </section>
