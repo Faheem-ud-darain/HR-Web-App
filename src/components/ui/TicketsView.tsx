@@ -446,12 +446,20 @@ export function TicketsView({ role }: TicketsViewProps) {
         <div className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-0 z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}>
           {selectedTicket ? (
             <div className="border-0 lg:border border-slate-200 overflow-hidden flex flex-col h-full lg:h-[calc(100vh-220px)] min-h-[560px] lg:rounded-xl bg-white">
-              {/* Header. pt-safe added — on mobile this whole panel is
-                  `fixed inset-x-0 top-0` (see the wrapping div above), which
-                  on notched/Dynamic-Island iPhones put the ticket title
-                  under the status bar with no way to tap "back". pt-safe is
-                  a no-op on the lg: static/desktop layout and on web. */}
-              <div className="px-3.5 lg:px-5 py-2.5 lg:py-4 pt-safe bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
+              {/* Header. Arbitrary-value pt (not `py-2.5 lg:py-4 pt-safe`
+                  combined) — this file's own globals.css comment warns that
+                  a bare .pt-safe/.pb-safe class stacked with a Tailwind
+                  padding shorthand touching the same side is a same-
+                  specificity cascade collision that can silently compile
+                  away to nothing. This panel is `fixed inset-x-0 top-0` on
+                  mobile (see the wrapping div above), which on notched/
+                  Dynamic-Island iPhones put the ticket title under the
+                  status bar with no way to tap "back" — and on Android,
+                  with zero top inset to add, it needs the same 12px
+                  minimum floor .pt-safe now gives everywhere else. Both
+                  env() and the pb-2.5/lg:pb-4 base are folded into one
+                  calc() per breakpoint instead. */}
+              <div className="px-3.5 lg:px-5 pt-[max(12px,env(safe-area-inset-top))] pb-2.5 lg:pb-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
                 {/* `grow` (flex-grow only) instead of `flex-1` — flex-1 sets
                     the `flex` shorthand (flex: 1 1 0%), which stomps on
                     basis-full's flex-basis: 100% depending on Tailwind's

@@ -25,13 +25,28 @@
 //
 // Fix: temporarily move src/app/api out of the tree, run the real build,
 // then restore it — success or failure, via try/finally.
+//
+// Also deletes .next before building. Without this, a previous `next dev`
+// or `next build` run (from before this route was moved) leaves behind
+// cached type-checking artifacts under .next/dev/types/ or .next/types/
+// that still reference src/app/api/pb/api/realtime/route.ts at its normal
+// path. With that file moved aside, TypeScript then fails with "Cannot
+// find module '.../api/pb/api/realtime/route.js'" — a stale-cache problem,
+// not a real one. Deleting .next forces every one of those to regenerate
+// fresh against the current (api-folder-moved) state of the tree.
 
-import { existsSync, renameSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const apiDir = path.join(process.cwd(), 'src', 'app', 'api');
 const apiBackupDir = path.join(process.cwd(), 'src', 'app', '__api_backup_for_capacitor_build__');
+const nextCacheDir = path.join(process.cwd(), '.next');
+
+if (existsSync(nextCacheDir)) {
+  rmSync(nextCacheDir, { recursive: true, force: true });
+  console.log('[build-for-capacitor] Cleared .next cache (avoids stale references to the moved api/ folder).');
+}
 
 const moved = existsSync(apiDir);
 if (moved) {
