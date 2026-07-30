@@ -115,7 +115,7 @@ export default function AuthPage() {
         }
 
         const sessionToken = generateSessionToken();
-        setSession(cleanEmail, role, rememberMe, sessionToken);
+        await setSession(cleanEmail, role, rememberMe, sessionToken);
         if (rememberMe) setRememberedEmail(cleanEmail);
         else clearRememberedEmail();
         if (role !== 'admin' && role !== 'hr') {
