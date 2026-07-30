@@ -123,11 +123,13 @@ body {
      top inset (Android, where the WebView doesn't draw under the status
      bar by default; or a non-notched iPhone), env(safe-area-inset-top)
      legitimately resolves to 0, which left headers with literally zero top
-     breathing room instead of just "no extra inset". 12px is the floor;
-     an actual notch/status bar inset (usually 44–59px) always wins since
-     max() picks whichever is larger. */
+     breathing room instead of just "no extra inset". 20px (not the earlier
+     12px) is the floor, matching .pb-safe's own 20px fallback above for
+     consistency — 12px read as visually indistinguishable from 0 in
+     testing. An actual notch/status bar inset (usually 44–59px) always
+     wins since max() picks whichever is larger. */
   .pt-safe {
-    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    padding-top: max(20px, env(safe-area-inset-top, 0px));
   }
 }
 

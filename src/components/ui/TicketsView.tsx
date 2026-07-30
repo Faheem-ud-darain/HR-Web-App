@@ -459,7 +459,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                   minimum floor .pt-safe now gives everywhere else. Both
                   env() and the pb-2.5/lg:pb-4 base are folded into one
                   calc() per breakpoint instead. */}
-              <div className="px-3.5 lg:px-5 pt-[max(12px,env(safe-area-inset-top))] pb-2.5 lg:pb-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
+              <div className="px-3.5 lg:px-5 pt-[max(20px,env(safe-area-inset-top))] pb-2.5 lg:pb-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
                 {/* `grow` (flex-grow only) instead of `flex-1` — flex-1 sets
                     the `flex` shorthand (flex: 1 1 0%), which stomps on
                     basis-full's flex-basis: 100% depending on Tailwind's
@@ -469,71 +469,73 @@ export function TicketsView({ role }: TicketsViewProps) {
                     full row width on mobile, so it never wrapped onto its
                     own line and the Operations button got squeezed onto
                     the same row instead of the row below it. */}
-                <div className="flex items-start gap-2 grow min-w-0 basis-full lg:basis-auto lg:items-center">
-                  <button onClick={() => setSelectedTicket(null)} className="lg:hidden h-8 w-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300">
+                {/* items-center (not items-start on mobile) — vertically
+                    centers the back button against the full two-line
+                    title + "Opened by" block, not just top-aligned with
+                    the title's line alone. */}
+                <div className="flex items-center gap-2 grow min-w-0">
+                  {/* No background box, matching TopNav's chat-screen back
+                      button (TopNav.tsx) — just an icon, not a filled pill. */}
+                  <button onClick={() => setSelectedTicket(null)} className="lg:hidden h-8 w-8 shrink-0 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 truncate">
-                    <span className="truncate">{selectedTicket.title}</span>
-                    {isEmp && isTicketLiveWithHR(selectedTicket.id) && (
-                      <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                        <Headset className="h-3 w-3" /> Live
-                      </span>
-                    )}
-                  </h3>
-                  <div className="text-[10px] text-slate-600 font-bold mt-0.5 flex items-center gap-1.5 min-w-0">
-                    <span className="shrink-0 whitespace-nowrap">Opened by:</span>
-                    <button
-                      onClick={() => handleInspectApplicant(selectedTicket.employeeEmail)}
-                      className="text-orange-700 hover:underline flex items-center gap-0.5 min-w-0"
-                    >
-                      <span className="truncate">{nameFor(selectedTicket.employeeName)}</span>
-                      <Eye className="h-3 w-3 shrink-0" />
-                    </button>
+                  <div className="min-w-0 flex-1">
+                    {/* Title row + Operations now share one row (previously
+                        Operations was a separate div pushed onto its own
+                        wrapped flex line via ml-auto — which visually read
+                        as "floating, disconnected from the title" rather
+                        than inline with it). justify-between here does the
+                        right-alignment instead. */}
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 truncate min-w-0">
+                        <span className="truncate">{selectedTicket.title}</span>
+                        {isEmp && isTicketLiveWithHR(selectedTicket.id) && (
+                          <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            <Headset className="h-3 w-3" /> Live
+                          </span>
+                        )}
+                      </h3>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isHR && !isClosed && (
+                          <button
+                            onClick={() => handleCloseTicket(selectedTicket.id)}
+                            disabled={updatingTicketStatusId === selectedTicket.id}
+                            title="Close Ticket"
+                            className="h-8 w-8 lg:w-auto lg:px-3 lg:py-1.5 text-xs font-semibold bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {updatingTicketStatusId === selectedTicket.id ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
+                            <span className="hidden lg:inline">Close Ticket</span>
+                          </button>
+                        )}
+                        {isHR && isClosed && (
+                          <button
+                            onClick={() => handleReopenTicket(selectedTicket.id)}
+                            disabled={updatingTicketStatusId === selectedTicket.id}
+                            title="Re-open Ticket"
+                            className="h-8 w-8 lg:w-auto lg:px-3 lg:py-1.5 text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {updatingTicketStatusId === selectedTicket.id ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <RotateCcw className="h-3.5 w-3.5 shrink-0" />}
+                            <span className="hidden lg:inline">Re-open Ticket</span>
+                          </button>
+                        )}
+                        {isClosed && !isHR && (
+                          <span className="text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                            <Lock className="h-3 w-3" /> Closed by HR
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-600 font-bold mt-0.5 flex items-center gap-1.5 min-w-0">
+                      <span className="shrink-0 whitespace-nowrap">Opened by:</span>
+                      <button
+                        onClick={() => handleInspectApplicant(selectedTicket.employeeEmail)}
+                        className="text-orange-700 hover:underline flex items-center gap-0.5 min-w-0"
+                      >
+                        <span className="truncate min-w-0">{nameFor(selectedTicket.employeeName)}</span>
+                        <Eye className="h-3 w-3 shrink-0" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-                </div>
-
-                {/* Operations. ml-auto, not a fixed ml-10 — the title/
-                    opened-by block above is basis-full on mobile, so this
-                    div wraps onto its own flex line; a fixed left margin
-                    just offsets it from the left edge on that line instead
-                    of pushing it to the right, which is what left it
-                    stranded near the left with a lot of dead space next
-                    to it. margin-left: auto is what actually pushes an
-                    item to the end of its own flex line. lg:ml-0 cancels
-                    it back out on desktop, where this div already shares
-                    the title's row and justify-between (on the parent)
-                    handles right-alignment on its own. */}
-                <div className="flex items-center gap-2 shrink-0 ml-auto lg:ml-0">
-                  {isHR && !isClosed && (
-                    <button
-                      onClick={() => handleCloseTicket(selectedTicket.id)}
-                      disabled={updatingTicketStatusId === selectedTicket.id}
-                      title="Close Ticket"
-                      className="h-8 w-8 lg:w-auto lg:px-3 lg:py-1.5 text-xs font-semibold bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {updatingTicketStatusId === selectedTicket.id ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <Lock className="h-3.5 w-3.5 shrink-0" />}
-                      <span className="hidden lg:inline">Close Ticket</span>
-                    </button>
-                  )}
-                  {isHR && isClosed && (
-                    <button
-                      onClick={() => handleReopenTicket(selectedTicket.id)}
-                      disabled={updatingTicketStatusId === selectedTicket.id}
-                      title="Re-open Ticket"
-                      className="h-8 w-8 lg:w-auto lg:px-3 lg:py-1.5 text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {updatingTicketStatusId === selectedTicket.id ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : <RotateCcw className="h-3.5 w-3.5 shrink-0" />}
-                      <span className="hidden lg:inline">Re-open Ticket</span>
-                    </button>
-                  )}
-                  {isClosed && !isHR && (
-                    <span className="text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                      <Lock className="h-3 w-3" /> Closed by HR
-                    </span>
-                  )}
                 </div>
               </div>
 
