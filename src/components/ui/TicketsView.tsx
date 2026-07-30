@@ -433,12 +433,25 @@ export function TicketsView({ role }: TicketsViewProps) {
           </div>
         </div>
 
-        {/* Conversation Chat Panel */}
-        <div className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-x-0 top-0 bottom-[64px] z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}>
+        {/* Conversation Chat Panel. bottom-0, not bottom-[64px] — this panel
+            only ever renders fixed when selectedTicket is truthy, which is
+            the exact same condition that calls pushModal() (above) to hide
+            the floating bottom pill nav (Sidebar.tsx, via modalStack). So
+            there's no state where this panel is fixed AND that nav is still
+            visible — reserving 64px for it left a dead gap at the bottom of
+            the screen with everything else pushed up into it. The reply
+            bar / "Replies disabled" banner further down already has its own
+            safe-area bottom padding (env(safe-area-inset-bottom)), so
+            bottom-0 here doesn't put anything under the home indicator. */}
+        <div className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-0 z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}>
           {selectedTicket ? (
             <div className="border-0 lg:border border-slate-200 overflow-hidden flex flex-col h-full lg:h-[calc(100vh-220px)] min-h-[560px] lg:rounded-xl bg-white">
-              {/* Header */}
-              <div className="px-3.5 lg:px-5 py-2.5 lg:py-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
+              {/* Header. pt-safe added — on mobile this whole panel is
+                  `fixed inset-x-0 top-0` (see the wrapping div above), which
+                  on notched/Dynamic-Island iPhones put the ticket title
+                  under the status bar with no way to tap "back". pt-safe is
+                  a no-op on the lg: static/desktop layout and on web. */}
+              <div className="px-3.5 lg:px-5 py-2.5 lg:py-4 pt-safe bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 md:gap-4">
                 {/* `grow` (flex-grow only) instead of `flex-1` — flex-1 sets
                     the `flex` shorthand (flex: 1 1 0%), which stomps on
                     basis-full's flex-basis: 100% depending on Tailwind's
