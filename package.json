@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "cap:sync": "set CAPACITOR_BUILD=true&& set NEXT_PUBLIC_PB_URL=http://157.230.7.89&& next build && npx cap sync android",
-    "cap:android": "set CAPACITOR_BUILD=true&& set NEXT_PUBLIC_PB_URL=http://157.230.7.89&& next build && npx cap sync android && npx cap open android",
-    "cap:sync:ios": "set CAPACITOR_BUILD=true&& set NEXT_PUBLIC_PB_URL=http://157.230.7.89&& next build && npx cap sync ios",
-    "cap:ios": "set CAPACITOR_BUILD=true&& set NEXT_PUBLIC_PB_URL=http://157.230.7.89&& next build && npx cap sync ios && npx cap open ios"
+    "build:capacitor": "node scripts/build-for-capacitor.mjs",
+    "cap:sync": "npm run build:capacitor && npx cap sync android",
+    "cap:android": "npm run build:capacitor && npx cap sync android && npx cap open android",
+    "cap:sync:ios": "npm run build:capacitor && npx cap sync ios",
+    "cap:ios": "npm run build:capacitor && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
