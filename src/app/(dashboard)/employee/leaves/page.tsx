@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, calculateTenure, getPTOAccrualDate, LeaveApplication, Profile, formatMoney } from '@/lib/hrData';
+import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, calculateTenure, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -46,8 +46,17 @@ export default function EmployeeLeavesPage() {
     return () => window.removeEventListener('globalSearch', handleSearch);
   }, [allProfiles, allLeaves]);
 
-  // Sync cashout days input limit with remaining PTO balance
-  const remainingPTO = userProfile && userProfile.joinedDate ? (calculatePTOAccrued(getPTOAccrualDate(userProfile)) - (allLeaves || []).filter(l => l.employeeName === userProfile.fullName && l.status === 'approved' && ['PTO'].includes(l.type)).length) : 0;
+  // Sync cashout days input limit with remaining PTO balance. Uses the
+  // shared getRemainingPTO helper (hrData.ts) instead of an inline
+  // recomputation — this card is labeled "Remaining Bank (PTO + Sick)", so
+  // the subtraction needs to include Sick Leave days taken too, count
+  // actual approved days (not a raw count of leave records — a single
+  // multi-day Sick Leave request is more than 1 day), and round/floor the
+  // result. The previous inline version did none of this, which is why it
+  // could render floating-point noise like "-0.17000000000000004 Days".
+  const remainingPTO = userProfile && userProfile.joinedDate
+    ? getRemainingPTO(allLeaves || [], userProfile.fullName, getPTOAccrualDate(userProfile))
+    : 0;
   useEffect(() => {
     if (remainingPTO > 0) {
       setCashoutDays(Math.floor(remainingPTO));

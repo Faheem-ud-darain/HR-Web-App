@@ -59,11 +59,14 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  // Brand orange — matches capacitor.config.ts's native SplashScreen
-  // background and SplashScreenOverlay.tsx's overlay, so the browser
-  // chrome (address bar on Android, PWA title bar) and the boot splash
-  // read as one consistent color instead of a jarring mismatch.
-  themeColor: "#EA580C",
+  // Navy — matches capacitor.config.ts's native SplashScreen background
+  // and SplashScreenOverlay.tsx's overlay (both updated to the real "DC
+  // HUB" navy/gold brand mark), so the browser chrome (address bar on
+  // Android, PWA title bar) and the boot splash read as one consistent
+  // color instead of a jarring mismatch. This used to be the old brand
+  // orange (#EA580C) and was never updated when the splash screen was
+  // redone.
+  themeColor: "#0B0F1A",
 };
 
 export default function RootLayout({
