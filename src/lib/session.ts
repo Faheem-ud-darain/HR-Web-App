@@ -36,6 +36,28 @@ const EMAIL_KEY = 'user_email';
 const ROLE_KEY = 'user_role';
 const TOKEN_KEY = 'session_token';
 
+// Single source of truth for "what roles actually exist" — every place that
+// reads a stored role (root page, auth page, dashboard layout) validates
+// against this instead of trusting whatever string happens to be sitting in
+// storage. A stale/corrupted value (e.g. from an old build, or storage
+// tampering) should fall back to "not logged in", never get treated as a
+// live session and routed somewhere that doesn't exist.
+export const VALID_ROLES = ['admin', 'hr', 'employee', 'team_lead'] as const;
+export type SessionRole = typeof VALID_ROLES[number];
+
+export function isValidRole(role: string | null): role is SessionRole {
+  return !!role && (VALID_ROLES as readonly string[]).includes(role);
+}
+
+// team_lead accounts share the employee dashboard (see auth/page.tsx and
+// (dashboard)/layout.tsx) — there is no /team_lead route. Anything that
+// needs to turn a role into a URL segment or a section-membership check
+// should go through this instead of comparing the raw role string, so a
+// team_lead never gets redirected at a route that doesn't exist.
+export function dashboardSectionForRole(role: SessionRole): 'admin' | 'hr' | 'employee' {
+  return role === 'team_lead' ? 'employee' : role;
+}
+
 async function mirrorToNativePreferences(email: string | null, role: string | null, token: string | null): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {

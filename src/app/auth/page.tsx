@@ -6,10 +6,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useRouter } from 'next/navigation';
 import { hrActions, useProfiles } from '@/lib/hrData';
-import { setSession, generateSessionToken, getDeviceLabel, getRememberedEmail, setRememberedEmail, clearRememberedEmail } from '@/lib/session';
+import {
+  setSession,
+  generateSessionToken,
+  getDeviceLabel,
+  getRememberedEmail,
+  setRememberedEmail,
+  clearRememberedEmail,
+  getSessionEmail,
+  getSessionRole,
+  hydrateSessionFromNativeStorage,
+  isValidRole,
+  dashboardSectionForRole,
+  clearSession,
+} from '@/lib/session';
 import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
 
 export default function AuthPage() {
+  // Same cold-start problem as the root page: if the WebView happens to
+  // (re)load straight at /auth (e.g. the user tapped "Sign In" from the
+  // public page, or bookmarked it) while a valid session already exists,
+  // skip the login form entirely instead of making them re-enter their
+  // password. Kept separate from the root page's check (not shared state)
+  // since either page can be the first one to mount.
+  const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -31,6 +51,30 @@ export default function AuthPage() {
   const [pendingDashRoute, setPendingDashRoute] = useState<string | null>(null);
   const router = useRouter();
   const { refetch: refetchProfiles } = useProfiles();
+
+  // Boot-time session check (see the comment on `checkingSession` above).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await hydrateSessionFromNativeStorage();
+      if (cancelled) return;
+
+      const savedRole = getSessionRole();
+      const savedEmail = getSessionEmail();
+
+      if (savedRole && savedEmail) {
+        if (isValidRole(savedRole)) {
+          router.replace(`/${dashboardSectionForRole(savedRole)}`);
+          return; // stay on the loading state — navigation is taking over
+        }
+        // Unknown/corrupted role — don't route anywhere, just show the
+        // login form as if there were no session.
+        clearSession();
+      }
+      if (!cancelled) setCheckingSession(false);
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
 
   // Pre-fill the email field from a previous "Remember me" login — this is
   // the only thing that's actually remembered into the form itself; the
@@ -164,6 +208,17 @@ export default function AuthPage() {
   // another device" notice next time it checks in — same mechanism, just
   // triggered deliberately instead of by a competing login.
   const handleForceLoginEverywhere = () => attemptLogin(true);
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <svg className="animate-spin h-8 w-8 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+    );
+  }
 
   return (
     // Uses arbitrary-value padding-top (below) instead of `p-4 pt-safe` —

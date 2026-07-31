@@ -5,7 +5,16 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
 import { Profile, hrActions, useProfiles } from '@/lib/hrData';
-import { getSessionEmail, getSessionRole, getSessionToken, clearSession, hydrateSessionFromNativeStorage } from '@/lib/session';
+import {
+  getSessionEmail,
+  getSessionRole,
+  getSessionToken,
+  clearSession,
+  hydrateSessionFromNativeStorage,
+  isValidRole,
+  dashboardSectionForRole,
+  SessionRole,
+} from '@/lib/session';
 import { initPush } from '@/lib/push';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -46,7 +55,14 @@ function PageTransition({ className, children }: { className: string; children: 
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<'admin' | 'hr' | 'employee' | null>(null);
+  // Widened to include 'team_lead' — it's a real value Profile.role/session
+  // can hold (see src/lib/hrData.ts), not just 'admin' | 'hr' | 'employee'.
+  // Sidebar already accepts it directly; anywhere this layout needs to
+  // reason about *which dashboard section* a role belongs to (RBAC route
+  // checks, onboarding/approval gates below) goes through
+  // dashboardSectionForRole() instead of comparing this raw value, so
+  // team_lead is never mistaken for "not employee".
+  const [role, setRole] = useState<SessionRole | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   
@@ -105,15 +121,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const { data: allProfiles, isLoading: isProfilesLoading } = useProfiles();
 
-  // Redirect if unauthorized
+  // Redirect if unauthorized.
+  //
+  // IMPORTANT: this used to compare pathname against the *raw* profile.role,
+  // which is broken for team_lead accounts — team_lead shares the /employee
+  // dashboard (there is no /team_lead route), so `profile.role !== 'employee'`
+  // was true for every team lead on their own dashboard, and
+  // `router.push('/team_lead')` sent them to a route that doesn't exist
+  // (a dead page, not a redirect to safety). Always resolve through
+  // dashboardSectionForRole() first so this can only ever push to
+  // '/admin', '/hr', or '/employee' — one of the three sections that
+  // actually exist under this layout.
   useEffect(() => {
-    if (!isProfilesLoading && profile) {
-      if (pathname.startsWith('/admin') && profile.role !== 'admin') {
-        router.push(`/${profile.role}`);
-      } else if (pathname.startsWith('/hr') && !['hr', 'admin'].includes(profile.role)) {
-        router.push(`/${profile.role}`);
-      } else if (pathname.startsWith('/employee') && profile.role !== 'employee') {
-        router.push(`/${profile.role}`);
+    if (!isProfilesLoading && profile && isValidRole(profile.role)) {
+      const section = dashboardSectionForRole(profile.role);
+      if (pathname.startsWith('/admin') && section !== 'admin') {
+        router.push(`/${section}`);
+      } else if (pathname.startsWith('/hr') && !['hr', 'admin'].includes(section)) {
+        router.push(`/${section}`);
+      } else if (pathname.startsWith('/employee') && section !== 'employee') {
+        router.push(`/${section}`);
       }
     }
   }, [pathname, profile, isProfilesLoading, router]);
@@ -129,12 +156,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       await hydrateSessionFromNativeStorage();
       if (cancelled) return;
 
-      const savedRole = getSessionRole() as 'admin' | 'hr' | 'employee' | null;
+      const rawRole = getSessionRole();
       const savedEmail = getSessionEmail();
 
-      if (!savedRole || !savedEmail) {
+      // Validate the role value itself, not just its presence — a
+      // corrupted/stale/unknown role should be treated the same as "not
+      // logged in" rather than being trusted and set into state, where it
+      // could otherwise get handed to Sidebar or compared against pathnames
+      // that don't account for it.
+      if (!rawRole || !savedEmail || !isValidRole(rawRole)) {
+        if (rawRole && !isValidRole(rawRole)) clearSession();
         router.push('/auth');
       } else {
+        const savedRole = rawRole;
         setRole(savedRole);
         setEmail(savedEmail);
 
@@ -145,7 +179,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             setProfile(userProfile);
           }
 
-          if (savedRole === 'employee' && (!userProfile || !userProfile.onboardingCompleted)) {
+          // team_lead accounts go through the same onboarding/consent flow
+          // as employee — they're employees first, lead status is layered
+          // on top (see hrData.ts / Sidebar.tsx).
+          if ((savedRole === 'employee' || savedRole === 'team_lead') && (!userProfile || !userProfile.onboardingCompleted)) {
             const consent = localStorage.getItem(`consent_accepted_${savedEmail}`);
             if (!consent) {
               setShowConsent(true);
@@ -357,7 +394,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  if (!dbReady || !role || (role === 'employee' && !profile)) {
+  if (!dbReady || !role || ((role === 'employee' || role === 'team_lead') && !profile)) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <svg className="animate-spin h-8 w-8 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -368,8 +405,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // Force onboarding stepper gate if user is employee and onboarding is incomplete
-  if (role === 'employee' && profile && !profile.onboardingCompleted) {
+  // Force onboarding stepper gate if user is employee (or team_lead, who is
+  // an employee first) and onboarding is incomplete
+  if ((role === 'employee' || role === 'team_lead') && profile && !profile.onboardingCompleted) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col py-6 md:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-xl mx-auto w-full bg-white border border-slate-200 rounded-xl p-4 sm:p-8 shadow-sm">
@@ -916,7 +954,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // the uploaded documents yet. Deliberately only fires for 'pending' or
   // 'rejected' — undefined (employees onboarded before this feature
   // existed) is left alone so nobody already using the app gets locked out.
-  if (role === 'employee' && profile && profile.onboardingCompleted && (profile.approvalStatus === 'pending' || profile.approvalStatus === 'rejected')) {
+  if ((role === 'employee' || role === 'team_lead') && profile && profile.onboardingCompleted && (profile.approvalStatus === 'pending' || profile.approvalStatus === 'rejected')) {
     const isRejected = profile.approvalStatus === 'rejected';
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

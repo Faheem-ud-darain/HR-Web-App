@@ -1,10 +1,66 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CareersView } from '@/components/ui/CareersView';
 import Link from 'next/link';
+import {
+  getSessionEmail,
+  getSessionRole,
+  hydrateSessionFromNativeStorage,
+  isValidRole,
+  dashboardSectionForRole,
+  clearSession,
+} from '@/lib/session';
 
 export default function Home() {
+  const router = useRouter();
+  // On a Capacitor cold start (app fully killed, not just backgrounded),
+  // the WebView always reloads at "/" first — this page — regardless of
+  // where the user was before closing the app. Previously this page never
+  // looked at the session at all, so a logged-in user landed back on the
+  // public Careers page and had to sign in again even though their session
+  // token was still valid in storage; that's what read as "logged out on
+  // restart." This check runs once at boot and, if a valid session is
+  // found, redirects straight into the dashboard instead. `checked` gates
+  // rendering the public page so there's no flash of it before the
+  // redirect takes over.
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await hydrateSessionFromNativeStorage();
+      if (cancelled) return;
+
+      const savedRole = getSessionRole();
+      const savedEmail = getSessionEmail();
+
+      if (savedRole && savedEmail) {
+        if (isValidRole(savedRole)) {
+          router.replace(`/${dashboardSectionForRole(savedRole)}`);
+          return; // stay on the loading state — navigation is taking over
+        }
+        // Unknown/corrupted role value — don't route somewhere that may
+        // not exist. Clear it and fall through to the public page.
+        clearSession();
+      }
+      if (!cancelled) setChecked(true);
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
+  if (!checked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <svg className="animate-spin h-8 w-8 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
       {/* Premium Public Landing Header. min-h-16 + pt-safe (not h-16) is
