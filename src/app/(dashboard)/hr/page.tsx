@@ -7,9 +7,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { OrgCalendar } from '@/components/ui/OrgCalendar';
 import { TaskModal } from '@/components/ui/TaskModal';
-import { Users, Clock, CheckCircle2, ClipboardList, UserCog, PlusCircle, Loader2, Trash2, Eye } from 'lucide-react';
+import { Users, Clock, CheckCircle2, ClipboardList, PlusCircle, Loader2, Trash2, Eye, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, displayName } from '@/lib/hrData';
+import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName } from '@/lib/hrData';
+import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
+import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 
 export default function HRDashboard() {
   const router = useRouter();
@@ -19,6 +21,7 @@ export default function HRDashboard() {
   const { data: leaves = [], refetch: refetchLeaves } = useLeaves();
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
   const { data: teamsData = [], refetch: refetchTeams } = useTeams();
+  const { data: timesheets = [] } = useTimesheets();
 
   // LeaveApplication only snapshots a fullName, not a live Profile reference.
   const nameFor = (employeeName: string): string => {
@@ -42,6 +45,11 @@ export default function HRDashboard() {
   const [annContent, setAnnContent] = useState('');
   const [annTargetType, setAnnTargetType] = useState<'all' | 'usa' | 'pakistan' | 'warehouses'>('all');
   const [annSelectedWarehouses, setAnnSelectedWarehouses] = useState<string[]>([]);
+  // Important announcements get a blocking popup in front of every targeted
+  // employee (see AnnouncementPopup.tsx) instead of just sitting quietly in
+  // the passive "Recent Announcements" feed — reserve this for things that
+  // actually need a forced acknowledgment, not routine updates.
+  const [annImportant, setAnnImportant] = useState(false);
   const [annSuccess, setAnnSuccess] = useState('');
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
@@ -96,7 +104,7 @@ export default function HRDashboard() {
     setIsPostingAnnouncement(true);
     try {
       const targetVal = annTargetType === 'warehouses' ? annSelectedWarehouses : annTargetType;
-      await hrActions.addAnnouncement(annTitle, annContent, targetVal, 'HR Manager');
+      await hrActions.addAnnouncement(annTitle, annContent, targetVal, 'HR Manager', annImportant);
       refetchAnnouncements();
       setAnnSuccess('Announcement posted successfully!');
 
@@ -106,6 +114,7 @@ export default function HRDashboard() {
         setAnnContent('');
         setAnnTargetType('all');
         setAnnSelectedWarehouses([]);
+        setAnnImportant(false);
         setAnnSuccess('');
       }, 1200);
     } finally {
@@ -156,8 +165,6 @@ export default function HRDashboard() {
 
   // Stats
   const pendingLeaves = leaves.filter(l => l.status === 'pending').length;
-  const activeTasks = tasks.filter(t => t.status !== 'done').length;
-  const teamLeads = employees.filter(e => e.isTeamLead).length;
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -185,7 +192,13 @@ export default function HRDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <Card>
+        <Card
+          onClick={() => router.push('/hr/teams')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push('/hr/teams'); } }}
+          className="cursor-pointer"
+        >
           <CardContent className="pt-4 md:pt-5">
             <div className="flex items-center justify-between">
               <div>
@@ -198,7 +211,13 @@ export default function HRDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          onClick={() => router.push('/hr/leaves')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push('/hr/leaves'); } }}
+          className="cursor-pointer"
+        >
           <CardContent className="pt-4 md:pt-5">
             <div className="flex items-center justify-between">
               <div>
@@ -211,32 +230,8 @@ export default function HRDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Active Tasks</p>
-                <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{activeTasks}</p>
-              </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
-                <ClipboardList className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Team Leads</p>
-                <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{teamLeads}</p>
-              </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <UserCog className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <AvgHoursWorkedCard employees={employees} timesheets={timesheets} viewerRole="hr" />
+        <ActiveEmployeesCard employees={employees} timesheets={timesheets} viewerRole="hr" />
       </div>
 
       {/* Pending Leave Requests — the primary actionable item for HR, surfaced
@@ -298,6 +293,11 @@ export default function HRDashboard() {
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-wrap break-words">{ann.content}</p>
                 </div>
                 <div className="flex items-center gap-2 self-start shrink-0">
+                  {ann.important && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      <AlertTriangle className="h-3 w-3" /> Important
+                    </span>
+                  )}
                   <Badge variant={ann.target === 'all' ? 'default' : 'warning'}>
                     Target: {Array.isArray(ann.target)
                       ? `Warehouses (${ann.target.map((tId: string) => warehouses.find(w => w.id === tId)?.name || tId).join(', ')})`
@@ -452,6 +452,21 @@ export default function HRDashboard() {
               </div>
             </div>
           )}
+
+          <label className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer">
+            <input
+              type="checkbox"
+              checked={annImportant}
+              onChange={e => setAnnImportant(e.target.checked)}
+              className="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span className="text-xs">
+              <span className="font-bold text-amber-900 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Mark as Important</span>
+              <span className="block text-amber-700 font-medium mt-0.5">
+                Every targeted employee gets a popup they must explicitly mark as read — it reappears on every login or page refresh until they do.
+              </span>
+            </span>
+          </label>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <button type="button" disabled={isPostingAnnouncement} onClick={() => setIsAnnounceOpen(false)} className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-4 py-2.5 md:py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>

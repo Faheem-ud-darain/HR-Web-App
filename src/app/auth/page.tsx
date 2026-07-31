@@ -61,6 +61,7 @@ export default function AuthPage() {
 
       const savedRole = getSessionRole();
       const savedEmail = getSessionEmail();
+      console.log('[boot-session] auth page decision:', { savedRole, savedEmail });
 
       if (savedRole && savedEmail) {
         if (isValidRole(savedRole)) {

@@ -19,6 +19,7 @@ import { initPush } from '@/lib/push';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
+import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload } from 'lucide-react';
 
@@ -1027,6 +1028,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </PageTransition>
         </main>
       </div>
+
+      {/* Blocking "important" announcement popup — employee/team_lead only;
+          HR/Admin are the ones posting these, they shouldn't get blocked by
+          their own broadcast. See AnnouncementPopup.tsx for why this isn't
+          built on the shared <Modal> (must not be dismissible except via its
+          own Mark as Read button). */}
+      {(role === 'employee' || role === 'team_lead') && (
+        <AnnouncementPopup email={email} profile={profile} />
+      )}
 
       {/* Consent Popup Overlay Gate */}
       {showConsent && (

@@ -357,45 +357,185 @@ button:active {
   }
 }
 
-/* Native app splash screen (SplashScreenOverlay.tsx) — the custom in/out
-   motion layered on top of the static native splash image so the app has a
-   real branded launch animation instead of Capacitor's plain instant-hide.
-   Entrance uses the same ease-out-snappy as everything else in this file;
-   exit uses a mirrored ease-in curve (accelerating away) rather than reusing
-   the enter curve backwards, since an ease-out exit reads as hesitant. */
-.splash-logo-in {
-  animation: splash-logo-in 520ms var(--ease-out-snappy) both;
+/* Native app splash screen (SplashScreenOverlay.tsx) — a hand-built
+   sequence recreating the real "DC HUB" app icon piece by piece, instead of
+   fading/scaling a single flat image. Each step below fires once, staggered
+   via animation-delay, in this order: bubble outline draws in -> tail pops
+   in -> "D" pops in -> "C" pops in -> "by DelCargo" focuses in from wide,
+   faded letter-spacing to settled. Timings here must stay in sync with
+   HOLD_MS in SplashScreenOverlay.tsx (that timer can't fire before the
+   tagline's own delay + duration below have had time to finish). */
+
+.splash-bubble-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: splash-bubble-draw 640ms var(--ease-out-snappy) 60ms both;
 }
-@keyframes splash-logo-in {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+@keyframes splash-bubble-draw {
+  to { stroke-dashoffset: 0; }
 }
 
+.splash-tail-in {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: splash-tail-in 260ms var(--ease-out-snappy) 620ms both;
+}
+@keyframes splash-tail-in {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Shared "pop in with a little overshoot" spring for the two letters —
+   00 is deliberately a 3-stop keyframe (not a plain from/to) so it actually
+   overshoots past 100% scale before settling, which reads as a spring
+   rather than a linear ease no matter which cubic-bezier wraps it. */
+.splash-letter {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: splash-letter-pop 420ms var(--ease-out-snappy) both;
+}
+.splash-letter-d { animation-delay: 700ms; }
+.splash-letter-c { animation-delay: 820ms; }
+@keyframes splash-letter-pop {
+  0% { opacity: 0; transform: scale(0.5) translateY(6px); }
+  70% { opacity: 1; transform: scale(1.08) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.splash-tagline-in {
+  opacity: 0;
+  letter-spacing: 0.4em;
+  animation: splash-tagline-in 480ms var(--ease-in-out-smooth) 1080ms both;
+}
+@keyframes splash-tagline-in {
+  from { opacity: 0; letter-spacing: 0.4em; transform: translateY(6px); }
+  to { opacity: 1; letter-spacing: 0.12em; transform: translateY(0); }
+}
+
+/* Exit: fades + drifts upward (not just scales) — a small extra touch over
+   the old plain scale-up, reads as the whole mark "releasing" rather than
+   just growing. Accelerating ease-in (not a mirrored ease-out) on purpose:
+   an ease-out exit reads as hesitant. */
 .splash-overlay-out {
-  animation: splash-overlay-out 380ms cubic-bezier(0.6, 0, 1, 0.2) both;
+  animation: splash-overlay-out 420ms cubic-bezier(0.6, 0, 1, 0.2) both;
 }
 @keyframes splash-overlay-out {
   from {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0) scale(1);
   }
   to {
     opacity: 0;
-    transform: scale(1.08);
+    transform: translateY(-14px) scale(1.05);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .splash-logo-in, .splash-overlay-out {
+  .splash-bubble-draw, .splash-tail-in, .splash-letter, .splash-tagline-in, .splash-overlay-out {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+    letter-spacing: 0.12em;
+    transform: none;
+  }
+}
+
+/* ActiveEmployeesCard's and AvgHoursWorkedCard's mini sparkline (dashboard
+   Overview) — a single smooth gradient-filled area + line, not a separate
+   bar chart bolted on next to it. Two competing chart idioms (bars AND a
+   line AND dots on top of the bars) in a space this small just looked
+   busy/homemade; one clean shape reads as considerably more polished, same
+   idiom as Apple Health / most stat-card sparklines. The gradient fill
+   fades in first, the line draws itself in via a stroke animation (same
+   pathLength=1 technique as SplashScreenOverlay's speech-bubble outline),
+   then a single highlighted dot pops in at today's point — one focal
+   marker instead of one per day, which is plenty for a 7-point trend. */
+.chart-area-fill {
+  opacity: 0;
+  animation: chart-area-in 450ms var(--ease-in-out-smooth) both;
+}
+@keyframes chart-area-in {
+  to { opacity: 1; }
+}
+
+.chart-line-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: chart-line-draw 620ms var(--ease-out-snappy) both;
+}
+@keyframes chart-line-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.chart-dot-today {
+  opacity: 0;
+  transform: scale(0.3);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chart-dot-in 300ms var(--ease-out-snappy) 680ms both;
+}
+@keyframes chart-dot-in {
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-area-fill, .chart-line-draw, .chart-dot-today {
     animation: none;
     opacity: 1;
     transform: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Hover/tap tooltip for the sparkline point currently being pointed at —
+   quick scale+fade pop, not a plain instant appear, matching the rest of
+   this app's animated micro-interactions. */
+.chart-tooltip-in {
+  animation: chart-tooltip-in 140ms var(--ease-out-snappy) both;
+}
+@keyframes chart-tooltip-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.chart-hover-dot {
+  animation: chart-dot-in 160ms var(--ease-out-snappy) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-tooltip-in { animation: none; }
+  .chart-hover-dot { animation: none; }
+}
+
+/* AvgHoursWorkedCard's modal roster — each row gets its own animated
+   horizontal bar (relative to that 7-day window's top earner) so the
+   per-employee list reads as a chart at a glance, not just a column of
+   numbers. Width is set inline per row (data-driven), the bar just grows
+   in from the left with a per-row stagger — same "grow, don't just
+   appear" language as the card's own bar+line sparkline above. */
+.hbar-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #f1f5f9; /* slate-100 */
+  overflow: hidden;
+}
+.hbar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #38bdf8, #0ea5e9); /* sky-400 -> sky-500 */
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: hbar-grow 420ms var(--ease-out-snappy) both;
+}
+@keyframes hbar-grow {
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hbar-fill {
+    animation: none;
+    transform: scaleX(1);
   }
 }
 

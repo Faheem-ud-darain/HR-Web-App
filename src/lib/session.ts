@@ -68,12 +68,22 @@ async function mirrorToNativePreferences(email: string | null, role: string | nu
         Preferences.remove({ key: ROLE_KEY }),
         Preferences.remove({ key: TOKEN_KEY }),
       ]);
+      console.log('[session] cleared native Preferences mirror');
     } else {
       await Promise.all([
         Preferences.set({ key: EMAIL_KEY, value: email }),
         Preferences.set({ key: ROLE_KEY, value: role || '' }),
         token ? Preferences.set({ key: TOKEN_KEY, value: token }) : Preferences.remove({ key: TOKEN_KEY }),
       ]);
+      // Read straight back after writing — confirms the native round-trip
+      // actually landed, rather than just trusting the `set()` promises
+      // resolved. If this ever logs a mismatch, the plugin call itself is
+      // silently lying about success.
+      const [{ value: checkEmail }, { value: checkRole }] = await Promise.all([
+        Preferences.get({ key: EMAIL_KEY }),
+        Preferences.get({ key: ROLE_KEY }),
+      ]);
+      console.log('[session] wrote native Preferences mirror, verified read-back:', { checkEmail, checkRole });
     }
   } catch (err) {
     // Best-effort mirror only — localStorage/sessionStorage (already
@@ -120,7 +130,19 @@ export async function setSession(email: string, role: string, remember: boolean,
 // every load after the first).
 export async function hydrateSessionFromNativeStorage(): Promise<void> {
   if (typeof window === 'undefined' || !Capacitor.isNativePlatform()) return;
-  if (window.localStorage.getItem(EMAIL_KEY)) return; // already present, nothing to restore
+
+  // Previously this bailed out entirely the moment EMAIL_KEY alone was
+  // present in localStorage, on the assumption that meant "the whole
+  // session survived, nothing to restore." That's wrong if only *some* of
+  // the three keys made it through whatever wiped WebView storage — e.g.
+  // email present but role/token gone — since the early return meant the
+  // missing keys never got recovered from Preferences even though they
+  // were sitting right there. Every key is now checked and restored
+  // independently instead of gating on just one of them.
+  const hasEmail = !!window.localStorage.getItem(EMAIL_KEY);
+  const hasRole = !!window.localStorage.getItem(ROLE_KEY);
+  const hasToken = !!window.localStorage.getItem(TOKEN_KEY);
+  if (hasEmail && hasRole) return; // token is optional (predates single-session enforcement)
 
   try {
     const { Preferences } = await import('@capacitor/preferences');
@@ -129,11 +151,9 @@ export async function hydrateSessionFromNativeStorage(): Promise<void> {
       Preferences.get({ key: ROLE_KEY }),
       Preferences.get({ key: TOKEN_KEY }),
     ]);
-    if (email && role) {
-      window.localStorage.setItem(EMAIL_KEY, email);
-      window.localStorage.setItem(ROLE_KEY, role);
-      if (token) window.localStorage.setItem(TOKEN_KEY, token);
-    }
+    if (!hasEmail && email) window.localStorage.setItem(EMAIL_KEY, email);
+    if (!hasRole && role) window.localStorage.setItem(ROLE_KEY, role);
+    if (!hasToken && token) window.localStorage.setItem(TOKEN_KEY, token);
   } catch (err) {
     console.error('[session] Preferences hydration failed:', err);
   }

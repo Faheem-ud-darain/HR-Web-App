@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useTasks, usePayroll, useTeams,
   useKVByPrefix, hrActions, calculatePTOAccrued, getPTOAccrualDate, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
-  TrackingSettings, TrackerHeartbeat, localShiftDate, displayName,
+  TrackingSettings, TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile,
 } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -107,6 +107,16 @@ export default function EmployeeDashboard() {
   const warehousesRef = useRef<Warehouse[]>([]);
   const shiftActiveRef = useRef(false);
   const geoWatchRef = useRef<GeoWatchHandle | null>(null);
+  // Current open shift's id + clockIn timestamp, kept current for the
+  // pagehide beacon below (manual/non-USA shifts only) — a pagehide handler
+  // can't afford to await a fresh getOpenShift() lookup as the tab is
+  // actually closing, so this is refreshed synchronously wherever a manual
+  // shift is started or discovered already-open.
+  const openShiftRef = useRef<{ id: string; clockIn: string } | null>(null);
+  // Guards the one-time "was this shift abandoned by a closed tab?" check
+  // below so it only runs once per profile per page load, not on every
+  // re-render triggered by a data refetch.
+  const staleShiftCheckedForEmailRef = useRef<string | null>(null);
 
   // Detailed Task Modal state
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -137,6 +147,26 @@ export default function EmployeeDashboard() {
       setShiftActive(!!openShift);
       if (openShift) {
         setGeofenceStatus(profile.region === 'USA' ? 'Inside Warehouse' : 'Shift Active');
+        openShiftRef.current = { id: openShift.id, clockIn: openShift.clockIn };
+        // First time this profile's dashboard load finds an already-open
+        // manual shift, check whether it was actually abandoned (tab
+        // closed, crashed, force-quit) rather than genuinely still running
+        // — see closeStaleManualShiftIfAbandoned in hrData.ts.
+        if (profile.region !== 'USA' && staleShiftCheckedForEmailRef.current !== profile.email) {
+          staleShiftCheckedForEmailRef.current = profile.email;
+          hrActions.closeStaleManualShiftIfAbandoned(profile).then(closed => {
+            if (closed) {
+              shiftActiveRef.current = false;
+              setShiftActive(false);
+              setGeofenceStatus('Shift Ended');
+              openShiftRef.current = null;
+              refetchTimesheets();
+              setShiftStopModal(true);
+            }
+          }).catch(() => { /* best-effort */ });
+        }
+      } else {
+        openShiftRef.current = null;
       }
     }
     
@@ -203,6 +233,40 @@ export default function EmployeeDashboard() {
     const interval = setInterval(check, 10000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [userProfile?.email]);
+
+  // Keeps the manual-shift tab heartbeat warm (see ShiftTabHeartbeat in
+  // hrData.ts) for as long as this tab has a manual shift active and open —
+  // starts the instant shiftActive flips true (whether from clicking Start
+  // Shift just now, or from discovering an already-open shift on load that
+  // passed the stale-shift check below) and stops the moment it flips
+  // false. USA employees are governed by GPS geofencing instead and don't
+  // need this at all.
+  useEffect(() => {
+    if (!userProfile?.email || userProfile.region === 'USA' || !shiftActive) return;
+    const touch = () => { hrActions.touchShiftTabHeartbeat(userProfile.email); };
+    touch();
+    const interval = setInterval(touch, 20000);
+    return () => clearInterval(interval);
+  }, [userProfile?.email, userProfile?.region, shiftActive]);
+
+  // Best-effort immediate stop the instant this tab actually closes (tab
+  // close, browser close, or navigating away) — manual/non-USA shifts only.
+  // `pagehide` is the modern, more reliable replacement for `beforeunload`/
+  // `unload` (fires consistently on mobile Safari/Chrome too), and
+  // beaconClockOut uses fetch's `keepalive` option so the request survives
+  // past the page tearing down. This is still just the fast path, not a
+  // guarantee — it can't run on a crash, force-quit, or killed process,
+  // which is exactly why closeStaleManualShiftIfAbandoned exists as an
+  // independent second safety net that catches those cases on next login.
+  useEffect(() => {
+    if (!userProfile?.email || userProfile.region === 'USA') return;
+    const handlePageHide = () => {
+      if (!shiftActiveRef.current || !openShiftRef.current) return;
+      hrActions.beaconClockOut(openShiftRef.current.id, openShiftRef.current.clockIn);
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, [userProfile?.email, userProfile?.region]);
 
   // Real GPS-based geofencing — USA employees only. Automatically starts/ends
   // the shift as the employee's device enters or leaves the radius of any
@@ -346,16 +410,10 @@ export default function EmployeeDashboard() {
     return daysUntil <= 3;
   }).length;
 
-  // Filter announcements for current employee
-  const myAnnouncements = announcements.filter(ann => {
-    if (ann.target === 'all') return true;
-    if (userProfile?.region === 'USA' && ann.target === 'usa') return true;
-    if (userProfile?.region === 'Pakistan' && ann.target === 'pakistan') return true;
-    if (Array.isArray(ann.target) && userProfile?.assignedWarehouses) {
-      return ann.target.some((wId: string) => userProfile.assignedWarehouses?.includes(wId));
-    }
-    return false;
-  });
+  // Filter announcements for current employee — shared with
+  // AnnouncementPopup.tsx's blocking popup via isAnnouncementForProfile, so
+  // the two can never silently disagree about who an announcement is for.
+  const myAnnouncements = announcements.filter(ann => isAnnouncementForProfile(ann, userProfile));
 
   // Unread-announcement highlighting: snapshot the read map once per visit
   // (announcementSeenRef guards against re-snapshotting on background
@@ -454,7 +512,9 @@ export default function EmployeeDashboard() {
                     }
                     setShiftActive(true);
                     setGeofenceStatus('Shift Active');
-                    await hrActions.clockIn(userProfile.email);
+                    const started = await hrActions.clockIn(userProfile.email);
+                    openShiftRef.current = { id: started.id, clockIn: started.clockIn };
+                    await hrActions.touchShiftTabHeartbeat(userProfile.email);
                     await refetchTimesheets();
                     await hrActions.addNotification(userProfile.email, 'employee', 'Shift started manually. Screen tracking is now active for this shift.');
                     await hrActions.addNotification('all', 'hr', `${userProfile.fullName} started shift manually.`);
@@ -470,6 +530,7 @@ export default function EmployeeDashboard() {
                     if (!userProfile?.email) return;
                     setShiftActive(false);
                     setGeofenceStatus('Shift Ended');
+                    openShiftRef.current = null;
                     await hrActions.clockOut(userProfile.email);
                     await refetchTimesheets();
                     await hrActions.addNotification(userProfile.email, 'employee', 'Shift ended manually. Screen tracking has stopped.');

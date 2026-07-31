@@ -190,6 +190,30 @@ export interface Warehouse { id: string; name: string; latitude: number; longitu
 export interface Announcement {
   id: string; title: string; content: string; timestamp: string; createdBy: string;
   target: 'all' | 'usa' | 'pakistan' | string[];
+  // Backed by hr_announcements' pre-existing `pinned` column — that field
+  // already existed in the schema but was always written as `false` and
+  // never read back anywhere (see addAnnouncement below), so repurposing it
+  // as "important" needed no migration. An important announcement is the
+  // one kind that gets a blocking popup (see AnnouncementPopup.tsx) instead
+  // of just sitting quietly in the passive "Recent Announcements" feed.
+  important: boolean;
+}
+
+// Shared "does this announcement apply to this person" check — the exact
+// targeting rule employee/page.tsx's dashboard feed widget already used
+// inline (region === 'usa'/'pakistan', or a specific warehouse-id list).
+// Centralized here so AnnouncementPopup.tsx's blocking popup can never
+// silently disagree with the feed widget about who an announcement is
+// actually for.
+export function isAnnouncementForProfile(ann: Announcement, profile: Profile | null | undefined): boolean {
+  if (!profile) return false;
+  if (ann.target === 'all') return true;
+  if (profile.region === 'USA' && ann.target === 'usa') return true;
+  if (profile.region === 'Pakistan' && ann.target === 'pakistan') return true;
+  if (Array.isArray(ann.target) && profile.assignedWarehouses) {
+    return ann.target.some(wId => profile.assignedWarehouses?.includes(wId));
+  }
+  return false;
 }
 
 export interface LeaveApplication {
@@ -226,6 +250,20 @@ export interface TrackerHeartbeat {
   employeeEmail: string; deviceId: string; deviceLabel?: string; connectedAt: string; lastSeenAt: string;
 }
 export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
+
+// A short-lived "this browser tab is actively viewing an in-progress manual
+// shift" heartbeat (Employee dashboard, non-USA/manual Start-Shift flow
+// only — USA employees are governed by GPS geofencing instead, which has
+// its own foreground/background lifecycle). Refreshed every ~20s while a
+// manual shift is active. Lets the app tell a genuinely still-running
+// shift apart from "the tab was closed N days/weeks ago and the shift just
+// never got told to stop" — see closeStaleManualShiftIfAbandoned below, the
+// safety net for when the pagehide-based immediate stop (best-effort —
+// unload-style handlers never fire on a crash, force-quit, or killed
+// process) never got the chance to run.
+export interface ShiftTabHeartbeat { employeeEmail: string; lastSeenAt: string; }
+export const SHIFT_TAB_HEARTBEAT_STALE_MS = 2 * 60 * 1000;
+const shiftTabHeartbeatKeyFor = (email: string) => `shift_tab_heartbeat_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
 // One-shot "your shift was just auto-ended by the desktop tracker" signal
 // (see notify_shift_auto_stopped in tracker-agent/agent_gui.py, written
@@ -339,6 +377,19 @@ export interface TicketPresence {
 }
 export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
 const ticketPresenceKeyFor = (ticketId: string) => `hr_ticket_presence_${ticketId}`;
+
+// Durable "the employee has read this ticket as of this time" marker — unlike
+// TicketPresence above (which only lasts ~20s and answers "is HR looking at
+// this right now"), this never expires, so HR/Admin can tell whether a reply
+// they sent has actually been read, same "Seen" convention as most chat
+// apps. Written by the employee/team-lead's own TicketsView whenever they
+// have a ticket selected (touched on an interval so it also advances if a
+// new reply arrives while they're already looking at it), read by HR/Admin's
+// TicketsView for whichever ticket is currently selected.
+export interface TicketSeenState {
+  ticketId: string; employeeSeenAt: string;
+}
+const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
 
 // Real hr_teams row — adopted structure (lead + members + warehouse).
 export interface Team {
@@ -490,7 +541,7 @@ function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
 }
 function toAnnouncement(a: any): Announcement {
-  return { id: a.id, title: a.title, content: a.content, timestamp: a.timestamp, createdBy: a.created_by, target: a.target || a.target_role || 'all' };
+  return { id: a.id, title: a.title, content: a.content, timestamp: a.timestamp, createdBy: a.created_by, target: a.target || a.target_role || 'all', important: !!a.pinned };
 }
 function toCareer(c: any): CareerPosition {
   return { id: c.id, title: c.title, department: c.department, location: c.location, description: c.description, requirements: c.requirements || [] };
@@ -858,7 +909,7 @@ export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[]
 export const formatMoney = (amount: number, region?: 'USA' | 'Pakistan') =>
   region === 'USA' ? `$${amount.toLocaleString()}` : `PKR ${amount.toLocaleString()}`;
 
-function formatDurationBetween(startISO: string, endISO: string): string {
+export function formatDurationBetween(startISO: string, endISO: string): string {
   const ms = new Date(endISO).getTime() - new Date(startISO).getTime();
   const totalMinutes = Math.max(0, Math.round(ms / 60000));
   return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
@@ -1359,15 +1410,40 @@ export const hrActions = {
   },
 
   // ── Announcements ─────────────────────────────────────────────────────
-  addAnnouncement: (title: string, content: string, target: Announcement['target'], createdBy: string) =>
+  // `important` writes into the pre-existing `pinned` column (see the
+  // Announcement.important comment in the interface above) — no schema
+  // migration needed, it just repurposes a column that already existed and
+  // was always hardcoded to `false`.
+  addAnnouncement: (title: string, content: string, target: Announcement['target'], createdBy: string, important: boolean = false) =>
     pbCreate('hr_announcements', {
       title, content, created_by: createdBy, target: typeof target === 'string' ? target : 'all',
-      target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: false,
+      target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString(),
     }),
   getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetKV('hr_announcement_reads_v1').then(v => v || {}),
   isAnnouncementRead: (ann: Announcement, email: string, readMap: AnnouncementReadMap): boolean =>
     (readMap[ann.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
+  // Explicit "I acknowledge this" action for AnnouncementPopup's blocking
+  // popup — as opposed to markAnnouncementsSeen below, which marks a whole
+  // batch read merely because they were passively rendered in a feed. This
+  // one only ever fires from the person's own button press, which is what
+  // "make sure they've actually read it" requires for an `important`
+  // announcement: it has to keep reappearing on every login/page refresh
+  // until they explicitly press Mark as Read, not clear itself the moment
+  // the popup happens to render. Shares the same hr_announcement_reads_v1
+  // KV store as markAnnouncementsSeen/isAnnouncementRead, so marking one
+  // read here also clears the passive feed's unread highlight, and vice
+  // versa — one unified read-state, not two that could disagree.
+  markAnnouncementRead: async (announcementId: string, email: string): Promise<void> => {
+    if (!email) return;
+    const readMap = ((await pbGetKV('hr_announcement_reads_v1')) as AnnouncementReadMap) || {};
+    const emailLower = email.toLowerCase();
+    const readers = readMap[announcementId] || [];
+    if (!readers.map(e => e.toLowerCase()).includes(emailLower)) {
+      readMap[announcementId] = [...readers, email];
+      await pbSetKV('hr_announcement_reads_v1', readMap);
+    }
+  },
   // Called once the announcements a person can currently see have actually
   // been rendered on screen — writes read-state server-side for next visit,
   // but deliberately doesn't hand back the updated map, so the page that
@@ -1533,6 +1609,12 @@ export const hrActions = {
     (await pbGetKVByPrefix('hr_ticket_presence_')).map(row => row.value as TicketPresence),
   isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
     !!p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) < TICKET_PRESENCE_STALE_MS,
+
+  // ── Ticket "seen by employee" marker (see TicketSeenState above) ────────
+  touchTicketSeenByEmployee: (ticketId: string): Promise<void> =>
+    pbSetKV(ticketSeenKeyFor(ticketId), { ticketId, employeeSeenAt: new Date().toISOString() } as TicketSeenState),
+  getTicketSeenState: (ticketId: string): Promise<TicketSeenState | null> =>
+    pbGetKV(ticketSeenKeyFor(ticketId)),
 
   // ── Teams (real hr_teams: name + leadEmail + members + warehouseId) ────
   addTeam: (name: string, warehouseId?: string) => pbCreate('hr_teams', { name, lead_email: '', members: [], warehouse_id: warehouseId || '' }),
@@ -1701,6 +1783,74 @@ export const hrActions = {
     pbGetKV(shiftStopSignalKeyFor(email)),
   isHeartbeatLive: (hb: TrackerHeartbeat | null): boolean =>
     !!hb?.lastSeenAt && (Date.now() - new Date(hb.lastSeenAt).getTime()) < TRACKER_HEARTBEAT_STALE_MS,
+
+  // ── Manual-shift tab heartbeat + abandoned-tab safety net ───────────────
+  touchShiftTabHeartbeat: async (email: string): Promise<void> => {
+    try {
+      await pbSetKV(shiftTabHeartbeatKeyFor(email), { employeeEmail: email, lastSeenAt: new Date().toISOString() } as ShiftTabHeartbeat);
+    } catch { /* best-effort — a missed heartbeat just means one earlier stale-check window */ }
+  },
+  clearShiftTabHeartbeat: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(email)]);
+  },
+  isShiftTabHeartbeatLive: (hb: ShiftTabHeartbeat | null): boolean =>
+    !!hb?.lastSeenAt && (Date.now() - new Date(hb.lastSeenAt).getTime()) < SHIFT_TAB_HEARTBEAT_STALE_MS,
+
+  // Fire-and-forget clock-out sent from a `pagehide` handler as the tab is
+  // actually closing. A normal awaited hrActions.clockOut() call has no
+  // guarantee of completing once the page starts tearing down, so this
+  // uses fetch's `keepalive` option instead — the browser keeps the
+  // request alive in the background past unload (the JSON body here is
+  // tiny, well under keepalive's ~64KB cap). Best-effort only: this can't
+  // run at all on a crash, force-quit, or killed process — exactly why
+  // closeStaleManualShiftIfAbandoned exists as an independent second
+  // safety net rather than relying on this alone.
+  beaconClockOut: (shiftId: string, clockInISO: string): void => {
+    try {
+      const nowIso = new Date().toISOString();
+      const url = `${pb.baseUrl}/api/collections/hr_timesheets/records/${shiftId}`;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (pb.authStore.token) headers['Authorization'] = pb.authStore.token;
+      fetch(url, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ clock_out: nowIso, duration: formatDurationBetween(clockInISO, nowIso) }),
+        keepalive: true,
+      }).catch(() => { /* best-effort */ });
+    } catch { /* best-effort */ }
+  },
+
+  // Safety net for a manually-started shift (non-USA employees only — USA
+  // is governed by GPS geofencing) whose tab is just gone: closed
+  // gracefully but the pagehide beacon above didn't get through in time,
+  // or the tab/app crashed or was force-quit, neither of which gives any
+  // handler a chance to run. Called once whenever the Employee dashboard
+  // discovers an already-open shift for this profile. If nothing has kept
+  // this shift's tab heartbeat warm recently AND the desktop tracker isn't
+  // live either (so nothing else is actively watching this shift right
+  // now), treats it as abandoned, clocks it out, and notifies the same way
+  // performLogout does — including setting the same
+  // shift_auto_stopped_<email> localStorage flag so the employee gets the
+  // same "your shift was auto-ended" notice on next login.
+  closeStaleManualShiftIfAbandoned: async (profile: Profile): Promise<boolean> => {
+    if (profile.region === 'USA') return false;
+    const open = await hrActions.getOpenShift(profile.email);
+    if (!open) return false;
+    const [tabHb, trackerHb] = await Promise.all([
+      pbGetKV(shiftTabHeartbeatKeyFor(profile.email)) as Promise<ShiftTabHeartbeat | null>,
+      hrActions.getTrackerHeartbeat(profile.email),
+    ]);
+    if (hrActions.isShiftTabHeartbeatLive(tabHb) || hrActions.isHeartbeatLive(trackerHb)) return false;
+    await hrActions.clockOut(profile.email);
+    await hrActions.clearShiftTabHeartbeat(profile.email);
+    await hrActions.addNotification(profile.email, 'employee', 'Your shift was automatically ended because the app was closed.');
+    await hrActions.addNotification('all', 'hr', `${profile.fullName || profile.email} closed the app while on shift — their shift was ended automatically.`);
+    await hrActions.addNotification('all', 'admin', `${profile.fullName || profile.email} closed the app while on shift — their shift was ended automatically.`);
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem(`shift_auto_stopped_${profile.email.toLowerCase()}`, '1'); } catch { /* ignore */ }
+    }
+    return true;
+  },
 
   // ── Single-session enforcement (Employee/Team Lead only) ────────────────
   getUserSession: async (email: string): Promise<UserSession | null> => pbGetKV(userSessionKeyFor(email)),
@@ -1908,6 +2058,7 @@ export const hrActions = {
     if (!open) return null;
     const nowIso = new Date().toISOString();
     const updated = await pbUpdate('hr_timesheets', open.id, { clock_out: nowIso, duration: formatDurationBetween(open.clockIn, nowIso) });
+    try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(employeeEmail)]); } catch { /* best-effort cleanup */ }
     return toTimesheet(updated);
   },
 };

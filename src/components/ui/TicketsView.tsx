@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, Profile, markTicketActivitySeen, displayName } from '@/lib/hrData';
+import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenState, Profile, markTicketActivitySeen, displayName } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft } from 'lucide-react';
+import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
@@ -69,6 +69,32 @@ function formatTicketDate(raw: string): string {
   return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// "Most recent activity" for sort purposes: a fresh reply on an old ticket
+// should bump it back to the top of the list, same as any inbox/chat app —
+// not just whichever ticket was originally opened most recently (that's
+// all useTickets()'s own `sort: '-created'` query gives us, and it never
+// changes again once a ticket exists). Takes the later of createdAt and the
+// newest reply's timestamp.
+//
+// Legacy replies predating the addTicketReply timestamp fix (see the
+// formatTicketDate comment above) are stored as a bare "04:18 PM" string
+// with no date at all. `Date.parse` on a time-only string isn't reliably
+// rejected the way `new Date(...)` sometimes is — some engines silently
+// resolve it against *today's* date, which would make an old reply look
+// like the most recent activity on every single ticket that has one,
+// corrupting the whole sort. BARE_TIME_ONLY (already used above) is reused
+// here to skip those entries entirely rather than let a bad parse in.
+function ticketActivityMs(ticket: Ticket): number {
+  let latest = Date.parse(ticket.createdAt.replace(' ', 'T'));
+  if (isNaN(latest)) latest = 0;
+  for (const rep of ticket.replies) {
+    if (BARE_TIME_ONLY.test(rep.timestamp.trim())) continue;
+    const t = Date.parse(rep.timestamp);
+    if (!isNaN(t) && t > latest) latest = t;
+  }
+  return latest;
+}
+
 interface TicketsViewProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead';
 }
@@ -119,6 +145,35 @@ export function TicketsView({ role }: TicketsViewProps) {
   // here, not a rendering bug: these avatars never pulled from a Profile at
   // all before this.
   const profileFor = (name: string): Profile | undefined => employees.find(e => e.fullName === name);
+
+  // Ticket list filters — status pill + free-text search (title, employee
+  // name/alias, description). Kept separate from `tickets` itself (the
+  // role-scoped set from applyTickets) so switching a filter never needs a
+  // refetch, and so the "no tickets match your filters" empty state can be
+  // told apart from "there are genuinely zero tickets".
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const visibleTickets = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return tickets
+      .filter(t => statusFilter === 'all' || t.status === statusFilter)
+      .filter(t => {
+        if (!q) return true;
+        return (
+          t.title.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.employeeName.toLowerCase().includes(q) ||
+          nameFor(t.employeeName).toLowerCase().includes(q)
+        );
+      })
+      // Most-recent-activity first, not creation order — see
+      // ticketActivityMs's comment. Stable within ties since Array#sort is
+      // guaranteed stable and useTickets() already arrives sorted by
+      // `-created`, so same-activity tickets keep falling back to newest-
+      // opened-first rather than shuffling on every re-render.
+      .sort((a, b) => ticketActivityMs(b) - ticketActivityMs(a));
+  }, [tickets, statusFilter, searchQuery, employees, isPrivileged]);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -232,6 +287,39 @@ export function TicketsView({ role }: TicketsViewProps) {
     const presence = ticketPresences.find(entry => entry.ticketId === ticketId && entry.role === 'hr');
     return hrActions.isTicketPresenceLive(presence);
   };
+
+  // Employee/team-lead side: mark this ticket "seen as of now" while it's
+  // open, so HR/Admin can tell a reply was actually read (see
+  // TicketSeenState in hrData.ts). Re-touched on an interval — not just
+  // once on open — so it also advances past a reply that arrives while
+  // this ticket is already sitting open on screen. Unlike TicketPresence
+  // above, this is a durable marker: no cleanup/clear on unmount, since
+  // "last seen at this time" should stay true after the employee leaves.
+  useEffect(() => {
+    if ((role !== 'employee' && role !== 'team_lead') || !selectedTicket) return;
+    const ticketId = selectedTicket.id;
+    const touch = () => hrActions.touchTicketSeenByEmployee(ticketId);
+    touch();
+    const interval = setInterval(touch, 8000);
+    return () => clearInterval(interval);
+  }, [role, selectedTicket?.id, selectedTicket?.replies.length]);
+
+  // HR/Admin side: poll the currently-open ticket's seen state so a "Seen"
+  // label can appear under HR's last message once the employee has
+  // actually read it, without needing a manual refresh.
+  const [ticketSeenState, setTicketSeenState] = useState<TicketSeenState | null>(null);
+  useEffect(() => {
+    if (!isPrivileged || !selectedTicket) { setTicketSeenState(null); return; }
+    const ticketId = selectedTicket.id;
+    let cancelled = false;
+    const poll = async () => {
+      const state = await hrActions.getTicketSeenState(ticketId);
+      if (!cancelled) setTicketSeenState(state);
+    };
+    poll();
+    const interval = setInterval(poll, 8000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [isPrivileged, selectedTicket?.id]);
 
   const handleNewTicketFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -392,9 +480,46 @@ export function TicketsView({ role }: TicketsViewProps) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Tickets List */}
         <div className={`lg:col-span-5 space-y-3 ${selectedTicket ? 'hidden lg:block' : 'block'}`}>
-          <h3 className="font-bold text-xs text-slate-500 uppercase tracking-wider">Active Tickets ({tickets.length})</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-bold text-xs text-slate-500 uppercase tracking-wider">
+              Tickets ({visibleTickets.length}{visibleTickets.length !== tickets.length ? ` of ${tickets.length}` : ''})
+            </h3>
+          </div>
+
+          {/* Filters — status pill group + free-text search. Sits above the
+              scrollable list, not inside it, so it stays visible/reachable
+              regardless of scroll position. */}
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder={isPrivileged ? 'Search by title, employee, or details…' : 'Search your tickets…'}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 outline-none focus:border-orange-500 placeholder:text-slate-400"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {(['all', 'open', 'closed'] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setStatusFilter(f)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                    statusFilter === f
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  {f === 'all' ? 'All' : f === 'open' ? 'Open' : 'Closed'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
-            {tickets.map(t => {
+            {visibleTickets.map(t => {
               const active = selectedTicket?.id === t.id;
               return (
                 <Card
@@ -425,9 +550,21 @@ export function TicketsView({ role }: TicketsViewProps) {
                 </Card>
               );
             })}
-            {tickets.length === 0 && (
+            {visibleTickets.length === 0 && tickets.length === 0 && (
               <div className="text-center py-12 text-slate-400 font-semibold italic text-xs border border-dashed border-slate-200 rounded-xl bg-white">
                 No tickets listed.
+              </div>
+            )}
+            {visibleTickets.length === 0 && tickets.length > 0 && (
+              <div className="text-center py-12 text-slate-400 font-semibold text-xs border border-dashed border-slate-200 rounded-xl bg-white space-y-2">
+                <p className="italic">No tickets match your filters.</p>
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter('all'); setSearchQuery(''); }}
+                  className="text-orange-600 hover:text-orange-700 font-bold underline not-italic"
+                >
+                  Clear filters
+                </button>
               </div>
             )}
           </div>
@@ -565,11 +702,24 @@ export function TicketsView({ role }: TicketsViewProps) {
                 })()}
 
                 {/* Replies list */}
-                {selectedTicket.replies.map(rep => {
+                {selectedTicket.replies.map((rep, repIdx) => {
                   let isSenderSelf = false;
                   if (role === 'hr' && rep.senderRole === 'hr') isSenderSelf = true;
                   else if (role === 'admin' && rep.senderRole === 'admin') isSenderSelf = true;
                   else if ((role === 'employee' || role === 'team_lead') && (rep.senderRole === 'employee' || rep.senderRole === 'team_lead')) isSenderSelf = true;
+
+                  // "Seen" only ever shows under the single most recent
+                  // HR reply, same one-badge-at-a-time convention as most
+                  // chat apps (not one per message) — and only to HR/Admin,
+                  // since they're the ones who actually want to know
+                  // whether the employee has caught up.
+                  const isLastReply = repIdx === selectedTicket.replies.length - 1;
+                  const showSeen =
+                    isLastReply &&
+                    isPrivileged &&
+                    rep.senderRole === 'hr' &&
+                    !!ticketSeenState?.employeeSeenAt &&
+                    new Date(ticketSeenState.employeeSeenAt).getTime() >= new Date(rep.timestamp).getTime();
 
                   const isAdminViewer = role === 'admin';
                   const isHrSender = rep.senderRole === 'hr';
@@ -635,6 +785,17 @@ export function TicketsView({ role }: TicketsViewProps) {
                         }`}>
                           {formatTicketDate(rep.timestamp)}
                         </span>
+                        {showSeen && (
+                          <span className={`block text-[9px] font-semibold text-right ${
+                            isSenderSelf
+                              ? 'text-orange-200'
+                              : isAdminViewer && isHrSender
+                                ? 'text-orange-700/80'
+                                : 'text-slate-400'
+                          }`}>
+                            Seen
+                          </span>
+                        )}
                       </div>
                     </div>
                   );

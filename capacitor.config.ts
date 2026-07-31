@@ -34,10 +34,13 @@ const config: CapacitorConfig = {
     // Native splash screen — this is only the "before the JS engine has
     // even booted" placeholder (a single static image, `@drawable/splash`
     // on Android / the Splash.imageset on iOS — see
-    // Notes/SPLASH_AND_ICON_SETUP.md for how to (re)generate those from
-    // SplashIcon.png). It intentionally matches the brand orange + logo
-    // that SplashScreenOverlay.tsx shows next, so the handoff between the
-    // two is invisible.
+    // Notes/SPLASH_AND_ICON_SETUP.md). That image is the real "DC HUB"
+    // navy/gold app icon (resources/icon.png), not the old orange
+    // SplashIcon.png — so backgroundColor here has to be the matching navy,
+    // not brand orange, or there'd be a visible flash from navy → orange the
+    // instant this native layer paints. SplashScreenOverlay.tsx's own
+    // background now uses this same navy tone so the handoff into its
+    // animated "DC" mark is invisible.
     //
     // launchAutoHide: false is the important part — it means the native
     // splash stays on screen until SplashScreenOverlay.tsx explicitly calls
@@ -48,7 +51,7 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 0,
       launchAutoHide: false,
-      backgroundColor: '#EA580C',
+      backgroundColor: '#0B0F1A',
       androidScaleType: 'CENTER_INSIDE',
       splashFullScreen: true,
       splashImmersive: true,
