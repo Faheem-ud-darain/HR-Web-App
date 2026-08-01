@@ -813,67 +813,68 @@ export function TicketsView({ role }: TicketsViewProps) {
                       }`}
                     >
                       <Avatar src={profileFor(rep.senderName)?.profilePicture} name={rep.senderName} size={28} className="flex-shrink-0" />
-                      <div className={`rounded-2xl p-3 shadow-sm text-xs ${
-                        isSenderSelf 
-                          ? 'bg-orange-600 text-white rounded-tr-none' 
-                          : isAdminViewer && isHrSender
-                            ? 'bg-orange-50/80 border-2 border-orange-300/80 text-slate-800 rounded-tl-none shadow-orange-100/50'
-                            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
-                      }`}>
-                        <p className={`font-bold text-[10px] mb-0.5 ${
-                          isSenderSelf 
-                            ? 'text-orange-200' 
-                            : isAdminViewer && isHrSender 
-                              ? 'text-orange-800' 
-                              : 'text-slate-600'
-                        }`}>
-                          {nameFor(rep.senderName)} ({rep.senderRole.toUpperCase()}) {isAdminViewer && isHrSender && '★'}
-                        </p>
-                        {rep.message && <p className="font-medium leading-relaxed whitespace-pre-wrap break-words">{rep.message}</p>}
-                        {rep.attachmentUrl && (
-                          isImageAttachment(rep.attachmentName) ? (
-                            // Opens in the in-app lightbox instead of
-                            // <a target="_blank"> — that used to hand the
-                            // base64 data: URL off to an external browser
-                            // intent, which on Android/Capacitor either
-                            // fails silently or opens a blank tab, since
-                            // there's no real document to navigate to.
-                            <button
-                              type="button"
-                              onClick={() => { setLightboxSrc(rep.attachmentUrl!); setLightboxName(rep.attachmentName); }}
-                              className={rep.message ? 'block mt-2' : 'block'}
-                            >
-                              <img src={rep.attachmentUrl} alt={rep.attachmentName || 'attachment'} className="rounded-lg max-h-56 object-cover" />
-                            </button>
-                          ) : (
-                            <a
-                              href={rep.attachmentUrl}
-                              download={rep.attachmentName}
-                              className={`flex items-center gap-1.5 text-[11px] font-bold underline ${rep.message ? 'mt-2' : ''} ${isSenderSelf ? 'text-orange-100' : 'text-amber-700'}`}
-                            >
-                              <FileText className="h-3.5 w-3.5 shrink-0" /> {rep.attachmentName || 'Attachment'}
-                              {rep.attachmentSize !== undefined && <span className="font-semibold opacity-80">({formatBytes(rep.attachmentSize)})</span>}
-                              <Download className="h-3 w-3 shrink-0" />
-                            </a>
-                          )
-                        )}
-                        <span className={`block text-[9px] mt-1 text-right ${
+                      {/* Column wrapper so "Seen" can sit below/outside the
+                          bubble instead of being one more line inside its
+                          padding+background — same idea as WhatsApp/iMessage
+                          read receipts, which render underneath the bubble,
+                          not inside it. */}
+                      <div className="flex flex-col min-w-0">
+                        <div className={`rounded-2xl p-3 shadow-sm text-xs ${
                           isSenderSelf
-                            ? 'text-orange-200'
+                            ? 'bg-orange-600 text-white rounded-tr-none'
                             : isAdminViewer && isHrSender
-                              ? 'text-orange-700/80'
-                              : 'text-slate-400'
+                              ? 'bg-orange-50/80 border-2 border-orange-300/80 text-slate-800 rounded-tl-none shadow-orange-100/50'
+                              : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                         }`}>
-                          {formatTicketDate(rep.timestamp)}
-                        </span>
-                        {showSeen && (
-                          <span className={`block text-[9px] font-semibold text-right ${
+                          <p className={`font-bold text-[10px] mb-0.5 ${
+                            isSenderSelf
+                              ? 'text-orange-200'
+                              : isAdminViewer && isHrSender
+                                ? 'text-orange-800'
+                                : 'text-slate-600'
+                          }`}>
+                            {nameFor(rep.senderName)} ({rep.senderRole.toUpperCase()}) {isAdminViewer && isHrSender && '★'}
+                          </p>
+                          {rep.message && <p className="font-medium leading-relaxed whitespace-pre-wrap break-words">{rep.message}</p>}
+                          {rep.attachmentUrl && (
+                            isImageAttachment(rep.attachmentName) ? (
+                              // Opens in the in-app lightbox instead of
+                              // <a target="_blank"> — that used to hand the
+                              // base64 data: URL off to an external browser
+                              // intent, which on Android/Capacitor either
+                              // fails silently or opens a blank tab, since
+                              // there's no real document to navigate to.
+                              <button
+                                type="button"
+                                onClick={() => { setLightboxSrc(rep.attachmentUrl!); setLightboxName(rep.attachmentName); }}
+                                className={rep.message ? 'block mt-2' : 'block'}
+                              >
+                                <img src={rep.attachmentUrl} alt={rep.attachmentName || 'attachment'} className="rounded-lg max-h-56 object-cover" />
+                              </button>
+                            ) : (
+                              <a
+                                href={rep.attachmentUrl}
+                                download={rep.attachmentName}
+                                className={`flex items-center gap-1.5 text-[11px] font-bold underline ${rep.message ? 'mt-2' : ''} ${isSenderSelf ? 'text-orange-100' : 'text-amber-700'}`}
+                              >
+                                <FileText className="h-3.5 w-3.5 shrink-0" /> {rep.attachmentName || 'Attachment'}
+                                {rep.attachmentSize !== undefined && <span className="font-semibold opacity-80">({formatBytes(rep.attachmentSize)})</span>}
+                                <Download className="h-3 w-3 shrink-0" />
+                              </a>
+                            )
+                          )}
+                          <span className={`block text-[9px] mt-1 text-right ${
                             isSenderSelf
                               ? 'text-orange-200'
                               : isAdminViewer && isHrSender
                                 ? 'text-orange-700/80'
                                 : 'text-slate-400'
                           }`}>
+                            {formatTicketDate(rep.timestamp)}
+                          </span>
+                        </div>
+                        {showSeen && (
+                          <span className={`block text-[9px] font-semibold mt-1 ${isSenderSelf ? 'text-right' : 'text-left'} text-slate-400`}>
                             Seen
                           </span>
                         )}
