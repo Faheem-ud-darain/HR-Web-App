@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, calculateTenure, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney } from '@/lib/hrData';
+import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, calculateTenure, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -169,12 +169,12 @@ export default function EmployeeLeavesPage() {
 
     setIsSubmittingLeave(true);
     try {
-      await hrActions.addLeave(newLeave);
+      const createdLeave = await hrActions.addLeave(newLeave);
       // Both HR and Admin manage leave approvals (see admin/leaves + hr/leaves
       // pages) — this previously only notified 'hr', so Admin never found
       // out a request existed until they happened to open the Leaves page.
-      await hrActions.addNotification('all', 'hr', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email);
-      await hrActions.addNotification('all', 'admin', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email);
+      await hrActions.addNotification('all', 'hr', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email, buildNotificationLink('hr', 'leave', createdLeave.id));
+      await hrActions.addNotification('all', 'admin', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email, buildNotificationLink('admin', 'leave', createdLeave.id));
       await refetchLeaves();
 
       setSuccess('Leave request submitted!');

@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenState, Profile, markTicketActivitySeen, displayName } from '@/lib/hrData';
+import { TypingIndicator } from './TypingIndicator';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search } from 'lucide-react';
@@ -195,6 +196,21 @@ export function TicketsView({ role }: TicketsViewProps) {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // "X is typing…" for the currently-open ticket — see the effect below.
+  const [typingNames, setTypingNames] = useState<string[]>([]);
+  const lastTypingTouchRef = useRef<number>(0);
+
+  // Deep-linking from a notification click (?ticketId=...) — see the effect
+  // below applyTickets. Applied at most once per page load: after the first
+  // successful auto-select, the ref flips so a later poll refresh (or the
+  // user picking a different ticket) doesn't keep forcing this one back
+  // open. Deliberately reads window.location.search directly with
+  // URLSearchParams instead of next/navigation's useSearchParams — that
+  // hook requires a Suspense boundary under this app's static export build
+  // (see auth/page.tsx's comment for the same tradeoff made there), which
+  // isn't worth adding just for a one-shot read on mount.
+  const appliedDeepLinkRef = useRef(false);
+
   const applyTickets = (all: Ticket[], email: string) => {
     if (role === 'employee' || role === 'team_lead') {
       setTickets(all.filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase()));
@@ -207,6 +223,24 @@ export function TicketsView({ role }: TicketsViewProps) {
       if (!prev) return prev;
       return all.find(t => t.id === prev.id) || prev;
     });
+
+    // Deep-link: open the ticket named in ?ticketId= (from a notification
+    // click) the first time it shows up in a loaded ticket list.
+    if (!appliedDeepLinkRef.current && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const targetId = params.get('ticketId');
+      if (targetId) {
+        const target = all.find(t => t.id === targetId);
+        if (target) {
+          appliedDeepLinkRef.current = true;
+          setSelectedTicket(target);
+          // Strip the query param so it doesn't re-apply on a manual
+          // refresh after the user has since switched to a different
+          // ticket, and so the URL doesn't stay pinned to this one ticket.
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    }
   };
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
@@ -233,7 +267,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   // Scroll chat to bottom when replies change
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedTicket?.replies]);
+  }, [selectedTicket?.replies, typingNames.length]);
 
   // Best-effort sweep for attachments on tickets closed 15+ days ago — see
   // checkTicketAttachmentRetention in hrData.ts. There's no server cron in
@@ -320,6 +354,31 @@ export function TicketsView({ role }: TicketsViewProps) {
     const interval = setInterval(poll, 8000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [isPrivileged, selectedTicket?.id]);
+
+  // "X is typing…" — poll the other side's typing state for the currently
+  // open ticket every 2s. Symmetric: both HR and the employee/team_lead can
+  // reply, so both sides run this same poll+clear-on-unmount effect, scoped
+  // per ticket like TicketPresence/TicketSeenState above. Admin is excluded
+  // — replies are disabled for Admin (read-only), so there's nothing for
+  // them to ever be typing.
+  useEffect(() => {
+    setTypingNames([]);
+    if (role === 'admin' || !selectedTicket || selectedTicket.status === 'closed' || !currentEmail) return;
+    const ticketId = selectedTicket.id;
+    let cancelled = false;
+    const poll = () => {
+      hrActions.getTypingUsers('ticket', ticketId, currentEmail).then(rows => {
+        if (!cancelled) setTypingNames(rows.map(r => r.displayName));
+      }).catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      hrActions.clearTypingState('ticket', ticketId, currentEmail).catch(() => {});
+    };
+  }, [role, selectedTicket?.id, selectedTicket?.status, currentEmail]);
 
   const handleNewTicketFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -412,8 +471,30 @@ export function TicketsView({ role }: TicketsViewProps) {
       refetchTickets();
       setReplyMsg('');
       setReplyFile(null);
+      lastTypingTouchRef.current = 0;
+      hrActions.clearTypingState('ticket', selectedTicket.id, currentEmail).catch(() => {});
     } finally {
       setSendingReply(false);
+    }
+  };
+
+  // Touches the typing marker at most once every 1.5s while there's text in
+  // the reply box; clears it immediately once emptied. Same debounce
+  // approach as TeamChatView's composer.
+  const handleReplyMsgChange = (value: string) => {
+    setReplyMsg(value);
+    if (!selectedTicket || !currentEmail) return;
+    const ticketId = selectedTicket.id;
+    if (value.trim()) {
+      const now = Date.now();
+      if (now - lastTypingTouchRef.current > 1500) {
+        lastTypingTouchRef.current = now;
+        const displayNameForTyping = userProfile?.fullName || currentEmail;
+        hrActions.touchTypingState('ticket', ticketId, currentEmail, displayNameForTyping).catch(() => {});
+      }
+    } else {
+      lastTypingTouchRef.current = 0;
+      hrActions.clearTypingState('ticket', ticketId, currentEmail).catch(() => {});
     }
   };
 
@@ -800,6 +881,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                     </div>
                   );
                 })}
+                <TypingIndicator names={typingNames} />
                 <div ref={chatEndRef} />
               </div>
 
@@ -848,7 +930,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                         <textarea
                           ref={replyTextareaRef}
                           value={replyMsg}
-                          onChange={e => setReplyMsg(e.target.value)}
+                          onChange={e => handleReplyMsgChange(e.target.value)}
                           onKeyDown={e => {
                             // On the native mobile app, the on-screen keyboard's
                             // Enter/Return key should always insert a line break —

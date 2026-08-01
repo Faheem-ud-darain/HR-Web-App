@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, ShieldCheck, List, Loader2 } from 'lucide-react';
-import { useLeaves, useProfiles, hrActions, LeaveApplication, Profile, displayName } from '@/lib/hrData';
+import { useLeaves, useProfiles, hrActions, LeaveApplication, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 
 const TYPE_COLORS: Record<string, string> = {
   'PTO': 'bg-indigo-100 text-indigo-800',
@@ -56,9 +56,9 @@ export default function AdminLeavesPage() {
       if (l) {
         const emp = employees.find(e => e.fullName === l.employeeName);
         if (emp) {
-          await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was ${action === 'approve' ? 'approved' : 'rejected'} by the CEO.`, 'leave_task', action === 'approve' ? 'Leave Approved' : 'Leave Rejected');
+          await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was ${action === 'approve' ? 'approved' : 'rejected'} by the CEO.`, 'leave_task', action === 'approve' ? 'Leave Approved' : 'Leave Rejected', undefined, buildNotificationLink('employee', 'leave', l.id));
         }
-        await hrActions.addNotification('all', 'hr', `CEO ${action === 'approve' ? 'Approved' : 'Rejected'} leave for ${l.employeeName}.`, 'leave_task', `${l.employeeName}'s Leave`);
+        await hrActions.addNotification('all', 'hr', `CEO ${action === 'approve' ? 'Approved' : 'Rejected'} leave for ${l.employeeName}.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
       }
 
       refetchLeaves();

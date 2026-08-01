@@ -539,6 +539,38 @@ button:active {
   }
 }
 
+/* "X is typing…" jumping dots — used by Team Chat and Ticket screen typing
+   indicators. Three dots bounce in a staggered wave, same idea as the
+   iMessage/WhatsApp typing bubble. Wrap in a fade-in on the parent row
+   (typing-row-in) so the whole indicator appears/disappears smoothly rather
+   than popping in and out as presence polling toggles it. */
+.typing-row-in {
+  animation: typing-row-in 180ms var(--ease-out-snappy) both;
+}
+@keyframes typing-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: typing-dot-bounce 1200ms ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 160ms; }
+.typing-dot:nth-child(3) { animation-delay: 320ms; }
+@keyframes typing-dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-row-in { animation: none; }
+  .typing-dot { animation: none; opacity: 0.8; }
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 .scrollbar-hide::-webkit-scrollbar {
     display: none;

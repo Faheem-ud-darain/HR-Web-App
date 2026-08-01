@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Team, Profile, Message, useMessages, useTeamDocuments, hrActions, displayName } from '@/lib/hrData';
+import { Team, Profile, Message, useMessages, useTeamDocuments, hrActions, displayName, buildNotificationLink } from '@/lib/hrData';
 import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
+import { TypingIndicator } from './TypingIndicator';
 import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
@@ -236,6 +237,11 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
   // second UI competing with the chat itself.
   const [messageReadMap, setMessageReadMap] = useState<Record<string, string[]>>({});
   const [viewersMsgId, setViewersMsgId] = useState<string | null>(null);
+  // "X is typing…" — names of everyone else currently typing in the active
+  // channel, refreshed on a short poll (see the effect below). Empty most
+  // of the time; TypingIndicator renders nothing when this is [].
+  const [typingNames, setTypingNames] = useState<string[]>([]);
+  const lastTypingTouchRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -256,8 +262,29 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [showEmojiPicker]);
 
+  // Deep-linking from a notification click (?teamId=...) — same one-shot,
+  // window.location.search-based approach as TicketsView's ?ticketId=
+  // handling (see its comment for why this avoids next/navigation's
+  // useSearchParams). Takes priority over the teams[0] default below, but
+  // only once and only if the linked team is actually one this viewer can
+  // see; otherwise it falls through to the normal default.
+  const appliedChatDeepLinkRef = useRef(false);
   useEffect(() => {
-    if (!activeTeamId && teams.length > 0) setActiveTeamId(teams[0].id);
+    if (activeTeamId || teams.length === 0) return;
+    if (!appliedChatDeepLinkRef.current && typeof window !== 'undefined') {
+      const targetId = new URLSearchParams(window.location.search).get('teamId');
+      if (targetId && teams.some(t => t.id === targetId)) {
+        appliedChatDeepLinkRef.current = true;
+        setActiveTeamId(targetId);
+        window.history.replaceState(null, '', window.location.pathname);
+        return;
+      }
+      // No matching team to deep-link to (bad id, or this viewer isn't on
+      // that team) — don't keep retrying every render, just fall through
+      // to the default below.
+      appliedChatDeepLinkRef.current = true;
+    }
+    setActiveTeamId(teams[0].id);
   }, [teams, activeTeamId]);
 
   const { data: messages = [], isLoading } = useMessages(activeTeamId);
@@ -266,7 +293,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages.length, activeTeamId]);
+  }, [messages.length, activeTeamId, typingNames.length]);
 
   // Fetch the read-receipt map for whatever's currently on screen, and mark
   // it as seen by the current viewer — same "seen on arrival" pattern as
@@ -306,6 +333,29 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
     setDocTag(null);
     setShowEmojiPicker(false);
   }, [activeTeamId]);
+
+  // "X is typing…" — poll everyone else's typing state for the active
+  // channel every 2s (short enough that the indicator feels live, long
+  // enough not to hammer the KV collection). Also clears this device's own
+  // typing marker whenever the channel changes, so switching teams mid-type
+  // doesn't leave a stale "typing…" showing in the channel just left.
+  useEffect(() => {
+    setTypingNames([]);
+    if (!activeTeamId || !currentUserEmail) return;
+    let cancelled = false;
+    const poll = () => {
+      hrActions.getTypingUsers('chat', activeTeamId, currentUserEmail).then(rows => {
+        if (!cancelled) setTypingNames(rows.map(r => r.displayName));
+      }).catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      hrActions.clearTypingState('chat', activeTeamId, currentUserEmail).catch(() => {});
+    };
+  }, [activeTeamId, currentUserEmail]);
 
   // Trimmed as well as lower-cased — a stray leading/trailing space on
   // either side (e.g. from a copy-pasted email during onboarding) would
@@ -404,6 +454,25 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
     const cursor = e.target.selectionStart ?? value.length;
     setDraft(value);
 
+    // Touch the typing marker at most once every 1.5s (not on every
+    // keystroke — this is a KV write, no need to hammer it) while there's
+    // actually text in the box; clear it immediately once the box is
+    // emptied (e.g. select-all + delete) rather than waiting for it to go
+    // stale.
+    if (activeTeamId && currentUserEmail) {
+      if (value.trim()) {
+        const now = Date.now();
+        if (now - lastTypingTouchRef.current > 1500) {
+          lastTypingTouchRef.current = now;
+          const senderProfile = emailToProfile.get(normEmail(currentUserEmail));
+          hrActions.touchTypingState('chat', activeTeamId, currentUserEmail, senderProfile?.fullName || currentUserEmail).catch(() => {});
+        }
+      } else {
+        lastTypingTouchRef.current = 0;
+        hrActions.clearTypingState('chat', activeTeamId, currentUserEmail).catch(() => {});
+      }
+    }
+
     const upToCursor = value.slice(0, cursor);
     const atIndex = upToCursor.lastIndexOf('@');
     const hashIndex = upToCursor.lastIndexOf('#');
@@ -491,6 +560,10 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
     if (!activeTeamId || sending) return;
     if (!draft.trim() && !pendingFile) return;
     setShowEmojiPicker(false);
+    // Narrowed local copy — activeTeamId is `string | null` at the state
+    // level, and TS can't carry the null-check above through the
+    // asynchronous forEach closure below without this.
+    const teamId = activeTeamId;
     const senderProfile = emailToProfile.get(normEmail(currentUserEmail));
     const teamLabel = activeTeam?.name || 'Team Chat';
     const draftAtSend = draft;
@@ -514,6 +587,8 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
       setDocTag(null);
       setDraftIsAnnouncement(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      lastTypingTouchRef.current = 0;
+      hrActions.clearTypingState('chat', activeTeamId, currentUserEmail).catch(() => {});
 
       // Best-effort: a failed mention notification shouldn't make the
       // message itself look like it failed to send. Each recipient sees
@@ -524,7 +599,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
         if (p.email.toLowerCase() === currentUserEmail.toLowerCase()) return;
         const senderLabelForRecipient = senderProfile ? displayName(senderProfile, p.role) : currentUserEmail;
         hrActions
-          .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`, 'chat_mention', senderLabelForRecipient, currentUserEmail)
+          .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`, 'chat_mention', senderLabelForRecipient, currentUserEmail, buildNotificationLink(p.role, 'chat', teamId))
           .catch(err => console.error('Mention notification failed:', err));
       });
     } catch (err) {
@@ -800,6 +875,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
               </div>
             );
           })}
+          <TypingIndicator names={typingNames} />
         </div>
         )}
         {activePanel === 'chat' && (

@@ -312,6 +312,12 @@ export interface InactivityLog {
 
 export interface Notification {
   id: string; recipientEmail: string; recipientRole: string; message: string; read: boolean; timestamp: string;
+  // Where clicking this notification should navigate to (a role-correct
+  // in-app path, e.g. "/hr/tickets?ticketId=abc123") — set by addNotification
+  // for categories that point at a specific record (ticket, leave, chat
+  // mention). Absent for generic/'internal' notifications with nothing to
+  // deep-link to, and for anything created before this field existed.
+  link?: string;
 }
 type NotificationReadMap = Record<string, string[]>;
 type NotificationClearedMap = Record<string, string[]>;
@@ -326,6 +332,26 @@ type AnnouncementReadMap = Record<string, string[]>;
 export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'internal';
 export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal'>, boolean>;
 const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true };
+
+// Builds the role-correct in-app path for a notification's `link` field.
+// team_lead shares the employee route tree everywhere (see
+// (dashboard)/layout.tsx — "there is no /team_lead route"), so it maps to
+// the same /employee/* paths as 'employee'.
+function roleBasePath(role: string): string {
+  if (role === 'hr') return '/hr';
+  if (role === 'admin') return '/admin';
+  return '/employee'; // employee, team_lead, or anything else
+}
+export function buildNotificationLink(role: string, kind: 'ticket' | 'leave' | 'chat' | 'task', id: string): string {
+  const base = roleBasePath(role);
+  if (kind === 'ticket') return `${base}/tickets?ticketId=${id}`;
+  if (kind === 'leave') return `${base}/leaves?leaveId=${id}`;
+  if (kind === 'task') return `${base}/tasks?taskId=${id}`; // Tasks list doesn't deep-select by id yet — still lands on the right screen.
+  // Team Chat route differs per role even though the base doesn't follow
+  // the simple /leaves, /tickets pattern.
+  const chatPath = role === 'hr' || role === 'admin' ? `${base}/team-chats` : `${base}/chat`;
+  return `${chatPath}?teamId=${id}`;
+}
 
 // Read receipts for regular Team Chat messages — same shape again (message
 // id -> emails who've viewed it). Kept as its own KV key/blob rather than
@@ -390,6 +416,22 @@ export interface TicketSeenState {
   ticketId: string; employeeSeenAt: string;
 }
 const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
+
+// "X is typing…" indicator — same KV-heartbeat idea as TicketPresence above,
+// just keyed per (scope, id, senderEmail) instead of one row per ticket, since
+// multiple people can be typing in the same team chat/ticket at once and we
+// want to show all of them, not just the last one. Very short staleness
+// window (a few seconds) since a typing indicator that lingers after someone
+// actually stops typing reads as a bug, not a feature. Shared by both Team
+// Chat (scope 'chat', id = teamId) and Tickets (scope 'ticket', id =
+// ticketId) — see touchTypingState/clearTypingState/getTypingUsers below.
+export interface TypingState {
+  scope: 'chat' | 'ticket'; scopeId: string; email: string; displayName: string; lastTypedAt: string;
+}
+export const TYPING_STALE_MS = 5 * 1000;
+const typingKeyFor = (scope: 'chat' | 'ticket', scopeId: string, email: string) =>
+  `hr_typing_${scope}_${scopeId}_${email.toLowerCase()}`;
+const typingPrefixFor = (scope: 'chat' | 'ticket', scopeId: string) => `hr_typing_${scope}_${scopeId}_`;
 
 // Real hr_teams row — adopted structure (lead + members + warehouse).
 export interface Team {
@@ -535,7 +577,7 @@ function toLeave(l: any): LeaveApplication {
   return { id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status };
 }
 function toNotification(n: any): Notification {
-  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, read: !!n.read };
+  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, read: !!n.read, link: n.link || undefined };
 }
 function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
@@ -678,7 +720,16 @@ export function useTickets() {
   return useQuery({
     queryKey: ['hr_tickets'],
     queryFn: async () => (await pbList('hr_tickets', { sort: '-created' })).map(toTicket),
-    refetchInterval: 15000, // near-real-time polling, matches old refreshTickets() intent
+    // Was 15000ms — too slow for a screen someone is actively watching a
+    // live conversation on (HR/employee could sit staring at an open ticket
+    // for up to 15s after a reply lands before it appeared). Matches
+    // useMessages()'s 4000ms chat cadence instead, same "polling instead of
+    // SSE" tradeoff explained there (this app's web deploy proxies
+    // PocketBase through a Next.js rewrite that doesn't reliably keep a
+    // long-lived EventSource open, so pb.collection(...).subscribe() isn't
+    // used here — see ToastNotification.tsx for the one place it IS used,
+    // defensively, with a .catch() for exactly this reason).
+    refetchInterval: 4000,
   });
 }
 export function usePayroll() {
@@ -1333,12 +1384,22 @@ export const hrActions = {
   // that person's profile_picture in hr_profiles to use as the Android
   // large icon/avatar. Neither field is required — omit senderEmail for
   // system-generated notifications that don't really have a "contact".
-  addNotification: async (email: string, role: string, message: string, category?: NotificationCategory, pushTitle?: string, senderEmail?: string): Promise<void> => {
+  // `link` is a role-correct in-app path (e.g. "/hr/tickets?ticketId=abc123")
+  // that TopNav's bell dropdown navigates to when this notification is
+  // clicked — see buildNotificationLink() below for how callers construct
+  // one per recipient role. Requires a `link` (text) field on the
+  // hr_notifications collection; if that field hasn't been added in the
+  // PocketBase admin yet, PocketBase silently drops the extra key on write
+  // (same as happened with category/push_title/sender_email before those
+  // were added) and clicking just won't navigate anywhere — not a crash,
+  // just a no-op until the field exists.
+  addNotification: async (email: string, role: string, message: string, category?: NotificationCategory, pushTitle?: string, senderEmail?: string, link?: string): Promise<void> => {
     await pbCreate('hr_notifications', {
       recipient_email: email, recipient_role: role, message, read: false,
       category: category || 'internal',
       push_title: pushTitle || '',
       sender_email: senderEmail || '',
+      link: link || '',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
   },
@@ -1471,11 +1532,11 @@ export const hrActions = {
 
   // ── Tasks ─────────────────────────────────────────────────────────────
   addTask: async (task: Omit<Task, 'id'>): Promise<void> => {
-    await pbCreate('hr_tasks', {
+    const created = await pbCreate('hr_tasks', {
       title: task.title, description: task.description, assigned_to: task.assignedTo, assigned_email: task.assignedEmail,
       team: task.team, due_date: task.dueDate, priority: task.priority, status: task.status, created_by: task.createdBy,
     });
-    await hrActions.addNotification(task.assignedEmail, 'employee', `New task assigned: "${task.title}" due ${task.dueDate}.`, 'leave_task', task.title);
+    await hrActions.addNotification(task.assignedEmail, 'employee', `New task assigned: "${task.title}" due ${task.dueDate}.`, 'leave_task', task.title, undefined, buildNotificationLink('employee', 'task', created.id));
   },
   updateTaskStatus: (id: string, status: Task['status']) => pbUpdate('hr_tasks', id, { status }),
   deleteTask: (id: string) => pbDelete('hr_tasks', id),
@@ -1522,8 +1583,8 @@ export const hrActions = {
     });
     // Admin also has a Tickets queue (admin/tickets) — this previously only
     // notified 'hr', same gap as leave requests.
-    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail);
-    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail);
+    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', created.id));
+    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
@@ -1542,17 +1603,17 @@ export const hrActions = {
       // reply.senderName is a real-name snapshot, not an email (TicketReply
       // has no senderEmail field) — pass the title only, no avatar, rather
       // than guess at an email from a name.
-      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`, 'ticket', ticket.title);
+      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
     } else {
-      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail);
-      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail);
+      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', ticket.id));
+      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', ticket.id));
     }
   },
   updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
     await pbUpdate('hr_tickets', ticket.id, { status });
-    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket', ticket.title);
-    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title);
-    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title);
+    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
+    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
+    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
     // Starts/clears the 15-day attachment-deletion timer (see
     // checkTicketAttachmentRetention below) — hr_tickets has no closedAt
     // column of its own, so this is tracked in the KV store the same way
@@ -1609,6 +1670,28 @@ export const hrActions = {
     (await pbGetKVByPrefix('hr_ticket_presence_')).map(row => row.value as TicketPresence),
   isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
     !!p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) < TICKET_PRESENCE_STALE_MS,
+
+  // ── "X is typing…" indicator (see TypingState above) ────────────────────
+  // Call on every keystroke in a composer (debounce on the caller's side —
+  // TeamChatView/TicketsView call this at most once every ~1.5s while the
+  // field is non-empty, not on every single keypress) while it's non-empty,
+  // and call clearTypingState immediately on send/blur/empty so the
+  // indicator disappears promptly rather than waiting out the stale window.
+  touchTypingState: (scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> =>
+    pbSetKV(typingKeyFor(scope, scopeId, email), { scope, scopeId, email, displayName, lastTypedAt: new Date().toISOString() } as TypingState),
+  clearTypingState: (scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> =>
+    pbDeleteKVByKeys([typingKeyFor(scope, scopeId, email)]),
+  // Returns everyone currently (non-stale) typing in this scope, excluding
+  // the viewer themself — that's the filtering the UI needs directly.
+  getTypingUsers: async (scope: 'chat' | 'ticket', scopeId: string, excludeEmail: string): Promise<TypingState[]> => {
+    const rows = (await pbGetKVByPrefix(typingPrefixFor(scope, scopeId))).map(row => row.value as TypingState);
+    const now = Date.now();
+    return rows.filter(r =>
+      r.email.toLowerCase() !== excludeEmail.toLowerCase() &&
+      !!r.lastTypedAt &&
+      (now - new Date(r.lastTypedAt).getTime()) < TYPING_STALE_MS
+    );
+  },
 
   // ── Ticket "seen by employee" marker (see TicketSeenState above) ────────
   touchTicketSeenByEmployee: (ticketId: string): Promise<void> =>

@@ -560,12 +560,39 @@ export function TopNav() {
                   </div>
                 </div>
                 <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                  {notifications.map(n => (
-                    <div key={n.id} className={`p-3.5 text-xs flex flex-col gap-1 ${email && !hrActions.isNotificationRead(n, email, readMap) ? 'bg-orange-50/40' : ''}`}>
-                      <div className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words">{n.message}</div>
-                      <div className="text-[9px] text-slate-400 font-medium text-right">{n.timestamp}</div>
-                    </div>
-                  ))}
+                  {notifications.map(n => {
+                    const isUnread = !!email && !hrActions.isNotificationRead(n, email, readMap);
+                    const content = (
+                      <>
+                        <div className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words">{n.message}</div>
+                        <div className="text-[9px] text-slate-400 font-medium text-right">{n.timestamp}</div>
+                      </>
+                    );
+                    // Only notifications with a `link` (ticket/leave/chat_mention —
+                    // see buildNotificationLink in hrData.ts) are clickable.
+                    // Older notifications created before this field existed, and
+                    // generic/'internal' ones with nothing to deep-link to, render
+                    // as a plain row same as before.
+                    if (n.link) {
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => {
+                            setIsBellOpen(false);
+                            router.push(n.link!);
+                          }}
+                          className={`w-full text-left p-3.5 text-xs flex flex-col gap-1 transition-colors hover:bg-slate-50 ${isUnread ? 'bg-orange-50/40' : ''}`}
+                        >
+                          {content}
+                        </button>
+                      );
+                    }
+                    return (
+                      <div key={n.id} className={`p-3.5 text-xs flex flex-col gap-1 ${isUnread ? 'bg-orange-50/40' : ''}`}>
+                        {content}
+                      </div>
+                    );
+                  })}
                   {notifications.length === 0 && (
                     <div className="p-8 text-center text-slate-400 font-medium text-xs">No alerts active</div>
                   )}
