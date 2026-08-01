@@ -169,7 +169,11 @@ export default function AdminProfilePage() {
   ];
 
   return (
-    <div className="space-y-8 max-w-2xl font-sans">
+    // Wider than the old max-w-2xl — the sections below now lay out as 2
+    // columns on desktop web (lg+ breakpoint). Native app builds run on
+    // phone-sized viewports and never hit that breakpoint, so they stay
+    // single-column exactly like before.
+    <div className="space-y-8 max-w-5xl font-sans">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -239,28 +243,33 @@ export default function AdminProfilePage() {
         </div>
       </Card>
 
-      {/* Info grid */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {infoRows.map(({ icon: Icon, label, value }) => (
-            <div key={label} className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Icon className="h-4 w-4 text-slate-500" />
+      {/* 2 columns on desktop web (lg+); single column below that,
+          including native app builds (phone-sized viewports never reach
+          lg). items-start so the shorter column doesn't stretch. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 items-start">
+        {/* Info grid */}
+        <Card className="border border-slate-200 p-0 overflow-hidden">
+          <div className="px-6 pt-5 pb-2 border-b border-slate-100">
+            <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {infoRows.map(({ icon: Icon, label, value }) => (
+              <div key={label} className="flex items-center gap-4 px-6 py-4">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <Icon className="h-4 w-4 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+            ))}
+          </div>
+        </Card>
 
-      {/* Push Notification Preferences */}
-      {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+        {/* Push Notification Preferences */}
+        {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+      </div>
 
       {/* Profile Edit Modal */}
       <Modal isOpen={isEditOpen} onClose={() => { setIsEditOpen(false); setEditSuccess(''); }} title="Edit System Profile">

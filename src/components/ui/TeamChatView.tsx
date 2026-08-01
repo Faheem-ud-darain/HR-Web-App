@@ -6,7 +6,7 @@ import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { TypingIndicator } from './TypingIndicator';
-import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 
@@ -83,6 +83,32 @@ function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; onOpen: 
         Seen{viewers.length > 3 ? ` by ${viewers.length}` : ''}
       </span>
     </button>
+  );
+}
+
+// Small role badge shown next to a name — used both in the Members panel
+// and (for HR/Team Lead) next to a sender's name on their messages, so
+// anyone reading the channel can immediately tell who's HR/Admin/a Team
+// Lead vs. a regular employee. Admin already had its own purple+Crown
+// treatment on messages (see isAdminSender below, kept as-is since it also
+// recolors the whole bubble); this covers the two roles that previously had
+// no visual distinction at all. Returns null for a plain employee — no
+// badge needed there.
+type RoleBadgeInfo = { label: string; icon: React.ComponentType<{ className?: string }>; text: string; bg: string };
+function roleBadgeInfo(role?: string): RoleBadgeInfo | null {
+  if (role === 'admin') return { label: 'Admin', icon: Crown, text: 'text-purple-700', bg: 'bg-purple-100' };
+  if (role === 'hr') return { label: 'HR', icon: Headset, text: 'text-sky-700', bg: 'bg-sky-100' };
+  if (role === 'team_lead') return { label: 'Team Lead', icon: Star, text: 'text-amber-700', bg: 'bg-amber-100' };
+  return null;
+}
+function RoleBadge({ role, className = '' }: { role?: string; className?: string }) {
+  const info = roleBadgeInfo(role);
+  if (!info) return null;
+  const Icon = info.icon;
+  return (
+    <span className={`flex items-center gap-0.5 ${info.bg} ${info.text} text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${className}`}>
+      <Icon className="h-2.5 w-2.5" /> {info.label}
+    </span>
   );
 }
 
@@ -222,6 +248,10 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
   const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all');
   const [sizeFilter, setSizeFilter] = useState<SizeFilter>('all');
   const [showAnnouncements, setShowAnnouncements] = useState(false);
+  // "Who's in this channel" panel — see mentionCandidates below, the same
+  // list already used to drive @mention suggestions (team members + every
+  // Admin, since Admin can post in any channel).
+  const [showMembers, setShowMembers] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   // Image attachments used to open via <a target="_blank"> pointing at a
   // base64 data: URL — same Capacitor/Android WebView gotcha already fixed
@@ -682,6 +712,15 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
                 <Megaphone className="h-3 w-3 shrink-0" /> {announcements.length}
               </button>
             )}
+            {activePanel === 'chat' && (
+              <button
+                onClick={() => setShowMembers(true)}
+                title="See who's in this channel"
+                className="flex items-center gap-1 text-[10px] font-bold h-7 md:h-auto px-2 py-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"
+              >
+                <Users className="h-3 w-3 shrink-0" /> {mentionCandidates.length}
+              </button>
+            )}
           </div>
 
           {/* Right group: Filter — alone in its own flex slot so
@@ -786,7 +825,8 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
             // anywhere — their messages get a distinct highlighted look
             // (purple + crown badge) in every viewer's chat, self or not,
             // so they're unmistakable next to regular team messages.
-            const isAdminSender = emailToProfile.get(normEmail(m.senderEmail))?.role === 'admin';
+            const senderRole = emailToProfile.get(normEmail(m.senderEmail))?.role;
+            const isAdminSender = senderRole === 'admin';
 
             // Announcements render full-width and pinned-banner styled,
             // not as a left/right chat bubble — they're meant to stand out
@@ -796,7 +836,7 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
                 <div key={m.id} className="border-2 border-amber-300 bg-amber-50 rounded-xl px-4 py-3">
                   <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">
                     <Megaphone className="h-3.5 w-3.5" /> Announcement · {label}
-                    {isAdminSender && <Crown className="h-3 w-3 text-purple-600" />}
+                    {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
                     <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
                   </div>
                   {m.text && (
@@ -830,10 +870,12 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
                 <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className={`text-[10px] font-bold ${isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
-                    {isAdminSender && (
+                    {isAdminSender ? (
                       <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
                         <Crown className="h-2.5 w-2.5" /> Admin
                       </span>
+                    ) : (
+                      <RoleBadge role={senderRole} />
                     )}
                     <span className="text-[9px] text-slate-400 font-semibold">{formatTimestamp(m.timestamp)}</span>
                   </div>
@@ -1063,6 +1105,37 @@ export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProf
             ))}
           </div>
         )}
+      </Modal>
+
+      {/* "Who's in this channel" — team members plus every Admin (who can
+          post/be reached in any channel), same list @mention suggestions
+          draw from. Role badges here match the ones shown on messages. */}
+      <Modal
+        isOpen={showMembers}
+        onClose={() => setShowMembers(false)}
+        title={`${activeTeam?.name || 'Team Chat'} — Members (${mentionCandidates.length})`}
+      >
+        <div className="space-y-1 max-h-96 overflow-y-auto">
+          {mentionCandidates.map(p => {
+            const isYou = p.email.toLowerCase() === currentUserEmail.toLowerCase();
+            return (
+              <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+                <Avatar src={p.profilePicture} name={displayName(p, currentUserRole)} size={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                    {displayName(p, currentUserRole)}
+                    {isYou && <span className="text-[9px] text-slate-400 font-semibold">(You)</span>}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate">{p.email}</p>
+                </div>
+                <RoleBadge role={p.role} />
+              </div>
+            );
+          })}
+          {mentionCandidates.length === 0 && (
+            <p className="text-center py-8 text-slate-400 font-semibold text-xs italic">No members in this channel yet.</p>
+          )}
+        </div>
       </Modal>
     </div>
   );

@@ -341,7 +341,14 @@ export default function EmployeeProfilePage() {
   ];
 
   return (
-    <div className="space-y-6 md:space-y-8 max-w-2xl">
+    // Wider than the old single-column max-w-2xl — this now lays out as a
+    // 2-column grid at the lg breakpoint (see below), which needs the extra
+    // room or the two columns would be too cramped to read comfortably.
+    // Native mobile app builds run on phone-sized viewports, so they never
+    // hit the lg breakpoint and stay single-column exactly like before —
+    // no separate Capacitor check needed, same responsive-only approach
+    // used everywhere else in this app.
+    <div className="space-y-6 md:space-y-8 max-w-6xl">
       {/* Header */}
       <div>
         <h1 className="text-lg md:text-2xl font-bold text-slate-900">My Profile</h1>
@@ -408,231 +415,242 @@ export default function EmployeeProfilePage() {
         </div>
       </Card>
 
-      {/* Info grid */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {infoRows.map(({ icon: Icon, label, value }) => (
-            <div key={label} className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Icon className="h-4 w-4 text-slate-500" />
+      {/* Everything below the identity card lays out as 2 columns on
+          desktop web (lg+) instead of stacking single-file down a narrow
+          center column — that's what was leaving so much empty space on
+          wide screens. items-start keeps each column's height independent
+          so a short column doesn't get stretched to match a tall one. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 items-start">
+        <div className="space-y-6 md:space-y-8">
+          {/* Info grid */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {infoRows.map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Icon className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
+                  </div>
+                </div>
+              ))}
+              {/* Salary row */}
+              <div className="flex items-center gap-4 px-6 py-4">
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <span className="text-emerald-600 font-bold text-sm">{profile.region === 'USA' ? '$' : '₨'}</span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Salary</p>
+                  <p className="text-sm font-semibold text-emerald-700 mt-0.5">{formatMoney(salary, profile.region)} / month</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
-              </div>
             </div>
-          ))}
-          {/* Salary row */}
-          <div className="flex items-center gap-4 px-6 py-4">
-            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-              <span className="text-emerald-600 font-bold text-sm">{profile.region === 'USA' ? '$' : '₨'}</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Salary</p>
-              <p className="text-sm font-semibold text-emerald-700 mt-0.5">{formatMoney(salary, profile.region)} / month</p>
-            </div>
-          </div>
-        </div>
-      </Card>
+          </Card>
 
-      {/* Bank Details section */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm">Bank Details</h3>
-          <button
-            onClick={openBankEdit}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </button>
-        </div>
-        {profile.bankName ? (
-          <div className="divide-y divide-slate-100">
-            <div className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Landmark className="h-4 w-4 text-slate-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Name</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.bankName}</p>
-              </div>
+          {/* Bank Details section */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 text-sm">Bank Details</h3>
+              <button
+                onClick={openBankEdit}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
             </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Landmark className="h-4 w-4 text-slate-500" />
+            {profile.bankName ? (
+              <div className="divide-y divide-slate-100">
+                <div className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Landmark className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Name</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.bankName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Landmark className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account Number</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{profile.accountNumber || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Landmark className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Routing Number' : 'IBAN'}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{profile.iban || '—'}</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account Number</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{profile.accountNumber || '—'}</p>
+            ) : (
+              <div className="px-6 py-6 text-center">
+                <p className="text-xs text-slate-400 italic font-semibold">No bank details on file yet. Add them so payroll can process your salary correctly.</p>
               </div>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Landmark className="h-4 w-4 text-slate-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Routing Number' : 'IBAN'}</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{profile.iban || '—'}</p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="px-6 py-6 text-center">
-            <p className="text-xs text-slate-400 italic font-semibold">No bank details on file yet. Add them so payroll can process your salary correctly.</p>
-          </div>
-        )}
-      </Card>
-
-      {/* Contact Numbers section */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm">Contact Numbers</h3>
-          <button
-            onClick={openPhoneEdit}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </button>
-        </div>
-        {profile.personalPhone || profile.companyPhone ? (
-          <div className="divide-y divide-slate-100">
-            <div className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Phone className="h-4 w-4 text-slate-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Own Number</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.personalPhone || '—'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Phone className="h-4 w-4 text-slate-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Allocated Number</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.companyPhone || 'Not applicable'}</p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="px-6 py-6 text-center">
-            <p className="text-xs text-slate-400 italic font-semibold">No contact numbers on file yet. Add your own number (and a company-allocated one, if you have one).</p>
-          </div>
-        )}
-      </Card>
-
-      {/* Documents section */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-sm">My Documents</h3>
-          <p className="text-[10px] text-slate-400 mt-1">Images up to 3 MB (auto-converted to WebP), PDFs up to 5 MB. Visible to HR/Admin under Master Reports.</p>
+            )}
+          </Card>
         </div>
 
-        {(docError || docSuccess) && (
-          <div className={`mx-6 mt-4 p-2.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${docError ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-            {docError ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-            {docError || docSuccess}
-          </div>
-        )}
-
-        <div className="divide-y divide-slate-100">
-          {/* CV / Resume */}
-          <div className="flex items-center justify-between gap-3 px-6 py-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <FileText className="h-4 w-4 text-slate-500" />
+        <div className="space-y-6 md:space-y-8">
+          {/* Contact Numbers section */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 text-sm">Contact Numbers</h3>
+              <button
+                onClick={openPhoneEdit}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
+            </div>
+            {profile.personalPhone || profile.companyPhone ? (
+              <div className="divide-y divide-slate-100">
+                <div className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Phone className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Own Number</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.personalPhone || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 px-6 py-4">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <Phone className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Allocated Number</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.companyPhone || 'Not applicable'}</p>
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CV / Resume</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.cvFileName || 'Not uploaded yet'}</p>
+            ) : (
+              <div className="px-6 py-6 text-center">
+                <p className="text-xs text-slate-400 italic font-semibold">No contact numbers on file yet. Add your own number (and a company-allocated one, if you have one).</p>
+              </div>
+            )}
+          </Card>
+
+          {/* Documents section */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">My Documents</h3>
+              <p className="text-[10px] text-slate-400 mt-1">Images up to 3 MB (auto-converted to WebP), PDFs up to 5 MB. Visible to HR/Admin under Master Reports.</p>
+            </div>
+
+            {(docError || docSuccess) && (
+              <div className={`mx-6 mt-4 p-2.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${docError ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                {docError ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                {docError || docSuccess}
+              </div>
+            )}
+
+            <div className="divide-y divide-slate-100">
+              {/* CV / Resume */}
+              <div className="flex items-center justify-between gap-3 px-6 py-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <FileText className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CV / Resume</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.cvFileName || 'Not uploaded yet'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => cvInputRef.current?.click()}
+                  disabled={docBusy === 'cv'}
+                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                >
+                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'cv' ? 'Uploading…' : myDocs?.cvFileData ? 'Replace' : 'Upload'}
+                </button>
+                <input ref={cvInputRef} type="file" accept="image/*,application/pdf" onChange={handleCvUpload} className="hidden" />
+              </div>
+
+              {/* Identity documents */}
+              <div className="px-6 py-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{(myDocs?.identityDocs || []).length} document(s) on file</p>
+                  </div>
+                  <button
+                    onClick={() => idInputRef.current?.click()}
+                    disabled={docBusy === 'id'}
+                    className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> {docBusy === 'id' ? 'Uploading…' : 'Add Document'}
+                  </button>
+                  <input ref={idInputRef} type="file" accept="image/*,application/pdf" onChange={handleIdUpload} className="hidden" />
+                </div>
+                {(myDocs?.identityDocs || []).length > 0 && (
+                  <ul className="text-xs text-slate-600 space-y-1 pl-1">
+                    {(myDocs?.identityDocs || []).map((d, i) => <li key={i} className="truncate">• {d.name}</li>)}
+                  </ul>
+                )}
+              </div>
+
+              {/* Passport */}
+              <div className="flex items-center justify-between gap-3 px-6 py-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                    <FileText className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Passport (Optional)</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.passportFileName || 'Not uploaded yet'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => passportInputRef.current?.click()}
+                  disabled={docBusy === 'passport'}
+                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                >
+                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'passport' ? 'Uploading…' : myDocs?.passportFileData ? 'Replace' : 'Upload'}
+                </button>
+                <input ref={passportInputRef} type="file" accept="image/*,application/pdf" onChange={handlePassportUpload} className="hidden" />
               </div>
             </div>
-            <button
-              onClick={() => cvInputRef.current?.click()}
-              disabled={docBusy === 'cv'}
-              className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
-            >
-              <Upload className="h-3.5 w-3.5" /> {docBusy === 'cv' ? 'Uploading…' : myDocs?.cvFileData ? 'Replace' : 'Upload'}
-            </button>
-            <input ref={cvInputRef} type="file" accept="image/*,application/pdf" onChange={handleCvUpload} className="hidden" />
-          </div>
+          </Card>
 
-          {/* Identity documents */}
-          <div className="px-6 py-4 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{(myDocs?.identityDocs || []).length} document(s) on file</p>
+          {/* Security section */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Security</h3>
+            </div>
+            <div className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <KeyRound className="h-4 w-4 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Password</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
+                </div>
               </div>
               <button
-                onClick={() => idInputRef.current?.click()}
-                disabled={docBusy === 'id'}
-                className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                onClick={() => setIsResetOpen(true)}
+                className="w-full sm:w-auto flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm"
               >
-                <Upload className="h-3.5 w-3.5" /> {docBusy === 'id' ? 'Uploading…' : 'Add Document'}
+                Change Password
               </button>
-              <input ref={idInputRef} type="file" accept="image/*,application/pdf" onChange={handleIdUpload} className="hidden" />
             </div>
-            {(myDocs?.identityDocs || []).length > 0 && (
-              <ul className="text-xs text-slate-600 space-y-1 pl-1">
-                {(myDocs?.identityDocs || []).map((d, i) => <li key={i} className="truncate">• {d.name}</li>)}
-              </ul>
-            )}
-          </div>
+          </Card>
 
-          {/* Passport */}
-          <div className="flex items-center justify-between gap-3 px-6 py-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <FileText className="h-4 w-4 text-slate-500" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Passport (Optional)</p>
-                <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.passportFileName || 'Not uploaded yet'}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => passportInputRef.current?.click()}
-              disabled={docBusy === 'passport'}
-              className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
-            >
-              <Upload className="h-3.5 w-3.5" /> {docBusy === 'passport' ? 'Uploading…' : myDocs?.passportFileData ? 'Replace' : 'Upload'}
-            </button>
-            <input ref={passportInputRef} type="file" accept="image/*,application/pdf" onChange={handlePassportUpload} className="hidden" />
-          </div>
+          {/* Push Notification Preferences */}
+          {profile?.email && <NotificationPreferencesCard email={profile.email} />}
         </div>
-      </Card>
-
-      {/* Security section */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-sm">Security</h3>
-        </div>
-        <div className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
-              <KeyRound className="h-4 w-4 text-slate-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Password</p>
-              <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsResetOpen(true)}
-            className="w-full sm:w-auto flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm"
-          >
-            Change Password
-          </button>
-        </div>
-      </Card>
-
-      {/* Push Notification Preferences */}
-      {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+      </div>
 
       {/* Password Reset Modal */}
       <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">

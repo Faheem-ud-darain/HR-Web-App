@@ -126,7 +126,11 @@ export default function HRProfilePage() {
   ];
 
   return (
-    <div className="space-y-6 md:space-y-8 max-w-2xl font-sans">
+    // Wider than the old max-w-2xl — the sections below now lay out as 2
+    // columns on desktop web (lg+ breakpoint). Native app builds run on
+    // phone-sized viewports and never hit that breakpoint, so they stay
+    // single-column exactly like before.
+    <div className="space-y-6 md:space-y-8 max-w-5xl font-sans">
       {/* Header */}
       <div>
         <h1 className="text-lg md:text-2xl font-bold text-slate-900">HR Profile</h1>
@@ -183,52 +187,59 @@ export default function HRProfilePage() {
         </div>
       </Card>
 
-      {/* Info grid */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {infoRows.map(({ icon: Icon, label, value }) => (
-            <div key={label} className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3.5 md:py-4">
-              <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <Icon className="h-4 w-4 text-slate-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-                <p className="text-xs md:text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Security Section */}
-      <Card className="border border-slate-200 p-0 overflow-hidden">
-        <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-sm">Security</h3>
-        </div>
-        <div className="px-4 md:px-6 py-4 md:py-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
-              <KeyRound className="h-4 w-4 text-slate-500" />
-            </div>
-            <div>
-              <p className="text-xs md:text-sm font-semibold text-slate-900">Password</p>
-              <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
-            </div>
+      {/* 2 columns on desktop web (lg+); single column below that,
+          including native app builds (phone-sized viewports never reach
+          lg). items-start so the shorter column doesn't stretch. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 items-start">
+        {/* Info grid */}
+        <Card className="border border-slate-200 p-0 overflow-hidden">
+          <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100">
+            <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
           </div>
-          <button
-            onClick={() => setIsResetOpen(true)}
-            className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm min-h-[44px] md:min-h-0"
-          >
-            Change Password
-          </button>
-        </div>
-      </Card>
+          <div className="divide-y divide-slate-100">
+            {infoRows.map(({ icon: Icon, label, value }) => (
+              <div key={label} className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3.5 md:py-4">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                  <Icon className="h-4 w-4 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                  <p className="text-xs md:text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
 
-      {/* Push Notification Preferences */}
-      {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+        <div className="space-y-6 md:space-y-8">
+          {/* Security Section */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Security</h3>
+            </div>
+            <div className="px-4 md:px-6 py-4 md:py-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <KeyRound className="h-4 w-4 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm font-semibold text-slate-900">Password</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsResetOpen(true)}
+                className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm min-h-[44px] md:min-h-0"
+              >
+                Change Password
+              </button>
+            </div>
+          </Card>
+
+          {/* Push Notification Preferences */}
+          {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+        </div>
+      </div>
 
       {/* Password Reset Modal */}
       <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">
