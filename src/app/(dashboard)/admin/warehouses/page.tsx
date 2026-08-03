@@ -234,9 +234,16 @@ export default function AdminWarehousesPage() {
             <CardContent className="p-4 space-y-2.5">
               {warehouses.map(wh => (
                 <div key={wh.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex justify-between items-center text-xs">
-                  <div>
-                    <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400" /> {wh.name}
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5 min-w-0">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {/* Some warehouse names were saved with spaces inside the
+                          parens (e.g. "W1 ( Wilmington )") — those spaces make
+                          the browser treat "(" and ")" as separate breakable
+                          words, so on narrow screens the closing ")" wraps
+                          onto its own line. Normalizing here fixes display
+                          regardless of what's actually stored. */}
+                      <span className="truncate">{wh.name.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')}</span>
                     </div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
                       Coords: <span className="font-mono text-slate-600">{wh.latitude}, {wh.longitude}</span> · Radius: <span className="text-orange-600 font-mono">{wh.radius}m</span>

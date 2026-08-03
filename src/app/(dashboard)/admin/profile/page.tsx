@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
+import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Edit2, Camera
 } from 'lucide-react';
@@ -269,6 +270,7 @@ export default function AdminProfilePage() {
 
         {/* Push Notification Preferences */}
         {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+        <AppVersionCard />
       </div>
 
       {/* Profile Edit Modal */}

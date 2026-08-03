@@ -11,6 +11,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useRouter, usePathname } from 'next/navigation';
 import { getSessionEmail, getSessionRole, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
+import { formatRelativeDateNY } from '@/lib/timezone';
 
 // The bell only ever showed a bare time-of-day string (e.g. "3:02 AM") with
 // no date — that's all `notification.timestamp` ever contained (see
@@ -20,16 +21,13 @@ import { logoutPush } from '@/lib/push';
 // own `created` system field always has the full date+time regardless of
 // what's in `timestamp`, so this derives "Today"/"Yesterday"/a short date
 // from that instead, to sit alongside the existing time string rather than
-// replace it.
+// replace it. "Today"/"Yesterday" are judged against America/New_York, not
+// the device's local timezone — see src/lib/timezone.ts.
 function formatNotificationWhen(created?: string): string {
   if (!created) return '';
   const date = new Date(created);
   if (isNaN(date.getTime())) return '';
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return formatRelativeDateNY(date);
 }
 
 export function TopNav() {

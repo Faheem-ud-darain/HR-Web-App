@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Clock } from 'lucide-react';
 import { Profile, TimesheetEntry, displayName, localShiftDate } from '@/lib/hrData';
 import { smoothLinePath, smoothAreaPath } from '@/lib/sparkline';
+import { APP_TIMEZONE } from '@/lib/timezone';
 
 interface AvgHoursWorkedCardProps {
   employees: Profile[];
@@ -59,7 +60,7 @@ export function AvgHoursWorkedCard({ employees, timesheets, viewerRole }: AvgHou
       d.setDate(d.getDate() - (6 - i));
       return {
         dateStr: localShiftDate(d.toISOString()),
-        label: i === 6 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }),
+        label: i === 6 ? 'Today' : d.toLocaleDateString('en-US', { timeZone: APP_TIMEZONE, weekday: 'short' }),
       };
     });
   }, []);

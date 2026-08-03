@@ -19,7 +19,9 @@ import {
   isValidRole,
   dashboardSectionForRole,
   clearSession,
+  getOrCreateDeviceId,
 } from '@/lib/session';
+import { API_BASE } from '@/lib/apiBase';
 import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
 
 export default function AuthPage() {
@@ -43,6 +45,96 @@ export default function AuthPage() {
   const [sessionConflict, setSessionConflict] = useState(false);
   const [notice, setNotice] = useState('');
   const [isForgotOpen, setIsForgotOpen] = useState(false);
+  // Forgot Password / OTP self-service flow — see
+  // src/app/api/auth/forgot-password and src/app/api/auth/reset-password.
+  // 'email' -> enter email, request a code; 'otp' -> enter the 6-digit code
+  // + new password; 'done' -> success confirmation.
+  const [forgotStep, setForgotStep] = useState<'email' | 'otp' | 'done'>('email');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [forgotShowPassword, setForgotShowPassword] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [forgotInfo, setForgotInfo] = useState('');
+
+  const resetForgotFlow = () => {
+    setForgotStep('email');
+    setForgotEmail('');
+    setForgotOtp('');
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
+    setForgotError('');
+    setForgotInfo('');
+    setForgotLoading(false);
+  };
+
+  const handleRequestOtp = async () => {
+    setForgotError('');
+    const clean = forgotEmail.trim().toLowerCase();
+    if (!clean || !clean.includes('@')) {
+      setForgotError('Enter a valid email address.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: clean }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setForgotError(data?.error || 'Something went wrong. Please try again.');
+        return;
+      }
+      setForgotInfo('If an account exists for that email, a 6-digit code has been sent — check your inbox (and spam folder).');
+      setForgotStep('otp');
+    } catch {
+      setForgotError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleSubmitReset = async () => {
+    setForgotError('');
+    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
+      setForgotError('Enter the 6-digit code from your email.');
+      return;
+    }
+    if (!forgotNewPassword || forgotNewPassword.length < 4) {
+      setForgotError('Choose a password at least 4 characters long.');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: forgotEmail.trim().toLowerCase(),
+          otp: forgotOtp.trim(),
+          newPassword: forgotNewPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setForgotError(data?.error || 'Something went wrong. Please try again.');
+        return;
+      }
+      setForgotStep('done');
+    } catch {
+      setForgotError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
   // Shown post-login (blocking navigation until acknowledged) when this
   // account's last shift was auto-ended by logging out — see
   // hrActions.performLogout in hrData.ts, which sets the localStorage flag
@@ -142,29 +234,45 @@ export default function AuthPage() {
       }
 
       if (role) {
-        // Single-active-session enforcement — Employee/Team Lead accounts
-        // only. Admin/HR are exempt and may sign in from multiple places at
-        // once. Checked here, right before committing the login, using a
-        // fresh read so this can't be bypassed by a stale in-memory value.
+        // Multi-device session enforcement — Employee/Team Lead accounts
+        // only, up to MAX_USER_SESSION_DEVICES (2) at once. Admin/HR are
+        // exempt and may sign in from as many places as they like. Checked
+        // here, right before committing the login, using a fresh read so
+        // this can't be bypassed by a stale in-memory value. Logging back
+        // in on a device that's ALREADY one of the live slots is always
+        // allowed regardless of the cap — only a genuinely new (3rd)
+        // device gets blocked.
+        const sessionToken = generateSessionToken();
+        const deviceId = await getOrCreateDeviceId();
         if (role !== 'admin' && role !== 'hr' && !force) {
-          const existingSession = await hrActions.getUserSession(cleanEmail);
-          if (hrActions.isUserSessionLive(existingSession)) {
+          const claim = await hrActions.claimUserSessionSlot(cleanEmail, deviceId, getDeviceLabel(), sessionToken);
+          if (!claim.ok) {
+            const labels = claim.liveSessions.map(s => s.deviceLabel || 'a device').join(' and ');
             setError(
-              `This account is already signed in${existingSession?.deviceLabel ? ` on ${existingSession.deviceLabel}` : ' elsewhere'}. ` +
-              'Please log out there first before signing in here, or log out from everywhere below.'
+              `This account is already signed in on 2 devices${labels ? ` (${labels})` : ''}. ` +
+              'Please log out on one of them first, or log out from everywhere below.'
             );
             setSessionConflict(true);
             setLoading(false);
             return;
           }
-        }
-
-        const sessionToken = generateSessionToken();
-        await setSession(cleanEmail, role, rememberMe, sessionToken);
-        if (rememberMe) setRememberedEmail(cleanEmail);
-        else clearRememberedEmail();
-        if (role !== 'admin' && role !== 'hr') {
-          await hrActions.claimUserSession(cleanEmail, sessionToken, getDeviceLabel());
+          // claim.ok already persisted the slot — no separate claim call
+          // needed below, unlike the old single-session flow.
+          await setSession(cleanEmail, role, rememberMe, sessionToken);
+          if (rememberMe) setRememberedEmail(cleanEmail);
+          else clearRememberedEmail();
+        } else {
+          await setSession(cleanEmail, role, rememberMe, sessionToken);
+          if (rememberMe) setRememberedEmail(cleanEmail);
+          else clearRememberedEmail();
+          if (role !== 'admin' && role !== 'hr') {
+            if (force) {
+              // "Log out from everywhere and sign in here" — wipe every
+              // slot, then claim a fresh one for just this device.
+              await hrActions.clearAllUserSessions(cleanEmail);
+            }
+            await hrActions.claimUserSessionSlot(cleanEmail, deviceId, getDeviceLabel(), sessionToken);
+          }
         }
         // team_lead users share the employee dashboard
         const dashRoute = role === 'team_lead' ? 'employee' : role;
@@ -201,13 +309,12 @@ export default function AuthPage() {
   };
 
   // "Log out from everywhere and sign in here" — re-runs the exact same
-  // login attempt but skips the live-session check, so claimUserSession
-  // (further down in attemptLogin) unconditionally overwrites the other
-  // device's session slot. That device's own heartbeat (see the
-  // single-session effect in (dashboard)/layout.tsx) then finds its token
-  // no longer matches and force-logs it out with the "signed in from
-  // another device" notice next time it checks in — same mechanism, just
-  // triggered deliberately instead of by a competing login.
+  // login attempt but with force=true, which clears EVERY device slot
+  // (clearAllUserSessions) before claiming a fresh one for just this
+  // device. Every other device's own heartbeat (see the multi-device
+  // effect in (dashboard)/layout.tsx) then finds its slot gone and
+  // force-logs it out next time it checks in — same mechanism, just
+  // triggered deliberately instead of naturally aging out.
   const handleForceLoginEverywhere = () => attemptLogin(true);
 
   if (checkingSession) {
@@ -332,7 +439,7 @@ export default function AuthPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setIsForgotOpen(true)}
+                    onClick={() => { resetForgotFlow(); setForgotEmail(email); setIsForgotOpen(true); }}
                     className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline"
                   >
                     Forgot password?
@@ -363,26 +470,134 @@ export default function AuthPage() {
         Privacy Policy
       </Link>
 
-      <Modal isOpen={isForgotOpen} onClose={() => setIsForgotOpen(false)} title="Forgot Password">
+      <Modal
+        isOpen={isForgotOpen}
+        onClose={() => { setIsForgotOpen(false); resetForgotFlow(); }}
+        title={forgotStep === 'done' ? 'Password Reset' : 'Forgot Password'}
+      >
         <div className="space-y-4">
-          <div className="flex items-start gap-3 bg-orange-50 border border-orange-100 p-4 rounded-xl">
-            <Mail className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-              Self-service password reset isn't available yet. To reset your password, please contact your HR administrator directly — they can reset it for you from the Employee Directory.
-            </p>
-          </div>
-          <div className="text-xs text-slate-500 space-y-1">
-            <p className="font-bold text-slate-700">HR Contact</p>
-            <p>hr@delcargo.us</p>
-          </div>
-          <div className="flex justify-end pt-2 border-t border-slate-200">
-            <button
-              onClick={() => setIsForgotOpen(false)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
-            >
-              Close
-            </button>
-          </div>
+          {forgotStep === 'email' && (
+            <>
+              <div className="flex items-start gap-3 bg-orange-50 border border-orange-100 p-4 rounded-xl">
+                <Mail className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                  Enter your account email and we'll send a 6-digit code you can use to set a new password.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">Email</label>
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="you@delcargo.us"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <p className="text-[11px] text-slate-400 font-semibold">Still stuck? Email hr@delcargo.us</p>
+                <button
+                  onClick={handleRequestOtp}
+                  disabled={forgotLoading}
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
+                >
+                  {forgotLoading ? 'Sending…' : 'Send Code'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {forgotStep === 'otp' && (
+            <>
+              {forgotInfo && (
+                <div className="flex items-start gap-3 bg-orange-50 border border-orange-100 p-4 rounded-xl">
+                  <Mail className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-700 font-semibold leading-relaxed">{forgotInfo}</p>
+                </div>
+              )}
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">6-digit code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={forgotOtp}
+                  onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
+                  placeholder="123456"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold tracking-widest focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">New password</label>
+                <div className="relative">
+                  <input
+                    type={forgotShowPassword ? 'text' : 'password'}
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForgotShowPassword(v => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {forgotShowPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 mb-1 block">Confirm new password</label>
+                <input
+                  type={forgotShowPassword ? 'text' : 'password'}
+                  value={forgotConfirmPassword}
+                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setForgotStep('email')}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700"
+                >
+                  Use a different email
+                </button>
+                <button
+                  onClick={handleSubmitReset}
+                  disabled={forgotLoading}
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
+                >
+                  {forgotLoading ? 'Resetting…' : 'Reset Password'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {forgotStep === 'done' && (
+            <>
+              <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                <Mail className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                  Your password has been updated. You can now log in with your new password.
+                </p>
+              </div>
+              <div className="flex justify-end pt-2 border-t border-slate-200">
+                <button
+                  onClick={() => {
+                    setEmail(forgotEmail);
+                    setPassword('');
+                    setIsForgotOpen(false);
+                    resetForgotFlow();
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+                >
+                  Back to Login
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 

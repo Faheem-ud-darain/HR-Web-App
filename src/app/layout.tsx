@@ -80,7 +80,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${plusJakarta.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col overflow-x-hidden">
         <SplashScreenOverlay />
         <PushWebScript />
         <Providers>

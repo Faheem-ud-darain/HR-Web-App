@@ -29,7 +29,12 @@ onRecordAfterCreateRequest((e) => {
     const onesignal = require(`${__hooks}/onesignal_helper.js`);
 
     const category = e.record.get("category");
-    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift"];
+    // "maintenance" (System Maintenance Notices — see MaintenanceNotice in
+    // hrData.ts, added 2026-08-04) is deliberately NOT opt-out-able: an
+    // employee shouldn't be able to silence "the whole system is about to
+    // go down," so unlike the other 4 categories here it skips the
+    // per-recipient prefs filter below entirely (see the `allowed` step).
+    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift", "maintenance"];
     console.log("[push_notifications] fired, category=", category);
     if (pushableCategories.indexOf(category) === -1) {
       console.log("[push_notifications] category not pushable, skipping");
@@ -78,10 +83,15 @@ onRecordAfterCreateRequest((e) => {
       prefsMap = {}; // no prefs row yet — everyone defaults to on
     }
 
-    const allowed = emails.filter((email) => {
-      const p = prefsMap[email.toLowerCase()];
-      return !p || p[category] !== false;
-    });
+    // "maintenance" bypasses the opt-out check entirely — see the comment
+    // on pushableCategories above. Every other category still respects
+    // whatever the recipient set in NotificationPreferencesCard.
+    const allowed = category === "maintenance"
+      ? emails
+      : emails.filter((email) => {
+          const p = prefsMap[email.toLowerCase()];
+          return !p || p[category] !== false;
+        });
     console.log("[push_notifications] prefsMap=", JSON.stringify(prefsMap), "allowed=", JSON.stringify(allowed));
 
     if (allowed.length > 0) {
@@ -91,7 +101,7 @@ onRecordAfterCreateRequest((e) => {
       // hrData.ts), falling back to a generic per-category label if it's
       // missing (e.g. notifications created before this field existed, or
       // system actions with no natural "contact").
-      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update" };
+      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update", maintenance: "System Maintenance" };
       const title = pushTitle || fallbackTitles[category] || "Delcargo Internal";
 
       // Resolve the sender's profile picture (if we have their email) to

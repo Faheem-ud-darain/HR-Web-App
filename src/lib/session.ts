@@ -204,6 +204,44 @@ export function getDeviceLabel(): string {
 // field is not itself a "stay signed in" decision.
 const REMEMBERED_EMAIL_KEY = 'remembered_login_email';
 
+const DEVICE_ID_KEY = 'device_id';
+
+// Stable per-install identifier for the "Logged-in Devices" list on the
+// Profile page (see UserSessionSlot/claimUserSessionSlot in hrData.ts).
+// Unlike the session token above (regenerated every login), this persists
+// across logging out and back in on the same browser/app install, so doing
+// that is recognized as the SAME device slot — not a new one that would
+// eat into the 2-device limit. Mirrored to native Preferences for the same
+// WebView-storage-eviction durability reason as the rest of this file (see
+// the big comment at the top) — without this, an Android storage wipe
+// would silently mint a "new device" identity every time.
+export async function getOrCreateDeviceId(): Promise<string> {
+  if (typeof window === 'undefined') return '';
+  const existing = window.localStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { Preferences } = await import('@capacitor/preferences');
+      const { value } = await Preferences.get({ key: DEVICE_ID_KEY });
+      if (value) {
+        window.localStorage.setItem(DEVICE_ID_KEY, value);
+        return value;
+      }
+    } catch { /* fall through to generating a fresh one */ }
+  }
+
+  const id = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage.setItem(DEVICE_ID_KEY, id);
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { Preferences } = await import('@capacitor/preferences');
+      await Preferences.set({ key: DEVICE_ID_KEY, value: id });
+    } catch { /* best-effort — worst case this ID isn't durable across a WebView storage wipe */ }
+  }
+  return id;
+}
+
 export function getRememberedEmail(): string {
   if (typeof window === 'undefined') return '';
   return window.localStorage.getItem(REMEMBERED_EMAIL_KEY) || '';

@@ -10,6 +10,7 @@ import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
+import { formatDateTimeNY, formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
@@ -67,7 +68,7 @@ function formatTicketDate(raw: string): string {
   if (BARE_TIME_ONLY.test(raw.trim())) return raw; // legacy format, no date was ever recorded — don't guess one
   const d = new Date(raw.replace(' ', 'T'));
   if (isNaN(d.getTime())) return raw; // fall back to the raw string rather than showing "Invalid Date"
-  return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatDateTimeNY(d);
 }
 
 // "Most recent activity" for sort purposes: a fresh reply on an old ticket
@@ -1060,7 +1061,7 @@ export function TicketsView({ role }: TicketsViewProps) {
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-slate-400 uppercase text-[9px] tracking-wider">Service Start Date</span>
-                <span className="text-slate-800">{new Date(inspectEmployee.joinedDate).toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+                <span className="text-slate-800">{formatDateNY(inspectEmployee.joinedDate)}</span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-slate-400 uppercase text-[9px] tracking-wider">Gender</span>

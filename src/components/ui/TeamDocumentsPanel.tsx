@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { Team, TeamDocument, useTeamDocuments, hrActions } from '@/lib/hrData';
+import { formatDateNY } from '@/lib/timezone';
 import {
   Upload, FileText, FileImage, FileVideo, Download, Trash2, Loader2,
   X, FolderOpen, File as FileIcon,
@@ -32,7 +33,7 @@ function formatBytes(bytes?: number): string {
 function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    return formatDateNY(d);
   } catch {
     return iso;
   }

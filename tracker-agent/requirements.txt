@@ -3,3 +3,8 @@ pyautogui>=0.9.54
 Pillow>=10.0.0
 pystray>=0.19.5
 pyinstaller>=6.3.0
+# Windows has no system IANA timezone database, so Python's built-in
+# zoneinfo can't resolve "America/New_York" there without this — needed for
+# _get_ny_date_string() in agent_gui.py (inactivity auto-absence feature)
+# to bucket the correct calendar date. Harmless/unused extra on macOS.
+tzdata>=2024.1

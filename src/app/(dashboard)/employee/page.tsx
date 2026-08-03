@@ -16,6 +16,7 @@ import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
+import { formatTimeNY, formatDateNY } from '@/lib/timezone';
 
 const PRIORITY_STYLES: Record<Task['priority'], string> = {
   high:   'bg-rose-100 text-rose-800 border-rose-200',
@@ -102,6 +103,10 @@ export default function EmployeeDashboard() {
   // flag, which only surfaces this at the *next login*. This one shows
   // immediately if the dashboard happens to already be open in a browser.
   const [shiftStopModal, setShiftStopModal] = useState(false);
+  // Which signal reason triggered the modal above — 'tracker_closed' (the
+  // original case) or 'inactivity_absence' (35+ continuous idle minutes —
+  // see ShiftStopSignal in hrData.ts). Drives which copy the modal shows.
+  const [shiftStopReason, setShiftStopReason] = useState<'tracker_closed' | 'inactivity_absence'>('tracker_closed');
 
   const profileRef = useRef<Profile | null>(null);
   const warehousesRef = useRef<Warehouse[]>([]);
@@ -226,6 +231,7 @@ export default function EmployeeDashboard() {
       if (shiftActiveRef.current) {
         setShiftActive(false);
         await refetchTimesheets();
+        setShiftStopReason(signal.reason === 'inactivity_absence' ? 'inactivity_absence' : 'tracker_closed');
         setShiftStopModal(true);
       }
     };
@@ -241,32 +247,59 @@ export default function EmployeeDashboard() {
   // passed the stale-shift check below) and stops the moment it flips
   // false. USA employees are governed by GPS geofencing instead and don't
   // need this at all.
+  //
+  // Also re-touches immediately on `visibilitychange` -> visible, not just
+  // every 20s: while backgrounded, mobile OSes commonly throttle/suspend JS
+  // timers, so the plain interval alone could leave the heartbeat looking
+  // stale for a bit right after resuming even though the employee is back.
+  // Belt-and-suspenders with the loosened SHIFT_TAB_HEARTBEAT_STALE_MS
+  // above — see the comment there for the bug this pair of changes fixes.
   useEffect(() => {
     if (!userProfile?.email || userProfile.region === 'USA' || !shiftActive) return;
     const touch = () => { hrActions.touchShiftTabHeartbeat(userProfile.email); };
     touch();
     const interval = setInterval(touch, 20000);
-    return () => clearInterval(interval);
+    const handleVisible = () => { if (document.visibilityState === 'visible') touch(); };
+    document.addEventListener('visibilitychange', handleVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisible);
+    };
   }, [userProfile?.email, userProfile?.region, shiftActive]);
 
-  // Best-effort immediate stop the instant this tab actually closes (tab
-  // close, browser close, or navigating away) — manual/non-USA shifts only.
-  // `pagehide` is the modern, more reliable replacement for `beforeunload`/
-  // `unload` (fires consistently on mobile Safari/Chrome too), and
-  // beaconClockOut uses fetch's `keepalive` option so the request survives
-  // past the page tearing down. This is still just the fast path, not a
-  // guarantee — it can't run on a crash, force-quit, or killed process,
-  // which is exactly why closeStaleManualShiftIfAbandoned exists as an
-  // independent second safety net that catches those cases on next login.
-  useEffect(() => {
-    if (!userProfile?.email || userProfile.region === 'USA') return;
-    const handlePageHide = () => {
-      if (!shiftActiveRef.current || !openShiftRef.current) return;
-      hrActions.beaconClockOut(openShiftRef.current.id, openShiftRef.current.clockIn);
-    };
-    window.addEventListener('pagehide', handlePageHide);
-    return () => window.removeEventListener('pagehide', handlePageHide);
-  }, [userProfile?.email, userProfile?.region]);
+  // DISABLED (2026-08-04) — this used to fire an immediate clock-out on
+  // `pagehide`, on the assumption that event only meant "the tab actually
+  // closed." Turned out not to be true on desktop web either (all the
+  // affected employees turned out to be on the website, not the mobile
+  // app, which doesn't even have Start/Stop Shift): Chrome/Edge's
+  // background-tab memory-saving feature ("Memory Saver" / tab discarding)
+  // silently unloads an inactive-but-not-closed tab to free RAM, and
+  // reloading it when the employee switches back fires the exact same
+  // `pagehide` event as a genuine close — which is what showed up as
+  // employees' shifts randomly ending after an "auto page refresh" they
+  // never asked for. There's no reliable way to tell a real close apart
+  // from a discarded/reloaded tab using this event, so rather than keep
+  // guessing, this fast path is turned off entirely — ending an abandoned
+  // manual shift is now handled ONLY by the slower-but-safer
+  // closeStaleManualShiftIfAbandoned stale-heartbeat check (runs at next
+  // dashboard load, see the effect above and hrData.ts), which doesn't
+  // fire on ordinary backgrounding/tab-discarding on any platform. Net
+  // effect: a genuinely abandoned tab now takes up to
+  // SHIFT_TAB_HEARTBEAT_STALE_MS (currently 15 minutes) to be caught
+  // instead of being instant — a deliberate trade against the disruption
+  // of false-positive shift-ends. beaconClockOut itself (hrData.ts) is
+  // left in place, just unused, in case a safer trigger for it is found
+  // later.
+  //
+  // useEffect(() => {
+  //   if (!userProfile?.email || userProfile.region === 'USA') return;
+  //   const handlePageHide = () => {
+  //     if (!shiftActiveRef.current || !openShiftRef.current) return;
+  //     hrActions.beaconClockOut(openShiftRef.current.id, openShiftRef.current.clockIn);
+  //   };
+  //   window.addEventListener('pagehide', handlePageHide);
+  //   return () => window.removeEventListener('pagehide', handlePageHide);
+  // }, [userProfile?.email, userProfile?.region]);
 
   // Real GPS-based geofencing — USA employees only. Automatically starts/ends
   // the shift as the employee's device enters or leaves the radius of any
@@ -686,7 +719,7 @@ export default function EmployeeDashboard() {
                             {isDueSoon && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.2 rounded-full">DUE SOON</span>}
                           </div>
                           {task.description && <p className="text-xs text-slate-500 mb-1.5 line-clamp-1">{task.description}</p>}
-                          <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1"><Calendar className="h-3 w-3 shrink-0" /> Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {task.team}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1"><Calendar className="h-3 w-3 shrink-0" /> Due: {formatDateNY(task.dueDate)} · {task.team}</p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[task.status]}`}>{STATUS_LABELS[task.status]}</span>
@@ -976,24 +1009,31 @@ export default function EmployeeDashboard() {
         </Modal>
       )}
 
-      {/* Tracker-closed-mid-shift notice — see the shift-stop-signal polling
-          effect above. Blocking (no backdrop-click dismiss expected) since
-          this is important enough that it shouldn't be missed by accident. */}
+      {/* Tracker-closed-mid-shift OR inactivity-auto-absence notice — see the
+          shift-stop-signal polling effect above. Blocking (no backdrop-click
+          dismiss expected) since this is important enough that it shouldn't
+          be missed by accident. */}
       {shiftStopModal && (
-        <Modal isOpen onClose={() => setShiftStopModal(false)} title="Tracker Closed — Shift Ended">
+        <Modal
+          isOpen
+          onClose={() => setShiftStopModal(false)}
+          title={shiftStopReason === 'inactivity_absence' ? 'Marked Absent — Shift Ended' : 'Tracker Closed — Shift Ended'}
+        >
           <div className="space-y-4">
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className={`flex items-start gap-3 p-4 rounded-xl border ${shiftStopReason === 'inactivity_absence' ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
+              <AlertTriangle className={`h-5 w-5 shrink-0 mt-0.5 ${shiftStopReason === 'inactivity_absence' ? 'text-rose-600' : 'text-amber-600'}`} />
               <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                The DelCargo Tracker app on your computer was closed while your shift was active, so your shift has been automatically ended. If this wasn't intentional, reopen the tracker app and start a new shift to resume being tracked.
+                {shiftStopReason === 'inactivity_absence'
+                  ? 'Your shift has been ended automatically because you were inactive for more than 35 continuous minutes. You have been marked absent for today and a deduction has been applied to your pay — see Absent Details for the exact amount. If you believe this is a mistake, contact HR.'
+                  : "The DelCargo Tracker app on your computer was closed while your shift was active, so your shift has been automatically ended. If this wasn't intentional, reopen the tracker app and start a new shift to resume being tracked."}
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
               <button
-                onClick={() => router.push('/employee/tracker')}
+                onClick={() => router.push(shiftStopReason === 'inactivity_absence' ? '/employee/absences' : '/employee/tracker')}
                 className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
-                Go to Tracker Setup
+                {shiftStopReason === 'inactivity_absence' ? 'View Absent Details' : 'Go to Tracker Setup'}
               </button>
               <button
                 onClick={() => setShiftStopModal(false)}
@@ -1029,7 +1069,7 @@ export default function EmployeeDashboard() {
             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs">
               <div>
                 <p className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Due Date</p>
-                <p className="font-semibold text-slate-800 mt-0.5">{new Date(selectedTask.dueDate).toLocaleDateString('en-US', { dateStyle: 'medium' })}</p>
+                <p className="font-semibold text-slate-800 mt-0.5">{formatDateNY(selectedTask.dueDate)}</p>
               </div>
               <div>
                 <p className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Department</p>
@@ -1104,8 +1144,8 @@ export default function EmployeeDashboard() {
                       {reviewEntries.map((entry, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50">
                           <td className="px-4 py-3 font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? new Date(entry.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? new Date(entry.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</td>
+                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</td>
                           <td className="px-4 py-3 text-right font-bold text-slate-900">{entry.duration || '—'}</td>
                           <td className="px-4 py-3 text-right">
                             <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
@@ -1136,9 +1176,9 @@ export default function EmployeeDashboard() {
                         <div>
                           <p className="text-[10px] text-slate-400 font-semibold uppercase">Clock In / Out</p>
                           <p className="text-xs font-semibold text-slate-700 font-mono">
-                            {entry.clockIn ? new Date(entry.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}
                             {' → '}
-                            {entry.clockOut ? new Date(entry.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}
                           </p>
                         </div>
                         <div>

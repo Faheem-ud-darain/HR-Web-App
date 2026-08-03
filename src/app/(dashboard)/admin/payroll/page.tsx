@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { DollarSign, CheckCircle2, TrendingUp } from 'lucide-react';
-import { usePayroll, useProfiles, useLeaves, hrActions, formatMoney, PayrollRecord } from '@/lib/hrData';
+import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord } from '@/lib/hrData';
 
 interface PayrollSummary {
   department: string;
@@ -31,12 +31,19 @@ export default function AdminPayrollPage() {
   const { data: rawPayroll = [], refetch: refetchPayroll } = usePayroll();
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
   const { data: leaves = [] } = useLeaves();
+  const { data: timesheets = [] } = useTimesheets();
+  // No dedicated React Query hook for this — it's stored in the generic KV
+  // collection, not its own PocketBase collection (see AbsenceRecord's own
+  // comment in hrData.ts). Plain one-time fetch on mount is fine here.
+  const [absenceRecords, setAbsenceRecords] = useState<AbsenceRecord[]>([]);
+  useEffect(() => { hrActions.getAbsenceRecords().then(setAbsenceRecords); }, []);
   // computePayrollView is a PURE function — it never writes. It recomputes
-  // the current view (pending increments, urgent-leave deductions, etc.) on
-  // top of whatever payroll records already exist server-side. Memoized so
-  // it doesn't produce a fresh array reference (and re-trigger the summary
-  // effect) on every render.
-  const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves), [employees, rawPayroll, leaves]);
+  // the current view (pending increments, urgent-leave deductions,
+  // no-call-no-show/inactivity absence deductions, etc.) on top of whatever
+  // payroll records already exist server-side. Memoized so it doesn't
+  // produce a fresh array reference (and re-trigger the summary effect) on
+  // every render.
+  const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords), [employees, rawPayroll, leaves, timesheets, absenceRecords]);
   const [summaries, setSummaries] = useState<PayrollSummary[]>([]);
   const [isReleasing, setIsReleasing] = useState(false);
 

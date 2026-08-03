@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
+import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
 
 export default function HRDashboard() {
   const router = useRouter();
@@ -92,6 +93,21 @@ export default function HRDashboard() {
     window.addEventListener('globalSearch', handleSearch);
     return () => window.removeEventListener('globalSearch', handleSearch);
   }, []);
+
+  // No-call-no-show / inactivity auto-absence check — Pakistan-region
+  // employees who haven't started a shift on a weekday (with no approved
+  // leave), or who were inactive 35+ minutes during a shift, get marked
+  // absent + a 2-days'-pay deduction that automatically shows up in payroll
+  // (see AbsenceRecord/runAbsenceCheck/computePayrollView in hrData.ts).
+  // This fires new notifications + creates the persisted AbsenceRecord the
+  // moment HR's dashboard loads with real data — no-ops on every subsequent
+  // load unless a new absence has actually occurred since the last check.
+  useEffect(() => {
+    if (employees.length === 0) return;
+    hrActions.getInactivityLogs({ sinceISO: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString() })
+      .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
+      .catch(() => { /* best-effort */ });
+  }, [employees.length, timesheets.length, leaves.length]);
 
   useEffect(() => {
     hrActions.getAnnouncementReadMap().then(setAnnouncementReadMap);
@@ -351,6 +367,8 @@ export default function HRDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <MaintenanceNoticeManager createdBy="HR Manager" />
 
       {/* --- MODALS --- */}
 

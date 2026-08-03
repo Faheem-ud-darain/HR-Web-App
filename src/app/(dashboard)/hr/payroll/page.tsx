@@ -4,12 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord } from '@/lib/hrData';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const { data: payrollRecords = [], isLoading: payrollLoading, refetch: refetchPayroll } = usePayroll();
+  const { data: timesheets = [] } = useTimesheets();
+  // No dedicated React Query hook — absence records live in the generic KV
+  // store, not their own PocketBase collection (see AbsenceRecord's comment
+  // in hrData.ts). Plain one-time fetch is fine for this page.
+  const [absenceRecords, setAbsenceRecords] = useState<AbsenceRecord[]>([]);
+  useEffect(() => { hrActions.getAbsenceRecords().then(setAbsenceRecords); }, []);
 
   // Optimistic local overrides while a bonus/deductions edit is in flight,
   // keyed by employeeId — merged over the server-computed view below.
@@ -70,7 +76,7 @@ export default function HRPayrollPage() {
   // Server-computed payroll view (base salary, increments, onboarding
   // penalties, urgent-leave deductions) with any in-flight local edits
   // for bonus/deductions layered on top.
-  const compiledPayrollData = hrActions.computePayrollView(employees, payrollRecords, leavesList).map(r => ({
+  const compiledPayrollData = hrActions.computePayrollView(employees, payrollRecords, leavesList, timesheets, absenceRecords).map(r => ({
     ...r,
     bonus: localEdits[r.employeeId]?.bonus ?? r.bonus,
     deductions: localEdits[r.employeeId]?.deductions ?? r.deductions,
@@ -289,6 +295,14 @@ export default function HRPayrollPage() {
                           }
                           return null;
                         })()}
+                        {(() => {
+                          const monthKey = new Date().toISOString().slice(0, 7);
+                          const empProfile = employees.find(e => e.id === emp.employeeId);
+                          const records = empProfile ? absenceRecords.filter(a => a.date.slice(0, 7) === monthKey && a.employeeEmail.toLowerCase() === empProfile.email.toLowerCase()) : [];
+                          if (records.length === 0) return null;
+                          const total = records.reduce((acc, a) => acc + a.deductionAmount, 0);
+                          return <div className="text-[10px] text-rose-600 font-bold mt-1">Absent ({records.length}d, {formatMoney(total, emp.region)})</div>;
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="font-semibold text-slate-900">{formatMoney(netPayable, emp.region)}</div>
@@ -324,6 +338,11 @@ export default function HRPayrollPage() {
         {filteredData.map(emp => {
           const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
           const urgentCount = leavesList.filter(l => l.employeeName === emp.name && l.type === 'Urgent' && l.status === 'approved').length;
+          const empProfileMobile = employees.find(e => e.id === emp.employeeId);
+          const monthKeyMobile = new Date().toISOString().slice(0, 7);
+          const absenceRecordsMobile = empProfileMobile ? absenceRecords.filter(a => a.date.slice(0, 7) === monthKeyMobile && a.employeeEmail.toLowerCase() === empProfileMobile.email.toLowerCase()) : [];
+          const absentCountMobile = absenceRecordsMobile.length;
+          const absentTotalMobile = absenceRecordsMobile.reduce((acc, a) => acc + a.deductionAmount, 0);
           return (
             <div key={emp.employeeId} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -360,6 +379,11 @@ export default function HRPayrollPage() {
               {urgentCount > 0 && (
                 <p className={`text-[10px] font-bold ${urgentCount <= 3 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {urgentCount <= 3 ? `Rebate Eligible (${urgentCount} UL)` : `No Rebate (${urgentCount} UL)`}
+                </p>
+              )}
+              {absentCountMobile > 0 && (
+                <p className="text-[10px] font-bold text-rose-600">
+                  Absent ({absentCountMobile}d, {formatMoney(absentTotalMobile, emp.region)})
                 </p>
               )}
               {!emp.processed && (

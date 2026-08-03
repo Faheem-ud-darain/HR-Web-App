@@ -9,6 +9,8 @@ import { Modal } from '@/components/ui/Modal';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
+import { AppVersionCard } from '@/components/ui/AppVersionCard';
+import { LoggedInDevicesCard } from '@/components/ui/LoggedInDevicesCard';
 import {
   User, Mail, Briefcase, Calendar, Users, ShieldCheck,
   KeyRound, CheckCircle2, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
@@ -649,6 +651,11 @@ export default function EmployeeProfilePage() {
 
           {/* Push Notification Preferences */}
           {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+          {/* Logged-in Devices — Employee/Team Lead only, since Admin/HR are
+              exempt from the 2-device cap and never claim a session slot at
+              all (see claimUserSessionSlot in hrData.ts). */}
+          {profile?.email && <LoggedInDevicesCard email={profile.email} />}
+          <AppVersionCard />
         </div>
       </div>
 

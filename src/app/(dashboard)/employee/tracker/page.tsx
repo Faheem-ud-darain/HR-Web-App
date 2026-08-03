@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, detectOS } from '@/lib/trackerSetup';
 import { getSessionEmail } from '@/lib/session';
 import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { formatTimeNY } from '@/lib/timezone';
 
 export default function TrackerPage() {
   const { data: allProfiles = [] } = useProfiles();
@@ -160,7 +161,7 @@ export default function TrackerPage() {
                     {elapsedLabel}
                   </div>
                   <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                    Clocked in at {new Date(openShift.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    Clocked in at {formatTimeNY(openShift.clockIn)}
                     {profile?.region === 'USA' ? ' via GPS warehouse geofencing.' : ' (manual shift start).'}
                   </p>
                 </div>
@@ -229,7 +230,7 @@ export default function TrackerPage() {
                         : heartbeatCheckedOnce ? 'App Not Connected' : 'Checking connection…'}
                     </p>
                     {heartbeat?.lastSeenAt && (
-                      <p className="text-[9px] text-slate-400 font-semibold">Last check-in: {new Date(heartbeat.lastSeenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-[9px] text-slate-400 font-semibold">Last check-in: {formatTimeNY(heartbeat.lastSeenAt)}</p>
                     )}
                   </div>
                 </div>
@@ -326,8 +327,8 @@ export default function TrackerPage() {
                     {timesheetEntries.map((entry) => (
                       <tr key={entry.id} className="hover:bg-slate-100/30 transition-colors">
                         <td className="px-5 py-4 font-bold text-slate-800">{localShiftDate(entry.clockIn, entry.date)}</td>
-                        <td className="px-5 py-4 text-slate-600 font-medium font-mono">{new Date(entry.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                        <td className="px-5 py-4 text-slate-600 font-medium font-mono">{entry.clockOut ? new Date(entry.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                        <td className="px-5 py-4 text-slate-600 font-medium font-mono">{formatTimeNY(entry.clockIn)}</td>
+                        <td className="px-5 py-4 text-slate-600 font-medium font-mono">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</td>
                         <td className="px-5 py-4 text-right font-bold text-slate-900">{entry.duration || '—'}</td>
                         <td className="px-5 py-4 text-right">
                           <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
@@ -358,9 +359,9 @@ export default function TrackerPage() {
                       <div>
                         <p className="text-[10px] text-slate-400 font-semibold uppercase">Clock In / Out</p>
                         <p className="text-xs font-semibold text-slate-700 font-mono">
-                          {new Date(entry.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTimeNY(entry.clockIn)}
                           {' → '}
-                          {entry.clockOut ? new Date(entry.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}
                         </p>
                       </div>
                       <div>

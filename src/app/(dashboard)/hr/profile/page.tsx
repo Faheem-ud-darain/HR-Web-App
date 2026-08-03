@@ -8,6 +8,7 @@ import { getSessionEmail } from '@/lib/session';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
+import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Camera
 } from 'lucide-react';
@@ -238,6 +239,7 @@ export default function HRProfilePage() {
 
           {/* Push Notification Preferences */}
           {profile?.email && <NotificationPreferencesCard email={profile.email} />}
+          <AppVersionCard />
         </div>
       </div>
 

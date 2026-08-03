@@ -15,12 +15,15 @@ import {
   isValidRole,
   dashboardSectionForRole,
   SessionRole,
+  getOrCreateDeviceId,
 } from '@/lib/session';
 import { initPush } from '@/lib/push';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
+import { AbsentPopup } from '@/components/ui/AbsentPopup';
+import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload } from 'lucide-react';
@@ -235,11 +238,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener('visibilitychange', handleVisible);
   }, [email, queryClient]);
 
-  // Single-active-session enforcement — Employee/Team Lead accounts only
+  // Multi-device session enforcement — Employee/Team Lead accounts only
   // (Admin/HR are exempt, see auth/page.tsx). Periodically "touches" this
-  // tab's claimed session slot; if another login has since superseded it
-  // (touchUserSession returns false), force a logout here rather than
-  // leaving two tabs/browsers quietly signed in as the same employee.
+  // device's claimed slot; if it's gone (removed remotely from the Devices
+  // card on another device/tab, or evicted by a "log out everywhere" forced
+  // login — see touchUserSessionSlot in hrData.ts), force a logout here
+  // rather than leaving a device quietly signed in after it's been
+  // deliberately logged out from elsewhere.
   useEffect(() => {
     if (!email || !role || role === 'admin' || role === 'hr') return;
     const token = getSessionToken();
@@ -247,7 +252,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     let cancelled = false;
     const check = async () => {
-      const stillOwner = await hrActions.touchUserSession(email, token);
+      const deviceId = await getOrCreateDeviceId();
+      const stillOwner = await hrActions.touchUserSessionSlot(email, deviceId, token);
       if (!stillOwner && !cancelled) {
         clearSession();
         try { window.sessionStorage.setItem('session_superseded', '1'); } catch { /* ignore */ }
@@ -1069,6 +1075,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {(role === 'employee' || role === 'team_lead') && (
         <AnnouncementPopup email={email} profile={profile} />
       )}
+
+      {/* Explains a new no-call-no-show / inactivity absence the moment the
+          employee it happened to logs in or refreshes — see AbsentPopup.tsx.
+          Employee/team_lead only, same reasoning as AnnouncementPopup above:
+          HR/Admin aren't the subject of this, they see everyone's absences
+          on the dedicated Absent Details page instead. */}
+      {(role === 'employee' || role === 'team_lead') && (
+        <AbsentPopup email={email} />
+      )}
+
+      {/* Blocking System Maintenance Notice popup — see
+          MaintenanceNoticePopup.tsx. Unlike AnnouncementPopup/AbsentPopup
+          above, this is NOT gated to employee/team_lead only: HR and Admin
+          can post these, but they're just as affected by the system going
+          down as anyone else, so they see the popup too (no "you posted
+          it, you're exempt" exception here). */}
+      <MaintenanceNoticePopup email={email} />
 
       {/* Checks live OS notification permission on every login (not just
           once) and nags until it's turned back on — see

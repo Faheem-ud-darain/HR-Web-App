@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 export default function PublicCareersPage() {
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
+    <div className="min-h-screen w-full overflow-x-hidden bg-slate-50/50 flex flex-col font-sans">
       {/* Mini public header. min-h-16 + pt-safe, not h-16 — see the same
           fix + explanation in src/app/page.tsx's header. */}
       <header className="min-h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sm:px-12 sticky top-0 z-50 pt-safe">
@@ -23,7 +23,7 @@ export default function PublicCareersPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 py-12 px-6 sm:px-12 max-w-5xl mx-auto w-full">
+      <main className="flex-1 py-12 px-6 sm:px-12 max-w-5xl mx-auto w-full min-w-0 overflow-x-hidden">
         <CareersView role="public" />
       </main>
 

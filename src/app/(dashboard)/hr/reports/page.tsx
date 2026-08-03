@@ -10,6 +10,7 @@ import { FileText, Search, Filter, ShieldCheck, Download, Monitor, Clock, CheckC
 import { UserProfileModal } from '@/components/ui/UserProfileModal';
 import { DocumentsModal } from '@/components/ui/DocumentsModal';
 import { Avatar } from '@/components/ui/Avatar';
+import { formatTimeNY } from '@/lib/timezone';
 
 export default function ReportsPage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -105,8 +106,8 @@ export default function ReportsPage() {
     const headers = ['Date', 'Clock In', 'Clock Out', 'Duration', 'Status'];
     const rows = filteredReviewEntries.map(e => [
       e.date || '',
-      e.clockIn ? new Date(e.clockIn).toLocaleTimeString() : '—',
-      e.clockOut ? new Date(e.clockOut).toLocaleTimeString() : '—',
+      e.clockIn ? formatTimeNY(e.clockIn) : '—',
+      e.clockOut ? formatTimeNY(e.clockOut) : '—',
       e.duration || '—',
       e.status === 'in_progress' ? 'On Shift' : 'Completed'
     ]);
@@ -390,8 +391,8 @@ export default function ReportsPage() {
                     {filteredReviewEntries.map((entry) => (
                       <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-4 py-3 font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</td>
-                        <td className="px-4 py-3 font-mono text-slate-500 text-[10px]">{entry.clockIn ? new Date(entry.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                        <td className="px-4 py-3 font-mono text-slate-500 text-[10px]">{entry.clockOut ? new Date(entry.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                        <td className="px-4 py-3 font-mono text-slate-500 text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</td>
+                        <td className="px-4 py-3 font-mono text-slate-500 text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</td>
                         <td className="px-4 py-3 text-right font-bold text-slate-900">{entry.duration || '—'}</td>
                         <td className="px-4 py-3 text-right">
                           <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>

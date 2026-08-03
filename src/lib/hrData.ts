@@ -1,6 +1,8 @@
 'use client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from './pocketbase';
+import { getNYDateString, formatTimeNY, formatDateNY } from './timezone';
+import { getOrCreateDeviceId } from './session';
 
 // ─────────────────────────────────────────────────────────────────────────
 // SINGLE SOURCE OF TRUTH for all PocketBase access in this app.
@@ -216,6 +218,37 @@ export function isAnnouncementForProfile(ann: Announcement, profile: Profile | n
   return false;
 }
 
+// System Maintenance Notice — a deliberately separate thing from
+// Announcement above, not just an "important announcement" with extra
+// fields. Two real differences: (1) always targets literally everyone
+// (Employee/Team Lead/HR/Admin alike) — a system going down for
+// maintenance affects every role equally, unlike a targeted company
+// announcement; (2) carries real ISO UTC instants for a start/end window,
+// entered by Admin/HR as Pakistan local time and displayed to every viewer
+// converted to THEIR OWN device's local timezone — see pktLocalToUtcIso/
+// formatInViewerLocalTime in src/lib/timezone.ts for why this is the one
+// deliberate exception to the rest of the app's America/New_York-only
+// display rule.
+//
+// Stored in hr_delcargo_store (no dedicated PocketBase collection/schema
+// migration needed) rather than hr_announcements, precisely because it
+// needs real convertible instants — hr_announcements' `timestamp` field is
+// a pre-formatted NY display string baked in at creation time (see
+// addAnnouncement), which can't be un-formatted back into a real instant
+// for per-viewer conversion.
+export interface MaintenanceNotice {
+  id: string;
+  title: string;
+  message: string;
+  startAt: string; // ISO UTC instant
+  endAt: string; // ISO UTC instant
+  createdBy: string;
+  createdAt: string; // ISO UTC — "posted" info only, not the maintenance window itself
+}
+const MAINTENANCE_NOTICES_KEY = 'hr_maintenance_notices_v1';
+const MAINTENANCE_NOTICE_READS_KEY = 'hr_maintenance_notice_reads_v1';
+type MaintenanceNoticeReadMap = Record<string, string[]>;
+
 export interface LeaveApplication {
   id: string; employeeName: string; type: 'PTO' | 'Sick Leave' | 'Urgent' | 'Parental Leave';
   duration: string; reason: string; status: 'pending' | 'hr_approved' | 'approved' | 'rejected';
@@ -242,6 +275,26 @@ export interface PayrollRecord {
   incrementAmount: number;
 }
 
+// A single day an employee was auto-marked absent, with a specific reason —
+// stored in hr_delcargo_store (no dedicated collection; see
+// hr_absence_records_v1 in runAbsenceCheck) since it's app-internal
+// bookkeeping, not a PocketBase-native concept. Persisted (rather than
+// recomputed live like countAbsentWeekdays) because: (1) the "Absent
+// Details" pages need real reasons to display, not just a count, and (2)
+// the deduction it causes is applied exactly once, at detection time, not
+// re-derived on every payroll page load.
+export interface AbsenceRecord {
+  id: string; // `${employeeEmail}_${date}` — naturally unique per employee per day
+  employeeEmail: string;
+  employeeName: string;
+  date: string; // "YYYY-MM-DD", America/New_York calendar day
+  reason: 'no_clock_in' | 'inactivity';
+  inactivityMinutes?: number; // only set when reason === 'inactivity'
+  deductionAmount: number;
+  createdAt: string; // ISO instant this record was created
+  acknowledged: boolean; // employee has seen/dismissed the explanatory popup
+}
+
 export interface TrackingSettings {
   employeeEmail: string; enabled: boolean; intervalMinutes: number; excludeFromAutoDelete: boolean; agentToken: string;
 }
@@ -262,7 +315,17 @@ export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 // unload-style handlers never fire on a crash, force-quit, or killed
 // process) never got the chance to run.
 export interface ShiftTabHeartbeat { employeeEmail: string; lastSeenAt: string; }
-export const SHIFT_TAB_HEARTBEAT_STALE_MS = 2 * 60 * 1000;
+// Was 2 minutes — too tight. On the native mobile app, simply locking the
+// phone or switching apps for a couple of minutes (extremely normal during
+// a shift) let this go stale, which closeStaleManualShiftIfAbandoned then
+// read as "the app was closed" and auto-ended the shift — reported by
+// employees as being randomly logged out / shift-ended mid-shift with a
+// "closed the app" push notification, even though they hadn't closed
+// anything. 15 minutes gives real backgrounding room to breathe while still
+// catching a genuinely abandoned/crashed session within a reasonable
+// window. See also the pagehide-handler native/web split below, the other
+// half of this same fix.
+export const SHIFT_TAB_HEARTBEAT_STALE_MS = 15 * 60 * 1000;
 const shiftTabHeartbeatKeyFor = (email: string) => `shift_tab_heartbeat_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
 // One-shot "your shift was just auto-ended by the desktop tracker" signal
@@ -273,21 +336,42 @@ const shiftTabHeartbeatKeyFor = (email: string) => `shift_tab_heartbeat_${(email
 // shift_auto_stopped_<email> localStorage flag that already covers the
 // "wasn't looking at the dashboard right now" case at next login.
 export interface ShiftStopSignal {
-  employeeEmail: string; timestamp: string; reason: 'tracker_closed' | string;
+  // 'inactivity_absence' — written by handle_inactivity_auto_absence() in
+  // tracker-agent/agent_gui.py the instant 35+ continuous idle minutes are
+  // detected during a shift (see AUTO_ABSENT_INACTIVITY_SECONDS there) —
+  // the agent has already ended the shift and created a real AbsenceRecord
+  // by the time this signal lands; employee/page.tsx just needs to show the
+  // right explanatory copy for this reason instead of the generic
+  // "tracker closed" one.
+  employeeEmail: string; timestamp: string; reason: 'tracker_closed' | 'inactivity_absence' | string;
 }
 const shiftStopSignalKeyFor = (email: string) => `shift_stop_signal_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
-// Single-active-session enforcement for Employee (and Team Lead, who shares
+// Multi-device session enforcement for Employee (and Team Lead, who shares
 // the Employee dashboard) accounts only — Admin/HR are exempt and may be
-// signed in from multiple browsers/devices at once (see auth/page.tsx).
-// Mirrors the tracker agent's own "claim + heartbeat + supersede" pattern
-// above (TrackerHeartbeat) rather than inventing a second mechanism.
-export interface UserSession {
-  email: string; sessionToken: string; deviceLabel?: string; loggedInAt: string; lastSeenAt: string;
+// signed in from as many places as they like (see auth/page.tsx). Per
+// explicit product decision: up to MAX_USER_SESSION_DEVICES (2) devices may
+// be signed in at once, each employee can see their own list of devices and
+// remotely log any of them out from the Profile page's "Logged-in Devices"
+// card, and a 3rd device is blocked from logging in until one is freed.
+//
+// One JSON array lives under a single hr_delcargo_store KV key per email
+// (same "list of slots in one KV row" shape as everything else in this
+// file that needs a small per-employee list — not a dedicated collection).
+// `deviceId` (see getOrCreateDeviceId in src/lib/session.ts) is a STABLE
+// per-browser/app-install identifier that survives logging out and back in
+// on the same device — unlike `sessionToken`, which is regenerated every
+// login. This distinction matters: without a stable deviceId, logging out
+// and back in on your own laptop would look like "a new device" and
+// needlessly eat into the 2-device cap.
+export interface UserSessionSlot {
+  deviceId: string; deviceLabel: string; sessionToken: string; loggedInAt: string; lastSeenAt: string;
 }
-// If a session hasn't heartbeated in this long, it's treated as abandoned
-// (browser/tab closed without hitting Log Out) and a new login elsewhere is
-// allowed to claim the slot rather than locking the employee out forever.
+export const MAX_USER_SESSION_DEVICES = 2;
+// If a device's slot hasn't heartbeated in this long, it's treated as
+// abandoned (browser/tab closed without hitting Log Out) and doesn't count
+// against the cap — so an employee whose old laptop just silently died
+// isn't ever permanently locked out of one of their 2 slots.
 export const USER_SESSION_STALE_MS = 90 * 1000;
 const userSessionKeyFor = (email: string) => `user_session_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
@@ -338,8 +422,20 @@ type AnnouncementReadMap = Record<string, string[]>;
 // their Settings (see NotificationPreferencesCard.tsx) — 'internal' is a
 // 5th, non-configurable bucket for lower-signal ops notifications that
 // only ever show in the in-app bell (see the comment on addNotification).
-export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'internal';
-export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal'>, boolean>;
+// 'maintenance' (System Maintenance Notices — see MaintenanceNotice below)
+// is deliberately NOT included in NotificationPrefs/DEFAULT_NOTIFICATION_PREFS
+// below — unlike the other 5 configurable categories, an employee should not
+// be able to opt out of "the whole system is about to go down," so there's
+// no toggle for it in Settings and no per-user preference to check.
+// IMPORTANT CAVEAT (2026-08-04): this only means the client-side notification
+// preferences UI/model don't offer an opt-out — whether a 'maintenance'
+// notification actually fires a real OneSignal push still depends on
+// pb_hooks/push_notifications.pb.js on the droplet recognizing 'maintenance'
+// as one of its pushable categories server-side. That file isn't present in
+// this repo checkout/session, so it could not be updated as part of this
+// feature — see PROJECT_HISTORY.md for the exact server-side change needed.
+export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'maintenance' | 'internal';
+export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal' | 'maintenance'>, boolean>;
 const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true, shift: true };
 
 // Builds the role-correct in-app path for a notification's `link` field.
@@ -735,6 +831,17 @@ export function useAnnouncements() {
     refetchInterval: 30000,
   });
 }
+// Polls fairly quickly (15s, faster than useAnnouncements' 30s) — the whole
+// point of a maintenance notice is that it should reach everyone with as
+// little delay as possible once posted, including anyone already sitting
+// on a dashboard page at the time.
+export function useMaintenanceNotices() {
+  return useQuery({
+    queryKey: ['hr_maintenance_notices'],
+    queryFn: () => hrActions.getMaintenanceNotices(),
+    refetchInterval: 15000,
+  });
+}
 export function useCareers() {
   return useQuery({ queryKey: ['hr_careers'], queryFn: async () => (await pbList('hr_careers')).map(toCareer) });
 }
@@ -886,6 +993,76 @@ export function getRemainingPTO(leaves: LeaveApplication[], fullName: string, jo
   return Math.max(0, Math.round((accrued - taken) * 100) / 100);
 }
 
+// Returns true if `dateStr` (a "YYYY-MM-DD" America/New_York calendar date,
+// same shape as getNYDateString/localShiftDate produce) falls on a Monday
+// through Friday. Parsed at UTC noon specifically so the weekday read back
+// out can't be shifted by a day depending on the runtime's own local
+// timezone — noon UTC is always still the same calendar day in
+// America/New_York (which is never more than 5 hours behind UTC).
+function isWeekday(dateStr: string): boolean {
+  const day = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
+  return day >= 1 && day <= 5;
+}
+
+// Approved leave covers a given date if the leave's parsed date range
+// (parseLeaveDates) spans it — compared as NY calendar dates, not raw Date
+// object equality, since parseLeaveDates' Date objects don't carry the
+// fixed-timezone treatment the rest of the app's dates do.
+function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
+  return leaves.some(l => {
+    if (l.employeeName !== fullName || l.status !== 'approved') return false;
+    const dates = parseLeaveDates(l.duration);
+    if (!dates) return false;
+    const startStr = getNYDateString(dates.start);
+    const endStr = getNYDateString(dates.end);
+    return dateStr >= startStr && dateStr <= endStr;
+  });
+}
+
+// Per explicit product decision: only Pakistan-region employees are subject
+// to this check (USA staff clock in/out automatically via GPS geofencing,
+// so a "missing" shift there means something different — a device/GPS
+// issue, not a no-show — and isn't penalized the same way). Counts weekdays
+// (Mon-Fri, America/New_York calendar) in the current pay month, from the
+// 1st through yesterday (today doesn't count — its 24 hours haven't fully
+// elapsed yet), where the employee has neither a timesheet shift nor
+// approved leave covering that day. Days before the employee's own
+// joinedDate are never counted (can't be absent from a job you hadn't
+// started yet).
+export function countAbsentWeekdays(
+  profile: Pick<Profile, 'fullName' | 'region' | 'joinedDate'>,
+  timesheets: TimesheetEntry[],
+  leaves: LeaveApplication[],
+  today: Date = new Date()
+): number {
+  if (profile.region !== 'Pakistan') return 0;
+
+  const todayStr = getNYDateString(today);
+  const joinedStr = profile.joinedDate ? getNYDateString(new Date(profile.joinedDate)) : '';
+
+  // Every calendar date this employee actually has a shift recorded for,
+  // regardless of which device/timezone wrote it — localShiftDate always
+  // re-derives the date in America/New_York from the real clockIn instant.
+  const shiftDates = new Set(
+    timesheets
+      .filter(t => t.employeeEmail && t.clockIn)
+      .map(t => localShiftDate(t.clockIn, t.date))
+  );
+
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  let absentDays = 0;
+  for (const cursor = new Date(monthStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
+    const dateStr = getNYDateString(cursor);
+    if (dateStr >= todayStr) break; // never count today or the future
+    if (joinedStr && dateStr < joinedStr) continue; // not employed yet
+    if (!isWeekday(dateStr)) continue;
+    if (shiftDates.has(dateStr)) continue;
+    if (isApprovedLeaveOnDate(leaves, profile.fullName, dateStr)) continue;
+    absentDays++;
+  }
+  return absentDays;
+}
+
 // PTO accrual runs off the employee's account-creation date, not their
 // joining date — the two can differ (e.g. account created before/after
 // the actual start date). Falls back to joinedDate for anyone onboarded
@@ -991,24 +1168,23 @@ export function formatDurationBetween(startISO: string, endISO: string): string 
   return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
 }
 
-// A TimesheetEntry's `date` field is fixed to whatever UTC calendar date it
-// happened to be when clockIn() wrote the record (see clockIn() below) —
-// it's a plain "YYYY-MM-DD" string, not a real timestamp, so it never
-// re-renders relative to whoever's actually looking at it. A shift that
-// starts late at night in Pakistan can land on a different calendar day
-// once converted to a US viewer's own local time, so any "Date" column
-// shown in the UI should derive that date fresh from the real clockIn
-// timestamp — via the browser's own local timezone (same as
-// toLocaleTimeString elsewhere) — rather than trusting the stored field.
+// A TimesheetEntry's `date` field is fixed to whatever calendar date it
+// happened to be (in America/New_York — see clockIn() below) when the record
+// was written — it's a plain "YYYY-MM-DD" string, not a real timestamp, so it
+// never re-renders relative to whoever's actually looking at it. Per product
+// decision, the whole app displays exactly one timezone (America/New_York)
+// regardless of the employee's or viewer's own device/location — no
+// per-device or IP-based timezone conversion anywhere (see
+// src/lib/timezone.ts) — so any "Date" column shown in the UI should derive
+// that date fresh from the real clockIn timestamp via that same fixed
+// timezone, rather than trusting the stored field (which is fine on its own,
+// this just guards against any old rows written before this was fixed).
 // Falls back to the stored `date` if clockIn is ever missing/unparseable.
 export function localShiftDate(clockInISO: string | undefined | null, fallbackDate?: string): string {
   if (clockInISO) {
     const d = new Date(clockInISO);
     if (!isNaN(d.getTime())) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      return getNYDateString(d);
     }
   }
   return fallbackDate || '—';
@@ -1461,7 +1637,7 @@ export const hrActions = {
       push_title: pushTitle || '',
       sender_email: senderEmail || '',
       link: link || '',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: formatTimeNY(new Date()),
     });
   },
   getNotificationReadMap: (): Promise<NotificationReadMap> => pbGetKV('hr_notification_reads_prod_v1').then(v => v || {}),
@@ -1540,7 +1716,7 @@ export const hrActions = {
     pbCreate('hr_announcements', {
       title, content, created_by: createdBy, target: typeof target === 'string' ? target : 'all',
       target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString(),
+      timestamp: formatTimeNY(new Date()) + ' ' + formatDateNY(new Date()),
     }),
   getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetKV('hr_announcement_reads_v1').then(v => v || {}),
   isAnnouncementRead: (ann: Announcement, email: string, readMap: AnnouncementReadMap): boolean =>
@@ -1591,6 +1767,70 @@ export const hrActions = {
   // announcement, not just ones they personally posted.
   deleteAnnouncement: (id: string) => pbDelete('hr_announcements', id),
 
+  // ── System Maintenance Notices ──────────────────────────────────────────
+  // See MaintenanceNotice above for why this is a separate system from
+  // Announcement rather than an "important announcement" variant.
+  getMaintenanceNotices: (): Promise<MaintenanceNotice[]> =>
+    pbGetKV(MAINTENANCE_NOTICES_KEY).then(v => (Array.isArray(v) ? v : [])),
+
+  // Creates the notice AND broadcasts a real hr_notifications row (category
+  // 'maintenance') to all four roles so it shows in every dashboard's bell
+  // immediately, not just the blocking popup — same "broadcast to role='X',
+  // email='all'" pattern used elsewhere (e.g. shift-auto-ended-by-tracker
+  // notifying 'all'/'hr'). team_lead needs its own separate call despite
+  // sharing the employee dashboard, since recipient_role is matched by
+  // exact string elsewhere (markNotificationsAsRead/getVisibleNotifications)
+  // and 'employee' broadcasts never reach 'team_lead' accounts or vice versa.
+  //
+  // NOTE (2026-08-04): passing category: 'maintenance' here only makes the
+  // in-app bell show it. Whether this actually fires a real OneSignal push
+  // depends on pb_hooks/push_notifications.pb.js on the droplet recognizing
+  // 'maintenance' as a pushable category — that file isn't present in this
+  // repo checkout, so it couldn't be updated as part of this feature. See
+  // PROJECT_HISTORY.md for the exact change still needed there.
+  addMaintenanceNotice: async (
+    title: string, message: string, startAtIso: string, endAtIso: string, createdBy: string
+  ): Promise<void> => {
+    const existing = await hrActions.getMaintenanceNotices();
+    const notice: MaintenanceNotice = {
+      id: `maint_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      title, message, startAt: startAtIso, endAt: endAtIso, createdBy,
+      createdAt: new Date().toISOString(),
+    };
+    await pbSetKV(MAINTENANCE_NOTICES_KEY, [...existing, notice]);
+
+    await Promise.all(
+      (['employee', 'team_lead', 'hr', 'admin'] as const).map(role =>
+        hrActions.addNotification('all', role, `${title}: ${message}`, 'maintenance', 'System Maintenance', createdBy)
+      )
+    );
+  },
+
+  deleteMaintenanceNotice: async (id: string): Promise<void> => {
+    const existing = await hrActions.getMaintenanceNotices();
+    await pbSetKV(MAINTENANCE_NOTICES_KEY, existing.filter(n => n.id !== id));
+  },
+
+  getMaintenanceNoticeReadMap: (): Promise<MaintenanceNoticeReadMap> =>
+    pbGetKV(MAINTENANCE_NOTICE_READS_KEY).then(v => v || {}),
+
+  isMaintenanceNoticeRead: (notice: MaintenanceNotice, email: string, readMap: MaintenanceNoticeReadMap): boolean =>
+    (readMap[notice.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
+
+  markMaintenanceNoticeRead: async (noticeId: string, email: string): Promise<void> => {
+    if (!email) return;
+    const readMap = ((await pbGetKV(MAINTENANCE_NOTICE_READS_KEY)) as MaintenanceNoticeReadMap) || {};
+    const emailLower = email.toLowerCase();
+    const readers = readMap[noticeId] || [];
+    if (!readers.map(e => e.toLowerCase()).includes(emailLower)) {
+      readMap[noticeId] = [...readers, email];
+      await pbSetKV(MAINTENANCE_NOTICE_READS_KEY, readMap);
+    }
+  },
+
+  // Both HR and Admin can post/manage these (per explicit product decision),
+  // same shared-trust model as deleteAnnouncement above.
+
   // ── Tasks ─────────────────────────────────────────────────────────────
   addTask: async (task: Omit<Task, 'id'>): Promise<void> => {
     const created = await pbCreate('hr_tasks', {
@@ -1626,7 +1866,7 @@ export const hrActions = {
     pbCreate('hr_career_applications', {
       position_id: app.positionId, position_title: app.positionTitle, applicant_name: app.applicantName,
       applicant_email: app.applicantEmail.trim().toLowerCase(), phone: '', cover_letter: app.coverLetter, resume_url: '', status: 'pending',
-      submitted_at: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      submitted_at: formatDateNY(new Date()) + ' ' + formatTimeNY(new Date()),
     }),
   updateApplicationStatus: (id: string, status: CareerApplicationStatus) =>
     pbUpdate('hr_career_applications', id, { status }),
@@ -1849,7 +2089,19 @@ export const hrActions = {
   // Computes the current payroll view for a set of employees (pure, no
   // writes) — mirrors old db.getPayroll()'s calculation. Callers decide
   // whether/when to persist via upsertPayrollRecord (e.g. only on "Process").
-  computePayrollView: (employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[]): PayrollRecord[] => {
+  //
+  // `timesheets` is unused here now (kept for backward-compat with existing
+  // callers) — `absenceRecords` is the real source of truth for no-call-
+  // no-show / inactivity deductions. Deliberately NOT recomputed live from
+  // timesheets+leaves the way urgent-leave deductions are: absence
+  // detection needs a one-time historical scan (inactivity logs especially)
+  // and needs to persist a specific reason for the Absent Details pages, so
+  // runAbsenceCheck (below) creates a real AbsenceRecord once per absence,
+  // and this function just sums up whichever records already exist for the
+  // employee this month — recomputed fresh every render like everything
+  // else here, just from a different, richer source than a live count.
+  computePayrollView: (employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[] = [], absenceRecords: AbsenceRecord[] = []): PayrollRecord[] => {
+    const monthKey = getNYDateString(new Date()).slice(0, 7);
     return employees
       .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
       .map(emp => {
@@ -1866,18 +2118,26 @@ export const hrActions = {
         const dailyRate = emp.baseSalary / WORKING_DAYS_PER_MONTH;
         const urgentDeduction = Math.round(urgentDays * 2 * dailyRate);
         const onboardingPenalty = emp.onboardingCompleted ? 0 : (emp.region === 'USA' ? 10 : 200);
+        // No-call-no-show / inactivity penalty — Pakistan-region employees
+        // only (USA clocks in/out automatically via GPS geofence). Summed
+        // from real persisted AbsenceRecords for this employee this month,
+        // not recomputed independently, so it always matches exactly what
+        // the Absent Details page shows.
+        const absenceDeduction = absenceRecords
+          .filter(a => a.employeeEmail.toLowerCase() === emp.email.toLowerCase() && a.date.slice(0, 7) === monthKey)
+          .reduce((acc, a) => acc + a.deductionAmount, 0);
 
         if (existing) {
           return {
             ...existing, region: emp.region, baseSalary: emp.baseSalary,
-            deductions: existing.processed ? existing.deductions : urgentDeduction,
+            deductions: existing.processed ? existing.deductions : (urgentDeduction + absenceDeduction),
             incrementAmount: existing.processed ? existing.incrementAmount : pendingIncrement,
           };
         }
         return {
           id: '', employeeId: emp.id, name: emp.fullName, role: emp.jobTitle || 'Staff', region: emp.region,
           baseSalary: emp.baseSalary, unpaidLeaves: emp.onboardingCompleted ? 0 : 2, bonus: 0,
-          deductions: urgentDeduction + onboardingPenalty, incrementAmount: pendingIncrement, processed: false,
+          deductions: urgentDeduction + absenceDeduction + onboardingPenalty, incrementAmount: pendingIncrement, processed: false,
         };
       });
   },
@@ -2002,41 +2262,221 @@ export const hrActions = {
     return true;
   },
 
-  // ── Single-session enforcement (Employee/Team Lead only) ────────────────
-  getUserSession: async (email: string): Promise<UserSession | null> => pbGetKV(userSessionKeyFor(email)),
-  isUserSessionLive: (s: UserSession | null): boolean =>
+  // ── Absence records (hr_delcargo_store key "hr_absence_records_v1") ────
+  // See AbsenceRecord's own comment for why this lives in the generic KV
+  // store rather than a dedicated collection, and why it's persisted rather
+  // than purely recomputed like countAbsentWeekdays.
+  getAbsenceRecords: async (): Promise<AbsenceRecord[]> => {
+    try {
+      const raw = await pbGetKV('hr_absence_records_v1');
+      return Array.isArray(raw) ? raw : [];
+    } catch { return []; }
+  },
+  // Marks a record as seen so AbsentPopup stops showing it — called by the
+  // employee dismissing the popup, never by HR/Admin (they can always see
+  // every record on the Absent Details page regardless of acknowledgment).
+  acknowledgeAbsence: async (recordId: string): Promise<void> => {
+    const all = await hrActions.getAbsenceRecords();
+    const next = all.map(a => a.id === recordId ? { ...a, acknowledged: true } : a);
+    await pbSetKV('hr_absence_records_v1', next);
+  },
+
+  // No-call-no-show / mouse-inactivity auto-absence check. Client-triggered
+  // (no server cron exists in this app — see pb_hooks, none use cronAdd),
+  // meant to be called once per HR/Admin dashboard mount, same pattern as
+  // closeStaleManualShiftIfAbandoned above but for the whole roster instead
+  // of a single employee's own shift.
+  //
+  // Two ways a Pakistan-region employee's weekday can end up marked absent
+  // (USA staff excluded — they clock in/out automatically via GPS geofence,
+  // so a gap there means a device/GPS issue, not a no-show):
+  //   1. 'no_clock_in' — no timesheet shift at all that day, and no
+  //      approved leave covering it.
+  //   2. 'inactivity' — they DID clock in, but the desktop Tracker agent's
+  //      mouse-inactivity logs (hr_inactivity_logs) show 35+ continuous
+  //      minutes of inactivity at some point during that day's shift(s).
+  //      Per explicit product decision, this carries the exact same
+  //      penalty as never clocking in at all.
+  // Only ever creates NEW records for days not already recorded — this is
+  // safe to call from every HR/Admin dashboard mount, it just no-ops once a
+  // given employee+date combination has already been decided.
+  runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
+    const INACTIVITY_THRESHOLD_SECONDS = 35 * 60;
+    const todayStr = getNYDateString(new Date());
+    // FIX (2026-08-04): this used to scan from the start of the current
+    // calendar month, which meant the very first time this ran after
+    // deploying — including just opening the HR/Admin dashboard on a local
+    // dev server pointed at the real production PocketBase — it
+    // retroactively marked every already-passed weekday this month absent
+    // and deducted 2 days' pay for each one, before the feature had ever
+    // actually been "live." Anchoring to a fixed go-live date instead means
+    // no date before this ever gets evaluated, no matter when in the month
+    // this code first runs. Update this to the actual date you push/deploy
+    // this if it ends up being a different day.
+    const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
+    const existingRecords = await hrActions.getAbsenceRecords();
+    const existingIds = new Set(existingRecords.map(r => r.id));
+    const newRecords: AbsenceRecord[] = [];
+
+    for (const emp of employees) {
+      if (emp.region !== 'Pakistan') continue;
+      if (emp.role !== 'employee' && emp.role !== 'team_lead') continue;
+
+      const empTimesheets = timesheets.filter(t => t.employeeEmail && t.employeeEmail.toLowerCase() === emp.email.toLowerCase() && t.clockIn);
+      const empInactivity = inactivityLogs.filter(l => l.employeeEmail && l.employeeEmail.toLowerCase() === emp.email.toLowerCase());
+      const joinedStr = emp.joinedDate ? getNYDateString(new Date(emp.joinedDate)) : '';
+
+      // Every date this employee has at least one shift on, mapped to the
+      // LONGEST SINGLE continuous inactivity log on that date — not the sum
+      // of every idle stretch across the day. Per explicit product
+      // decision, this is about one continuous session of inactivity
+      // crossing the threshold, not several short idle moments adding up
+      // (e.g. five separate 8-minute breaks should never trigger this, one
+      // real 35-minute stretch should). This is the same rule the tracker
+      // agent's own real-time check (AUTO_ABSENT_INACTIVITY_SECONDS in
+      // agent_gui.py) already enforces live — this is just the historical/
+      // backstop version for logs that land here before an agent update,
+      // or from an older agent version.
+      const shiftDatesWithInactivity = new Map<string, number>();
+      for (const t of empTimesheets) {
+        const d = localShiftDate(t.clockIn, t.date);
+        if (!shiftDatesWithInactivity.has(d)) shiftDatesWithInactivity.set(d, 0);
+      }
+      for (const log of empInactivity) {
+        const d = localShiftDate(log.startAt);
+        if (shiftDatesWithInactivity.has(d)) {
+          shiftDatesWithInactivity.set(d, Math.max(shiftDatesWithInactivity.get(d) || 0, log.durationSeconds || 0));
+        }
+      }
+
+      const today = new Date();
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      for (const cursor = new Date(monthStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
+        const dateStr = getNYDateString(cursor);
+        if (dateStr >= todayStr) break;
+        if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
+        if (joinedStr && dateStr < joinedStr) continue;
+        if (!isWeekday(dateStr)) continue;
+        const recordId = `${emp.email.toLowerCase()}_${dateStr}`;
+        if (existingIds.has(recordId)) continue; // already decided, one way or the other
+
+        const hadShift = shiftDatesWithInactivity.has(dateStr);
+        const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
+
+        let reason: AbsenceRecord['reason'] | null = null;
+        let inactivityMinutes: number | undefined;
+        if (!hadShift) {
+          if (!onLeave) reason = 'no_clock_in';
+        } else {
+          const inactiveSeconds = shiftDatesWithInactivity.get(dateStr) || 0;
+          if (inactiveSeconds >= INACTIVITY_THRESHOLD_SECONDS) {
+            reason = 'inactivity';
+            inactivityMinutes = Math.round(inactiveSeconds / 60);
+          }
+        }
+        if (!reason) continue; // present and accounted for — nothing to record
+
+        const dailyRate = emp.baseSalary / WORKING_DAYS_PER_MONTH;
+        const deductionAmount = Math.round(2 * dailyRate);
+        const name = displayName(emp, 'hr');
+
+        newRecords.push({
+          id: recordId, employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
+          reason, inactivityMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
+        });
+
+        const reasonText = reason === 'inactivity'
+          ? `was inactive for ${inactivityMinutes} minutes during their shift on ${dateStr}`
+          : `did not start a shift on ${dateStr}`;
+        await hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
+        await hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
+        await hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${reason === 'inactivity' ? `${inactivityMinutes} min inactivity during your shift` : 'not starting a shift'}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task');
+      }
+    }
+
+    if (newRecords.length > 0) {
+      await pbSetKV('hr_absence_records_v1', [...existingRecords, ...newRecords]);
+    }
+  },
+
+  // ── Multi-device session enforcement (Employee/Team Lead only) ──────────
+  // Reads the raw KV row and normalizes it into an array — a pre-existing
+  // session written before this multi-device migration is a bare
+  // {email, sessionToken, deviceLabel, loggedInAt, lastSeenAt} object with
+  // no deviceId; treated as one legacy slot (deviceId 'legacy') so an
+  // in-flight session from right before this shipped doesn't just vanish
+  // and force everyone to re-login.
+  getUserSessions: async (email: string): Promise<UserSessionSlot[]> => {
+    const raw = await pbGetKV(userSessionKeyFor(email));
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    return [{
+      deviceId: 'legacy',
+      deviceLabel: raw.deviceLabel || 'Unknown device',
+      sessionToken: raw.sessionToken,
+      loggedInAt: raw.loggedInAt,
+      lastSeenAt: raw.lastSeenAt,
+    }];
+  },
+  isSessionSlotLive: (s: UserSessionSlot | null | undefined): boolean =>
     !!s?.lastSeenAt && (Date.now() - new Date(s.lastSeenAt).getTime()) < USER_SESSION_STALE_MS,
-  // Unconditionally claims the session slot for this email. Callers must
-  // first check getUserSession/isUserSessionLive and block the login
-  // attempt themselves if another session is still live — this just
-  // performs the actual claim once that check has passed.
-  claimUserSession: async (email: string, sessionToken: string, deviceLabel: string): Promise<void> => {
+  // Attempts to claim a device slot at login. If this exact deviceId
+  // already has a (possibly stale) slot, it's just refreshed — logging out
+  // and back in on the same device never counts as a new one. Otherwise, a
+  // new slot is added only if fewer than MAX_USER_SESSION_DEVICES OTHER
+  // devices are currently live; if the cap is already full, returns
+  // `{ ok: false, liveSessions }` (the other live devices) so the caller
+  // can show which devices are blocking the login, without claiming
+  // anything.
+  claimUserSessionSlot: async (
+    email: string, deviceId: string, deviceLabel: string, sessionToken: string
+  ): Promise<{ ok: boolean; liveSessions: UserSessionSlot[] }> => {
+    const all = await hrActions.getUserSessions(email);
+    const live = all.filter(s => hrActions.isSessionSlotLive(s));
+    const others = live.filter(s => s.deviceId !== deviceId);
+    if (others.length >= MAX_USER_SESSION_DEVICES) {
+      return { ok: false, liveSessions: others };
+    }
+    const existing = live.find(s => s.deviceId === deviceId);
     const now = new Date().toISOString();
-    await pbSetKV(userSessionKeyFor(email), { email, sessionToken, deviceLabel, loggedInAt: now, lastSeenAt: now });
+    const next: UserSessionSlot[] = [
+      ...others,
+      { deviceId, deviceLabel, sessionToken, loggedInAt: existing?.loggedInAt || now, lastSeenAt: now },
+    ];
+    await pbSetKV(userSessionKeyFor(email), next);
+    return { ok: true, liveSessions: next };
   },
   // Called periodically while a dashboard session is open. Returns false if
-  // a different device/tab has since claimed the slot (this session went
-  // stale and someone else logged in) — the caller should force a logout
-  // when this happens.
-  touchUserSession: async (email: string, sessionToken: string): Promise<boolean> => {
-    const existing = (await pbGetKV(userSessionKeyFor(email))) as UserSession | null;
-    if (existing && existing.sessionToken !== sessionToken) return false;
-    await pbSetKV(userSessionKeyFor(email), {
-      email, sessionToken,
-      deviceLabel: existing?.deviceLabel,
-      loggedInAt: existing?.loggedInAt || new Date().toISOString(),
-      lastSeenAt: new Date().toISOString(),
-    });
+  // this device's slot is gone — either removed remotely (the employee hit
+  // "Log out" on this device from the Devices card on another device/tab)
+  // or evicted by a "log out everywhere" forced login — the caller should
+  // force a local logout when this happens.
+  touchUserSessionSlot: async (email: string, deviceId: string, sessionToken: string): Promise<boolean> => {
+    const all = await hrActions.getUserSessions(email);
+    const mine = all.find(s => s.deviceId === deviceId);
+    if (!mine || mine.sessionToken !== sessionToken) return false;
+    const next = all.map(s => s.deviceId === deviceId ? { ...s, lastSeenAt: new Date().toISOString() } : s);
+    await pbSetKV(userSessionKeyFor(email), next);
     return true;
   },
-  clearUserSession: async (email: string): Promise<void> => {
+  // Removes exactly one device's slot — used both by the Profile page's
+  // "Logged-in Devices" card (logging out another device remotely) and by
+  // this device's own explicit Log Out (see logoutSession below).
+  removeUserSessionDevice: async (email: string, deviceId: string): Promise<void> => {
+    const all = await hrActions.getUserSessions(email);
+    const next = all.filter(s => s.deviceId !== deviceId);
+    await pbSetKV(userSessionKeyFor(email), next);
+  },
+  // Wipes every device slot at once — used by "Log out from everywhere and
+  // sign in here" on the login screen when the 2-device cap is already full.
+  clearAllUserSessions: async (email: string): Promise<void> => {
     await pbDeleteKVByKeys([userSessionKeyFor(email)]);
   },
-  // Frees the session slot on explicit logout — skipped for Admin/HR, who
-  // never claim one in the first place.
-  logoutSession: async (email: string, role: string | null): Promise<void> => {
-    if (!email || role === 'admin' || role === 'hr') return;
-    try { await hrActions.clearUserSession(email); } catch { /* best-effort */ }
+  // Frees just THIS device's slot on explicit logout — skipped for Admin/HR,
+  // who never claim one in the first place.
+  logoutSession: async (email: string, role: string | null, deviceId: string): Promise<void> => {
+    if (!email || role === 'admin' || role === 'hr' || !deviceId) return;
+    try { await hrActions.removeUserSessionDevice(email, deviceId); } catch { /* best-effort */ }
   },
 
   // Single entry point for every "Log Out" button in the app (Sidebar,
@@ -2089,7 +2529,10 @@ export const hrActions = {
         }
       } catch { /* best-effort — never block logout on this */ }
     }
-    await hrActions.logoutSession(email, role);
+    try {
+      const deviceId = await getOrCreateDeviceId();
+      await hrActions.logoutSession(email, role, deviceId);
+    } catch { /* best-effort — never block logout on this */ }
     return { shiftStopped };
   },
   getScreenshots: async (filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<Screenshot[]> => {
@@ -2218,8 +2661,12 @@ export const hrActions = {
     const existingOpen = await hrActions.getOpenShift(employeeEmail);
     if (existingOpen) return existingOpen;
     const now = new Date();
+    // Calendar date is bucketed by America/New_York wall-clock time, not UTC
+    // and not the device's local timezone — see src/lib/timezone.ts. Without
+    // this, an employee clocking in late at night could have their shift
+    // filed under the wrong day depending on server/device timezone.
     const created = await pbCreate('hr_timesheets', {
-      employee_id: employeeEmail, date: now.toISOString().split('T')[0], clock_in: now.toISOString(),
+      employee_id: employeeEmail, date: getNYDateString(now), clock_in: now.toISOString(),
       clock_out: '', status: 'pending',
     });
     return toTimesheet(created);

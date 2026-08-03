@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Zap, Clock } from 'lucide-react';
 import { Profile, TimesheetEntry, displayName, formatDurationBetween, localShiftDate } from '@/lib/hrData';
 import { smoothLinePath, smoothAreaPath } from '@/lib/sparkline';
+import { formatTimeNY, APP_TIMEZONE } from '@/lib/timezone';
 
 interface ActiveEmployeesCardProps {
   employees: Profile[];
@@ -70,7 +71,7 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
       d.setDate(d.getDate() - (6 - i));
       return {
         dateStr: localShiftDate(d.toISOString()),
-        label: i === 6 ? 'Today' : d.toLocaleDateString(undefined, { weekday: 'short' }),
+        label: i === 6 ? 'Today' : d.toLocaleDateString('en-US', { timeZone: APP_TIMEZONE, weekday: 'short' }),
       };
     });
   }, []);
@@ -209,7 +210,7 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
                     <Clock className="h-3 w-3" /> {formatDurationBetween(entry.clockIn, new Date().toISOString())}
                   </p>
                   <p className="text-[9px] text-slate-400 font-semibold">
-                    since {new Date(entry.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    since {formatTimeNY(entry.clockIn)}
                   </p>
                 </div>
               </div>

@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { FileText, Download, CheckCircle2, ShieldCheck, Printer, TrendingUp, Calendar } from 'lucide-react';
+import { APP_TIMEZONE } from '@/lib/timezone';
 
 interface Payslip {
   month: string;
@@ -70,7 +71,7 @@ export default function EmployeeSalaryPage() {
   // payroll record (bonus/deductions default to 0 until HR/Finance actually
   // processes them; nothing here is fabricated). Historical month-by-month
   // payslip archiving isn't implemented yet, so we don't invent past months.
-  const currentMonthLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const currentMonthLabel = new Date().toLocaleDateString('en-US', { timeZone: APP_TIMEZONE, month: 'long', year: 'numeric' });
   const currentSlip: Payslip | null = payrollRecord ? {
     month: currentMonthLabel,
     base: baseSalary,

@@ -9,6 +9,7 @@ import { TypingIndicator } from './TypingIndicator';
 import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
+import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -129,10 +130,12 @@ const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // matches the collection's maxSi
 function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso);
-    const now = new Date();
-    const sameDay = d.toDateString() === now.toDateString();
-    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return sameDay ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${time}`;
+    // "Today" is judged in America/New_York, not the device's local
+    // timezone — every clock in the app is fixed to that one timezone, see
+    // src/lib/timezone.ts.
+    const sameDay = getNYDateString(d) === getNYDateString(new Date());
+    const time = formatTimeNY(d);
+    return sameDay ? time : `${formatShortDateNY(d)} · ${time}`;
   } catch {
     return iso;
   }

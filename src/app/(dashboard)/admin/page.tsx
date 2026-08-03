@@ -11,6 +11,7 @@ import { DollarSign, TrendingUp, Users, Clock, ClipboardList, CheckCircle2, Aler
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, useAnnouncements, useWarehouses, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
+import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -73,6 +74,18 @@ export default function AdminDashboard() {
     // month or nothing is due; see checkScreenshotRetention in hrData.ts.
     hrActions.checkScreenshotRetention();
   }, []);
+
+  // Same no-call-no-show / inactivity auto-absence check as hr/page.tsx —
+  // safe to run from both HR's and Admin's dashboards (whichever loads with
+  // real data first "wins"; runAbsenceCheck only ever creates NEW records
+  // for employee+date combinations not already decided, so calling it from
+  // both pages is a no-op the second time).
+  useEffect(() => {
+    if (employees.length === 0) return;
+    hrActions.getInactivityLogs({ sinceISO: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString() })
+      .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
+      .catch(() => { /* best-effort */ });
+  }, [employees.length, timesheets.length, leaves.length]);
 
   const handleAnnouncementSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -426,6 +439,8 @@ export default function AdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <MaintenanceNoticeManager createdBy="CEO Admin" />
 
       {/* Announcement Viewers Modal — lists everyone who has seen the
           selected announcement (see hrActions.getAnnouncementReadMap). */}

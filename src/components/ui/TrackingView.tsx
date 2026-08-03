@@ -19,6 +19,7 @@ import {
   displayName,
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
+import { formatTimeNY, formatShortDateNY, formatDateTimeNY } from '@/lib/timezone';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, POCKETBASE_URL } from '@/lib/trackerSetup';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 
@@ -354,7 +355,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   const mouseLogsByDay = (): { day: string; logs: InactivityLog[]; totalSeconds: number }[] => {
     const groups: Record<string, InactivityLog[]> = {};
     mouseLogs.forEach(log => {
-      const key = new Date(log.startAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      const key = new Date(log.startAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', year: 'numeric', month: 'short', day: 'numeric' });
       (groups[key] = groups[key] || []).push(log);
     });
     return Object.entries(groups)
@@ -854,9 +855,9 @@ AGENT_TOKEN=${settings.agentToken}`}
                     {viewerInactivity.map(log => (
                       <div key={log.id} className="flex items-center justify-between text-[10px] text-amber-700 font-semibold">
                         <span>
-                          {new Date(log.startAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          {formatShortDateNY(log.startAt)}, {formatTimeNY(log.startAt)}
                           {' – '}
-                          {new Date(log.endAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                          {formatTimeNY(log.endAt)}
                         </span>
                         <span>{formatDuration(log.durationSeconds)}</span>
                       </div>
@@ -884,7 +885,7 @@ AGENT_TOKEN=${settings.agentToken}`}
                         <ZoomIn className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-                    <p className="text-[9px] text-slate-400 font-semibold text-center">{new Date(shot.timestamp).toLocaleString()}</p>
+                    <p className="text-[9px] text-slate-400 font-semibold text-center">{formatDateTimeNY(shot.timestamp)}</p>
                   </button>
                 ))}
               </div>
@@ -1045,8 +1046,8 @@ AGENT_TOKEN=${settings.agentToken}`}
                           <tbody className="divide-y divide-slate-100">
                             {group.logs.map(log => (
                               <tr key={log.id}>
-                                <td className="py-1.5 font-semibold text-slate-700">{new Date(log.startAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>
-                                <td className="py-1.5 font-semibold text-slate-700">{new Date(log.endAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>
+                                <td className="py-1.5 font-semibold text-slate-700">{formatTimeNY(log.startAt)}</td>
+                                <td className="py-1.5 font-semibold text-slate-700">{formatTimeNY(log.endAt)}</td>
                                 <td className="py-1.5 font-bold text-amber-700 text-right">{formatDuration(log.durationSeconds)}</td>
                                 <td className="py-1.5 text-slate-400 text-[10px] text-right">{log.deviceLabel || '—'}</td>
                               </tr>
@@ -1078,7 +1079,7 @@ AGENT_TOKEN=${settings.agentToken}`}
               this lightbox. */}
           <div className="flex items-center justify-between px-4 py-3 text-white" onClick={e => e.stopPropagation()}>
             <span className="text-xs font-semibold text-slate-200">
-              {new Date(viewerShots[lightboxIndex].timestamp).toLocaleString()} · {lightboxIndex + 1} / {viewerShots.length}
+              {formatDateTimeNY(viewerShots[lightboxIndex].timestamp)} · {lightboxIndex + 1} / {viewerShots.length}
             </span>
             <div className="flex items-center gap-1.5">
               <button onClick={zoomOut} disabled={zoom <= 1} className="p-2 rounded-lg bg-black/40 backdrop-blur-md hover:bg-black/55 disabled:opacity-40 transition-colors">
