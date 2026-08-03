@@ -82,12 +82,28 @@ async function initNative(externalId?: string): Promise<void> {
 
   OneSignal.Debug.setLogLevel(LogLevel.Warn);
   OneSignal.initialize(ONESIGNAL_APP_ID);
-  if (externalId) OneSignal.login(externalId);
 
-  // Shows the native "Allow Notifications?" system prompt. `false` = don't
-  // fall back to iOS's silent "provisional" permission — we want an
-  // explicit yes/no from the user.
+  // Permission BEFORE login, not after. On a brand-new install there is no
+  // push subscription yet — that only gets created once the OS permission
+  // prompt is answered "Allow". Calling login(externalId) before that
+  // subscription exists risks the external_id alias never actually
+  // attaching to a real subscription (OneSignal has nothing to attach it
+  // to yet), which is invisible from here: the SDK call itself doesn't
+  // throw, the device still shows up in OneSignal as "subscribed" and can
+  // receive a manual blast sent to everyone from the dashboard, but a
+  // server-side send targeted at this specific external_id (which is how
+  // every push in this app is actually sent — see
+  // pb_hooks/push_notifications.pb.js's `include_aliases: { external_id }`)
+  // silently finds no match and delivers nothing. Shows the native "Allow
+  // Notifications?" system prompt; `false` = don't fall back to iOS's
+  // silent "provisional" permission — we want an explicit yes/no.
   await OneSignal.Notifications.requestPermission(false);
+
+  // Login (attach externalId) after permission is resolved, and again on
+  // every later initPush() call (see loginPush below) — belt and suspenders
+  // in case the very first login still raced the subscription being fully
+  // registered server-side.
+  if (externalId) OneSignal.login(externalId);
 }
 
 function initWeb(externalId?: string): void {
@@ -95,8 +111,11 @@ function initWeb(externalId?: string): void {
   w.OneSignalDeferred = w.OneSignalDeferred || [];
   w.OneSignalDeferred.push(async (OneSignal: any) => {
     await OneSignal.init({ appId: ONESIGNAL_APP_ID });
-    if (externalId) await OneSignal.login(externalId);
+    // Same permission-before-login ordering as initNative above, and for
+    // the same reason — login() before a subscription exists risks the
+    // external_id alias never attaching to anything.
     await OneSignal.Notifications.requestPermission();
+    if (externalId) await OneSignal.login(externalId);
   });
 }
 
@@ -118,6 +137,61 @@ async function loginPush(externalId: string): Promise<void> {
     }
   } catch (err) {
     console.error('[push] Login failed:', err);
+  }
+}
+
+/**
+ * Whether this device currently has OS-level notification permission
+ * granted. Used to show the "please turn on notifications" prompt in
+ * (dashboard)/layout.tsx on every login — this deliberately checks live
+ * permission state every time rather than remembering "the user granted it
+ * once", since permission can be silently revoked later from the phone's
+ * own Settings without the app ever finding out otherwise.
+ *
+ * Returns true (i.e. "nothing to prompt about") when push isn't configured
+ * or this runs where there's no notification concept at all — the prompt
+ * should never block anyone over a diagnostic check.
+ */
+export async function isPushEnabled(): Promise<boolean> {
+  if (typeof window === 'undefined' || !isPushConfigured()) return true;
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const { default: OneSignal } = await import('@onesignal/capacitor-plugin');
+      return await OneSignal.Notifications.hasPermission();
+    }
+    if (typeof Notification === 'undefined') return true; // no Notification API in this browser
+    return Notification.permission === 'granted';
+  } catch (err) {
+    console.error('[push] Permission check failed:', err);
+    return true; // fail open — never block login over this
+  }
+}
+
+/**
+ * Re-requests notification permission from the "please enable
+ * notifications" prompt's Enable button. `true` for the native
+ * fallbackToSettings param: once a user has already said no once, neither
+ * Android nor iOS will show the system permission dialog again — the OS
+ * requires sending them to the app's Settings page instead, which this
+ * flag makes the SDK do automatically when needed.
+ */
+export async function requestPushPermissionAgain(): Promise<boolean> {
+  if (typeof window === 'undefined' || !isPushConfigured()) return true;
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const { default: OneSignal } = await import('@onesignal/capacitor-plugin');
+      return await OneSignal.Notifications.requestPermission(true);
+    }
+    if (typeof Notification === 'undefined') return false;
+    const w = window as any;
+    if (w.OneSignal?.Notifications?.requestPermission) {
+      return await w.OneSignal.Notifications.requestPermission();
+    }
+    const result = await Notification.requestPermission();
+    return result === 'granted';
+  } catch (err) {
+    console.error('[push] Re-request permission failed:', err);
+    return false;
   }
 }
 

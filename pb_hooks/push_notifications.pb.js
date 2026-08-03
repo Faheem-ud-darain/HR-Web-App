@@ -29,7 +29,7 @@ onRecordAfterCreateRequest((e) => {
     const onesignal = require(`${__hooks}/onesignal_helper.js`);
 
     const category = e.record.get("category");
-    const pushableCategories = ["ticket", "leave_task", "chat_mention"];
+    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift"];
     console.log("[push_notifications] fired, category=", category);
     if (pushableCategories.indexOf(category) === -1) {
       console.log("[push_notifications] category not pushable, skipping");
@@ -91,7 +91,7 @@ onRecordAfterCreateRequest((e) => {
       // hrData.ts), falling back to a generic per-category label if it's
       // missing (e.g. notifications created before this field existed, or
       // system actions with no natural "contact").
-      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat" };
+      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update" };
       const title = pushTitle || fallbackTitles[category] || "Delcargo Internal";
 
       // Resolve the sender's profile picture (if we have their email) to
@@ -106,8 +106,47 @@ onRecordAfterCreateRequest((e) => {
       let largeIcon = APP_LOGO_URL;
       if (senderEmail) {
         try {
-          const senderProfile = $app.dao().findFirstRecordByData("hr_profiles", "email", senderEmail);
-          largeIcon = senderProfile.get("profile_picture") || APP_LOGO_URL;
+          // findFirstRecordByData does an exact, case-sensitive match on
+          // "email". senderEmail here is always lowercase (it comes from
+          // currentUserEmail, which auth/page.tsx normalizes at login — see
+          // the identical case-mismatch bug already fixed in
+          // onesignal_helper.js), but hr_profiles.email itself isn't
+          // guaranteed to be lowercase (e.g. "Faheem@delcargo.us"). An exact
+          // match against a differently-cased stored email silently finds
+          // nothing, throws when .get() is called on the empty result, and
+          // falls back to the app logo — which is exactly why the sender's
+          // real profile picture wasn't showing up on chat_mention pushes
+          // even though the same lookup pattern happens to work elsewhere.
+          //
+          // Fix: narrow candidates with a case-insensitive LIKE (SQLite's
+          // `~` operator is case-insensitive for ASCII by default), then
+          // confirm an exact case-insensitive match in JS so a substring
+          // hit (e.g. "fa@x.com" matching "fa@x.com.au") can never produce
+          // a false positive.
+          const senderEmailLower = String(senderEmail).toLowerCase();
+          const candidates = $app.dao().findRecordsByFilter(
+            "hr_profiles",
+            "email ~ {:email}",
+            "",
+            50,
+            0,
+            { email: senderEmailLower }
+          );
+          const senderProfile = candidates.find((p) => String(p.get("email")).toLowerCase() === senderEmailLower);
+          // profile_picture_file is a real PocketBase file field (migrated
+          // off the old profile_picture text column, which stored the whole
+          // image as an inline base64 string — OneSignal's large_icon field
+          // needs a URL it can actually fetch over HTTP(S), it can't render
+          // a base64 data URI, so that never worked as a push icon no matter
+          // how correctly this lookup found the right profile). PocketBase's
+          // file URL shape is {baseUrl}/api/files/{collection}/{recordId}/{filename}.
+          // Falls back to the app logo for anyone who hasn't uploaded a
+          // picture (empty filename) or hasn't been migrated to the new
+          // field yet.
+          const pictureFilename = senderProfile && senderProfile.get("profile_picture_file");
+          largeIcon = pictureFilename
+            ? `https://pb.delcargo.us/api/files/hr_profiles/${senderProfile.id}/${pictureFilename}`
+            : APP_LOGO_URL;
         } catch (err) {
           largeIcon = APP_LOGO_URL;
         }

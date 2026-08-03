@@ -12,6 +12,26 @@ import { useRouter, usePathname } from 'next/navigation';
 import { getSessionEmail, getSessionRole, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 
+// The bell only ever showed a bare time-of-day string (e.g. "3:02 AM") with
+// no date — that's all `notification.timestamp` ever contained (see
+// addNotification in hrData.ts, which formats it with
+// toLocaleTimeString only, no date component, so there was never a date to
+// recover from that field for any notification, old or new). PocketBase's
+// own `created` system field always has the full date+time regardless of
+// what's in `timestamp`, so this derives "Today"/"Yesterday"/a short date
+// from that instead, to sit alongside the existing time string rather than
+// replace it.
+function formatNotificationWhen(created?: string): string {
+  if (!created) return '';
+  const date = new Date(created);
+  if (isNaN(date.getTime())) return '';
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 export function TopNav() {
   const router = useRouter();
   const pathname = usePathname();
@@ -565,7 +585,9 @@ export function TopNav() {
                     const content = (
                       <>
                         <div className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words">{n.message}</div>
-                        <div className="text-[9px] text-slate-400 font-medium text-right">{n.timestamp}</div>
+                        <div className="text-[9px] text-slate-400 font-medium text-right">
+                          {formatNotificationWhen(n.created)}{formatNotificationWhen(n.created) && n.timestamp ? ' • ' : ''}{n.timestamp}
+                        </div>
                       </>
                     );
                     // Only notifications with a `link` (ticket/leave/chat_mention —

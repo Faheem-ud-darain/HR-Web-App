@@ -1,0 +1,55 @@
+name: Deploy PocketBase Hooks
+
+# Auto-deploys pb_hooks/*.js to the PocketBase droplet whenever they change
+# on main, so a plain `git push` is enough — no more manually pasting file
+# contents over SSH/nano and running `systemctl restart pocketbase` by hand
+# for every hook change.
+#
+# One-time setup required before this will work (see
+# Notes/DEPLOY_PB_HOOKS_SETUP.md for the full walkthrough):
+#   1. Generate a dedicated SSH keypair for GitHub Actions to use.
+#   2. Add its public key to the droplet's authorized_keys.
+#   3. Add 3 repo secrets (Settings -> Secrets and variables -> Actions):
+#        PB_SSH_HOST       - the droplet's IP or domain (pb.delcargo.us)
+#        PB_SSH_USERNAME    - the SSH user (root, unless you set up a
+#                              dedicated deploy user — see the setup notes)
+#        PB_SSH_PRIVATE_KEY - the private half of the keypair from step 1
+#
+# Until those 3 secrets exist, this workflow will fail at the SSH step —
+# that's expected, it just means setup isn't done yet, not that something
+# is broken.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pb_hooks/**'
+  # Lets you manually trigger a redeploy from the Actions tab even when
+  # pb_hooks/ itself hasn't changed (e.g. after rotating the SSH key).
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy pb_hooks to droplet
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PB_SSH_HOST }}
+          username: ${{ secrets.PB_SSH_USERNAME }}
+          key: ${{ secrets.PB_SSH_PRIVATE_KEY }}
+          source: 'pb_hooks/*'
+          target: '/root/pocketbase/pb_hooks'
+          strip_components: 1
+          overwrite: true
+
+      - name: Restart PocketBase
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PB_SSH_HOST }}
+          username: ${{ secrets.PB_SSH_USERNAME }}
+          key: ${{ secrets.PB_SSH_PRIVATE_KEY }}
+          script: systemctl restart pocketbase

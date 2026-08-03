@@ -404,10 +404,24 @@ button:active {
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+/* "Employee Portal" — pops in right after the C letter settles, same
+   focus-in treatment as the "by DelCargo" line below it but starting from a
+   tighter letter-spacing (0.08em, matching its own resting value) since it's
+   a real two-word label, not a wide-tracked wordmark. */
+.splash-title-in {
+  opacity: 0;
+  letter-spacing: 0.3em;
+  animation: splash-title-in 480ms var(--ease-in-out-smooth) 950ms both;
+}
+@keyframes splash-title-in {
+  from { opacity: 0; letter-spacing: 0.3em; transform: translateY(6px); }
+  to { opacity: 1; letter-spacing: 0.08em; transform: translateY(0); }
+}
+
 .splash-tagline-in {
   opacity: 0;
   letter-spacing: 0.4em;
-  animation: splash-tagline-in 480ms var(--ease-in-out-smooth) 1080ms both;
+  animation: splash-tagline-in 480ms var(--ease-in-out-smooth) 1500ms both;
 }
 @keyframes splash-tagline-in {
   from { opacity: 0; letter-spacing: 0.4em; transform: translateY(6px); }
@@ -433,7 +447,7 @@ button:active {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .splash-bubble-draw, .splash-tail-in, .splash-letter, .splash-tagline-in, .splash-overlay-out {
+  .splash-bubble-draw, .splash-tail-in, .splash-letter, .splash-title-in, .splash-tagline-in, .splash-overlay-out {
     animation: none;
     opacity: 1;
     stroke-dashoffset: 0;

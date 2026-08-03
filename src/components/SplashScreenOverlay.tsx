@@ -15,7 +15,8 @@ import { Capacitor } from '@capacitor/core';
 // This is a hand-drawn recreation of the actual "DC HUB" app icon
 // (resources/icon.png / the Android launcher icon), built as inline SVG
 // instead of a static image so each piece — the speech-bubble outline, the
-// two letters, the tail, the "by DelCargo" mark below — can animate in as
+// two letters, the tail, the "Employee Portal" label, the "by DelCargo" mark
+// below it — can animate in as
 // its own tailored step instead of one generic image fade+scale. This
 // replaces the old design, which used a completely different (unrelated,
 // orange) icon that didn't match the app's real navy/gold identity at all.
@@ -33,15 +34,15 @@ import { Capacitor } from '@capacitor/core';
 //      is invisible.
 //   3. From there, everything is custom JS/CSS animation: the speech-bubble
 //      outline draws itself in (stroke animation, not a fade), the tail pops
-//      in, "D" then "C" pop in with a slight spring overshoot, "by DelCargo"
-//      focuses in from wide/faded letter-spacing to settled, then after a
-//      hold the whole overlay releases (fades + drifts up) to reveal the
-//      app. This is the "custom, tailored" part a static image + linear
-//      fade can't do.
+//      in, "D" then "C" pop in with a slight spring overshoot, then
+//      "Employee Portal" and "by DelCargo" each focus in in turn from
+//      wide/faded letter-spacing to settled, then after a hold the whole
+//      overlay releases (fades + drifts up) to reveal the app. This is the
+//      "custom, tailored" part a static image + linear fade can't do.
 //
 // On plain web, steps 2/3 are identical minus the native plugin calls —
 // same overlay, same timings, just without anything to hand off from.
-const HOLD_MS = 1680; // must clear the tagline's own delay+duration below
+const HOLD_MS = 2080; // must clear the "by DelCargo" line's own delay+duration below
 const EXIT_MS = 420;
 
 type Phase = 'entering' | 'exiting' | 'hidden';
@@ -99,7 +100,7 @@ export function SplashScreenOverlay() {
 
   return (
     <div
-      className={`fixed inset-0 z-[var(--z-splash)] flex flex-col items-center justify-center gap-6 ${
+      className={`fixed inset-0 z-[var(--z-splash)] flex flex-col items-center justify-center gap-5 ${
         phase === 'exiting' ? 'splash-overlay-out' : ''
       }`}
       // Matches capacitor.config.ts's SplashScreen.backgroundColor
@@ -141,16 +142,19 @@ export function SplashScreenOverlay() {
         />
 
         {/* "D" then "C" — pop in with a slight spring overshoot, staggered
-            just after the bubble finishes drawing. */}
+            just after the bubble finishes drawing. Sized to fill more of the
+            bubble's interior (up from fontSize 60) — x positions pulled in
+            slightly so the two bigger glyphs stay centered as a pair instead
+            of pushing toward the bubble's rounded corners. */}
         <text
-          x="72" y="92" textAnchor="middle" fontSize="60" fontWeight={800}
+          x="70" y="94" textAnchor="middle" fontSize="70" fontWeight={800}
           fill="#ffffff" fontFamily="var(--font-display), Arial, sans-serif"
           className="splash-letter splash-letter-d"
         >
           D
         </text>
         <text
-          x="128" y="92" textAnchor="middle" fontSize="60" fontWeight={800}
+          x="130" y="94" textAnchor="middle" fontSize="70" fontWeight={800}
           fill="url(#dcGold)" fontFamily="var(--font-display), Arial, sans-serif"
           className="splash-letter splash-letter-c"
         >
@@ -158,12 +162,26 @@ export function SplashScreenOverlay() {
         </text>
       </svg>
 
-      <p
-        className="splash-tagline-in text-[11px] font-semibold text-amber-200/90"
-        style={{ letterSpacing: '0.12em' }}
-      >
-        by DelCargo
-      </p>
+      {/* Text block below the mark — "Employee Portal" reads as the app's
+          name/purpose (bigger, brighter), "by DelCargo" as a smaller
+          attribution line underneath it, same relationship as a product name
+          vs. its maker's mark. Grouped in its own tight-gap column so the two
+          lines sit close to each other while still being a clear step below
+          the icon above (the outer flex column's own gap-5). */}
+      <div className="flex flex-col items-center gap-1.5">
+        <p
+          className="splash-title-in text-base sm:text-lg font-bold text-white"
+          style={{ letterSpacing: '0.08em' }}
+        >
+          Employee Portal
+        </p>
+        <p
+          className="splash-tagline-in text-[11px] font-semibold text-amber-200/90"
+          style={{ letterSpacing: '0.12em' }}
+        >
+          by DelCargo
+        </p>
+      </div>
     </div>
   );
 }

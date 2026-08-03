@@ -317,8 +317,15 @@ export default function EmployeeDashboard() {
         await hrActions.clockIn(profile.email);
         await refetchTimesheets();
         await hrActions.addNotification(profile.email, 'employee', `Auto Shift ON: Checked-in at ${nearestWarehouse.name} via GPS geofencing.`);
-        await hrActions.addNotification('all', 'hr', `${profile.fullName} checked-in at ${nearestWarehouse.name} via geofencing.`);
-        await hrActions.addNotification('all', 'admin', `${profile.fullName} checked-in at ${nearestWarehouse.name} via geofencing.`);
+        // 'shift' category + pushTitle/senderEmail so HR/Admin actually get a
+        // push (with the employee's own profile picture as the Android large
+        // icon, resolved server-side from senderEmail — see
+        // push_notifications.pb.js), not just an in-app bell entry.
+        {
+          const shiftActorName = displayName(profile, 'hr');
+          await hrActions.addNotification('all', 'hr', `${shiftActorName} checked-in at ${nearestWarehouse.name} via geofencing.`, 'shift', shiftActorName, profile.email);
+          await hrActions.addNotification('all', 'admin', `${shiftActorName} checked-in at ${nearestWarehouse.name} via geofencing.`, 'shift', shiftActorName, profile.email);
+        }
       } else if (!isInside && shiftActiveRef.current) {
         const whName = nearestWarehouse ? nearestWarehouse.name : 'the warehouse';
         shiftActiveRef.current = false;
@@ -327,8 +334,11 @@ export default function EmployeeDashboard() {
         await hrActions.clockOut(profile.email);
         await refetchTimesheets();
         await hrActions.addNotification(profile.email, 'employee', `Auto Shift OFF: Left the geofence at ${whName}.`);
-        await hrActions.addNotification('all', 'hr', `${profile.fullName} checked-out (left warehouse geofence at ${whName}).`);
-        await hrActions.addNotification('all', 'admin', `${profile.fullName} checked-out (left warehouse geofence at ${whName}).`);
+        {
+          const shiftActorName = displayName(profile, 'hr');
+          await hrActions.addNotification('all', 'hr', `${shiftActorName} checked-out (left warehouse geofence at ${whName}).`, 'shift', shiftActorName, profile.email);
+          await hrActions.addNotification('all', 'admin', `${shiftActorName} checked-out (left warehouse geofence at ${whName}).`, 'shift', shiftActorName, profile.email);
+        }
       }
     };
 
@@ -517,8 +527,11 @@ export default function EmployeeDashboard() {
                     await hrActions.touchShiftTabHeartbeat(userProfile.email);
                     await refetchTimesheets();
                     await hrActions.addNotification(userProfile.email, 'employee', 'Shift started manually. Screen tracking is now active for this shift.');
-                    await hrActions.addNotification('all', 'hr', `${userProfile.fullName} started shift manually.`);
-                    await hrActions.addNotification('all', 'admin', `${userProfile.fullName} started shift manually.`);
+                    {
+                      const shiftActorName = displayName(userProfile, 'hr');
+                      await hrActions.addNotification('all', 'hr', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
+                      await hrActions.addNotification('all', 'admin', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
+                    }
                   }}
                   disabled={shiftActive || checkingTracker || (!!userProfile && isTrackingLiveFor(userProfile) && isMobileApp)}
                   className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97 shadow-sm"
@@ -534,8 +547,11 @@ export default function EmployeeDashboard() {
                     await hrActions.clockOut(userProfile.email);
                     await refetchTimesheets();
                     await hrActions.addNotification(userProfile.email, 'employee', 'Shift ended manually. Screen tracking has stopped.');
-                    await hrActions.addNotification('all', 'hr', `${userProfile.fullName} ended shift manually.`);
-                    await hrActions.addNotification('all', 'admin', `${userProfile.fullName} ended shift manually.`);
+                    {
+                      const shiftActorName = displayName(userProfile, 'hr');
+                      await hrActions.addNotification('all', 'hr', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
+                      await hrActions.addNotification('all', 'admin', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
+                    }
                   }}
                   disabled={!shiftActive}
                   className="bg-white hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 border border-rose-200 font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97"

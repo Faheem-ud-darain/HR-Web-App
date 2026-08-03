@@ -109,10 +109,36 @@ export default function AdminPayrollPage() {
 
   // Net payable and bonuses must stay split by currency — USA (USD) and
   // Pakistan (PKR) amounts are never combined into a single figure.
-  const grandNetUSD = summaries.reduce((acc, s) => acc + s.totalNetUSD, 0);
-  const grandNetPKR = summaries.reduce((acc, s) => acc + s.totalNetPKR, 0);
-  const grandBonusesUSD = summaries.reduce((acc, s) => acc + s.totalBonusesUSD, 0);
-  const grandBonusesPKR = summaries.reduce((acc, s) => acc + s.totalBonusesPKR, 0);
+  //
+  // IMPORTANT: these page-level headline totals are computed as a single
+  // flat pass over `payroll`, filtered by region only — NOT by summing the
+  // per-department `summaries` above. `Profile.teams` is a string array, so
+  // an employee can belong to 0, 2, or more teams; summing across
+  // department buckets silently dropped anyone on 0 teams and double (or
+  // triple-)counted anyone on 2+ teams, which is exactly why this page's
+  // "Total Net Outflow" used to disagree with HR's payroll page and with
+  // Admin's own dashboard overview card (both of which already did a flat,
+  // one-employee-once pass). The per-department `summaries` breakdown below
+  // is still team-grouped on purpose — that's a legitimate "cost by
+  // department" view — it's only the grand total that must not be derived
+  // from it.
+  //
+  // Formula also matches hr/payroll/page.tsx and admin/page.tsx exactly
+  // (baseSalary + bonus - deductions, no incrementAmount) so this figure
+  // and the dashboard overview figure agree — increments only affect
+  // baseSalary once actually applied via "Release Monthly Funds" above.
+  const grandNetUSD = payroll
+    .filter(p => p.region === 'USA')
+    .reduce((acc, p) => acc + (p.baseSalary + p.bonus - p.deductions), 0);
+  const grandNetPKR = payroll
+    .filter(p => p.region !== 'USA')
+    .reduce((acc, p) => acc + (p.baseSalary + p.bonus - p.deductions), 0);
+  const grandBonusesUSD = payroll
+    .filter(p => p.region === 'USA')
+    .reduce((acc, p) => acc + p.bonus, 0);
+  const grandBonusesPKR = payroll
+    .filter(p => p.region !== 'USA')
+    .reduce((acc, p) => acc + p.bonus, 0);
 
   return (
     <div className="space-y-6 px-4 py-4 md:px-0 md:py-0">

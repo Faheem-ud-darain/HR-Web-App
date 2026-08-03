@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
@@ -20,6 +21,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
+import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload } from 'lucide-react';
 
@@ -111,6 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [dbReady, setDbReady] = useState(false);
   const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats');
   // Support Tickets has its own bottom-anchored reply composer, same as Team
@@ -202,6 +205,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (email) initPush(email);
   }, [email]);
+
+  // Two related staleness problems, one fix: React Query's
+  // refetchOnWindowFocus is deliberately off (see providers.tsx) so
+  // switching tabs/apps on desktop doesn't refire every active query, but
+  // that meant NOTHING refreshed data when the native app came back from
+  // the background — the bell, tickets, chat, etc. all sat on whatever was
+  // last loaded until the app was fully killed and relaunched. The Page
+  // Visibility API fires reliably in a Capacitor WebView on both iOS and
+  // Android when the app is backgrounded/foregrounded (it's not a browser
+  // tab from the WebView's perspective, but the same underlying event),
+  // so listening for it here and invalidating every active query is a
+  // Capacitor-app-appropriate substitute for refetchOnWindowFocus without
+  // turning that global default back on for the desktop web case it was
+  // presumably disabled for.
+  //
+  // Also re-runs initPush(email) on the same trigger — self-heals the case
+  // where OneSignal's external_id login raced the push subscription being
+  // created on a brand-new install (see the comment in push.ts's
+  // initNative) by re-attempting the login every time the app resumes, not
+  // just once at first launch.
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      queryClient.invalidateQueries();
+      if (email) initPush(email);
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    return () => document.removeEventListener('visibilitychange', handleVisible);
+  }, [email, queryClient]);
 
   // Single-active-session enforcement — Employee/Team Lead accounts only
   // (Admin/HR are exempt, see auth/page.tsx). Periodically "touches" this
@@ -1037,6 +1069,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {(role === 'employee' || role === 'team_lead') && (
         <AnnouncementPopup email={email} profile={profile} />
       )}
+
+      {/* Checks live OS notification permission on every login (not just
+          once) and nags until it's turned back on — see
+          PushPermissionPrompt.tsx. Applies to every role, not just
+          employee/team_lead, since HR/Admin also rely on push for tickets
+          and leave requests. */}
+      <PushPermissionPrompt />
 
       {/* Consent Popup Overlay Gate */}
       {showConsent && (

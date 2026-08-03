@@ -57,10 +57,24 @@ module.exports = {
       return;
     }
 
+    // Lowercase every email right before it's sent to OneSignal — this is
+    // the one point both push_notifications.pb.js and push_announcements.pb.js
+    // funnel through, so fixing it here covers every caller. The client
+    // (auth/page.tsx) always normalizes to lowercase before calling
+    // OneSignal.login(externalId), so a device's real external_id is always
+    // lowercase — but emails elsewhere in the data model (a profile's stored
+    // `email` field, task.assignedEmail, etc.) aren't guaranteed to be, and
+    // OneSignal's external_id matching is exact-string, not case-insensitive.
+    // A single differently-cased letter anywhere (e.g. "Faheem@delcargo.us"
+    // vs the device's real "faheem@delcargo.us") silently drops that
+    // recipient with OneSignal returning 200 + "All included players are
+    // not subscribed" — no error, just nothing delivered.
+    const normalizedEmails = emails.map((e) => String(e).toLowerCase());
+
     const body = {
       app_id: appId,
       target_channel: "push",
-      include_aliases: { external_id: emails },
+      include_aliases: { external_id: normalizedEmails },
       contents: { en: message },
       headings: { en: title },
     };
@@ -82,7 +96,16 @@ module.exports = {
       // arriving) — OneSignal can return 200 with zero matched recipients,
       // which isn't an "error" from its point of view but means nobody
       // actually got the push, and that only shows up in this response body.
-      console.log("[onesignal_helper] OneSignal response:", res.statusCode, res.body);
+      //
+      // IMPORTANT: this used to log `res.body`, which does not exist on this
+      // PocketBase version's $http.send() response object (see the pre-v0.23
+      // JSVM API note at the top of push_notifications.pb.js — no `.body`,
+      // no `e.next()`) — every prior log line here printed the literal
+      // string "undefined" instead of OneSignal's actual response, which is
+      // exactly what was hiding a real "0 recipients matched" response for
+      // who knows how long. `.raw` is the actual field name for the raw
+      // response text on this API version.
+      console.log("[onesignal_helper] OneSignal response:", res.statusCode, res.raw);
     } catch (err) {
       console.log("[onesignal_helper] Request to OneSignal failed:", err);
     }

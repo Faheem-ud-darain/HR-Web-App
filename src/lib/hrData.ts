@@ -312,6 +312,15 @@ export interface InactivityLog {
 
 export interface Notification {
   id: string; recipientEmail: string; recipientRole: string; message: string; read: boolean; timestamp: string;
+  // Raw PocketBase system field (auto-set on every record, never written by
+  // this app directly) — added so the bell can show "Today"/"Yesterday"/a
+  // real date next to the time. `timestamp` above is a *display-only*
+  // time-of-day string (e.g. "3:02 AM") written once at creation with no
+  // date component at all (see addNotification below) — there was never a
+  // way to recover the date from it, which is exactly why old notifications
+  // only ever showed a time with no day context. `created` always has the
+  // full date+time regardless, so it's the one to use for that.
+  created?: string;
   // Where clicking this notification should navigate to (a role-correct
   // in-app path, e.g. "/hr/tickets?ticketId=abc123") — set by addNotification
   // for categories that point at a specific record (ticket, leave, chat
@@ -329,9 +338,9 @@ type AnnouncementReadMap = Record<string, string[]>;
 // their Settings (see NotificationPreferencesCard.tsx) — 'internal' is a
 // 5th, non-configurable bucket for lower-signal ops notifications that
 // only ever show in the in-app bell (see the comment on addNotification).
-export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'internal';
+export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'internal';
 export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal'>, boolean>;
-const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true };
+const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true, shift: true };
 
 // Builds the role-correct in-app path for a notification's `link` field.
 // team_lead shares the employee route tree everywhere (see
@@ -524,7 +533,19 @@ function toProfile(p: any, extras: Partial<Profile> = {}): Profile {
     bankName: p.bank_name,
     accountNumber: p.account_number,
     iban: p.iban,
-    profilePicture: p.profile_picture,
+    // Prefer the real PocketBase file field (profile_picture_file) — a
+    // proper uploaded file served via PocketBase's own file URL — over the
+    // legacy `profile_picture` text column, which used to hold the entire
+    // picture as an inline base64 string (see uploadProfilePicture below for
+    // why that had to change: OneSignal's push notification large-icon
+    // field needs a real fetchable URL, and every profile list load was
+    // downloading everyone's full-size encoded photo whether or not it was
+    // even being displayed). Falls back to the old text field for any
+    // profile that hasn't been migrated yet — see
+    // migration_data/migrate_profile_pictures_to_files.mjs.
+    profilePicture: p.profile_picture_file
+      ? pb.files.getURL(p, p.profile_picture_file)
+      : (p.profile_picture || undefined),
     region: p.region,
     assignedWarehouses: p.assigned_warehouses || [],
     trackingEnabled: !!p.tracking_enabled,
@@ -552,7 +573,11 @@ function fromProfileFields(p: Partial<Profile>): any {
   if (p.bankName !== undefined) fields.bank_name = p.bankName;
   if (p.accountNumber !== undefined) fields.account_number = p.accountNumber;
   if (p.iban !== undefined) fields.iban = p.iban;
-  if (p.profilePicture !== undefined) fields.profile_picture = p.profilePicture;
+  // profilePicture is deliberately NOT mapped here — it never goes through
+  // this plain-JSON path anymore. updateProfileDetails below strips it out
+  // of `real` and routes it through uploadProfilePicture() instead, which
+  // uploads it as an actual file (multipart) to profile_picture_file rather
+  // than writing a giant base64 string into a text column.
   if (p.region !== undefined) fields.region = p.region;
   if (p.assignedWarehouses !== undefined) fields.assigned_warehouses = p.assignedWarehouses;
   if (p.trackingEnabled !== undefined) fields.tracking_enabled = p.trackingEnabled;
@@ -577,7 +602,7 @@ function toLeave(l: any): LeaveApplication {
   return { id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status };
 }
 function toNotification(n: any): Notification {
-  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, read: !!n.read, link: n.link || undefined };
+  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, created: n.created, read: !!n.read, link: n.link || undefined };
 }
 function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
@@ -1114,6 +1139,9 @@ export const hrActions = {
     const docs: Partial<Profile> = {};
     const real: Partial<Profile> = {};
     (Object.keys(updates) as (keyof Profile)[]).forEach(k => {
+      // profilePicture never goes through the plain-JSON `real` path — see
+      // uploadProfilePicture below, called separately a few lines down.
+      if (k === 'profilePicture') return;
       if (PROFILE_DOC_KEYS.includes(k)) (docs as any)[k] = (updates as any)[k];
       else if (OVERLAY_KEYS.includes(k)) (overlay as any)[k] = (updates as any)[k];
       else (real as any)[k] = (updates as any)[k];
@@ -1121,6 +1149,39 @@ export const hrActions = {
     if (Object.keys(real).length > 0) await pbUpdate('hr_profiles', profileId, fromProfileFields(real));
     if (Object.keys(overlay).length > 0) await saveProfileExtras(profileId, overlay);
     if (Object.keys(docs).length > 0) await saveProfileDocuments(profileId, docs);
+    if (updates.profilePicture !== undefined) await hrActions.uploadProfilePicture(profileId, updates.profilePicture);
+  },
+
+  // Uploads a profile picture as a REAL PocketBase file (multipart), into
+  // the profile_picture_file field — not the legacy profile_picture text
+  // column, which used to store the entire image as an inline base64
+  // string. That base64 approach had two real problems: (1) OneSignal's
+  // push-notification large-icon field needs a URL it can actually fetch
+  // over HTTP(S) — it can't render an inline base64 data URI, so shift/
+  // ticket/chat push notifications could never show a real profile photo;
+  // (2) every useProfiles() load (basically every dashboard page) was
+  // downloading every employee's full-size encoded photo inline in the
+  // JSON response, whether or not that page even displays it.
+  //
+  // dataUrl is whatever AvatarCropperModal.tsx already produces (a
+  // `data:image/webp;base64,...` string from canvas.toDataURL) — this
+  // function is the ONLY place that needs to change to make that work with
+  // a real file field; the cropper itself doesn't need touching.
+  //
+  // Passing an empty string clears the picture (removes the file).
+  uploadProfilePicture: async (profileId: string, dataUrl: string): Promise<void> => {
+    if (!dataUrl) {
+      // PocketBase's convention for clearing a single file field via
+      // multipart: send the field name with an empty value.
+      const formData = new FormData();
+      formData.append('profile_picture_file', '');
+      await pb.collection('hr_profiles').update(profileId, formData);
+      return;
+    }
+    const blob = await (await fetch(dataUrl)).blob();
+    const formData = new FormData();
+    formData.append('profile_picture_file', blob, `profile_${profileId}.webp`);
+    await pb.collection('hr_profiles').update(profileId, formData);
   },
 
   // Onboarding approval gate — see approvalStatus on Profile and the gate
@@ -1927,8 +1988,14 @@ export const hrActions = {
     await hrActions.clockOut(profile.email);
     await hrActions.clearShiftTabHeartbeat(profile.email);
     await hrActions.addNotification(profile.email, 'employee', 'Your shift was automatically ended because the app was closed.');
-    await hrActions.addNotification('all', 'hr', `${profile.fullName || profile.email} closed the app while on shift — their shift was ended automatically.`);
-    await hrActions.addNotification('all', 'admin', `${profile.fullName || profile.email} closed the app while on shift — their shift was ended automatically.`);
+    // 'shift' category + pushTitle/senderEmail so this actually reaches
+    // HR/Admin's phones (push_notifications.pb.js looks up profile.email's
+    // profile_picture as the Android large icon) instead of only ever
+    // showing up in the in-app bell, same treatment as the manual/GPS shift
+    // notifications below.
+    const shiftEndedName = displayName(profile, 'hr');
+    await hrActions.addNotification('all', 'hr', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, 'shift', shiftEndedName, profile.email);
+    await hrActions.addNotification('all', 'admin', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, 'shift', shiftEndedName, profile.email);
     if (typeof window !== 'undefined') {
       try { window.localStorage.setItem(`shift_auto_stopped_${profile.email.toLowerCase()}`, '1'); } catch { /* ignore */ }
     }
@@ -1988,8 +2055,29 @@ export const hrActions = {
           await hrActions.clockOut(email);
           shiftStopped = true;
           await hrActions.addNotification(email, 'employee', 'Your shift was automatically ended because you logged out.');
-          await hrActions.addNotification('all', 'hr', `${email} logged out while on shift — their shift was ended automatically.`);
-          await hrActions.addNotification('all', 'admin', `${email} logged out while on shift — their shift was ended automatically.`);
+          // performLogout only ever gets a bare email/role — unlike the other
+          // 3 shift notification call sites (manual button, GPS geofence,
+          // closeStaleManualShiftIfAbandoned), it never had a full Profile
+          // object to pull a name/alias/photo from, which is why this used
+          // to just print the raw email. Fetching it fresh here is a bit
+          // heavier, but logout is infrequent enough that it doesn't matter,
+          // and it's what lets this notification carry the same name+alias+
+          // profile-picture treatment as every other shift event.
+          let actorLabel = email;
+          let actorEmailForPush: string | undefined = email;
+          try {
+            const rawMatches = await pbList('hr_profiles', { filter: `email ~ "${email.replace(/"/g, '\\"')}"` });
+            const rawProfile = rawMatches.find((r: any) => (r.email || '').toLowerCase() === email.toLowerCase());
+            if (rawProfile) {
+              const extras = await getProfileExtras(rawProfile.id);
+              actorLabel = displayName(toProfile(rawProfile, extras), 'hr');
+            }
+          } catch {
+            // Best-effort — worst case this notification falls back to the
+            // raw email, same as before this fetch existed.
+          }
+          await hrActions.addNotification('all', 'hr', `${actorLabel} logged out while on shift — their shift was ended automatically.`, 'shift', actorLabel, actorEmailForPush);
+          await hrActions.addNotification('all', 'admin', `${actorLabel} logged out while on shift — their shift was ended automatically.`, 'shift', actorLabel, actorEmailForPush);
           // Durable (localStorage, not the per-tab session storage used for
           // the "signed in elsewhere" notice) flag read by auth/page.tsx the
           // next time this exact email logs back in — even if that's after
