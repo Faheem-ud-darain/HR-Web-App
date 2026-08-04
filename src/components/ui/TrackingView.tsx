@@ -19,7 +19,7 @@ import {
   displayName,
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
-import { formatTimeNY, formatShortDateNY, formatDateTimeNY } from '@/lib/timezone';
+import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, POCKETBASE_URL } from '@/lib/trackerSetup';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 
@@ -42,13 +42,8 @@ const AGENT_SCRIPT_PATH = '/delcargo_tracker_agent.py';
 // e.g. a US-based (UTC-5) admin opening this in the evening already has
 // tomorrow's UTC date, so "Today" silently pointed at a day that hadn't
 // happened yet and showed no data at all. This keeps the default/max always
-// in sync with what the viewer would actually call "today".
-const localDateString = (d: Date = new Date()): string => {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// in sync with America/New_York (where shift days are measured).
+const localDateString = (d: Date = new Date()): string => getNYDateString(d);
 
 export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // Team Leads get read-only access to their own teammates' tracking data
@@ -231,13 +226,12 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   };
 
   // Computes the [since, until) window for the current range/day selection.
-  // 'day' is a single calendar day in the browser's local timezone (matches
-  // a single shift), 'week'/'month' are the existing rolling windows.
+  // 'day' is a single calendar day in America/New_York time (matches a single
+  // shift window), 'week'/'month' are the existing rolling windows.
   const computeWindow = (range: 'day' | 'week' | 'month', day: string): { since: Date; until: Date } => {
     if (range === 'day') {
-      const since = new Date(`${day}T00:00:00`);
-      const until = new Date(since);
-      until.setDate(until.getDate() + 1);
+      const since = getNYMidnight(day);
+      const until = new Date(since.getTime() + 24 * 60 * 60 * 1000);
       return { since, until };
     }
     const now = new Date();

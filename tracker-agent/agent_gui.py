@@ -1185,6 +1185,7 @@ class TrackerApp:
         self.worker = None
         self.inactivity_worker = None
         self.realtime_worker = None
+        self.heartbeat_worker = None
         # Set by the realtime subscription (see _realtime_loop) the instant
         # this employee's hr_timesheets row changes on the web dashboard —
         # lets _worker_loop's between-capture sleep wake up and re-check
@@ -1534,6 +1535,8 @@ class TrackerApp:
             self.inactivity_worker.join(timeout=2)
         if self.realtime_worker and self.realtime_worker.is_alive():
             self.realtime_worker.join(timeout=2)
+        if self.heartbeat_worker and self.heartbeat_worker.is_alive():
+            self.heartbeat_worker.join(timeout=2)
         self.stop_event = threading.Event()
         self.wake_event.clear()
         self.worker = threading.Thread(target=self._worker_loop, args=(self.cfg, self.stop_event), daemon=True)
@@ -1542,6 +1545,8 @@ class TrackerApp:
         self.inactivity_worker.start()
         self.realtime_worker = threading.Thread(target=self._realtime_loop, args=(self.cfg, self.stop_event), daemon=True)
         self.realtime_worker.start()
+        self.heartbeat_worker = threading.Thread(target=self._heartbeat_loop, args=(self.cfg, self.stop_event), daemon=True)
+        self.heartbeat_worker.start()
 
     def _checkin(self, cfg):
         """Claims (first run / reconnect) or refreshes this device's
@@ -1611,6 +1616,11 @@ class TrackerApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _heartbeat_loop(self, cfg, stop_event):
+        while not stop_event.is_set():
+            self._checkin(cfg)
+            stop_event.wait(60.0)
+
     def _worker_loop(self, cfg, stop_event):
         # cfg and stop_event are captured as explicit arguments (a snapshot
         # at the moment this thread was started) rather than read live off
@@ -1619,7 +1629,10 @@ class TrackerApp:
         # new thread with the new cfg, so there's never any ambiguity about
         # which credentials an old, lingering thread might still be using.
         while not stop_event.is_set():
-            if not self._checkin(cfg):
+            with self.state_lock:
+                superseded = (self.state.get("connection_status") == "superseded")
+            
+            if superseded:
                 # Superseded by another device — don't poll tracking
                 # settings or capture anything until reconnected.
                 with self.state_lock:

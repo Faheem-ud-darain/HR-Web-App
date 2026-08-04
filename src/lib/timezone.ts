@@ -71,6 +71,20 @@ export function getNYDateString(date: Date | string | number = new Date()): stri
   return d.toLocaleDateString('en-CA', { timeZone: APP_TIMEZONE });
 }
 
+/**
+ * Returns a true Date object representing EXACTLY 00:00:00 America/New_York
+ * time for the given calendar day, correctly handling EDT vs EST.
+ * @param dateStr "YYYY-MM-DD"
+ */
+export function getNYMidnight(dateStr: string): Date {
+  const d = new Date(`${dateStr}T00:00:00-05:00`); // Guess EST
+  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: APP_TIMEZONE, hour: 'numeric', hourCycle: 'h23' });
+  const hour = parseInt(formatter.format(d), 10);
+  // If it formats to hour 1 instead of 0, our UTC-5 guess landed at 1 AM EDT.
+  if (hour === 1) return new Date(`${dateStr}T00:00:00-04:00`);
+  return d;
+}
+
 /** Returns "Today" / "Yesterday" / short date — all judged in America/New_York. */
 export function formatRelativeDateNY(date: Date | string | number): string {
   const d = date instanceof Date ? date : new Date(date);
