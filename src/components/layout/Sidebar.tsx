@@ -26,18 +26,21 @@ export function Sidebar({ role }: SidebarProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    let targetEl: HTMLElement | Window = window;
-    const mainEl = document.querySelector('main');
-    if (mainEl && mainEl.scrollHeight > mainEl.clientHeight) {
-      targetEl = mainEl;
-    }
+    const handleScrollEvent = (e: Event) => {
+      const target = e.target as HTMLElement | Document;
+      let currentScrollY = 0;
 
-    const handleScroll = () => {
-      const currentScrollY = targetEl === window
-        ? (window.scrollY || document.documentElement.scrollTop)
-        : (targetEl as HTMLElement).scrollTop;
-      
-      // Near top of page (within 10px), keep visible
+      if (target === document || target === document.documentElement || (target as any) === window) {
+        currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      } else if (target instanceof HTMLElement) {
+        // Only track vertical overflow scrollable elements
+        if (target.scrollTop !== undefined && (target.tagName === 'MAIN' || target.classList.contains('overflow-y-auto'))) {
+          currentScrollY = target.scrollTop;
+        } else {
+          return;
+        }
+      }
+
       if (currentScrollY <= 10) {
         setIsNavVisible(true);
         lastScrollY.current = currentScrollY;
@@ -46,7 +49,6 @@ export function Sidebar({ role }: SidebarProps) {
 
       const diff = currentScrollY - lastScrollY.current;
 
-      // Hide when scrolling down by more than 5px, show when scrolling up by more than 5px
       if (diff > 5) {
         setIsNavVisible(false);
       } else if (diff < -5) {
@@ -55,12 +57,10 @@ export function Sidebar({ role }: SidebarProps) {
       lastScrollY.current = currentScrollY;
     };
 
-    targetEl.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
+    // Capture phase listener catches scroll events on any child element (e.g. main.overflow-y-auto)
+    window.addEventListener('scroll', handleScrollEvent, true);
     return () => {
-      targetEl.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScrollEvent, true);
     };
   }, [pathname]);
   // Desktop-only "hide sidebar" toggle — collapses to an icon rail instead
