@@ -27,6 +27,7 @@ import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
+import { useAnyModalOpen } from '@/lib/modalStack';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload } from 'lucide-react';
 
 // Wraps each page's content for the tab-switch fade+rise animation. Split
@@ -126,6 +127,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // anymore, they get a small fixed bottom breathing-room padding instead of
   // the large pb-24 other tabs use to clear it.
   const isTicketsScreen = pathname?.endsWith('/tickets');
+  // When the ticket conversation panel is open it calls pushModal() (see
+  // TicketsView.tsx) — subscribe to that signal so we can switch the tickets
+  // screen's <main> to overflow-hidden while it's open. Without this, the
+  // OS keyboard-avoidance sees a scrollable page behind the fixed panel and
+  // tries to pan/resize the scroll container, pushing the whole panel up.
+  // Identical fix to isChatScreen, which already uses overflow-hidden.
+  const anyModalOpen = useAnyModalOpen();
+  const isTicketPanelOpen = isTicketsScreen && anyModalOpen;
 
   const { data: allProfiles, isLoading: isProfilesLoading } = useProfiles();
 
@@ -1055,9 +1064,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main className={`flex-1 w-full min-w-0 overflow-x-hidden ${
           isChatScreen
             ? 'overflow-hidden flex flex-col p-1.5 pb-2.5 md:px-8 md:py-8'
-            : isTicketsScreen
-              ? 'overflow-y-auto px-4 py-4 pb-2.5 md:px-8 md:py-8'
-              : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-8 md:py-8 pb-28 md:pb-8'
+            : isTicketPanelOpen
+              // Ticket conversation panel is open — lock the scroll container
+              // exactly like the chat screen so the OS keyboard does not try
+              // to pan/resize this element (which pushed the fixed panel up).
+              ? 'overflow-hidden flex flex-col p-0'
+              : isTicketsScreen
+                ? 'overflow-y-auto px-4 py-4 pb-2.5 md:px-8 md:py-8'
+                : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-8 md:py-8 pb-28 md:pb-8'
         }`}>
           {/* key={pathname} forces PageTransition to remount on every
               nav-tab switch so its animating state (and page-enter) resets

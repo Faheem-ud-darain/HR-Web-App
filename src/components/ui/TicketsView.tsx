@@ -14,6 +14,7 @@ import { formatDateTimeNY, formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
+import { useNativeKeyboard } from '@/hooks/useNativeKeyboard';
 
 // Converts an uploaded attachment File to a storable data URL: images are
 // compressed to WebP (max 3 MB), PDFs are stored as-is after a size check
@@ -107,6 +108,10 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [currentEmail, setCurrentEmail] = useState('');
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
+
+  // Track native keyboard height so the ticket panel can pad itself above
+  // the keyboard on iOS/Android (see the panel's style.paddingBottom below).
+  const { keyboardHeight } = useNativeKeyboard();
 
   // Modals
   const [isNewOpen, setIsNewOpen] = useState(false);
@@ -652,17 +657,18 @@ export function TicketsView({ role }: TicketsViewProps) {
           </div>
         </div>
 
-        {/* Conversation Chat Panel. bottom-0, not bottom-[64px] — this panel
-            only ever renders fixed when selectedTicket is truthy, which is
-            the exact same condition that calls pushModal() (above) to hide
-            the floating bottom pill nav (Sidebar.tsx, via modalStack). So
-            there's no state where this panel is fixed AND that nav is still
-            visible — reserving 64px for it left a dead gap at the bottom of
-            the screen with everything else pushed up into it. The reply
-            bar / "Replies disabled" banner further down already has its own
-            safe-area bottom padding (env(safe-area-inset-bottom)), so
-            bottom-0 here doesn't put anything under the home indicator. */}
-        <div className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-0 z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}>
+        {/* Conversation Chat Panel. Fixed full-screen overlay on mobile.
+            `paddingBottom={keyboardHeight}` (from useNativeKeyboard) lifts
+            the inner flex content above the native keyboard: the chat log
+            (flex-1 overflow-y-auto) shrinks to absorb the padding while the
+            header and reply bar stay at their natural sizes. The layout
+            layout.tsx switches <main> to overflow-hidden while this panel is
+            open (via isTicketPanelOpen + useAnyModalOpen) so the background
+            page doesn't scroll/pan under the panel when the keyboard opens. */}
+        <div
+          className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-0 z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}
+          style={selectedTicket && keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : undefined}
+        >
           {selectedTicket ? (
             <div className="border-0 lg:border border-slate-200 overflow-hidden flex flex-col h-full lg:h-[calc(100vh-220px)] min-h-[560px] lg:rounded-xl bg-white">
               {/* Header. Arbitrary-value pt (not `py-2.5 lg:py-4 pt-safe`

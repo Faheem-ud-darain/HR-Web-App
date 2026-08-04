@@ -78,6 +78,20 @@ const config: CapacitorConfig = {
       overlaysWebView: true,
       style: 'DARK',
     },
+
+    // Android keyboard resize workaround: when `StatusBar.overlaysWebView`
+    // is true (above), Android has a known bug where `adjustResize`
+    // (set in AndroidManifest.xml) is silently ignored — the WebView
+    // doesn't actually resize when the keyboard opens, so the keyboard
+    // just covers the bottom of the screen with no layout response.
+    // `resizeOnFullScreen: true` forces the Capacitor Keyboard plugin to
+    // apply its own resize workaround on top of `adjustResize`, so both
+    // modes work correctly. Without this, keyboard-aware layouts (tickets
+    // reply bar, team chat input) sit under the keyboard instead of
+    // scrolling above it.
+    Keyboard: {
+      resizeOnFullScreen: true,
+    },
   },
 };
 
