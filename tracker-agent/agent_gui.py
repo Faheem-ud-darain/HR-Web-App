@@ -96,7 +96,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "1.7"
+APP_VERSION = "1.8"
 GITHUB_REPO = "SPARXzeux/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -905,38 +905,50 @@ def _app_icon_path():
 _ICON_SOURCE = None  # lazily loaded, cached Pillow Image of icon.png
 
 
-def build_tray_image(active):
-    """Uses the real DelCargo brand mark (icon.png, generated from
-    "Tracker Icon.png" by generate_icons.py) for the tray icon, with a
-    small green "live" dot overlaid while tracking is active. Falls back to
-    a drawn monitor glyph if the icon asset isn't present (e.g. it hasn't
-    been generated yet)."""
+def build_tray_image(status_mode):
+    """Uses the real DelCargo brand mark (icon.png) for the tray icon with a
+    status-colored status dot indicator:
+      - 'active' (Green): Tracking is active during an ongoing shift
+      - 'paused' (Amber): HR enabled tracking, waiting for employee to clock in
+      - 'off' / False (Gray): Tracking disabled
+    Falls back to a drawn monitor glyph if icon asset isn't present."""
     global _ICON_SOURCE
     size = 64
     icon_path = _app_icon_path()
+
+    # Resolve status mode string
+    if isinstance(status_mode, bool):
+        mode = "active" if status_mode else "off"
+    else:
+        mode = str(status_mode or "off").lower()
+
+    # Determine status dot RGBA color
+    if mode == "active":
+        dot_color = (16, 185, 129, 255)   # emerald green
+    elif mode == "paused":
+        dot_color = (245, 158, 11, 255)   # amber yellow
+    else:
+        dot_color = (148, 163, 184, 255)  # slate gray
+
     if icon_path:
         if _ICON_SOURCE is None:
             _ICON_SOURCE = Image.open(icon_path).convert("RGBA")
         img = _ICON_SOURCE.resize((size, size), Image.LANCZOS).copy()
-        if not active:
-            # Dim to slate when tracking is off, matching the orange
-            # (active) vs slate (idle) convention used elsewhere in the UI.
+        if mode == "off":
             gray = Image.new("RGBA", img.size, (100, 116, 139, 255))
             img = Image.blend(img.convert("RGBA"), gray, 0.35)
-        if active:
-            d = ImageDraw.Draw(img)
-            d.ellipse([44, 2, 62, 20], fill=(16, 185, 129, 255), outline=(255, 255, 255, 255), width=2)
+        d = ImageDraw.Draw(img)
+        d.ellipse([42, 2, 62, 22], fill=dot_color, outline=(255, 255, 255, 255), width=2)
         return img
 
-    # Fallback: simple monitor glyph drawn in-memory (no icon asset found).
+    # Fallback: simple monitor glyph drawn in-memory
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    color = (234, 88, 12, 255) if active else (100, 116, 139, 255)  # orange vs slate
-    d.rounded_rectangle([8, 12, 56, 42], radius=5, outline=color, width=5)
-    d.rectangle([26, 46, 38, 52], fill=color)
-    d.rectangle([18, 52, 46, 56], fill=color)
-    if active:
-        d.ellipse([40, 4, 60, 24], fill=(16, 185, 129, 255))  # green "live" dot
+    monitor_color = (234, 88, 12, 255) if mode != "off" else (100, 116, 139, 255)
+    d.rounded_rectangle([8, 12, 56, 42], radius=5, outline=monitor_color, width=5)
+    d.rectangle([26, 46, 38, 52], fill=monitor_color)
+    d.rectangle([18, 52, 46, 56], fill=monitor_color)
+    d.ellipse([40, 4, 60, 24], fill=dot_color, outline=(255, 255, 255, 255), width=1)
     return img
 
 
@@ -1906,25 +1918,27 @@ class TrackerApp:
                 else:
                     self.conn_status_var.set("Checking connection…")
 
+            tray_mode = "off"
             if s.get("last_error"):
                 self.status_var.set("⚠ Connection issue")
                 self.detail_var.set(s["last_error"])
+                tray_mode = "off"
             elif s.get("enabled"):
                 self.status_var.set("🟢 Tracking Active")
-                # Deliberately doesn't show the capture interval or last-capture
-                # time to the employee — that level of detail about exactly
-                # when/how often screenshots are taken is HR/Admin-facing only
-                # (see TrackingView.tsx), not something surfaced in this app.
                 self.detail_var.set("Your screen activity is being monitored for this shift, per your employer's tracking policy.")
+                tray_mode = "active"
             elif s.get("enabled_by_hr") and not s.get("shift_active"):
                 self.status_var.set("⏸ Tracking Paused")
                 self.detail_var.set("Waiting for your shift to start.\nTracking will automatically resume when you clock in.")
+                tray_mode = "paused"
             else:
                 self.status_var.set("⚪ Tracking Off")
                 self.detail_var.set("Waiting for HR/Admin to enable tracking for your account.\nNothing is being captured right now.")
+                tray_mode = "off"
+
             if self.tray_icon:
                 try:
-                    self.tray_icon.icon = build_tray_image(bool(s.get("enabled")))
+                    self.tray_icon.icon = build_tray_image(tray_mode)
                 except Exception:
                     pass
         self.root.after(2000, self._tick)
