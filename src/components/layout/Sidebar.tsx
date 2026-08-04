@@ -26,33 +26,43 @@ export function Sidebar({ role }: SidebarProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Find the scrollable main container (layout.tsx main tag has overflow-y-auto)
-    const mainContainer = document.querySelector('main.overflow-y-auto') || document.querySelector('main') || window;
+    let targetEl: HTMLElement | Window = window;
+    const mainEl = document.querySelector('main');
+    if (mainEl && mainEl.scrollHeight > mainEl.clientHeight) {
+      targetEl = mainEl;
+    }
 
     const handleScroll = () => {
-      const currentScrollY = mainContainer === window
+      const currentScrollY = targetEl === window
         ? (window.scrollY || document.documentElement.scrollTop)
-        : (mainContainer as HTMLElement).scrollTop;
+        : (targetEl as HTMLElement).scrollTop;
       
-      // Near top of page, keep visible
-      if (currentScrollY <= 20) {
+      // Near top of page (within 10px), keep visible
+      if (currentScrollY <= 10) {
         setIsNavVisible(true);
         lastScrollY.current = currentScrollY;
         return;
       }
 
-      // Hide when scrolling down, show when scrolling up
-      if (currentScrollY > lastScrollY.current + 10) {
+      const diff = currentScrollY - lastScrollY.current;
+
+      // Hide when scrolling down by more than 5px, show when scrolling up by more than 5px
+      if (diff > 5) {
         setIsNavVisible(false);
-      } else if (currentScrollY < lastScrollY.current - 10) {
+      } else if (diff < -5) {
         setIsNavVisible(true);
       }
       lastScrollY.current = currentScrollY;
     };
 
-    mainContainer.addEventListener('scroll', handleScroll, { passive: true });
-    return () => mainContainer.removeEventListener('scroll', handleScroll);
-  }, []);
+    targetEl.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      targetEl.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [pathname]);
   // Desktop-only "hide sidebar" toggle — collapses to an icon rail instead
   // of the full 256px-wide panel. Persisted so it stays collapsed across
   // page loads/navigation instead of resetting every time. Purely a
