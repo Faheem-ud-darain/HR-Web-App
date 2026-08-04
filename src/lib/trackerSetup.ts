@@ -19,7 +19,8 @@ export const TRACKER_RELEASES_URL = 'https://github.com/SPARXzeux/HR-Web-App/rel
 // browser starts downloading immediately instead of navigating to a page.
 // Filenames must stay in sync with that workflow's release asset names.
 export const TRACKER_DOWNLOAD_WINDOWS_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.exe';
-export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
+export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.dmg';
+export const TRACKER_DOWNLOAD_MAC_ZIP_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
 
 /** Best-effort OS guess from the browser, used only to default which
  * download button we highlight — both are always shown regardless. */
