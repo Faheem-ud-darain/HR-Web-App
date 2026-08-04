@@ -23,6 +23,7 @@ import {
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
 import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
+import { OtpInput } from '@/components/ui/OtpInput';
 
 export default function AuthPage() {
   // Same cold-start problem as the root page: if the WebView happens to
@@ -56,8 +57,19 @@ export default function AuthPage() {
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [forgotShowPassword, setForgotShowPassword] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
   const [forgotError, setForgotError] = useState('');
   const [forgotInfo, setForgotInfo] = useState('');
+
+  // Countdown timer for Resend OTP button rate limiting
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const timer = setInterval(() => {
+      setResendTimer((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendTimer]);
 
   const resetForgotFlow = () => {
     setForgotStep('email');
@@ -68,6 +80,8 @@ export default function AuthPage() {
     setForgotError('');
     setForgotInfo('');
     setForgotLoading(false);
+    setResendLoading(false);
+    setResendTimer(0);
   };
 
   const handleRequestOtp = async () => {
@@ -87,14 +101,54 @@ export default function AuthPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setForgotError(data?.error || 'Something went wrong. Please try again.');
+        if (data?.waitSeconds) {
+          setResendTimer(data.waitSeconds);
+        }
         return;
       }
       setForgotInfo('If an account exists for that email, a 6-digit code has been sent — check your inbox (and spam folder).');
       setForgotStep('otp');
-    } catch {
+      const cooldown = data?.cooldownSec || 30;
+      setResendTimer(cooldown);
+    } catch (err) {
+      console.error('[forgot-password] Fetch error in handleRequestOtp:', err);
       setForgotError('Could not reach the server. Check your connection and try again.');
     } finally {
       setForgotLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendTimer > 0 || resendLoading) return;
+    setForgotError('');
+    const clean = forgotEmail.trim().toLowerCase();
+    if (!clean || !clean.includes('@')) {
+      setForgotError('Enter a valid email address.');
+      return;
+    }
+    setResendLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: clean }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setForgotError(data?.error || 'Something went wrong sending a new code.');
+        if (data?.waitSeconds) {
+          setResendTimer(data.waitSeconds);
+        }
+        return;
+      }
+      setForgotInfo('A new 6-digit verification code has been sent to your email.');
+      const cooldown = data?.cooldownSec || 60;
+      setResendTimer(cooldown);
+    } catch (err) {
+      console.error('[forgot-password] Fetch error in handleResendOtp:', err);
+      setForgotError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -517,16 +571,34 @@ export default function AuthPage() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-bold text-slate-700 mb-1 block">6-digit code</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
+                <label className="text-xs font-bold text-slate-700 mb-1 block text-center">6-digit security code</label>
+                <OtpInput
+                  length={6}
                   value={forgotOtp}
-                  onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="123456"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold tracking-widest focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  onChange={setForgotOtp}
+                  disabled={forgotLoading || resendLoading}
                 />
+                <div className="flex items-center justify-between mt-2 px-1">
+                  <span className="text-[11px] text-slate-400 font-medium">Didn't receive the code?</span>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendTimer > 0 || resendLoading || forgotLoading}
+                    className="text-xs font-bold text-orange-600 hover:text-orange-700 disabled:text-slate-400 transition-colors flex items-center gap-1.5"
+                  >
+                    {resendLoading && (
+                      <svg className="animate-spin h-3.5 w-3.5 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    )}
+                    {resendLoading 
+                      ? 'Sending code…' 
+                      : resendTimer > 0 
+                        ? `Resend in ${resendTimer}s` 
+                        : 'Resend Code'}
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-700 mb-1 block">New password</label>

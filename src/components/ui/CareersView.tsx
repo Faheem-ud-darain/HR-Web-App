@@ -179,52 +179,35 @@ export function CareersView({ role }: CareersViewProps) {
   return (
     // min-w-0 is required here: this component is rendered as a flex item
     // inside both the dashboard's flex-col main content wrapper and (via
-    // Card contexts elsewhere) similar flex layouts. Without it, a flex
-    // item's default min-width is its content's intrinsic width — so the
-    // horizontally-scrollable job-card row below (which contains several
-    // 85vw-wide cards side by side) forced this whole div, and therefore
-    // the whole page, to become horizontally scrollable instead of just
-    // the intended row. min-w-0 lets this shrink to the actual viewport
-    // width so overflow-x-auto on the inner row is what scrolls, not body.
-    <div className="space-y-16 max-w-6xl mx-auto font-sans min-w-0">
+    // Card contexts elsewhere) similar flex layouts.
+    <div className="space-y-10 sm:space-y-16 max-w-6xl mx-auto font-sans min-w-0 px-2 sm:px-0">
       
-      {/* High-End Editorial Hero Section. min-w-0 + overflow-hidden + px-4
-          here are a defensive belt-and-suspenders: globals.css sets
-          `text-wrap: balance` globally on every h1/h2/h3 (for nicer
-          multi-line heading breaks elsewhere in the app), but combined with
-          `uppercase` + negative letter-spacing (`tracking-tight`) on this
-          particular heading it was overflowing past the right edge on
-          narrow phone widths instead of wrapping — the inline `textWrap:
-          'wrap'` below overrides the global balance rule (inline styles
-          always win over stylesheet rules) back to plain wrapping for just
-          this heading, and break-words/max-w-full on both the heading and
-          paragraph guarantee neither can push this section wider than the
-          screen even if that still weren't the whole story. */}
-      <section className="text-center space-y-4 py-8 px-4 min-w-0 overflow-hidden">
+      {/* High-End Editorial Hero Section */}
+      <section className="text-center space-y-4 py-4 sm:py-8 px-2 sm:px-4 min-w-0 overflow-hidden">
         <h1
-          className="text-4xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full"
+          className="text-3xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full leading-tight"
           style={{ fontFamily: 'Georgia, serif', textWrap: 'wrap' }}
         >
           Work with DelCargo
         </h1>
         <div className="h-0.5 w-12 bg-orange-600 mx-auto" />
-        <p className="max-w-2xl mx-auto text-slate-500 text-sm sm:text-base font-light leading-relaxed break-words">
+        <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-2">
           We are building the future of supply-chain technology. Join our collaborative logistics and product teams in creating beautiful, operational-grade software.
         </p>
       </section>
 
       {/* Categories Filter tab */}
-      <div className="border-b border-slate-200 flex overflow-x-auto gap-4 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar">
+      <div className="border-b border-slate-200 flex overflow-x-auto gap-3 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar pb-1 px-1 -mx-2 sm:mx-0">
         {categories.map(cat => {
           const active = selectedCategory === cat;
           return (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`pb-3 whitespace-nowrap transition-colors shrink-0 ${
+              className={`pb-3 px-1.5 whitespace-nowrap transition-colors shrink-0 text-xs sm:text-xs ${
                 active 
-                  ? 'border-b-2 border-orange-600 text-slate-900' 
-                  : 'hover:text-slate-700'
+                  ? 'border-b-2 border-orange-600 text-slate-900 font-extrabold' 
+                  : 'hover:text-slate-700 font-semibold'
               }`}
             >
               {cat}
@@ -235,21 +218,21 @@ export function CareersView({ role }: CareersViewProps) {
 
       {/* Grid listing */}
       <div className="space-y-6 min-w-0">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h2 className="text-lg font-light text-slate-900 uppercase tracking-widest" style={{ fontFamily: 'Georgia, serif' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-base sm:text-lg font-light text-slate-900 uppercase tracking-widest" style={{ fontFamily: 'Georgia, serif' }}>
             Open Positions ({filteredJobs.length})
           </h2>
           {canEdit && (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setIsApplicationsOpen(true)}
-                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform flex items-center gap-1 shadow-sm"
+                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-3 py-2 rounded-xl text-xs active:scale-97 transition-colors flex items-center gap-1.5 shadow-sm min-h-[38px]"
               >
-                <Users className="h-4 w-4" /> Applications ({applications.length})
+                <Users className="h-4 w-4 text-orange-600" /> Applications ({applications.length})
               </button>
               <button
                 onClick={() => setIsAddOpen(true)}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform flex items-center gap-1 shadow-sm"
+                className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-3.5 py-2 rounded-xl text-xs active:scale-97 transition-colors flex items-center gap-1.5 shadow-sm min-h-[38px]"
               >
                 <Plus className="h-4 w-4" /> Post Job
               </button>
@@ -257,47 +240,43 @@ export function CareersView({ role }: CareersViewProps) {
           )}
         </div>
 
-        {/* Mobile: horizontal swipe strip (edge-to-edge, no bleed-margin hack
-            since this component is embedded in containers with different
-            paddings — the public landing page vs the dashboard tab — a fixed
-            -mx-6 assumption broke alignment in whichever context didn't
-            actually have 24px of padding). Desktop: normal 2-col grid. */}
-        <div className="flex overflow-x-auto snap-x scroll-smooth [-webkit-overflow-scrolling:touch] overscroll-x-contain md:grid md:grid-cols-2 gap-4 sm:gap-6 pb-4">
+        {/* Job postings: Responsive list on mobile / 2-col grid on desktop */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {filteredJobs.map(job => (
             <div
               key={job.id}
-              className="w-[85vw] sm:w-[60vw] shrink-0 snap-center md:w-auto md:shrink bg-white border border-slate-200 hover:border-orange-200 p-6 sm:p-8 flex flex-col justify-between transition-colors"
+              className="w-full bg-white border border-slate-200 hover:border-orange-200 rounded-xl p-5 sm:p-8 flex flex-col justify-between transition-colors shadow-sm"
             >
-              <div className="space-y-6">
-                <div className="flex justify-between items-start gap-4">
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex justify-between items-start gap-3">
                   <div>
-                    <h3 className="font-semibold text-slate-900 text-lg tracking-tight">{job.title}</h3>
-                    <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold mt-1">
-                      <span className="text-orange-700 font-bold uppercase tracking-wider text-[9px]">{job.department}</span>
-                      <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {job.location}</span>
+                    <h3 className="font-bold text-slate-900 text-base sm:text-lg tracking-tight leading-snug">{job.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-semibold mt-1.5">
+                      <span className="text-orange-700 font-bold uppercase tracking-wider text-[10px] bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{job.department}</span>
+                      <span className="flex items-center gap-1 text-slate-500"><MapPin className="h-3.5 w-3.5 text-slate-400" /> {job.location}</span>
                     </div>
                   </div>
                   {canEdit && (
                     <button
                       onClick={() => handleDeleteJob(job.id)}
                       disabled={deletingJobId === job.id}
-                      className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
                     >
                       {deletingJobId === job.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </button>
                   )}
                 </div>
 
-                <p className="text-xs text-slate-500 leading-relaxed font-light">{job.description}</p>
+                <p className="text-xs sm:text-xs text-slate-600 leading-relaxed font-normal">{job.description}</p>
 
                 {job.requirements.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Requirements</p>
-                    <ul className="space-y-1">
+                    <ul className="space-y-1.5">
                       {job.requirements.map((req: any, idx: number) => (
                         <li key={idx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
-                          <span className="h-1 w-1 rounded-full bg-orange-500 mt-1.5 shrink-0" />
-                          {req}
+                          <span className="h-1.5 w-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />
+                          <span>{req}</span>
                         </li>
                       ))}
                     </ul>
@@ -305,11 +284,11 @@ export function CareersView({ role }: CareersViewProps) {
                 )}
               </div>
 
-              <div className="pt-6 border-t border-slate-100 mt-6 flex justify-end">
+              <div className="pt-4 border-t border-slate-100 mt-5 flex items-center justify-between">
                 {canApply ? (
                   <button
                     onClick={() => { setSelectedJob(job); setApplyError(''); setIsApplyOpen(true); }}
-                    className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 tracking-wider uppercase transition-colors"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-bold bg-orange-50 sm:bg-transparent text-orange-600 hover:text-orange-700 py-2.5 sm:py-0 px-4 sm:px-0 rounded-lg sm:rounded-none tracking-wider uppercase transition-colors"
                   >
                     Apply now <ArrowRight className="h-3.5 w-3.5" />
                   </button>
@@ -323,7 +302,7 @@ export function CareersView({ role }: CareersViewProps) {
           ))}
 
           {filteredJobs.length === 0 && (
-            <div className="md:col-span-2 text-center py-20 text-slate-400 font-light italic text-sm border border-dashed border-slate-200 bg-white">
+            <div className="md:col-span-2 text-center py-16 px-4 text-slate-400 font-light italic text-sm border border-dashed border-slate-200 bg-white rounded-xl">
               No vacancies listed in this category.
             </div>
           )}
@@ -333,16 +312,16 @@ export function CareersView({ role }: CareersViewProps) {
       {role === 'public' && (
         <>
           {/* About Us Section */}
-          <section className="bg-white border border-slate-200 rounded-xl p-8 sm:p-12 mb-8 shadow-sm overflow-hidden font-sans">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <section className="bg-white border border-slate-200 rounded-xl p-5 sm:p-12 mb-8 shadow-sm overflow-hidden font-sans">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
               
               {/* Left Column: Descriptive texts & stats */}
-              <div className="lg:col-span-7 space-y-6">
+              <div className="lg:col-span-7 space-y-5 sm:space-y-6">
                 <div className="space-y-2">
-                  <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 border border-orange-100 px-3 py-1 rounded-full">
+                  <span className="inline-block text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 border border-orange-100 px-3 py-1 rounded-full">
                     Global Freight & Software
                   </span>
-                  <h3 className="text-2xl font-light text-slate-900 uppercase tracking-wider mt-2" style={{ fontFamily: 'Georgia, serif' }}>
+                  <h3 className="text-xl sm:text-2xl font-light text-slate-900 uppercase tracking-wider mt-2" style={{ fontFamily: 'Georgia, serif' }}>
                     Who We Are
                   </h3>
                 </div>
@@ -355,20 +334,19 @@ export function CareersView({ role }: CareersViewProps) {
                   We maintain strategic warehousing facilities in major transit centers across North America and remote design cells in South Asia, operating with around-the-clock synchrony to keep supply lines operating optimally.
                 </p>
 
-                {/* Metrics — real counts pulled from live warehouse/team data,
-                    not marketing placeholders. */}
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100">
-                  <div>
-                    <p className="text-lg font-bold text-slate-900">{warehouseCount}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Active Warehouses</p>
+                {/* Metrics */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 border-t border-slate-100">
+                  <div className="text-center sm:text-left">
+                    <p className="text-base sm:text-lg font-bold text-slate-900">{warehouseCount}</p>
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">Active Warehouses</p>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-slate-900">{teamCount}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Departments</p>
+                  <div className="text-center sm:text-left">
+                    <p className="text-base sm:text-lg font-bold text-slate-900">{teamCount}</p>
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">Departments</p>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-slate-900">{positions.length}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Open Positions</p>
+                  <div className="text-center sm:text-left">
+                    <p className="text-base sm:text-lg font-bold text-slate-900">{positions.length}</p>
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">Open Positions</p>
                   </div>
                 </div>
               </div>
@@ -378,7 +356,7 @@ export function CareersView({ role }: CareersViewProps) {
                 <img 
                   src="/delcargo_warehouse_hightech.png" 
                   alt="High Tech Warehouse" 
-                  className="w-full h-64 object-cover object-center group-hover:scale-103 transition-transform duration-500"
+                  className="w-full h-48 sm:h-64 object-cover object-center group-hover:scale-103 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex flex-col justify-end p-4">
                   <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Operations Hub</p>
@@ -390,34 +368,34 @@ export function CareersView({ role }: CareersViewProps) {
           </section>
 
           {/* Culture & Benefits Section */}
-          <section className="bg-slate-50/50 py-12 px-6 sm:px-12 border border-slate-200 space-y-8">
-          <div className="text-center space-y-2">
-            <h3 className="text-xl font-light text-slate-900 uppercase tracking-widest" style={{ fontFamily: 'Georgia, serif' }}>
-              Life at DelCargo
-            </h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Perks & Compensation</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-8 text-center sm:text-left">
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Good Salary</h4>
-              <p className="text-xs text-slate-500 leading-relaxed font-light">We offer competitive salaries calibrated for regional standards, with guaranteed annual increments.</p>
+          <section className="bg-slate-50/50 py-8 sm:py-12 px-5 sm:px-12 border border-slate-200 rounded-xl space-y-6 sm:space-y-8">
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg sm:text-xl font-light text-slate-900 uppercase tracking-widest" style={{ fontFamily: 'Georgia, serif' }}>
+                Life at DelCargo
+              </h3>
+              <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Perks & Compensation</p>
             </div>
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Accrued PTOs</h4>
-              <p className="text-xs text-slate-500 leading-relaxed font-light">Accrue leave balance every month with cashing out settlements.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-left">
+              <div className="space-y-1.5 bg-white sm:bg-transparent p-4 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Good Salary</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light">We offer competitive salaries calibrated for regional standards, with guaranteed annual increments.</p>
+              </div>
+              <div className="space-y-1.5 bg-white sm:bg-transparent p-4 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Accrued PTOs</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light">Accrue leave balance every month with cashing out settlements.</p>
+              </div>
+              <div className="space-y-1.5 bg-white sm:bg-transparent p-4 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Learning & Tech</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light">Collaborate using modern architectures, framework toolsets, and clean design structures.</p>
+              </div>
+              <div className="space-y-1.5 bg-white sm:bg-transparent p-4 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Parental Leaves</h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light">Gender-balanced opportunities including fully paid Parental Leaves.</p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Learning & Tech</h4>
-              <p className="text-xs text-slate-500 leading-relaxed font-light">Collaborate using modern architectures, framework toolsets, and clean design structures.</p>
-            </div>
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">Parental Leaves</h4>
-              <p className="text-xs text-slate-500 leading-relaxed font-light">Gender-balanced opportunities including fully paid Parental Leaves.</p>
-            </div>
-          </div>
-        </section>
-      </>
-    )}
+          </section>
+        </>
+      )}
 
       {role === 'employee' && (
         /* Referral Program Info Block */

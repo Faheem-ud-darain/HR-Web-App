@@ -24,8 +24,27 @@ interface OtpRecord {
   attempts: number;
 }
 
+interface RateLimitRecord {
+  count: number;
+  lastSentAt: number; // epoch ms
+  resetAt: number; // epoch ms (midnight / 24h reset)
+}
+
+// Progressive delay schedule in seconds:
+// 1st request -> 30s delay before 2nd request allowed
+// 2nd request -> 60s delay before 3rd request allowed
+// 3rd request -> 120s (2m) delay before 4th request allowed
+// 4th request -> 240s (4m) delay before 5th request allowed
+// 5th request -> 300s (5m) delay before next attempt
+const COOLDOWN_DELAYS_SEC = [30, 60, 120, 240, 300];
+const MAX_DAILY_OTPS = 5;
+
 function kvKey(email: string): string {
   return `password_reset_${email.toLowerCase().trim()}`;
+}
+
+function rateLimitKey(email: string): string {
+  return `otp_ratelimit_${email.toLowerCase().trim()}`;
 }
 
 async function pbFetch(path: string, init?: RequestInit): Promise<any> {
@@ -84,11 +103,54 @@ function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-export async function createAndStoreOtp(email: string): Promise<string> {
+export type CreateOtpResult =
+  | { ok: true; otp: string; cooldownSec: number; count: number }
+  | { ok: false; reason: 'daily_limit_exceeded'; waitSeconds: number }
+  | { ok: false; reason: 'cooldown_active'; waitSeconds: number };
+
+export async function createAndStoreOtp(email: string): Promise<CreateOtpResult> {
+  const now = Date.now();
+  const rlKey = rateLimitKey(email);
+  const existingRl = await getKvRecord(rlKey);
+
+  let rl: RateLimitRecord = existingRl?.value || { count: 0, lastSentAt: 0, resetAt: now + 24 * 60 * 60 * 1000 };
+
+  // Reset counter if 24 hours have passed since reset window
+  if (now > rl.resetAt) {
+    rl = { count: 0, lastSentAt: 0, resetAt: now + 24 * 60 * 60 * 1000 };
+  }
+
+  // Enforcement 1: Maximum 5 OTPs per 24 hours
+  if (rl.count >= MAX_DAILY_OTPS) {
+    const waitSeconds = Math.ceil((rl.resetAt - now) / 1000);
+    return { ok: false, reason: 'daily_limit_exceeded', waitSeconds };
+  }
+
+  // Enforcement 2: Progressive Cooldown Timers (30s, 60s, 120s, 240s, 300s)
+  if (rl.count > 0 && rl.lastSentAt > 0) {
+    const requiredDelaySec = COOLDOWN_DELAYS_SEC[Math.min(rl.count - 1, COOLDOWN_DELAYS_SEC.length - 1)];
+    const elapsedSec = (now - rl.lastSentAt) / 1000;
+    if (elapsedSec < requiredDelaySec) {
+      const waitSeconds = Math.ceil(requiredDelaySec - elapsedSec);
+      return { ok: false, reason: 'cooldown_active', waitSeconds };
+    }
+  }
+
   const otp = generateOtp();
-  const record: OtpRecord = { otp, expiresAt: Date.now() + OTP_TTL_MS, attempts: 0 };
+  const record: OtpRecord = { otp, expiresAt: now + OTP_TTL_MS, attempts: 0 };
   await setKvRecord(kvKey(email), record);
-  return otp;
+
+  // Update Rate Limit record
+  const newCount = rl.count + 1;
+  const nextCooldownSec = COOLDOWN_DELAYS_SEC[Math.min(newCount - 1, COOLDOWN_DELAYS_SEC.length - 1)];
+  const updatedRl: RateLimitRecord = {
+    count: newCount,
+    lastSentAt: now,
+    resetAt: rl.resetAt,
+  };
+  await setKvRecord(rlKey, updatedRl);
+
+  return { ok: true, otp, cooldownSec: nextCooldownSec, count: newCount };
 }
 
 export type VerifyOtpResult =

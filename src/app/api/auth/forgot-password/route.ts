@@ -40,10 +40,26 @@ export async function POST(req: NextRequest) {
       return GENERIC_OK;
     }
 
-    const otp = await createAndStoreOtp(profile.email);
+    const otpResult = await createAndStoreOtp(profile.email);
+
+    if (!otpResult.ok) {
+      if (otpResult.reason === 'daily_limit_exceeded') {
+        const hours = Math.ceil(otpResult.waitSeconds / 3600);
+        return NextResponse.json(
+          { error: `Daily limit reached (5/5 codes requested). Please try again in ~${hours} hours or contact HR.`, waitSeconds: otpResult.waitSeconds },
+          { status: 429 }
+        );
+      }
+      if (otpResult.reason === 'cooldown_active') {
+        return NextResponse.json(
+          { error: `Please wait ${otpResult.waitSeconds} seconds before requesting another code.`, waitSeconds: otpResult.waitSeconds },
+          { status: 429 }
+        );
+      }
+    }
 
     try {
-      await sendOtpEmail(profile.email, otp);
+      await sendOtpEmail(profile.email, otpResult.otp);
     } catch (emailErr) {
       console.error('[forgot-password] Failed to send OTP email:', emailErr);
       return NextResponse.json(
@@ -52,7 +68,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return GENERIC_OK;
+    return NextResponse.json({
+      message: 'If an account exists for that email, a reset code has been sent.',
+      cooldownSec: otpResult.cooldownSec,
+      requestCount: otpResult.count,
+    });
   } catch (err) {
     console.error('[forgot-password] Unexpected error:', err);
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
