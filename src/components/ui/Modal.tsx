@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { pushModal, popModal } from '@/lib/modalStack';
+import { triggerHaptic } from '@/lib/haptics';
 
 interface ModalProps {
   isOpen: boolean;
@@ -79,7 +80,11 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
   useEffect(() => {
     if (isOpen) {
       pushModal();
-      return () => popModal();
+      triggerHaptic.medium();
+      return () => {
+        popModal();
+        triggerHaptic.light();
+      };
     }
   }, [isOpen]);
 

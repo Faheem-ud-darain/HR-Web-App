@@ -7,6 +7,7 @@ import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useKVByPr
 import { getSessionEmail, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 import { useAnyModalOpen } from '@/lib/modalStack';
+import { triggerHaptic } from '@/lib/haptics';
 
 interface SidebarProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead';
@@ -366,6 +367,7 @@ export function Sidebar({ role }: SidebarProps) {
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={() => triggerHaptic.light()}
                 className="flex items-center justify-center relative active:scale-95 transition-transform"
               >
                 {isActive ? (
@@ -384,7 +386,7 @@ export function Sidebar({ role }: SidebarProps) {
           })}
           
           <button
-            onClick={() => setIsMobileMenuOpen(true)}
+            onClick={() => { triggerHaptic.light(); setIsMobileMenuOpen(true); }}
             className="flex items-center justify-center relative active:scale-95 transition-transform"
           >
             {isMobileMenuOpen ? (
