@@ -81,6 +81,8 @@ export function SplashScreenOverlay() {
       // applies on its own.
       import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
         StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+        // Style.Dark in Capacitor means "dark content / dark icons" (for light backgrounds)
+        // Style.Light in Capacitor means "light content / white icons" (for dark backgrounds)
         StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
       }).catch(() => {
         // Plugin not installed/synced into this build yet — safe to ignore.

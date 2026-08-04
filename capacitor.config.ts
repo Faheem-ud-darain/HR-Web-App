@@ -72,6 +72,8 @@ const config: CapacitorConfig = {
     // legible against TopNav's light/translucent background
     // (bg-white/85 backdrop-blur-md). See StatusBarInit in
     // SplashScreenOverlay.tsx for the JS-side call this config pairs with.
+    // iOS notch/Dynamic Island status bar contrast fix:
+    // Forces dark status bar icons/text (clock, battery, Wi-Fi) on white/light app backgrounds
     StatusBar: {
       overlaysWebView: true,
       style: 'DARK',
