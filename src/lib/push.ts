@@ -99,6 +99,16 @@ async function initNative(externalId?: string): Promise<void> {
   // silent "provisional" permission — we want an explicit yes/no.
   await OneSignal.Notifications.requestPermission(false);
 
+  // Register Notification Click Event Listener for Deep-Linking Navigation
+  OneSignal.Notifications.addEventListener('click', (event: any) => {
+    const data = event?.notification?.additionalData;
+    const launchUrl = data?.url || data?.path || event?.notification?.launchURL;
+    if (launchUrl && typeof window !== 'undefined') {
+      console.log('[push] Deep-linking notification clicked:', launchUrl);
+      window.location.href = launchUrl;
+    }
+  });
+
   // Login (attach externalId) after permission is resolved, and again on
   // every later initPush() call (see loginPush below) — belt and suspenders
   // in case the very first login still raced the subscription being fully
