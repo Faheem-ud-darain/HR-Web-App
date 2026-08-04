@@ -1,7 +1,7 @@
 [Setup]
 AppId={{6C6F5E6E-2D6A-4C8E-9C7A-DELCARGOTRK01}
 AppName=DelCargo Tracker
-AppVersion=1.4
+AppVersion=1.9
 AppPublisher=DelCargo
 AppPublisherURL=https://delcargo.example
 DefaultDirName={localappdata}\DelCargo Tracker

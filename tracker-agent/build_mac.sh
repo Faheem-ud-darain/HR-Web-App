@@ -47,7 +47,7 @@ cat << 'EOF' > mac_info.plist
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.8</string>
+    <string>1.9</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © DelCargo. All rights reserved.</string>
     <key>NSScreenCaptureUsageDescription</key>

@@ -96,7 +96,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "1.8"
+APP_VERSION = "1.9"
 GITHUB_REPO = "SPARXzeux/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
