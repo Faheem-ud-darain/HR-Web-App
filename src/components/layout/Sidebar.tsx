@@ -18,6 +18,35 @@ export function Sidebar({ role }: SidebarProps) {
   const [isTeamLead, setIsTeamLead] = useState(false);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  // Auto-hide mobile bottom nav bar on scroll down, show on scroll up
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY || document.documentElement.scrollTop;
+      
+      // Near top of page, keep visible
+      if (currentScrollY <= 20) {
+        setIsNavVisible(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // Hide when scrolling down, show when scrolling up
+      if (currentScrollY > lastScrollY.current + 10) {
+        setIsNavVisible(false);
+      } else if (currentScrollY < lastScrollY.current - 10) {
+        setIsNavVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   // Desktop-only "hide sidebar" toggle — collapses to an icon rail instead
   // of the full 256px-wide panel. Persisted so it stays collapsed across
   // page loads/navigation instead of resetting every time. Purely a
@@ -324,7 +353,9 @@ export function Sidebar({ role }: SidebarProps) {
           so this is exactly the original 1.5rem there. */}
       {!hideBottomNav && !anyModalOpen && (
         <div
-          className="md:hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-full shadow-lg flex justify-around items-center px-2 py-2"
+          className={`md:hidden fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-full shadow-lg flex justify-around items-center px-2 py-2 transition-all duration-300 ease-in-out ${
+            isNavVisible ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-28 opacity-0 pointer-events-none'
+          }`}
         >
           {mobileQuickLinks.map((item) => {
             const isActive = pathname === item.href;
