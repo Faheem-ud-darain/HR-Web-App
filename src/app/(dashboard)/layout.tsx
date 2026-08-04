@@ -25,6 +25,7 @@ import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
 import { AbsentPopup } from '@/components/ui/AbsentPopup';
 import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
+import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload } from 'lucide-react';
 
@@ -1040,6 +1041,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden relative">
+      <NativeBackButtonHandler />
       <Sidebar role={role} />
       {/* min-w-0 here too: this is itself a flex item of the row above
           (alongside Sidebar), and without it a wide descendant (e.g. the
