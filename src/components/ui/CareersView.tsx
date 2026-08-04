@@ -180,31 +180,31 @@ export function CareersView({ role }: CareersViewProps) {
     // min-w-0 is required here: this component is rendered as a flex item
     // inside both the dashboard's flex-col main content wrapper and (via
     // Card contexts elsewhere) similar flex layouts.
-    <div className="space-y-10 sm:space-y-16 max-w-6xl mx-auto font-sans min-w-0 px-2 sm:px-0">
+    <div className="space-y-8 sm:space-y-16 max-w-6xl mx-auto font-sans w-full min-w-0 px-1 sm:px-0 overflow-x-hidden">
       
       {/* High-End Editorial Hero Section */}
-      <section className="text-center space-y-4 py-4 sm:py-8 px-2 sm:px-4 min-w-0 overflow-hidden">
+      <section className="text-center space-y-3 py-3 sm:py-8 px-2 sm:px-4 w-full min-w-0 overflow-hidden">
         <h1
-          className="text-3xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full leading-tight"
+          className="text-2xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full leading-snug"
           style={{ fontFamily: 'Georgia, serif', textWrap: 'wrap' }}
         >
           Work with DelCargo
         </h1>
-        <div className="h-0.5 w-12 bg-orange-600 mx-auto" />
-        <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-2">
+        <div className="h-0.5 w-10 sm:w-12 bg-orange-600 mx-auto" />
+        <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-1">
           We are building the future of supply-chain technology. Join our collaborative logistics and product teams in creating beautiful, operational-grade software.
         </p>
       </section>
 
       {/* Categories Filter tab */}
-      <div className="border-b border-slate-200 flex overflow-x-auto gap-3 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar pb-1 px-1 -mx-2 sm:mx-0">
+      <div className="border-b border-slate-200 flex overflow-x-auto gap-2.5 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar pb-1.5 px-1 max-w-full">
         {categories.map(cat => {
           const active = selectedCategory === cat;
           return (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`pb-3 px-1.5 whitespace-nowrap transition-colors shrink-0 text-xs sm:text-xs ${
+              className={`pb-2.5 px-2 whitespace-nowrap transition-colors shrink-0 text-xs ${
                 active 
                   ? 'border-b-2 border-orange-600 text-slate-900 font-extrabold' 
                   : 'hover:text-slate-700 font-semibold'

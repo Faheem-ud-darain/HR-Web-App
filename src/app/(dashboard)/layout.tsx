@@ -1050,18 +1050,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           is a second, explicit guard against the same failure mode. */}
       <div className="flex flex-col flex-1 w-full min-w-0 overflow-hidden overflow-x-hidden">
         <TopNav />
-        <main className={`flex-1 min-w-0 overflow-x-hidden ${
+        <main className={`flex-1 w-full min-w-0 overflow-x-hidden ${
           isChatScreen
             ? 'overflow-hidden flex flex-col p-1.5 pb-2.5 md:px-8 md:py-8'
             : isTicketsScreen
               ? 'overflow-y-auto px-4 py-4 pb-2.5 md:px-8 md:py-8'
-              : 'overflow-y-auto px-4 py-4 md:px-8 md:py-8 pb-24 md:pb-8'
+              : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-8 md:py-8 pb-28 md:pb-8'
         }`}>
           {/* key={pathname} forces PageTransition to remount on every
               nav-tab switch so its animating state (and page-enter) resets
               and re-triggers each time, not just on first load — previously
               content swapped instantly with zero motion. */}
-          <PageTransition key={pathname} className={`mx-auto min-w-0 w-full flex flex-col ${isChatScreen ? 'flex-1 h-full max-w-none' : 'max-w-6xl'}`}>
+          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${isChatScreen ? 'flex-1 h-full max-w-none' : 'max-w-6xl'}`}>
             {children}
           </PageTransition>
         </main>

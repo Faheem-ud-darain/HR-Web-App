@@ -126,6 +126,32 @@ AUTO_ABSENT_INACTIVITY_SECONDS = 35 * 60
 MAX_ERROR_DISPLAY_LEN = 140  # see _short_error() below
 
 
+# ── macOS Native Permission Helper ──────────────────────────────────────────
+def request_mac_permissions():
+    """On macOS, triggers a native system permission request for Screen Recording
+    and Accessibility if not already granted, preventing headless crash errors."""
+    if platform.system() != "Darwin":
+        return
+
+    try:
+        # Trigger an initial py_capture test to force macOS Gatekeeper / Screen Recording prompt
+        # CGPreflightScreenCaptureAccess is checked or triggered via screencapture check
+        cmd = ["screencapture", "-x", "-c"]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+    except Exception as e:
+        print(f"[macOS Permission Trigger] Warning: {e}")
+
+    try:
+        # Check accessibility API permission status via osascript
+        check_script = 'tell application "System Events" to get name of first process'
+        res = subprocess.run(["osascript", "-e", check_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0 and "not allowed" in res.stderr.lower():
+            # Trigger System Settings open to Privacy & Security -> Screen Recording
+            print("[macOS Permission] Accessibility or Screen Recording permission missing. Directing user to Settings.")
+    except Exception:
+        pass
+
+
 def _short_error(msg) -> str:
     """Truncates a raw exception/error string before it goes into the
     dashboard's status card. A long message (raw network/SSL exception text
@@ -1105,11 +1131,30 @@ class TrackerApp:
         # of silently clipping the action buttons below the visible,
         # unpressable area — which is exactly what happened with a fixed,
         # non-resizable window before this.
-        self.root.resizable(False, True)
-        self.root.minsize(440, 740)
+        self.root.resizable(True, True)
+        self.root.minsize(380, 520)
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._set_window_icon()
+
+        # Canvas-based vertical scrolling container for dynamic responsiveness across screen resolutions
+        self.main_canvas = tk.Canvas(self.root, bg=BG, highlightthickness=0, bd=0)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.main_canvas.yview)
+        self.scroll_content = tk.Frame(self.main_canvas, bg=BG)
+
+        self.scroll_win = self.main_canvas.create_window((0, 0), window=self.scroll_content, anchor="nw")
+        self.main_canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.scroll_content.bind("<Configure>", self._on_scroll_configure)
+        self.main_canvas.bind("<Configure>", self._on_canvas_resize)
+        
+        # Mousewheel scroll binding for macOS & Windows
+        self.root.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.root.bind_all("<Button-4>", self._on_mousewheel)
+        self.root.bind_all("<Button-5>", self._on_mousewheel)
+
+        self.main_canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
 
         self.cfg = load_config()
         self.state_lock = threading.Lock()
@@ -1161,6 +1206,18 @@ class TrackerApp:
 
         self.root.after(500, self._tick)
 
+    def _on_scroll_configure(self, _evt=None):
+        self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
+
+    def _on_canvas_resize(self, evt):
+        self.main_canvas.itemconfig(self.scroll_win, width=evt.width)
+
+    def _on_mousewheel(self, evt):
+        if platform.system() == "Darwin":
+            self.main_canvas.yview_scroll(int(-1 * (evt.delta)), "units")
+        else:
+            self.main_canvas.yview_scroll(int(-1 * (evt.delta / 120)), "units")
+
     # ---------- window icon ----------
 
     def _set_window_icon(self):
@@ -1199,7 +1256,7 @@ class TrackerApp:
         # (unlike tk.Label) — it has to be set on the style instead, or Tcl
         # raises "unknown option -wraplength". Used for the consent
         # checkbox's longer text on the setup screen.
-        style.configure("Wrap.Card.TCheckbutton", background=CARD_BG, foreground=INK, font=(FONT, 9, "bold"), wraplength=350)
+        style.configure("Wrap.Card.TCheckbutton", background=CARD_BG, foreground=INK, font=(FONT, 9, "bold"), wraplength=340)
         style.map("Wrap.Card.TCheckbutton", background=[("active", CARD_BG)])
 
     def _brand_header(self, parent, subtitle=None):
@@ -1213,14 +1270,14 @@ class TrackerApp:
         tk.Label(row, text=" Tracker", font=(FONT, 17, "bold"), bg=BG, fg=ACCENT).pack(side="left")
         if subtitle:
             tk.Label(parent, text=subtitle, font=(FONT, 9), bg=BG, fg=MUTED,
-                     wraplength=380, justify="left").pack(anchor="w", pady=(2, 0))
+                     wraplength=340, justify="left").pack(anchor="w", pady=(2, 0))
 
     # ---------- setup screen ----------
 
     def _build_setup_screen(self):
-        for w in self.root.winfo_children():
+        for w in self.scroll_content.winfo_children():
             w.destroy()
-        frame = tk.Frame(self.root, bg=BG, padx=28, pady=28)
+        frame = tk.Frame(self.scroll_content, bg=BG, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
 
         self._brand_header(frame, "Paste the one-time setup code your HR/Admin gave you (Screen Tracking → Setup Agent).")
@@ -1350,9 +1407,9 @@ class TrackerApp:
     # ---------- dashboard screen ----------
 
     def _build_dashboard(self):
-        for w in self.root.winfo_children():
+        for w in self.scroll_content.winfo_children():
             w.destroy()
-        frame = tk.Frame(self.root, bg=BG, padx=28, pady=24)
+        frame = tk.Frame(self.scroll_content, bg=BG, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
 
         self._brand_header(frame)
@@ -1996,6 +2053,9 @@ class TrackerApp:
 
 
 def main():
+    # Trigger macOS native permission prompt on launch if running on Darwin
+    request_mac_permissions()
+
     # The very first thing this app does on every launch: check GitHub for a
     # newer release and offer to update before anything else happens (before
     # the single-instance check, before loading saved config, before any

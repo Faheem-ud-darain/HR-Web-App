@@ -51,12 +51,17 @@ jobs:
       - name: Generate icon.icns / icon.png from "Tracker Icon.png"
         run: python3 generate_icons.py
       - run: pyinstaller --onefile --windowed --name "DelCargo Tracker" --icon "icon.icns" --add-data "icon.png:." agent_gui.py
-      - name: Zip the .app bundle
-        run: cd dist && zip -r "DelCargo-Tracker-Mac.zip" "DelCargo Tracker.app"
+      - name: Zip the .app bundle and build DMG installer
+        run: |
+          cd dist
+          hdiutil create -volname "DelCargo Tracker" -srcfolder "DelCargo Tracker.app" -ov -format UDZO "DelCargo_Tracker_Setup.dmg"
+          zip -r "DelCargo-Tracker-Mac.zip" "DelCargo Tracker.app"
       - uses: actions/upload-artifact@v4
         with:
           name: DelCargo-Tracker-Mac
-          path: tracker-agent/dist/DelCargo-Tracker-Mac.zip
+          path: |
+            tracker-agent/dist/DelCargo-Tracker-Mac.zip
+            tracker-agent/dist/DelCargo_Tracker_Setup.dmg
 
   release:
     needs: [build-windows, build-macos]
@@ -74,4 +79,5 @@ jobs:
           files: |
             artifacts/DelCargo-Tracker-Windows/DelCargo_Tracker_Setup.exe
             artifacts/DelCargo-Tracker-Mac/DelCargo-Tracker-Mac.zip
+            artifacts/DelCargo-Tracker-Mac/DelCargo_Tracker_Setup.dmg
           generate_release_notes: true
