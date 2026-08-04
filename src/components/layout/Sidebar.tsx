@@ -26,8 +26,13 @@ export function Sidebar({ role }: SidebarProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // Find the scrollable main container (layout.tsx main tag has overflow-y-auto)
+    const mainContainer = document.querySelector('main.overflow-y-auto') || document.querySelector('main') || window;
+
     const handleScroll = () => {
-      const currentScrollY = window.scrollY || document.documentElement.scrollTop;
+      const currentScrollY = mainContainer === window
+        ? (window.scrollY || document.documentElement.scrollTop)
+        : (mainContainer as HTMLElement).scrollTop;
       
       // Near top of page, keep visible
       if (currentScrollY <= 20) {
@@ -45,8 +50,8 @@ export function Sidebar({ role }: SidebarProps) {
       lastScrollY.current = currentScrollY;
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    mainContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => mainContainer.removeEventListener('scroll', handleScroll);
   }, []);
   // Desktop-only "hide sidebar" toggle — collapses to an icon rail instead
   // of the full 256px-wide panel. Persisted so it stays collapsed across
