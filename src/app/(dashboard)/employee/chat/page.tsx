@@ -51,7 +51,6 @@ export default function EmployeeTeamChatPage() {
         currentUserEmail={userEmail}
         currentUserRole={userProfile?.role || 'employee'}
         allProfiles={allProfiles}
-        includeHrDirectChannel={true}
       />
     </div>
   );

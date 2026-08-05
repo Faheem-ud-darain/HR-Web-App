@@ -125,6 +125,9 @@ interface TeamChatViewProps {
   oversight?: boolean;
   // If true, injects a virtual "HR & Admin" DM channel for this employee.
   includeHrDirectChannel?: boolean;
+  // Controls how the channel selector looks on mobile. 'horizontal' (default)
+  // is a scrolling list of pills. 'dropdown' uses a native `<select>`.
+  mobileSelectorStyle?: 'horizontal' | 'dropdown';
 }
 
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // matches the collection's maxSize
@@ -223,7 +226,7 @@ function renderMessageText(
   });
 }
 
-export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRole, allProfiles, oversight = false, includeHrDirectChannel = false }: TeamChatViewProps) {
+export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRole, allProfiles, oversight = false, includeHrDirectChannel = false, mobileSelectorStyle = 'horizontal' }: TeamChatViewProps) {
   const me = allProfiles.find(p => p.email.toLowerCase() === currentUserEmail.toLowerCase());
   
   const teams = React.useMemo(() => {
@@ -672,7 +675,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     <div className="flex flex-col md:flex-row gap-2 md:gap-4 flex-1 h-full min-h-0">
       {/* Team selector — only shown when there's more than one team to pick from */}
       {teams.length > 1 && (
-        <div className="md:w-56 shrink-0 flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-hide px-1 md:px-0">
+        <div className={`md:w-56 shrink-0 md:flex flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-hide px-1 md:px-0 ${mobileSelectorStyle === 'dropdown' ? 'hidden' : 'flex'}`}>
           {teams.map(t => (
             <button
               key={t.id}
@@ -685,6 +688,22 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               {oversight && <span className={`block text-[9px] font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-400'}`}>{t.members.length} members</span>}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Mobile Dropdown selector (only shown on mobile when requested) */}
+      {teams.length > 1 && mobileSelectorStyle === 'dropdown' && (
+        <div className="md:hidden shrink-0 px-1">
+          <select
+            value={activeTeamId || ''}
+            onChange={(e) => setActiveTeamId(e.target.value)}
+            className="w-full bg-slate-100 border-none text-slate-700 text-sm font-bold rounded-xl px-4 py-3 appearance-none outline-none focus:ring-2 focus:ring-orange-500/50"
+            style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', backgroundPosition: 'right 1rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1rem' }}
+          >
+            {teams.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
         </div>
       )}
 

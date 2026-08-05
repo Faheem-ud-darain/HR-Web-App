@@ -209,6 +209,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Career Board', href: '/employee/careers', icon: Briefcase },
     { name: 'Support Tickets', href: '/employee/tickets', icon: HelpCircle },
     { name: 'Team Chat', href: '/employee/chat', icon: MessageSquare },
+    { name: 'HR Messages', href: '/employee/direct-messages', icon: MessageCircle },
     ...(isTeamLead ? [{ name: 'Team Tasks ⭐', href: '/employee/tasks', icon: Star }] : []),
     // Read-only screenshots/mouse-activity viewer for their own teammates —
     // Team Leads can never change tracking settings, only view. See

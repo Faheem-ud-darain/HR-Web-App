@@ -82,6 +82,7 @@ export function DirectMessagesView({ allProfiles, currentUserEmail, currentUserR
           currentUserRole={currentUserRole}
           allProfiles={allProfiles}
           oversight={false} // oversight=false because HR/Admin are legitimate participants in these DM threads
+          mobileSelectorStyle="dropdown"
         />
       ) : (
         <div className="flex-1 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400">
