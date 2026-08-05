@@ -199,6 +199,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Support Tickets', href: '/hr/tickets', icon: HelpCircle },
     { name: 'Team Chats', href: '/hr/team-chats', icon: MessageSquare },
     { name: 'Direct Messages', href: '/hr/direct-messages', icon: MessageCircle },
+    { name: 'App Releases', href: '/hr/app-releases', icon: Smartphone },
   ];
 
   const employeeItems = [
