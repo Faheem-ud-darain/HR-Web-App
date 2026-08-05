@@ -5,6 +5,7 @@ import { ToastNotification } from "@/components/ui/ToastNotification";
 import { PushWebScript } from "@/components/PushWebScript";
 import { SplashScreenOverlay } from "@/components/SplashScreenOverlay";
 import Providers from "./providers";
+import { ForceUpdateProvider } from "@/components/ui/ForceUpdateProvider";
 
 // Display font — headings, page titles, stat numbers. Space Grotesk's
 // distinctive grotesk character (wide apertures, technical feel) is what
@@ -85,7 +86,9 @@ export default function RootLayout({
         <PushWebScript />
         <Providers>
           <ToastNotification />
-          {children}
+          <ForceUpdateProvider>
+            {children}
+          </ForceUpdateProvider>
         </Providers>
       </body>
     </html>

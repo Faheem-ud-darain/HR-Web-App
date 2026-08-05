@@ -22,7 +22,7 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle, Smartphone } from 'lucide-react';
 import { OtpInput } from '@/components/ui/OtpInput';
 
 export default function AuthPage() {
@@ -516,6 +516,24 @@ export default function AuthPage() {
           </CardContent>
         </div>
       </Card>
+
+      <a
+        href="https://pb.delcargo.us/api/files/hr_app_releases/latest/app.apk"
+        onClick={async (e) => {
+          e.preventDefault();
+          const { appReleaseActions } = await import('@/lib/appReleases');
+          const latest = await appReleaseActions.getLatestRelease();
+          if (latest) {
+            window.open(appReleaseActions.getApkUrl(latest), '_blank');
+          } else {
+            alert('No app release available yet.');
+          }
+        }}
+        className="mt-6 flex items-center justify-center gap-2 w-full max-w-[320px] bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg active:scale-95"
+      >
+        <Smartphone className="h-5 w-5" />
+        Download Android App
+      </a>
 
       <Link
         href="/privacy"

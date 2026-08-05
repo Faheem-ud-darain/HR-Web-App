@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, ChevronLeft, ChevronRight, UserX, UserCheck } from 'lucide-react';
+import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download } from 'lucide-react';
 import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useKVByPrefix, hasUnseenTicketActivity, hasUnseenMessageActivity, TrackingSettings } from '@/lib/hrData';
 import { getSessionEmail, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
@@ -182,6 +182,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Support Tickets', href: '/admin/tickets', icon: HelpCircle },
     { name: 'Team Chats', href: '/admin/team-chats', icon: MessageSquare },
     { name: 'Direct Messages', href: '/admin/direct-messages', icon: MessageCircle },
+    { name: 'App Releases', href: '/admin/app-releases', icon: Smartphone },
   ];
 
   const hrItems = [
@@ -338,17 +339,36 @@ export function Sidebar({ role }: SidebarProps) {
           <Link
             href={policyHref}
             title={isCollapsed ? 'Policy Handbook' : undefined}
-            className={`flex items-center py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 ${
+            className={`flex w-full items-center py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 mb-1 ${
               isCollapsed ? 'justify-center px-0' : 'px-3'
-            } ${
-              isPolicyActive
-                ? 'bg-orange-50 text-orange-700'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
+            } ${isPolicyActive ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50'}`}
           >
             <BookOpen className={`h-[18px] w-[18px] ${isCollapsed ? '' : 'mr-3'} ${isPolicyActive ? 'text-orange-600' : 'text-slate-400'}`} />
             {!isCollapsed && 'Policy Handbook'}
           </Link>
+          
+          {/* Download App (only shown on web, handled via CSS hiding on native if needed, or just always show) */}
+          <a
+            href="https://pb.delcargo.us/api/files/hr_app_releases/latest/app.apk" // Fallback generic URL, ideally dynamic but we don't block render.
+            onClick={async (e) => {
+              e.preventDefault();
+              const { appReleaseActions } = await import('@/lib/appReleases');
+              const latest = await appReleaseActions.getLatestRelease();
+              if (latest) {
+                window.open(appReleaseActions.getApkUrl(latest), '_blank');
+              } else {
+                alert('No app release available yet.');
+              }
+            }}
+            title={isCollapsed ? 'Download App' : undefined}
+            className={`flex w-full items-center py-2.5 rounded-lg text-sm font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors duration-200 mb-2 ${
+              isCollapsed ? 'justify-center px-0' : 'px-3'
+            }`}
+          >
+            <Smartphone className={`h-[18px] w-[18px] text-emerald-500 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && 'Download App'}
+          </a>
+
           <button
             onClick={handleSignOut}
             title={isCollapsed ? 'Sign out' : undefined}
