@@ -372,7 +372,7 @@ export const MAX_USER_SESSION_DEVICES = 2;
 // abandoned (browser/tab closed without hitting Log Out) and doesn't count
 // against the cap — so an employee whose old laptop just silently died
 // isn't ever permanently locked out of one of their 2 slots.
-export const USER_SESSION_STALE_MS = 90 * 1000;
+export const USER_SESSION_STALE_MS = 15 * 1000;
 const userSessionKeyFor = (email: string) => `user_session_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
 // `imageUrl` points at either a real PocketBase file URL (hr_screenshots

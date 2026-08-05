@@ -271,7 +271,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     };
     check();
-    const interval = setInterval(check, 30000);
+    const interval = setInterval(check, 5000);
     return () => { cancelled = true; clearInterval(interval); };
   }, [email, role, router]);
 
