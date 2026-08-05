@@ -2328,10 +2328,21 @@ export const hrActions = {
       return Array.isArray(raw) ? raw : [];
     } catch { return []; }
   },
+  getDeletedAbsenceIds: async (): Promise<string[]> => {
+    try {
+      const raw = await pbGetKV('hr_absence_deleted_v1');
+      return Array.isArray(raw) ? raw : [];
+    } catch { return []; }
+  },
   deleteAbsenceRecord: async (recordId: string): Promise<void> => {
     const all = await hrActions.getAbsenceRecords();
     const next = all.filter(a => a.id !== recordId);
     await pbSetKV('hr_absence_records_v1', next);
+    // Track deleted IDs so background runAbsenceCheck never re-marks them absent
+    const deletedIds = await hrActions.getDeletedAbsenceIds();
+    if (!deletedIds.includes(recordId)) {
+      await pbSetKV('hr_absence_deleted_v1', [...deletedIds, recordId]);
+    }
   },
   // Marks a record as seen so AbsentPopup stops showing it — called by the
   // employee dismissing the popup, never by HR/Admin (they can always see
@@ -2364,19 +2375,10 @@ export const hrActions = {
   runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
     const INACTIVITY_THRESHOLD_SECONDS = 35 * 60;
     const todayStr = getNYDateString(new Date());
-    // FIX (2026-08-04): this used to scan from the start of the current
-    // calendar month, which meant the very first time this ran after
-    // deploying — including just opening the HR/Admin dashboard on a local
-    // dev server pointed at the real production PocketBase — it
-    // retroactively marked every already-passed weekday this month absent
-    // and deducted 2 days' pay for each one, before the feature had ever
-    // actually been "live." Anchoring to a fixed go-live date instead means
-    // no date before this ever gets evaluated, no matter when in the month
-    // this code first runs. Update this to the actual date you push/deploy
-    // this if it ends up being a different day.
     const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
     const existingRecords = await hrActions.getAbsenceRecords();
-    const existingIds = new Set(existingRecords.map(r => r.id));
+    const deletedIds = await hrActions.getDeletedAbsenceIds();
+    const ignoredIds = new Set([...existingRecords.map(r => r.id), ...deletedIds]);
     const newRecords: AbsenceRecord[] = [];
 
     for (const emp of employees) {
@@ -2420,7 +2422,7 @@ export const hrActions = {
         if (joinedStr && dateStr < joinedStr) continue;
         if (!isWeekday(dateStr)) continue;
         const recordId = `${emp.email.toLowerCase()}_${dateStr}`;
-        if (existingIds.has(recordId)) continue; // already decided, one way or the other
+        if (ignoredIds.has(recordId)) continue; // already decided or manually deleted by HR/Admin
 
         const hadShift = shiftDatesWithInactivity.has(dateStr);
         const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
