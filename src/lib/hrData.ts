@@ -2612,8 +2612,8 @@ export const hrActions = {
     // employee's email (e.g. "bob@x.com" inside "bob@x.company.com").
     const filterParts: string[] = [];
     if (filters?.employeeEmail) filterParts.push(`employee_email ~ "${filters.employeeEmail.replace(/"/g, '\\"')}"`);
-    if (filters?.sinceISO) filterParts.push(`captured_at >= "${filters.sinceISO}"`);
-    if (filters?.untilISO) filterParts.push(`captured_at <= "${filters.untilISO}"`);
+    if (filters?.sinceISO) filterParts.push(`captured_at >= "${filters.sinceISO.replace('T', ' ').replace('Z', '')}"`);
+    if (filters?.untilISO) filterParts.push(`captured_at <= "${filters.untilISO.replace('T', ' ').replace('Z', '')}"`);
     const records = await pbList('hr_screenshots', {
       sort: '-captured_at',
       ...(filterParts.length ? { filter: filterParts.join(' && ') } : {}),
@@ -2665,8 +2665,8 @@ export const hrActions = {
     // server-side, exact check below guards against substring false-matches.
     const filterParts: string[] = [];
     if (filters?.employeeEmail) filterParts.push(`employee_email ~ "${filters.employeeEmail.replace(/"/g, '\\"')}"`);
-    if (filters?.sinceISO) filterParts.push(`start_at >= "${filters.sinceISO}"`);
-    if (filters?.untilISO) filterParts.push(`start_at <= "${filters.untilISO}"`);
+    if (filters?.sinceISO) filterParts.push(`start_at >= "${filters.sinceISO.replace('T', ' ').replace('Z', '')}"`);
+    if (filters?.untilISO) filterParts.push(`start_at <= "${filters.untilISO.replace('T', ' ').replace('Z', '')}"`);
     const records = await pbList('hr_inactivity_logs', {
       sort: '-start_at',
       ...(filterParts.length ? { filter: filterParts.join(' && ') } : {}),
