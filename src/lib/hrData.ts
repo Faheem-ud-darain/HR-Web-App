@@ -924,7 +924,11 @@ export function useTimesheets() {
 // Fetches every KV row whose key matches a prefix - used for tracking
 // settings / heartbeats / screenshots, which don't have dedicated tables.
 export function useKVByPrefix(prefix: string) {
-  return useQuery({ queryKey: ['hr_kv', prefix], queryFn: () => pbGetKVByPrefix(prefix) });
+  return useQuery({
+    queryKey: ['hr_kv', prefix],
+    queryFn: () => pbGetKVByPrefix(prefix),
+    refetchInterval: 5000,
+  });
 }
 
 // Convenience: call inside a component to get a function that invalidates
