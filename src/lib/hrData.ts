@@ -2101,12 +2101,51 @@ export const hrActions = {
   // employee this month — recomputed fresh every render like everything
   // else here, just from a different, richer source than a live count.
   computePayrollView: (employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[] = [], absenceRecords: AbsenceRecord[] = []): PayrollRecord[] => {
-    const monthKey = getNYDateString(new Date()).slice(0, 7);
+    const today = new Date();
+    const dayOfMonth = parseInt(getNYDateString(today).split('-')[2], 10);
+    
+    // When payroll is accessed during the processing window (Days 1–3 of the month),
+    // the target month being processed is the PREVIOUS month (e.g. Aug 1-3 processes July).
+    let targetMonthDate = new Date(today);
+    if (dayOfMonth >= 1 && dayOfMonth <= 3) {
+      targetMonthDate.setMonth(targetMonthDate.getMonth() - 1);
+    }
+    const targetMonthKey = getNYDateString(targetMonthDate).slice(0, 7);
+
     return employees
       .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
       .map(emp => {
         const existing = existingPayroll.find(p => p.employeeId === emp.id);
         const pendingIncrement = getPendingIncrement(emp);
+
+        // 1. Calculate Base Salary for Current Month (Handling Mid-Month Joiners)
+        let effectiveBaseSalary = emp.baseSalary;
+        let isFirstMonthLateJoiner = false;
+
+        if (emp.joinedDate) {
+          const joinedDateObj = new Date(emp.joinedDate);
+          const joinedMonthKey = getNYDateString(joinedDateObj).slice(0, 7);
+
+          // Check if employee joined in this current month
+          if (joinedMonthKey === targetMonthKey) {
+            const joinDayOfMonth = parseInt(getNYDateString(joinedDateObj).split('-')[2], 10);
+
+            // Rule:
+            // - If joined in month's first 5 days (joinDayOfMonth <= 5): Processed normally with full base salary.
+            // - If joined after a week (joinDayOfMonth > 5): Prorated for days worked, and carried over if unpaid.
+            if (joinDayOfMonth > 5) {
+              isFirstMonthLateJoiner = true;
+              const year = joinedDateObj.getFullYear();
+              const month = joinedDateObj.getMonth();
+              const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+              const daysWorkedInMonth = totalDaysInMonth - joinDayOfMonth + 1;
+              const dailyRate = emp.baseSalary / totalDaysInMonth;
+              effectiveBaseSalary = Math.round(daysWorkedInMonth * dailyRate);
+            }
+          }
+        }
+
+        // 2. Urgent Leave Deductions
         const urgentDays = leaves
           .filter(l => l.employeeName === emp.fullName && l.type === 'Urgent' && l.status === 'approved')
           .reduce((acc, l) => {
@@ -2115,29 +2154,46 @@ export const hrActions = {
             const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
             return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
           }, 0);
-        const dailyRate = emp.baseSalary / WORKING_DAYS_PER_MONTH;
-        const urgentDeduction = Math.round(urgentDays * 2 * dailyRate);
+        const dailyRateForDeduction = emp.baseSalary / WORKING_DAYS_PER_MONTH;
+        const urgentDeduction = Math.round(urgentDays * 2 * dailyRateForDeduction);
         const onboardingPenalty = emp.onboardingCompleted ? 0 : (emp.region === 'USA' ? 10 : 200);
-        // No-call-no-show / inactivity penalty — Pakistan-region employees
-        // only (USA clocks in/out automatically via GPS geofence). Summed
-        // from real persisted AbsenceRecords for this employee this month,
-        // not recomputed independently, so it always matches exactly what
-        // the Absent Details page shows.
+
+        // 3. Absence Deductions
         const absenceDeduction = absenceRecords
-          .filter(a => a.employeeEmail.toLowerCase() === emp.email.toLowerCase() && a.date.slice(0, 7) === monthKey)
+          .filter(a => a.employeeEmail.toLowerCase() === emp.email.toLowerCase() && a.date.slice(0, 7) === targetMonthKey)
           .reduce((acc, a) => acc + a.deductionAmount, 0);
+
+        // 4. Calculate Prior Month Unpaid Salary Arrears (Rollover)
+        // If employee has unprocessed payroll from previous months (e.g. joined late in July and unpaid), carry over as Arrears
+        const priorUnpaidArrears = existingPayroll
+          .filter(p => p.employeeId === emp.id && !p.processed && p.id !== existing?.id)
+          .reduce((acc, p) => acc + (p.baseSalary + p.bonus - p.deductions + p.incrementAmount), 0);
+
+        // If employee joined late in the month (after day 5) and July hasn't been processed, the prorated salary carries into bonus/base
+        const totalBaseWithArrears = effectiveBaseSalary + priorUnpaidArrears;
 
         if (existing) {
           return {
-            ...existing, region: emp.region, baseSalary: emp.baseSalary,
-            deductions: existing.processed ? existing.deductions : (urgentDeduction + absenceDeduction),
+            ...existing,
+            region: emp.region,
+            baseSalary: existing.processed ? existing.baseSalary : totalBaseWithArrears,
+            deductions: urgentDeduction + absenceDeduction + (emp.onboardingCompleted ? 0 : onboardingPenalty),
             incrementAmount: existing.processed ? existing.incrementAmount : pendingIncrement,
           };
         }
+
         return {
-          id: '', employeeId: emp.id, name: emp.fullName, role: emp.jobTitle || 'Staff', region: emp.region,
-          baseSalary: emp.baseSalary, unpaidLeaves: emp.onboardingCompleted ? 0 : 2, bonus: 0,
-          deductions: urgentDeduction + absenceDeduction + onboardingPenalty, incrementAmount: pendingIncrement, processed: false,
+          id: '',
+          employeeId: emp.id,
+          name: emp.fullName,
+          role: emp.jobTitle || 'Staff',
+          region: emp.region,
+          baseSalary: totalBaseWithArrears,
+          unpaidLeaves: emp.onboardingCompleted ? 0 : 2,
+          bonus: 0,
+          deductions: urgentDeduction + absenceDeduction + onboardingPenalty,
+          incrementAmount: pendingIncrement,
+          processed: false,
         };
       });
   },
@@ -2272,6 +2328,11 @@ export const hrActions = {
       return Array.isArray(raw) ? raw : [];
     } catch { return []; }
   },
+  deleteAbsenceRecord: async (recordId: string): Promise<void> => {
+    const all = await hrActions.getAbsenceRecords();
+    const next = all.filter(a => a.id !== recordId);
+    await pbSetKV('hr_absence_records_v1', next);
+  },
   // Marks a record as seen so AbsentPopup stops showing it — called by the
   // employee dismissing the popup, never by HR/Admin (they can always see
   // every record on the Absent Details page regardless of acknowledgment).
@@ -2350,8 +2411,9 @@ export const hrActions = {
       }
 
       const today = new Date();
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      for (const cursor = new Date(monthStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
+      const lookbackStart = new Date(today);
+      lookbackStart.setDate(today.getDate() - 35);
+      for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
         const dateStr = getNYDateString(cursor);
         if (dateStr >= todayStr) break;
         if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;

@@ -15,6 +15,7 @@ import {
   User, Mail, Briefcase, Calendar, Users, ShieldCheck,
   KeyRound, CheckCircle2, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
 } from 'lucide-react';
+import { formatDateNY } from '@/lib/timezone';
 
 export default function EmployeeProfilePage() {
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
@@ -331,7 +332,7 @@ export default function EmployeeProfilePage() {
   // increment, so it IS the current effective salary (mirrors old
   // db.calculateCurrentSalary()).
   const salary = profile.baseSalary;
-  const joined = new Date(profile.joinedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const joined = formatDateNY(profile.joinedDate);
 
   const infoRows = [
     { icon: Mail,      label: 'Email Address',       value: profile.email },

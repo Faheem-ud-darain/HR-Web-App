@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, ChevronLeft, ChevronRight, UserX } from 'lucide-react';
+import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, ChevronLeft, ChevronRight, UserX, UserCheck } from 'lucide-react';
 import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useKVByPrefix, hasUnseenTicketActivity, hasUnseenMessageActivity, TrackingSettings } from '@/lib/hrData';
 import { getSessionEmail, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
@@ -175,7 +175,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Tasks', href: '/admin/tasks', icon: ClipboardList },
     { name: 'Leaves Approval', href: '/admin/leaves', icon: Clock },
     { name: 'Payroll & Salary', href: '/admin/payroll', icon: Wallet },
-    { name: 'Absent Details', href: '/admin/absences', icon: UserX },
+    { name: 'Attendance', href: '/admin/absences', icon: UserCheck },
     { name: 'Career Board', href: '/admin/careers', icon: Briefcase },
     { name: 'Master Reports', href: '/admin/reports', icon: FileText },
     { name: 'Screen Tracking', href: '/admin/tracking', icon: Monitor },
@@ -190,7 +190,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Leave Management', href: '/hr/leaves', icon: Clock },
     { name: 'Team Management', href: '/hr/teams', icon: Users },
     { name: 'Payroll Records', href: '/hr/payroll', icon: Wallet },
-    { name: 'Absent Details', href: '/hr/absences', icon: UserX },
+    { name: 'Attendance', href: '/hr/absences', icon: UserCheck },
     { name: 'Career Board', href: '/hr/careers', icon: Briefcase },
     { name: 'Master Reports', href: '/hr/reports', icon: FileText },
     { name: 'Screen Tracking', href: '/hr/tracking', icon: Monitor },
@@ -202,7 +202,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'My Dashboard', href: '/employee', icon: LayoutDashboard },
     ...(trackingEnabled ? [{ name: 'Timesheet Tracker', href: '/employee/tracker', icon: Clock }] : []),
     { name: 'My Leaves', href: '/employee/leaves', icon: Clock },
-    { name: 'Absent Details', href: '/employee/absences', icon: UserX },
+    { name: 'Attendance', href: '/employee/absences', icon: UserCheck },
     { name: 'Salary History', href: '/employee/salary', icon: Wallet },
     { name: 'Career Board', href: '/employee/careers', icon: Briefcase },
     { name: 'Support Tickets', href: '/employee/tickets', icon: HelpCircle },

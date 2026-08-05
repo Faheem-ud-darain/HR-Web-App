@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, useProfiles, hrActions } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
+import { formatDateNY } from '@/lib/timezone';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
@@ -116,7 +117,7 @@ export default function HRProfilePage() {
     );
   }
 
-  const joined = new Date(profile.joinedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const joined = formatDateNY(profile.joinedDate);
 
   const infoRows = [
     { icon: Mail,      label: 'Email Address',       value: profile.email },

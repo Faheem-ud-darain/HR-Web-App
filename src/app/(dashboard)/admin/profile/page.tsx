@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useProfiles, hrActions } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
+import { formatDateNY } from '@/lib/timezone';
 
 export default function AdminProfilePage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -159,7 +160,7 @@ export default function AdminProfilePage() {
     );
   }
 
-  const joined = new Date(profile.joinedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const joined = formatDateNY(profile.joinedDate);
 
   const infoRows = [
     { icon: Mail, label: 'Email Address', value: profile.email },

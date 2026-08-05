@@ -96,6 +96,9 @@ export default function EmployeeDashboard() {
   // employee, a shift must not be startable from the mobile app at all,
   // regardless of tracker-connection state — there's no desktop to connect.
   const isMobileApp = isNativeMobileApp();
+  const [showUnder8HourModal, setShowUnder8HourModal] = useState(false);
+  const [under8HourDetails, setUnder8HourDetails] = useState<{ workedMinutes: number; remainingMinutes: number } | null>(null);
+
   // Popped up the moment the desktop tracker app tells the server it just
   // auto-ended this employee's shift because it was closed mid-shift (see
   // notify_shift_auto_stopped in agent_gui.py / getShiftStopSignal in
@@ -574,17 +577,53 @@ export default function EmployeeDashboard() {
                 <button
                   onClick={async () => {
                     if (!userProfile?.email) return;
-                    setShiftActive(false);
-                    setGeofenceStatus('Shift Ended');
-                    openShiftRef.current = null;
-                    await hrActions.clockOut(userProfile.email);
-                    await refetchTimesheets();
-                    await hrActions.addNotification(userProfile.email, 'employee', 'Shift ended manually. Screen tracking has stopped.');
-                    {
-                      const shiftActorName = displayName(userProfile, 'hr');
-                      await hrActions.addNotification('all', 'hr', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
-                      await hrActions.addNotification('all', 'admin', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
+
+                    const doClockOut = async () => {
+                      setShiftActive(false);
+                      setGeofenceStatus('Shift Ended');
+                      openShiftRef.current = null;
+                      await hrActions.clockOut(userProfile.email);
+                      await refetchTimesheets();
+                      await hrActions.addNotification(userProfile.email, 'employee', 'Shift ended manually. Screen tracking has stopped.');
+                      {
+                        const shiftActorName = displayName(userProfile, 'hr');
+                        await hrActions.addNotification('all', 'hr', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
+                        await hrActions.addNotification('all', 'admin', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
+                      }
+                    };
+
+                    // Calculate total worked shift minutes for today (including completed shifts and current open shift)
+                    const todayStr = localShiftDate(new Date().toISOString());
+                    const myTodayShifts = (allTimesheets || []).filter(t => 
+                      t.employeeEmail.toLowerCase() === userProfile.email.toLowerCase() &&
+                      localShiftDate(t.clockIn, t.date) === todayStr
+                    );
+
+                    let totalWorkedMs = 0;
+                    const nowMs = Date.now();
+                    for (const shift of myTodayShifts) {
+                      const startMs = new Date(shift.clockIn).getTime();
+                      if (shift.clockOut) {
+                        const endMs = new Date(shift.clockOut).getTime();
+                        totalWorkedMs += Math.max(0, endMs - startMs);
+                      } else {
+                        totalWorkedMs += Math.max(0, nowMs - startMs);
+                      }
                     }
+
+                    const totalWorkedMins = Math.floor(totalWorkedMs / 60000);
+                    const REQUIRED_SHIFT_MINUTES = 8 * 60; // 480 minutes
+
+                    if (totalWorkedMins < REQUIRED_SHIFT_MINUTES) {
+                      setUnder8HourDetails({
+                        workedMinutes: totalWorkedMins,
+                        remainingMinutes: REQUIRED_SHIFT_MINUTES - totalWorkedMins,
+                      });
+                      setShowUnder8HourModal(true);
+                      return;
+                    }
+
+                    await doClockOut();
                   }}
                   disabled={!shiftActive}
                   className="bg-white hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 border border-rose-200 font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97"
@@ -1193,7 +1232,8 @@ export default function EmployeeDashboard() {
                   )}
                 </div>
               </div>
-              <div className="space-y-3">
+            </div>
+            <div className="space-y-3">
               <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Workspace Screenshots</h4>
               <div className="border border-slate-200 p-6 rounded-xl bg-slate-50/50 text-center space-y-2 font-sans">
                 <Monitor className="h-6 w-6 text-slate-400 mx-auto" />
@@ -1204,7 +1244,7 @@ export default function EmployeeDashboard() {
                   </p>
                 </div>
               </div>
-            </div>            </div>
+            </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-200">
               <button
@@ -1212,6 +1252,68 @@ export default function EmployeeDashboard() {
                 className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2 rounded-lg text-xs"
               >
                 Close Logs
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {/* Early Shift End / Under 8 Hours Warning Modal */}
+      {showUnder8HourModal && under8HourDetails && (
+        <Modal isOpen={showUnder8HourModal} onClose={() => setShowUnder8HourModal(false)} title="Under 8 Hours Shift Warning">
+          <div className="space-y-4 font-sans text-xs">
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-sm">Mandatory 8-Hour Shift Requirement</p>
+                <p className="text-amber-800 leading-relaxed font-medium">
+                  Employees are required to complete at least <strong>8 hours</strong> of total shift time per day.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center text-slate-700">
+                <span className="font-semibold text-slate-500">Today's Completed/Current Shift Time:</span>
+                <span className="font-bold font-mono text-sm text-slate-900">
+                  {Math.floor(under8HourDetails.workedMinutes / 60)}h {under8HourDetails.workedMinutes % 60}m
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-700 pt-2 border-t border-slate-200">
+                <span className="font-semibold text-amber-700">Remaining Time Required Today:</span>
+                <span className="font-bold font-mono text-sm text-amber-700">
+                  {Math.floor(under8HourDetails.remainingMinutes / 60)}h {under8HourDetails.remainingMinutes % 60}m
+                </span>
+              </div>
+            </div>
+
+            <p className="text-slate-500 text-[11px] leading-relaxed">
+              If your shift was split into multiple parts due to internet/app disconnections, your total worked time today is combined. If you still need to end your shift early, please confirm below.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">
+              <button
+                onClick={() => setShowUnder8HourModal(false)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors"
+              >
+                Keep Shift Running
+              </button>
+              <button
+                onClick={async () => {
+                  setShowUnder8HourModal(false);
+                  if (!userProfile?.email) return;
+                  setShiftActive(false);
+                  setGeofenceStatus('Shift Ended');
+                  openShiftRef.current = null;
+                  await hrActions.clockOut(userProfile.email);
+                  await refetchTimesheets();
+                  await hrActions.addNotification(userProfile.email, 'employee', `Shift ended before 8 hours completed (${Math.floor(under8HourDetails.workedMinutes / 60)}h ${under8HourDetails.workedMinutes % 60}m worked).`);
+                  const shiftActorName = displayName(userProfile, 'hr');
+                  await hrActions.addNotification('all', 'hr', `${shiftActorName} ended shift early (${Math.floor(under8HourDetails.workedMinutes / 60)}h ${under8HourDetails.workedMinutes % 60}m total today).`, 'shift', shiftActorName, userProfile.email);
+                  await hrActions.addNotification('all', 'admin', `${shiftActorName} ended shift early (${Math.floor(under8HourDetails.workedMinutes / 60)}h ${under8HourDetails.workedMinutes % 60}m total today).`, 'shift', shiftActorName, userProfile.email);
+                }}
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-4 py-2 rounded-xl text-xs transition-colors"
+              >
+                Confirm End Shift Early
               </button>
             </div>
           </div>

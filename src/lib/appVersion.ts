@@ -10,9 +10,9 @@
 // in one of the files above, update the matching value here too, or this
 // card will show stale numbers.
 export const APP_VERSIONS = {
-  web: '1.3',
-  android: '1.3',
-  ios: '1.3',
+  web: '1.4',
+  android: '1.4',
+  ios: '1.4',
 } as const;
 
 export type AppPlatform = keyof typeof APP_VERSIONS;

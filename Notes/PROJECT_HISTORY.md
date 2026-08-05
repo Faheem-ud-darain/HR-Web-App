@@ -103,7 +103,7 @@ hand-maintained, no way to read live from `package.json`/`build.gradle`/
 `project.pbxproj` at runtime) + `src/components/ui/AppVersionCard.tsx`,
 wired into all 3 Profile Settings pages (employee/hr/admin). Shows all 3
 platform versions, tags the current one via `Capacitor.getPlatform()`.
-**Current version: 1.3, build 1**, synced across `package.json`,
+**Current version: 1.4, build 1**, synced across `package.json`,
 `android/app/build.gradle` (`versionName`), and
 `ios/App/App.xcodeproj/project.pbxproj` (both Debug AND Release configs'
 `MARKETING_VERSION` — a Release-config miss was caught and fixed
