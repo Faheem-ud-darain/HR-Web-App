@@ -2245,8 +2245,11 @@ export const hrActions = {
   // doesn't re-trigger the modal on every poll.
   getShiftStopSignal: (email: string): Promise<ShiftStopSignal | null> =>
     pbGetKV(shiftStopSignalKeyFor(email)),
-  isHeartbeatLive: (hb: TrackerHeartbeat | null): boolean =>
-    !!hb?.lastSeenAt && (Date.now() - new Date(hb.lastSeenAt).getTime()) < TRACKER_HEARTBEAT_STALE_MS,
+  isHeartbeatLive: (hb: TrackerHeartbeat | null, intervalMinutes: number = 3): boolean => {
+    if (!hb?.lastSeenAt) return false;
+    const toleranceMs = (Math.max(3, intervalMinutes) + 2) * 60 * 1000;
+    return (Date.now() - new Date(hb.lastSeenAt).getTime()) < toleranceMs;
+  },
 
   // ── Manual-shift tab heartbeat + abandoned-tab safety net ───────────────
   touchShiftTabHeartbeat: async (email: string): Promise<void> => {

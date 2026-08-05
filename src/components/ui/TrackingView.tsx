@@ -490,7 +490,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               {filteredEmployees.map(emp => {
                 const settings = settingsFor(emp.email);
                 const hb = heartbeatFor(emp.email);
-                const isLive = hrActions.isHeartbeatLive(hb);
+                const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
@@ -594,7 +594,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
           {filteredEmployees.map(emp => {
             const settings = settingsFor(emp.email);
             const hb = heartbeatFor(emp.email);
-            const isLive = hrActions.isHeartbeatLive(hb);
+            const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
             return (
               <div key={emp.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <div className="flex items-start justify-between">
