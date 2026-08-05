@@ -270,9 +270,42 @@ export default function EmployeeDashboard() {
     };
   }, [userProfile?.email, userProfile?.region, shiftActive]);
 
-  // DISABLED (2026-08-04) — this used to fire an immediate clock-out on
-  // `pagehide`, on the assumption that event only meant "the tab actually
-  // closed." Turned out not to be true on desktop web either (all the
+  // Screen Wake Lock API — Keeps the tab alive and prevents system/browser
+  // sleep mode while a shift is active, YouTube-style. Re-acquires automatically
+  // when switching back to the tab.
+  useEffect(() => {
+    if (!shiftActive || typeof window === 'undefined' || !('wakeLock' in navigator)) return;
+    let wakeLockSentinel: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if (document.visibilityState === 'visible' && !wakeLockSentinel) {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {
+        // Wake lock can fail if low battery or disallowed by OS policy — fail gracefully
+        console.warn('[ScreenWakeLock] Could not acquire wake lock:', err);
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
+        wakeLockSentinel = null;
+      }
+    };
+  }, [shiftActive]);
   // affected employees turned out to be on the website, not the mobile
   // app, which doesn't even have Start/Stop Shift): Chrome/Edge's
   // background-tab memory-saving feature ("Memory Saver" / tab discarding)
