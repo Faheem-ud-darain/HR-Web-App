@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ShieldCheck, Upload, Save, CheckCircle2, Download, Smartphone } from 'lucide-react';
+import { ShieldCheck, Upload, Save, CheckCircle2, Download, Smartphone, Loader2 } from 'lucide-react';
 import { appReleaseActions, AppRelease } from '@/lib/appReleases';
 
 export default function AppReleasesPage() {
@@ -107,14 +107,21 @@ export default function AppReleasesPage() {
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">APK File</label>
-                <input
-                  type="file"
-                  accept=".apk"
-                  ref={fileInputRef}
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="w-full border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer"
-                  required
-                />
+                {uploading ? (
+                  <div className="flex items-center gap-3 w-full border border-orange-200 bg-orange-50 rounded-lg px-4 py-3 text-sm text-orange-700 font-bold shadow-inner">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Uploading {file?.name || 'APK'} to secure storage...
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept=".apk"
+                    ref={fileInputRef}
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer"
+                    required
+                  />
+                )}
               </div>
 
               <div>
@@ -124,6 +131,7 @@ export default function AppReleasesPage() {
                   value={releaseNotes}
                   onChange={(e) => setReleaseNotes(e.target.value)}
                   className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:border-orange-500 outline-none min-h-[100px]"
+                  disabled={uploading}
                 />
               </div>
 
@@ -133,9 +141,10 @@ export default function AppReleasesPage() {
                   id="mandatoryCheck"
                   checked={isMandatory}
                   onChange={(e) => setIsMandatory(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-600"
+                  disabled={uploading}
+                  className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-600 disabled:opacity-50"
                 />
-                <label htmlFor="mandatoryCheck" className="text-sm font-semibold text-slate-700">
+                <label htmlFor="mandatoryCheck" className={`text-sm font-semibold text-slate-700 ${uploading ? 'opacity-50' : ''}`}>
                   Mandatory Update (Forces employees to update immediately)
                 </label>
               </div>
@@ -147,8 +156,8 @@ export default function AppReleasesPage() {
                   uploading ? 'bg-slate-400 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-700'
                 }`}
               >
-                {uploading ? 'Uploading APK (This may take a minute)...' : 'Publish Release'}
-                {!uploading && <Save className="h-4 w-4" />}
+                Publish Release
+                <Save className="h-4 w-4" />
               </button>
             </form>
           </div>
