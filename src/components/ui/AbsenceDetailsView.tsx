@@ -24,6 +24,15 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  const [selectedAttendanceRow, setSelectedAttendanceRow] = useState<{
+    employeeEmail: string;
+    employeeName: string;
+    date: string;
+    shifts: typeof allTimesheets;
+    totalMinutes: number;
+    hasActiveShift: boolean;
+  } | null>(null);
+
   const loadAbsenceRecords = () => {
     hrActions.getAbsenceRecords().then(all => {
       const scoped = role === 'employee' && filterEmail
@@ -45,8 +54,8 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     loadAbsenceRecords();
   };
 
-  // Filter timesheets for the attendance view
-  const filteredTimesheets = useMemo(() => {
+  // Group timesheets cumulatively per Employee + Date
+  const cumulativeAttendanceRows = useMemo(() => {
     let list = allTimesheets;
     if (role === 'employee' && filterEmail) {
       list = list.filter(t => t.employeeEmail.toLowerCase() === filterEmail.toLowerCase());
@@ -54,12 +63,61 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     if (selectedDate) {
       list = list.filter(t => localShiftDate(t.clockIn, t.date) === selectedDate);
     }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(t => t.employeeEmail.toLowerCase().includes(q));
+
+    const groupedMap = new Map<string, {
+      employeeEmail: string;
+      employeeName: string;
+      date: string;
+      shifts: typeof allTimesheets;
+      totalMinutes: number;
+      hasActiveShift: boolean;
+    }>();
+
+    for (const t of list) {
+      const dateKey = localShiftDate(t.clockIn, t.date);
+      const empEmail = (t.employeeEmail || '').toLowerCase();
+      const groupKey = `${empEmail}_${dateKey}`;
+
+      const empProfile = allProfiles.find(p => p.email.toLowerCase() === empEmail);
+      const empName = empProfile ? displayName(empProfile, 'hr') : t.employeeEmail;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        if (!empName.toLowerCase().includes(q) && !empEmail.includes(q)) continue;
+      }
+
+      let shiftMins = 0;
+      if (t.duration && t.duration.includes('h')) {
+        const hMatch = t.duration.match(/(\d+)h/);
+        const mMatch = t.duration.match(/(\d+)m/);
+        const h = hMatch ? parseInt(hMatch[1], 10) : 0;
+        const m = mMatch ? parseInt(mMatch[1], 10) : 0;
+        shiftMins = h * 60 + m;
+      } else if (t.clockIn) {
+        const start = new Date(t.clockIn).getTime();
+        const end = t.clockOut ? new Date(t.clockOut).getTime() : Date.now();
+        shiftMins = Math.max(0, Math.floor((end - start) / 60000));
+      }
+
+      const existing = groupedMap.get(groupKey);
+      if (existing) {
+        existing.shifts.push(t);
+        existing.totalMinutes += shiftMins;
+        if (!t.clockOut) existing.hasActiveShift = true;
+      } else {
+        groupedMap.set(groupKey, {
+          employeeEmail: t.employeeEmail,
+          employeeName: empName,
+          date: dateKey,
+          shifts: [t],
+          totalMinutes: shiftMins,
+          hasActiveShift: !t.clockOut,
+        });
+      }
     }
-    return [...list].sort((a, b) => (b.clockIn || '').localeCompare(a.clockIn || ''));
-  }, [allTimesheets, role, filterEmail, selectedDate, searchQuery]);
+
+    return Array.from(groupedMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [allTimesheets, allProfiles, role, filterEmail, selectedDate, searchQuery]);
 
   // Filter absence records by date and query
   const filteredAbsences = useMemo(() => {
@@ -95,7 +153,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'attendance' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           >
             <UserCheck className="h-4 w-4 text-emerald-600" />
-            Attendance Logs ({filteredTimesheets.length})
+            Attendance Logs ({cumulativeAttendanceRows.length})
           </button>
           <button
             onClick={() => setActiveTab('absences')}
@@ -162,12 +220,12 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         <Card className="border border-slate-200 overflow-hidden p-0 bg-white">
           {loadingTimesheets ? (
             <div className="py-16 text-center text-xs font-semibold text-slate-400">Loading attendance records…</div>
-          ) : filteredTimesheets.length === 0 ? (
+          ) : cumulativeAttendanceRows.length === 0 ? (
             <div className="py-16 text-center space-y-2">
               <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
-              <p className="text-sm font-bold text-slate-700">No shift attendance logs found</p>
+              <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
               <p className="text-xs text-slate-400">
-                {selectedDate ? `No shifts recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
+                {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
               </p>
             </div>
           ) : (
@@ -177,35 +235,47 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                     <tr>
-                      <th className="text-left px-5 py-3 font-bold">Shift Date</th>
+                      <th className="text-left px-5 py-3 font-bold">Date</th>
                       {role !== 'employee' && <th className="text-left px-5 py-3 font-bold">Employee</th>}
-                      <th className="text-left px-5 py-3 font-bold">Clock In</th>
-                      <th className="text-left px-5 py-3 font-bold">Clock Out</th>
-                      <th className="text-right px-5 py-3 font-bold">Duration</th>
-                      <th className="text-center px-5 py-3 font-bold">Status</th>
+                      <th className="text-center px-5 py-3 font-bold">Total Shifts</th>
+                      <th className="text-right px-5 py-3 font-bold">Total Worked Time</th>
+                      <th className="text-center px-5 py-3 font-bold">Attendance Status</th>
+                      <th className="text-center px-5 py-3 font-bold">Details</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredTimesheets.map(t => {
-                      const empProfile = allProfiles.find(p => p.email.toLowerCase() === t.employeeEmail.toLowerCase());
-                      const empName = empProfile ? displayName(empProfile, 'hr') : t.employeeEmail;
-                      const shiftDateStr = localShiftDate(t.clockIn, t.date);
+                    {cumulativeAttendanceRows.map(row => {
+                      const hours = Math.floor(row.totalMinutes / 60);
+                      const mins = row.totalMinutes % 60;
+                      const formattedDuration = `${hours}h ${mins}m`;
+
                       return (
-                        <tr key={t.id} className="hover:bg-slate-50/50">
-                          <td className="px-5 py-3 font-mono font-bold text-slate-700">{shiftDateStr}</td>
+                        <tr key={`${row.employeeEmail}_${row.date}`} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-5 py-3 font-mono font-bold text-slate-700">{row.date}</td>
                           {role !== 'employee' && (
                             <td className="px-5 py-3">
-                              <p className="font-bold text-slate-900">{empName}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">{t.employeeEmail}</p>
+                              <p className="font-bold text-slate-900">{row.employeeName}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">{row.employeeEmail}</p>
                             </td>
                           )}
-                          <td className="px-5 py-3 font-mono text-slate-600">{t.clockIn ? formatTimeNY(t.clockIn) : '—'}</td>
-                          <td className="px-5 py-3 font-mono text-slate-600">{t.clockOut ? formatTimeNY(t.clockOut) : '—'}</td>
-                          <td className="px-5 py-3 text-right font-bold text-slate-900">{t.duration || 'In Progress'}</td>
+                          <td className="px-5 py-3 text-center font-semibold text-slate-700">{row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''}</td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900">{formattedDuration}</td>
                           <td className="px-5 py-3 text-center">
-                            <Badge variant={t.clockOut ? 'success' : 'warning'}>
-                              {t.clockOut ? 'Completed' : 'On Shift'}
-                            </Badge>
+                            {row.hasActiveShift ? (
+                              <Badge variant="warning">On Shift</Badge>
+                            ) : row.totalMinutes >= 480 ? (
+                              <Badge variant="success">Present (Full Day)</Badge>
+                            ) : (
+                              <Badge variant="default">Present ({formattedDuration})</Badge>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-center">
+                            <button
+                              onClick={() => setSelectedAttendanceRow(row)}
+                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
+                            >
+                              View Breakdown
+                            </button>
                           </td>
                         </tr>
                       );
@@ -216,30 +286,35 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
               {/* Mobile Cards Stack */}
               <div className="md:hidden divide-y divide-slate-100">
-                {filteredTimesheets.map(t => {
-                  const empProfile = allProfiles.find(p => p.email.toLowerCase() === t.employeeEmail.toLowerCase());
-                  const empName = empProfile ? displayName(empProfile, 'hr') : t.employeeEmail;
-                  const shiftDateStr = localShiftDate(t.clockIn, t.date);
+                {cumulativeAttendanceRows.map(row => {
+                  const hours = Math.floor(row.totalMinutes / 60);
+                  const mins = row.totalMinutes % 60;
+                  const formattedDuration = `${hours}h ${mins}m`;
+
                   return (
-                    <div key={t.id} className="p-4 space-y-2">
+                    <div key={`${row.employeeEmail}_${row.date}`} className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="font-mono text-xs font-bold text-slate-800">{shiftDateStr}</p>
-                        <Badge variant={t.clockOut ? 'success' : 'warning'}>
-                          {t.clockOut ? 'Completed' : 'On Shift'}
-                        </Badge>
+                        <p className="font-mono text-xs font-bold text-slate-800">{row.date}</p>
+                        {row.hasActiveShift ? (
+                          <Badge variant="warning">On Shift</Badge>
+                        ) : row.totalMinutes >= 480 ? (
+                          <Badge variant="success">Present (Full Day)</Badge>
+                        ) : (
+                          <Badge variant="default">Present ({formattedDuration})</Badge>
+                        )}
                       </div>
-                      {role !== 'employee' && <p className="text-xs font-bold text-slate-900">{empName}</p>}
-                      <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                      {role !== 'employee' && <p className="text-xs font-bold text-slate-900">{row.employeeName}</p>}
+                      <div className="flex items-center justify-between pt-1 text-xs">
                         <div>
-                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Clock In / Out</p>
-                          <p className="font-mono font-medium text-slate-700">
-                            {t.clockIn ? formatTimeNY(t.clockIn) : '—'} → {t.clockOut ? formatTimeNY(t.clockOut) : '—'}
-                          </p>
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
+                          <p className="font-bold text-slate-900">{formattedDuration}</p>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
-                          <p className="font-bold text-slate-900">{t.duration || 'In Progress'}</p>
-                        </div>
+                        <button
+                          onClick={() => setSelectedAttendanceRow(row)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors"
+                        >
+                          View Breakdown
+                        </button>
                       </div>
                     </div>
                   );
@@ -248,6 +323,78 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             </>
           )}
         </Card>
+      )}
+
+      {/* SHIFT BREAKDOWN MODAL */}
+      {selectedAttendanceRow && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Shift Breakdown Details</h3>
+                <p className="text-xs text-slate-500 font-mono">{selectedAttendanceRow.date} • {selectedAttendanceRow.employeeName}</p>
+              </div>
+              <button
+                onClick={() => setSelectedAttendanceRow(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Total Worked Time</p>
+                  <p className="text-sm font-bold text-slate-900">
+                    {Math.floor(selectedAttendanceRow.totalMinutes / 60)}h {selectedAttendanceRow.totalMinutes % 60}m
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Shift Count</p>
+                  <p className="text-sm font-bold text-slate-900">{selectedAttendanceRow.shifts.length} shift(s)</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                <p className="text-xs font-bold text-slate-700">Individual Shifts:</p>
+                {selectedAttendanceRow.shifts.map((s, idx) => (
+                  <div key={s.id || idx} className="border border-slate-200 rounded-xl p-3 space-y-1 bg-white">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800">Shift #{idx + 1}</span>
+                      <Badge variant={s.clockOut ? 'success' : 'warning'}>
+                        {s.clockOut ? 'Completed' : 'On Shift'}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 font-mono text-slate-600">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold">Clock In</span>
+                        {s.clockIn ? formatTimeNY(s.clockIn) : '—'}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold">Clock Out</span>
+                        {s.clockOut ? formatTimeNY(s.clockOut) : '—'}
+                      </div>
+                    </div>
+                    <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Duration:</span>
+                      <span className="font-bold text-slate-900">{s.duration || 'In Progress'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedAttendanceRow(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ABSENCES TAB */}
