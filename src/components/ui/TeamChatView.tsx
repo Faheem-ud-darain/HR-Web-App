@@ -123,6 +123,8 @@ interface TeamChatViewProps {
   // in any of them — see the Crown/highlight styling below for how their
   // messages are made unmistakable to everyone else in the channel.
   oversight?: boolean;
+  // If true, injects a virtual "HR & Admin" DM channel for this employee.
+  includeHrDirectChannel?: boolean;
 }
 
 const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // matches the collection's maxSize
@@ -221,7 +223,21 @@ function renderMessageText(
   });
 }
 
-export function TeamChatView({ teams, currentUserEmail, currentUserRole, allProfiles, oversight = false }: TeamChatViewProps) {
+export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRole, allProfiles, oversight = false, includeHrDirectChannel = false }: TeamChatViewProps) {
+  const me = allProfiles.find(p => p.email.toLowerCase() === currentUserEmail.toLowerCase());
+  
+  const teams = React.useMemo(() => {
+    if (!includeHrDirectChannel || !me) return propTeams;
+    const hrTeam: Team = {
+      id: `dm_${me.id}`,
+      name: 'HR & Admin',
+      members: [], // It's a virtual channel, members list isn't used for DMs
+    };
+    // If the virtual team is already active, we shouldn't change the active id, 
+    // but we prepend it so it's always at the top of the sidebar.
+    return [hrTeam, ...propTeams];
+  }, [includeHrDirectChannel, me, propTeams]);
+
   const [activeTeamId, setActiveTeamId] = useState<string | null>(teams[0]?.id || null);
   const [draft, setDraft] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
