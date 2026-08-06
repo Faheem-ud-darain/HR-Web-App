@@ -25,7 +25,8 @@ export const appReleaseActions = {
   createRelease: async (version: string, apkFile: File, isMandatory: boolean, releaseNotes: string): Promise<AppRelease> => {
     const formData = new FormData();
     formData.append('version', version);
-    formData.append('apk_file', apkFile);
+    const forcedApkFile = new File([apkFile], apkFile.name || 'app.apk', { type: 'application/vnd.android.package-archive' });
+    formData.append('apk_file', forcedApkFile);
     formData.append('is_mandatory', String(isMandatory));
     formData.append('release_notes', releaseNotes);
     

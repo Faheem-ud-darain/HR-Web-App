@@ -524,7 +524,24 @@ export default function AuthPage() {
           const { appReleaseActions } = await import('@/lib/appReleases');
           const latest = await appReleaseActions.getLatestRelease();
           if (latest) {
-            window.location.href = appReleaseActions.getApkUrl(latest);
+            try {
+              const url = appReleaseActions.getApkUrl(latest);
+              const res = await fetch(url);
+              if (!res.ok) throw new Error('Network response was not ok');
+              const blob = await res.blob();
+              const customBlob = new Blob([blob], { type: 'application/vnd.android.package-archive' });
+              const blobUrl = window.URL.createObjectURL(customBlob);
+              const a = document.createElement('a');
+              a.style.display = 'none';
+              a.href = blobUrl;
+              a.download = latest.apk_file || `app-release-v${latest.version}.apk`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(blobUrl);
+            } catch (err) {
+              window.location.href = appReleaseActions.getApkUrl(latest);
+            }
           } else {
             alert('No app release available yet.');
           }
