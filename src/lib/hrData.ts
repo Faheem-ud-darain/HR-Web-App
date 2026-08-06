@@ -2404,19 +2404,31 @@ export const hrActions = {
         if (!isNaN(jd.getTime())) joinedStr = jd.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
       }
 
-      // Every date this employee has at least one shift on, mapped to the
-      // LONGEST SINGLE continuous inactivity log on that date
       const shiftDatesWithInactivity = new Map<string, number>();
       for (const t of empTimesheets) {
-        // Use tracker's intended date first, else convert clock-in to PKT
-        const d = t.date || (t.clockIn ? new Date(t.clockIn).toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' }) : '—');
-        if (!shiftDatesWithInactivity.has(d)) shiftDatesWithInactivity.set(d, 0);
-      }
-      for (const log of empInactivity) {
-        const d = new Date(log.startAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
-        if (shiftDatesWithInactivity.has(d)) {
-          shiftDatesWithInactivity.set(d, Math.max(shiftDatesWithInactivity.get(d) || 0, log.durationSeconds || 0));
+        if (!t.clockIn) continue;
+        
+        // IMPORTANT: Ignore t.date because it is stamped in New York time by the frontend.
+        // We must rely purely on the absolute UTC clockIn timestamp converted to PKT.
+        const d = new Date(t.clockIn);
+        if (isNaN(d.getTime())) continue;
+        const shiftDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+        
+        let inactiveSecsForShift = 0;
+        if (t.clockOut) {
+          const inTime = d.getTime();
+          const outTime = new Date(t.clockOut).getTime();
+          
+          // Inactivity is only counted if it happens strictly within the shift bounds
+          const logsForShift = empInactivity.filter(l => {
+            const lt = new Date(l.timestamp || l.startAt).getTime();
+            return lt >= inTime && lt <= outTime;
+          });
+          for (const l of logsForShift) inactiveSecsForShift += (l.durationSeconds || 0);
         }
+        
+        // Accumulate inactivity across all shifts on the same day (if they had multiple)
+        shiftDatesWithInactivity.set(shiftDate, (shiftDatesWithInactivity.get(shiftDate) || 0) + inactiveSecsForShift);
       }
 
       const today = new Date();
