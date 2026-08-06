@@ -21,6 +21,28 @@ export const appReleaseActions = {
       return null;
     }
   },
+
+  getAllReleases: async (): Promise<AppRelease[]> => {
+    try {
+      const records = await pb.collection('hr_app_releases').getFullList<AppRelease>({
+        sort: '-created',
+      });
+      return records;
+    } catch (e) {
+      console.error('Failed to get all app releases:', e);
+      return [];
+    }
+  },
+
+  deleteRelease: async (id: string): Promise<boolean> => {
+    try {
+      await pb.collection('hr_app_releases').delete(id);
+      return true;
+    } catch (e) {
+      console.error('Failed to delete release:', e);
+      return false;
+    }
+  },
   
   createRelease: async (version: string, apkFile: File, isMandatory: boolean, releaseNotes: string): Promise<AppRelease> => {
     const formData = new FormData();
