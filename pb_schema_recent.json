@@ -1505,6 +1505,19 @@
       },
       {
         "system": false,
+        "id": "ti_department",
+        "name": "department",
+        "type": "select",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSelect": 1,
+          "values": ["hr", "technical"]
+        }
+      },
+      {
+        "system": false,
         "id": "ti_replies",
         "name": "replies",
         "type": "json",

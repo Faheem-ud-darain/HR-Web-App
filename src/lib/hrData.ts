@@ -493,6 +493,7 @@ export interface TicketReply {
 }
 export interface Ticket {
   id: string; employeeName: string; employeeEmail: string; title: string; description: string;
+  department: 'hr' | 'technical';
   status: 'open' | 'closed'; createdAt: string; replies: TicketReply[];
 }
 
@@ -717,7 +718,7 @@ function toCareerApplication(a: any): CareerApplication {
   };
 }
 function toTicket(t: any): Ticket {
-  return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, status: t.status, createdAt: t.created, replies: t.replies || [] };
+  return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
 }
 function toPayroll(p: any): PayrollRecord {
   return {
@@ -1881,14 +1882,16 @@ export const hrActions = {
   // column, only `replies` does (see TicketReply comment above), so a
   // ticket-creation-time attachment has to be added as a follow-up reply
   // rather than a field on the ticket record itself.
-  createTicket: async (ticket: { employeeName: string; employeeEmail: string; title: string; description: string }): Promise<Ticket> => {
+  createTicket: async (ticket: { employeeName: string; employeeEmail: string; title: string; description: string; department: 'hr' | 'technical' }): Promise<Ticket> => {
     const created = await pbCreate('hr_tickets', {
       employee_email: ticket.employeeEmail, employee_name: ticket.employeeName, subject: ticket.title,
-      description: ticket.description, status: 'open', priority: 'medium', category: 'general', assigned_to: '', resolution: '', replies: [],
+      description: ticket.description, department: ticket.department, status: 'open', priority: 'medium', category: 'general', assigned_to: '', resolution: '', replies: [],
     });
     // Admin also has a Tickets queue (admin/tickets) — this previously only
     // notified 'hr', same gap as leave requests.
-    await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', created.id));
+    if (ticket.department === 'hr') {
+      await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', created.id));
+    }
     await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
     return toTicket(created);
   },
@@ -2381,7 +2384,7 @@ export const hrActions = {
   // given employee+date combination has already been decided.
   runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
     const INACTIVITY_THRESHOLD_SECONDS = 35 * 60;
-    const todayStr = getNYDateString(new Date());
+    const pktTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
     const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
     const existingRecords = await hrActions.getAbsenceRecords();
     const deletedIds = await hrActions.getDeletedAbsenceIds();
@@ -2394,26 +2397,23 @@ export const hrActions = {
 
       const empTimesheets = timesheets.filter(t => t.employeeEmail && t.employeeEmail.toLowerCase() === emp.email.toLowerCase() && t.clockIn);
       const empInactivity = inactivityLogs.filter(l => l.employeeEmail && l.employeeEmail.toLowerCase() === emp.email.toLowerCase());
-      const joinedStr = emp.joinedDate ? getNYDateString(new Date(emp.joinedDate)) : '';
+      
+      let joinedStr = '';
+      if (emp.joinedDate) {
+        const jd = new Date(emp.joinedDate);
+        if (!isNaN(jd.getTime())) joinedStr = jd.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+      }
 
       // Every date this employee has at least one shift on, mapped to the
-      // LONGEST SINGLE continuous inactivity log on that date — not the sum
-      // of every idle stretch across the day. Per explicit product
-      // decision, this is about one continuous session of inactivity
-      // crossing the threshold, not several short idle moments adding up
-      // (e.g. five separate 8-minute breaks should never trigger this, one
-      // real 35-minute stretch should). This is the same rule the tracker
-      // agent's own real-time check (AUTO_ABSENT_INACTIVITY_SECONDS in
-      // agent_gui.py) already enforces live — this is just the historical/
-      // backstop version for logs that land here before an agent update,
-      // or from an older agent version.
+      // LONGEST SINGLE continuous inactivity log on that date
       const shiftDatesWithInactivity = new Map<string, number>();
       for (const t of empTimesheets) {
-        const d = localShiftDate(t.clockIn, t.date);
+        // Use tracker's intended date first, else convert clock-in to PKT
+        const d = t.date || (t.clockIn ? new Date(t.clockIn).toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' }) : '—');
         if (!shiftDatesWithInactivity.has(d)) shiftDatesWithInactivity.set(d, 0);
       }
       for (const log of empInactivity) {
-        const d = localShiftDate(log.startAt);
+        const d = new Date(log.startAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
         if (shiftDatesWithInactivity.has(d)) {
           shiftDatesWithInactivity.set(d, Math.max(shiftDatesWithInactivity.get(d) || 0, log.durationSeconds || 0));
         }
@@ -2423,8 +2423,8 @@ export const hrActions = {
       const lookbackStart = new Date(today);
       lookbackStart.setDate(today.getDate() - 35);
       for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-        const dateStr = getNYDateString(cursor);
-        if (dateStr >= todayStr) break;
+        const dateStr = cursor.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+        if (dateStr >= pktTodayStr) break;
         if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
         if (joinedStr && dateStr < joinedStr) continue;
         if (!isWeekday(dateStr)) continue;

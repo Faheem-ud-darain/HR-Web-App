@@ -177,8 +177,19 @@ export function TopNav() {
       t.description.toLowerCase().includes(q)
     ));
 
-    // Tickets — full queue for HR/Admin, only my own tickets otherwise.
-    const ticketsScope = isPrivileged ? (allTickets || []) : (allTickets || []).filter(t => t.employeeEmail.toLowerCase() === (email || '').toLowerCase());
+    // Tickets — HR sees HR tickets, Tech sees Tech tickets + their own, Admin sees all, others see their own.
+    const currentProfile = (allProfiles || []).find(e => e.email?.toLowerCase() === (email || '').toLowerCase());
+    const isTech = currentProfile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+    let ticketsScope = allTickets || [];
+    if (role === 'hr') {
+      ticketsScope = ticketsScope.filter(t => t.department === 'hr');
+    } else if (role !== 'admin') {
+      if (isTech) {
+        ticketsScope = ticketsScope.filter(t => t.department === 'technical' || t.employeeEmail.toLowerCase() === (email || '').toLowerCase());
+      } else {
+        ticketsScope = ticketsScope.filter(t => t.employeeEmail.toLowerCase() === (email || '').toLowerCase());
+      }
+    }
     setMatchedTickets(ticketsScope.filter(t =>
       t.title.toLowerCase().includes(q) ||
       t.description.toLowerCase().includes(q)

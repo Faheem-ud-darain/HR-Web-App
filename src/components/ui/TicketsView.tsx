@@ -115,6 +115,7 @@ export function TicketsView({ role }: TicketsViewProps) {
 
   // Modals
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [department, setDepartment] = useState<'hr' | 'technical'>('hr');
   const [inspectEmployee, setInspectEmployee] = useState<Profile | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState<string | undefined>(undefined);
@@ -133,7 +134,8 @@ export function TicketsView({ role }: TicketsViewProps) {
     }
   }, [!!selectedTicket]);
 
-  const isPrivileged = role === 'hr' || role === 'admin';
+  const isTechnicalTeam = userProfile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+  const isPrivileged = role === 'hr' || role === 'admin' || isTechnicalTeam;
 
   // Ticket/reply records only ever snapshot a name string (employeeName /
   // senderName), not a live Profile reference, so resolving an alias for
@@ -217,11 +219,17 @@ export function TicketsView({ role }: TicketsViewProps) {
   // isn't worth adding just for a one-shot read on mount.
   const appliedDeepLinkRef = useRef(false);
 
-  const applyTickets = (all: Ticket[], email: string) => {
-    if (role === 'employee' || role === 'team_lead') {
-      setTickets(all.filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase()));
-    } else {
+  const applyTickets = (all: Ticket[], email: string, profile: Profile | null) => {
+    const isTech = profile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+    
+    if (role === 'admin') {
       setTickets(all);
+    } else if (role === 'hr') {
+      setTickets(all.filter(t => t.department === 'hr'));
+    } else if (isTech) {
+      setTickets(all.filter(t => t.department === 'technical' || t.employeeEmail.toLowerCase() === email.toLowerCase()));
+    } else {
+      setTickets(all.filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase()));
     }
     // Keep the open conversation live too, so incoming replies from other
     // users/devices show up without the viewer needing to reselect it.
@@ -256,13 +264,15 @@ export function TicketsView({ role }: TicketsViewProps) {
     const email = getSessionEmail() || '';
     setCurrentEmail(email);
     
+    let currentProfile = userProfile;
     if (allProfiles) {
       setEmployees(allProfiles);
-      setUserProfile(allProfiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase()) || null);
+      currentProfile = allProfiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase()) || null;
+      setUserProfile(currentProfile);
     }
 
     if (allTickets) {
-      applyTickets(allTickets, email);
+      applyTickets(allTickets, email, currentProfile);
       // Viewing this page clears the sidebar's unseen-activity dot for this
       // role+email. Re-runs on every poll while the page stays open, so new
       // activity that arrives elsewhere still lights the dot back up later.
@@ -420,6 +430,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         employeeEmail: userProfile.email,
         title,
         description: desc,
+        department,
       });
 
       // hr_tickets has no attachment column, so a file selected at filing time
@@ -442,6 +453,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         setIsNewOpen(false);
         setTitle('');
         setDesc('');
+        setDepartment('hr');
         setNewTicketFile(null);
         setSuccess('');
       }, 1200);
@@ -456,7 +468,13 @@ export function TicketsView({ role }: TicketsViewProps) {
     if ((!replyMsg.trim() && !replyFile) || !selectedTicket || sendingReply) return;
     setReplyFileError('');
 
-    const senderName = userProfile?.fullName || (role === 'hr' ? 'HR Manager' : role === 'admin' ? 'System Admin' : currentEmail.split('@')[0]);
+    const isTech = userProfile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+    let senderName = currentEmail.split('@')[0];
+    if (role === 'hr') senderName = 'HR Manager';
+    else if (role === 'admin') senderName = 'System Admin';
+    if (isTech || role === 'employee' || role === 'team_lead') {
+      senderName = userProfile?.fullName || senderName;
+    }
 
     setSendingReply(true);
     try {
@@ -986,6 +1004,14 @@ export function TicketsView({ role }: TicketsViewProps) {
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {success}
             </div>
           )}
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Department *</label>
+            <select required value={department} onChange={e => setDepartment(e.target.value as 'hr' | 'technical')} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 appearance-none">
+              <option value="hr">Human Resources</option>
+              <option value="technical">Technical Team</option>
+            </select>
+          </div>
 
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Ticket Title / Topic *</label>
