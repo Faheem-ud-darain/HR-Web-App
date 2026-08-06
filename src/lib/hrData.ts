@@ -2421,7 +2421,7 @@ export const hrActions = {
           
           // Inactivity is only counted if it happens strictly within the shift bounds
           const logsForShift = empInactivity.filter(l => {
-            const lt = new Date(l.timestamp || l.startAt).getTime();
+            const lt = new Date(l.startAt).getTime();
             return lt >= inTime && lt <= outTime;
           });
           for (const l of logsForShift) inactiveSecsForShift += (l.durationSeconds || 0);
