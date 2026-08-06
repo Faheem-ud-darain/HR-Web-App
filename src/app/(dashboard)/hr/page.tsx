@@ -23,7 +23,7 @@ export default function HRDashboard() {
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
   const { data: teamsData = [], refetch: refetchTeams } = useTeams();
   const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets();
-  const { data: payrollRecords = [] } = usePayroll();
+
 
   // LeaveApplication only snapshots a fullName, not a live Profile reference.
   const nameFor = (employeeName: string): string => {
