@@ -313,6 +313,8 @@ export interface TrackingSettings {
 
 export interface TrackerHeartbeat {
   employeeEmail: string; deviceId: string; deviceLabel?: string; connectedAt: string; lastSeenAt: string;
+  /** Written by the desktop agent since v6 — used by the web portal to detect outdated builds. */
+  agentVersion?: string;
 }
 export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 

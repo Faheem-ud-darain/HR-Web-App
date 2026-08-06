@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, TrackingSettings, TrackerHeartbeat, localShiftDate } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, detectOS } from '@/lib/trackerSetup';
+import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
 import { getSessionEmail } from '@/lib/session';
-import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
 
 export default function TrackerPage() {
@@ -250,6 +250,23 @@ export default function TrackerPage() {
 
               {trackingSettings?.agentToken ? (
                 <>
+                  {/* Update-required banner — shown when the connected agent is
+                      running an older build than TRACKER_MIN_VERSION. Employees
+                      whose agent predates v6 (no agentVersion in heartbeat)
+                      are silently ignored — the download buttons below always
+                      point to /releases/latest so they'll get the right build. */}
+                  {hrActions.isHeartbeatLive(heartbeat) && needsTrackerUpdate(heartbeat?.agentVersion) && (
+                    <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-bold text-amber-900">Tracker Update Required — v{TRACKER_MIN_VERSION}</p>
+                        <p className="text-[10px] text-amber-700 leading-relaxed">
+                          You're running v{heartbeat?.agentVersion ?? 'unknown'}. Download the latest installer below, run it, and your tracker will reconnect automatically.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Direct-download links straight to the installer file (not the
                       GitHub Releases page) — clicking starts the download
                       immediately instead of sending the employee to GitHub to

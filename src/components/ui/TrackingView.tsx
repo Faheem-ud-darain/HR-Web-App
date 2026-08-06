@@ -20,8 +20,8 @@ import {
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
-import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, POCKETBASE_URL } from '@/lib/trackerSetup';
-import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
+import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle } from 'lucide-react';
 
 interface TrackingViewProps {
   role: 'admin' | 'hr' | 'team_lead';
@@ -500,9 +500,16 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     <td className="px-6 py-4 text-slate-600 font-semibold">{emp.region || 'Pakistan'}</td>
                     <td className="px-6 py-4 text-center">
                       {isLive ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
-                          <Wifi className="h-3 w-3" /> Connected
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
+                            <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
+                          </span>
+                          {needsTrackerUpdate(hb?.agentVersion) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={`Must update to v${TRACKER_MIN_VERSION}`}>
+                              <AlertTriangle className="h-3 w-3" /> Update Required
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
                           <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : 'Not installed'}

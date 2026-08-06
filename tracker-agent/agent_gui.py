@@ -96,7 +96,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "1.10"
+APP_VERSION = "6"
 GITHUB_REPO = "SPARXzeux/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -651,6 +651,10 @@ def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_la
         "deviceLabel": device_label,
         "connectedAt": connected_at or now,
         "lastSeenAt": now,
+        # Included so the web dashboard can show an "update available" prompt
+        # when the employee's installed build is older than TRACKER_MIN_VERSION
+        # (see trackerSetup.ts / employee/tracker/page.tsx).
+        "agentVersion": APP_VERSION,
     }
     pb_set_kv(base_url, key, value)
 

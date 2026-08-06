@@ -22,6 +22,35 @@ export const TRACKER_DOWNLOAD_WINDOWS_URL = 'https://github.com/SPARXzeux/HR-Web
 export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.dmg';
 export const TRACKER_DOWNLOAD_MAC_ZIP_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
 
+// The minimum agent build employees must be running. When an employee's
+// tracker heartbeat reports an agentVersion older than this, the web portal
+// shows an "Update Required" banner on their Tracker Setup page, and
+// HR/Admin sees an outdated-build badge in TrackingView. Bump this string
+// whenever a new mandatory build ships (keep in sync with APP_VERSION in
+// tracker-agent/agent_gui.py AND the git tag pushed to trigger the release).
+export const TRACKER_MIN_VERSION = '6';
+
+/**
+ * Returns true when the connected tracker agent needs an update.
+ * Compares component-by-component so "2" > "1.10" works correctly.
+ * Returns false (no update needed) when version info is unavailable —
+ * we don't want to false-alarm employees whose agents predate the
+ * agentVersion heartbeat field (they'll appear as "unknown").
+ */
+export function needsTrackerUpdate(agentVersion: string | undefined): boolean {
+  if (!agentVersion) return false; // pre-v6 agents don't send a version — don't alarm
+  const parse = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
+  const agent = parse(agentVersion);
+  const min = parse(TRACKER_MIN_VERSION);
+  for (let i = 0; i < Math.max(agent.length, min.length); i++) {
+    const a = agent[i] ?? 0;
+    const m = min[i] ?? 0;
+    if (a < m) return true;
+    if (a > m) return false;
+  }
+  return false; // equal — up to date
+}
+
 /** Best-effort OS guess from the browser, used only to default which
  * download button we highlight — both are always shown regardless. */
 export function detectOS(): 'windows' | 'mac' | 'other' {
