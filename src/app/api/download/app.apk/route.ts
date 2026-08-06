@@ -3,11 +3,13 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const targetUrl = searchParams.get('url');
+    const encodedUrl = searchParams.get('url');
 
-    if (!targetUrl) {
+    if (!encodedUrl) {
       return new NextResponse('Missing url parameter', { status: 400 });
     }
+
+    const targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf-8');
 
     const res = await fetch(targetUrl);
     if (!res.ok) {

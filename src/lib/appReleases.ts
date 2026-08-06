@@ -36,6 +36,8 @@ export const appReleaseActions = {
   getApkUrl: (release: AppRelease): string => {
     const originalUrl = pb.getFileUrl(release, release.apk_file);
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
-    return `${baseUrl}/api/download/app.apk?url=${encodeURIComponent(originalUrl)}`;
+    // Base64 encode to hide any .zip extensions in the original URL from Android's aggressive Download Manager
+    const encodedUrl = typeof window !== 'undefined' ? btoa(originalUrl) : Buffer.from(originalUrl).toString('base64');
+    return `${baseUrl}/api/download/app.apk?url=${encodeURIComponent(encodedUrl)}`;
   }
 };

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Configures FileProvider paths to allow the app to securely share files
+    (like screenshots or downloaded documents) with other apps.
+    See AndroidManifest.xml's FileProvider entry and
+    https://developer.android.com/reference/androidx/core/content/FileProvider
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
