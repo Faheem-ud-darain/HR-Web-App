@@ -5,7 +5,7 @@ import { Bell, Search, X, User, CheckCircle2, Settings, LogOut, UserCircle, KeyR
 import {
   Notification, Profile, Task, Ticket, Team, Warehouse, PayrollRecord, LeaveApplication, CareerPosition, Announcement,
   hrActions, useProfiles, useTasks, useTickets, useNotifications, useTeams, useWarehouses, usePayroll, useLeaves, useCareers, useAnnouncements,
-  displayName as resolveDisplayName,
+  displayName as resolveDisplayName, isTechnicalSupportMember,
 } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { useRouter, usePathname } from 'next/navigation';
@@ -179,7 +179,7 @@ export function TopNav() {
 
     // Tickets — HR sees HR tickets, Tech sees Tech tickets + their own, Admin sees all, others see their own.
     const currentProfile = (allProfiles || []).find(e => e.email?.toLowerCase() === (email || '').toLowerCase());
-    const isTech = currentProfile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+    const isTech = isTechnicalSupportMember(currentProfile?.teams);
     let ticketsScope = allTickets || [];
     if (role === 'hr') {
       ticketsScope = ticketsScope.filter(t => t.department === 'hr');

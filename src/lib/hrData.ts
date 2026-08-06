@@ -172,6 +172,14 @@ export interface Profile {
   companyPhone?: string;
 }
 
+export function isTechnicalSupportMember(teams?: string[] | null): boolean {
+  if (!teams || !Array.isArray(teams)) return false;
+  return teams.some(t => {
+    const lower = (t || '').toLowerCase().trim();
+    return lower === 'technical support' || lower === 'internal technical support';
+  });
+}
+
 // Team members and team leads only ever see the Alias (or the real name as
 // a fallback if no alias has been set yet — better than showing a blank).
 // HR/Admin see the real name with the alias appended for reference. This is
@@ -1891,36 +1899,57 @@ export const hrActions = {
     // notified 'hr', same gap as leave requests.
     if (ticket.department === 'hr') {
       await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', created.id));
+    } else if (ticket.department === 'technical') {
+      // Find all profiles on Technical Support / Internal Technical Support teams and notify them directly
+      const profiles = await pbList('hr_profiles');
+      const techEmails = profiles
+        .filter((p: any) => isTechnicalSupportMember(p.teams))
+        .map((p: any) => p.email)
+        .filter(Boolean);
+      for (const email of techEmails) {
+        await hrActions.addNotification(email, 'employee', `New technical support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', created.id));
+      }
     }
     await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
-    // Store a raw, parseable timestamp (not a pre-formatted "05:01 AM"
-    // string) so the date is never permanently discarded — a thread that
-    // spans multiple days needs the date to read correctly, and baking in
-    // a time-only display string at creation time makes that impossible
-    // to recover later no matter how the UI formats it (see TicketsView's
-    // formatTicketDate, which now renders every reply this same way).
-    // Old replies already stored as a bare time string are left as-is —
-    // formatTicketDate falls back to showing them unchanged rather than
-    // guessing a date that was never recorded.
     const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toISOString() };
     await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
-    if (reply.senderRole === 'hr' || reply.senderRole === 'admin') {
-      // reply.senderName is a real-name snapshot, not an email (TicketReply
-      // has no senderEmail field) — pass the title only, no avatar, rather
-      // than guess at an email from a name.
-      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from HR regarding ticket "${ticket.title}".`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
+    if (reply.senderRole === 'hr' || reply.senderRole === 'admin' || (ticket.department === 'technical' && reply.senderRole !== 'employee')) {
+      const senderLabel = ticket.department === 'technical' ? 'Technical Support' : (reply.senderRole === 'hr' ? 'HR' : 'Admin');
+      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from ${senderLabel} regarding ticket "${ticket.title}".`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
     } else {
-      await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', ticket.id));
+      if (ticket.department === 'hr') {
+        await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', ticket.id));
+      } else if (ticket.department === 'technical') {
+        const profiles = await pbList('hr_profiles');
+        const techEmails = profiles
+          .filter((p: any) => isTechnicalSupportMember(p.teams))
+          .map((p: any) => p.email)
+          .filter(Boolean);
+        for (const email of techEmails) {
+          await hrActions.addNotification(email, 'employee', `New support message from ${ticket.employeeName} on technical ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', ticket.id));
+        }
+      }
       await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', ticket.id));
     }
   },
   updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
     await pbUpdate('hr_tickets', ticket.id, { status });
     await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
-    await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
+    if (ticket.department === 'hr') {
+      await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
+    } else if (ticket.department === 'technical') {
+      const profiles = await pbList('hr_profiles');
+      const techEmails = profiles
+        .filter((p: any) => isTechnicalSupportMember(p.teams))
+        .map((p: any) => p.email)
+        .filter(Boolean);
+      for (const email of techEmails) {
+        await hrActions.addNotification(email, 'employee', `Technical ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
+      }
+    }
     await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
     // Starts/clears the 15-day attachment-deletion timer (see
     // checkTicketAttachmentRetention below) — hr_tickets has no closedAt

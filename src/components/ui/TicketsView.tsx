@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenState, Profile, markTicketActivitySeen, displayName } from '@/lib/hrData';
+import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenState, Profile, markTicketActivitySeen, displayName, isTechnicalSupportMember } from '@/lib/hrData';
 import { TypingIndicator } from './TypingIndicator';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
@@ -134,7 +134,7 @@ export function TicketsView({ role }: TicketsViewProps) {
     }
   }, [!!selectedTicket]);
 
-  const isTechnicalTeam = userProfile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+  const isTechnicalTeam = isTechnicalSupportMember(userProfile?.teams);
   const isPrivileged = role === 'hr' || role === 'admin' || isTechnicalTeam;
 
   // Ticket/reply records only ever snapshot a name string (employeeName /
@@ -161,12 +161,14 @@ export function TicketsView({ role }: TicketsViewProps) {
   // refetch, and so the "no tickets match your filters" empty state can be
   // told apart from "there are genuinely zero tickets".
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [deptFilter, setDeptFilter] = useState<'all' | 'hr' | 'technical'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const visibleTickets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return tickets
       .filter(t => statusFilter === 'all' || t.status === statusFilter)
+      .filter(t => deptFilter === 'all' || t.department === deptFilter)
       .filter(t => {
         if (!q) return true;
         return (
@@ -176,13 +178,8 @@ export function TicketsView({ role }: TicketsViewProps) {
           nameFor(t.employeeName).toLowerCase().includes(q)
         );
       })
-      // Most-recent-activity first, not creation order — see
-      // ticketActivityMs's comment. Stable within ties since Array#sort is
-      // guaranteed stable and useTickets() already arrives sorted by
-      // `-created`, so same-activity tickets keep falling back to newest-
-      // opened-first rather than shuffling on every re-render.
       .sort((a, b) => ticketActivityMs(b) - ticketActivityMs(a));
-  }, [tickets, statusFilter, searchQuery, employees, isPrivileged]);
+  }, [tickets, statusFilter, deptFilter, searchQuery, employees, isPrivileged]);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -220,7 +217,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   const appliedDeepLinkRef = useRef(false);
 
   const applyTickets = (all: Ticket[], email: string, profile: Profile | null) => {
-    const isTech = profile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+    const isTech = isTechnicalSupportMember(profile?.teams);
     
     if (role === 'admin') {
       setTickets(all);
@@ -468,7 +465,7 @@ export function TicketsView({ role }: TicketsViewProps) {
     if ((!replyMsg.trim() && !replyFile) || !selectedTicket || sendingReply) return;
     setReplyFileError('');
 
-    const isTech = userProfile?.teams?.some(t => t.toLowerCase().includes('technical')) || false;
+    const isTech = isTechnicalSupportMember(userProfile?.teams);
     let senderName = currentEmail.split('@')[0];
     if (role === 'hr') senderName = 'HR Manager';
     else if (role === 'admin') senderName = 'System Admin';
@@ -605,21 +602,42 @@ export function TicketsView({ role }: TicketsViewProps) {
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 outline-none focus:border-orange-500 placeholder:text-slate-400"
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              {(['all', 'open', 'closed'] as const).map(f => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setStatusFilter(f)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                    statusFilter === f
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                >
-                  {f === 'all' ? 'All' : f === 'open' ? 'Open' : 'Closed'}
-                </button>
-              ))}
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                {(['all', 'open', 'closed'] as const).map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setStatusFilter(f)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      statusFilter === f
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {f === 'all' ? 'All' : f === 'open' ? 'Open' : 'Closed'}
+                  </button>
+                ))}
+              </div>
+
+              {isAdmin && (
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-full border border-slate-200">
+                  {(['all', 'hr', 'technical'] as const).map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDeptFilter(d)}
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                        deptFilter === d
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      {d === 'all' ? 'All Depts' : d === 'hr' ? 'HR' : 'Tech'}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
