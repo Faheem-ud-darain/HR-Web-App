@@ -518,13 +518,18 @@ export default function AuthPage() {
       </Card>
 
       <a
-        href="https://pb.delcargo.us/api/files/hr_app_releases/latest/app.apk"
+        href="#"
         onClick={async (e) => {
           e.preventDefault();
           const { appReleaseActions } = await import('@/lib/appReleases');
           const latest = await appReleaseActions.getLatestRelease();
           if (latest) {
-            window.location.href = appReleaseActions.getApkUrl(latest);
+            const url = appReleaseActions.getApkUrl(latest);
+            if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+              window.open(url, '_system');
+            } else {
+              window.location.href = url;
+            }
           } else {
             alert('No app release available yet.');
           }

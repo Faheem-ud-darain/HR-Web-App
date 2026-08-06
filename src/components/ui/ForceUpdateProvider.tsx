@@ -65,6 +65,15 @@ export function ForceUpdateProvider({ children }: { children: React.ReactNode })
 
           <a 
             href={appReleaseActions.getApkUrl(latestRelease)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              const url = appReleaseActions.getApkUrl(latestRelease);
+              if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+                e.preventDefault();
+                window.open(url, '_system');
+              }
+            }}
             className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             <Download className="h-5 w-5" />

@@ -16,21 +16,21 @@ export async function GET(request: Request) {
       return new NextResponse('Failed to fetch file from source', { status: res.status });
     }
 
-    const headers = new Headers(res.headers);
+    const headers = new Headers();
     
-    // Forcibly set the Android Package MIME type
+    // Forcibly set the Android Package MIME type so Android system installer recognizes it as an APK file, not a ZIP archive
     headers.set('Content-Type', 'application/vnd.android.package-archive');
     
-    // Forcibly tell the browser this is an attachment download, not a web page
-    const fallbackName = targetUrl.split('/').pop() || 'app-release.apk';
-    let filename = fallbackName.split('?')[0]; // remove query params
-    filename = filename.toLowerCase().endsWith('.apk') ? filename : `${filename}.apk`;
-    
-    headers.set('Content-Disposition', `attachment; filename="${filename}"`);
+    // Forcibly tell the browser/downloader this is an APK attachment file named DelCargo-HR.apk
+    headers.set('Content-Disposition', 'attachment; filename="DelCargo-HR.apk"');
+
+    const contentLength = res.headers.get('content-length');
+    if (contentLength) {
+      headers.set('Content-Length', contentLength);
+    }
 
     return new NextResponse(res.body, {
-      status: res.status,
-      statusText: res.statusText,
+      status: 200,
       headers,
     });
   } catch (error) {

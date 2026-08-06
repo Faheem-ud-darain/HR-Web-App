@@ -35,9 +35,9 @@ export const appReleaseActions = {
 
   getApkUrl: (release: AppRelease): string => {
     const originalUrl = pb.getFileUrl(release, release.apk_file);
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' && window.location.origin.startsWith('http') && !window.location.origin.includes('localhost') ? window.location.origin : 'https://delcargo-io.vercel.app');
     // Base64 encode to hide any .zip extensions in the original URL from Android's aggressive Download Manager
     const encodedUrl = typeof window !== 'undefined' ? btoa(originalUrl) : Buffer.from(originalUrl).toString('base64');
-    return `${baseUrl}/api/download/app.apk?url=${encodeURIComponent(encodedUrl)}`;
+    return `${siteUrl}/api/download/app.apk?url=${encodeURIComponent(encodedUrl)}`;
   }
 };
