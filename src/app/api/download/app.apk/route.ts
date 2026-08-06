@@ -18,11 +18,14 @@ export async function GET(request: Request) {
 
     const headers = new Headers();
     
+    // CRITICAL for Android: Prevents Chrome and Android DownloadManager from sniffing PK zip signature and renaming .apk to .zip
+    headers.set('X-Content-Type-Options', 'nosniff');
+    
     // Forcibly set the Android Package MIME type so Android system installer recognizes it as an APK file, not a ZIP archive
     headers.set('Content-Type', 'application/vnd.android.package-archive');
     
     // Forcibly tell the browser/downloader this is an APK attachment file named DelCargo-HR.apk
-    headers.set('Content-Disposition', 'attachment; filename="DelCargo-HR.apk"');
+    headers.set('Content-Disposition', 'attachment; filename="DelCargo-HR.apk"; filename*=UTF-8\'\'DelCargo-HR.apk');
 
     const contentLength = res.headers.get('content-length');
     if (contentLength) {
