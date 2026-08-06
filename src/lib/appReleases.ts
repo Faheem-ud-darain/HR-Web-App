@@ -35,6 +35,7 @@ export const appReleaseActions = {
 
   getApkUrl: (release: AppRelease): string => {
     const originalUrl = pb.getFileUrl(release, release.apk_file);
-    return `/api/download-apk?url=${encodeURIComponent(originalUrl)}`;
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || '';
+    return `${baseUrl}/api/download-apk?url=${encodeURIComponent(originalUrl)}`;
   }
 };
