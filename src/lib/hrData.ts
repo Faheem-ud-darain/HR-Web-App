@@ -2467,7 +2467,9 @@ export const hrActions = {
         if (!isNaN(jd.getTime())) joinedStr = jd.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
       }
 
-      const shiftDatesWithInactivity = new Map<string, number>();
+      const shiftDatesWithShift = new Set<string>();
+      const shiftDatesWithMaxSingleInactivity = new Map<string, number>();
+
       for (const t of empTimesheets) {
         if (!t.clockIn) continue;
         
@@ -2476,22 +2478,29 @@ export const hrActions = {
         const d = new Date(t.clockIn);
         if (isNaN(d.getTime())) continue;
         const shiftDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+        shiftDatesWithShift.add(shiftDate);
         
-        let inactiveSecsForShift = 0;
+        let maxSingleInactiveSecs = 0;
         if (t.clockOut) {
           const inTime = d.getTime();
           const outTime = new Date(t.clockOut).getTime();
           
-          // Inactivity is only counted if it happens strictly within the shift bounds
+          // Absence is only triggered if a SINGLE continuous inactivity run reaches 35+ mins (2100s),
+          // not by summing up multiple smaller inactive periods across the shift.
           const logsForShift = empInactivity.filter(l => {
             const lt = new Date(l.startAt).getTime();
             return lt >= inTime && lt <= outTime;
           });
-          for (const l of logsForShift) inactiveSecsForShift += (l.durationSeconds || 0);
+          for (const l of logsForShift) {
+            const duration = l.durationSeconds || 0;
+            if (duration > maxSingleInactiveSecs) {
+              maxSingleInactiveSecs = duration;
+            }
+          }
         }
         
-        // Accumulate inactivity across all shifts on the same day (if they had multiple)
-        shiftDatesWithInactivity.set(shiftDate, (shiftDatesWithInactivity.get(shiftDate) || 0) + inactiveSecsForShift);
+        const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
+        shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
       }
 
       const today = new Date();
@@ -2509,7 +2518,7 @@ export const hrActions = {
         // records to keep coming back).
         if (ignoredIds.has(recordId) || ignoredIds.has(recordId.toLowerCase())) continue;
 
-        const hadShift = shiftDatesWithInactivity.has(dateStr);
+        const hadShift = shiftDatesWithShift.has(dateStr);
         const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
 
         let reason: AbsenceRecord['reason'] | null = null;
@@ -2517,10 +2526,10 @@ export const hrActions = {
         if (!hadShift) {
           if (!onLeave) reason = 'no_clock_in';
         } else {
-          const inactiveSeconds = shiftDatesWithInactivity.get(dateStr) || 0;
-          if (inactiveSeconds >= INACTIVITY_THRESHOLD_SECONDS) {
+          const maxSingleInactiveSecs = shiftDatesWithMaxSingleInactivity.get(dateStr) || 0;
+          if (maxSingleInactiveSecs >= INACTIVITY_THRESHOLD_SECONDS) {
             reason = 'inactivity';
-            inactivityMinutes = Math.round(inactiveSeconds / 60);
+            inactivityMinutes = Math.round(maxSingleInactiveSecs / 60);
           }
         }
         if (!reason) continue; // present and accounted for — nothing to record
