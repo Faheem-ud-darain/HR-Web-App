@@ -4,8 +4,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { hrActions, AbsenceRecord, useTimesheets, useProfiles, formatMoney, localShiftDate, displayName } from '@/lib/hrData';
-import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck } from 'lucide-react';
+import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
+
 
 interface AbsenceDetailsViewProps {
   role: 'employee' | 'hr' | 'admin';
@@ -16,6 +17,8 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [activeTab, setActiveTab] = useState<'attendance' | 'absences'>('attendance');
   const [absenceRecords, setAbsenceRecords] = useState<AbsenceRecord[]>([]);
   const [loadingAbsences, setLoadingAbsences] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { data: allTimesheets = [], isLoading: loadingTimesheets } = useTimesheets();
   const { data: allProfiles = [] } = useProfiles();
@@ -51,7 +54,41 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     const confirmDelete = window.confirm(`Remove absence record for ${record.employeeName} on ${record.date}? This will remove the 2-days' pay deduction penalty.`);
     if (!confirmDelete) return;
     await hrActions.deleteAbsenceRecord(record.id);
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(record.id); return next; });
     loadAbsenceRecords();
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const total = filteredAbsences.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + r.deductionAmount, 0);
+    const confirmed = window.confirm(
+      `Remove ${selectedIds.size} absence record${selectedIds.size > 1 ? 's' : ''} and reverse ${formatMoney(total, 'Pakistan')} in deductions? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setBulkDeleting(true);
+    try {
+      await hrActions.bulkDeleteAbsenceRecords(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      loadAbsenceRecords();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleToggleAll = () => {
+    if (selectedIds.size === filteredAbsences.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredAbsences.map(r => r.id)));
+    }
+  };
+
+  const handleToggleOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   // Group timesheets cumulatively per Employee + Date
@@ -423,6 +460,41 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             </Card>
           </div>
 
+          {/* Bulk Action Bar — visible whenever HR/Admin has selected ≥1 record */}
+          {role !== 'employee' && selectedIds.size > 0 && (
+            <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 mb-2">
+              <div className="flex items-center gap-2">
+                <ShieldX className="h-4 w-4 text-rose-600 shrink-0" />
+                <span className="text-xs font-bold text-rose-800">
+                  {selectedIds.size} record{selectedIds.size > 1 ? 's' : ''} selected
+                  {' '}—{' '}
+                  {formatMoney(
+                    filteredAbsences.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + r.deductionAmount, 0),
+                    'Pakistan'
+                  )}{' '}to reverse
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs font-bold text-rose-500 hover:text-rose-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {bulkDeleting ? 'Removing…' : `Remove ${selectedIds.size} Record${selectedIds.size > 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          )}
+
           <Card className="border border-slate-200 overflow-hidden p-0 bg-white">
             {loadingAbsences ? (
               <div className="py-16 text-center text-xs font-semibold text-slate-400">Loading absence records…</div>
@@ -441,6 +513,17 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                       <tr>
+                        {role !== 'employee' && (
+                          <th className="px-5 py-3">
+                            <input
+                              type="checkbox"
+                              checked={filteredAbsences.length > 0 && selectedIds.size === filteredAbsences.length}
+                              onChange={handleToggleAll}
+                              className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
+                              title="Select all"
+                            />
+                          </th>
+                        )}
                         <th className="text-left px-5 py-3 font-bold">Date</th>
                         {role !== 'employee' && <th className="text-left px-5 py-3 font-bold">Employee</th>}
                         <th className="text-left px-5 py-3 font-bold">Reason</th>
@@ -451,7 +534,17 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredAbsences.map(r => (
-                        <tr key={r.id} className="hover:bg-slate-50/50">
+                        <tr key={r.id} className={`hover:bg-slate-50/50 ${selectedIds.has(r.id) ? 'bg-rose-50/50' : ''}`}>
+                          {role !== 'employee' && (
+                            <td className="px-5 py-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(r.id)}
+                                onChange={() => handleToggleOne(r.id)}
+                                className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
+                              />
+                            </td>
+                          )}
                           <td className="px-5 py-3 font-mono font-bold text-slate-700">{r.date}</td>
                           {role !== 'employee' && <td className="px-5 py-3 font-semibold text-slate-800">{r.employeeName}</td>}
                           <td className="px-5 py-3">
@@ -486,9 +579,19 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 {/* Mobile cards */}
                 <div className="md:hidden divide-y divide-slate-100">
                   {filteredAbsences.map(r => (
-                    <div key={r.id} className="p-4 space-y-2">
+                    <div key={r.id} className={`p-4 space-y-2 ${selectedIds.has(r.id) ? 'bg-rose-50/40' : ''}`}>
                       <div className="flex items-center justify-between">
-                        <p className="font-mono text-xs font-bold text-slate-800">{r.date}</p>
+                        <div className="flex items-center gap-2">
+                          {role !== 'employee' && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(r.id)}
+                              onChange={() => handleToggleOne(r.id)}
+                              className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
+                            />
+                          )}
+                          <p className="font-mono text-xs font-bold text-slate-800">{r.date}</p>
+                        </div>
                         <div className="flex items-center gap-2">
                           {r.acknowledged
                             ? <Badge variant="success">Seen</Badge>

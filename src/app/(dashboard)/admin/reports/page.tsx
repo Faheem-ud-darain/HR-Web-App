@@ -25,6 +25,7 @@ export default function ReportsPage() {
   const [selectedRegion, setSelectedRegion] = useState<'USA' | 'Pakistan'>('Pakistan');
   const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([]);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const [exemptFromAbsenceCheck, setExemptFromAbsenceCheck] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
 
@@ -90,6 +91,7 @@ export default function ReportsPage() {
     setSelectedRegion(emp.region || 'Pakistan');
     setSelectedWarehouses(emp.assignedWarehouses || []);
     setTrackingEnabled(!!emp.trackingEnabled);
+    setExemptFromAbsenceCheck(!!emp.exemptFromAbsenceCheck);
   };
 
   const handleToggleWarehouse = (whId: string) => {
@@ -108,7 +110,8 @@ export default function ReportsPage() {
       await hrActions.updateProfileDetails(selectedEmp.id, {
         region: selectedRegion,
         assignedWarehouses: assignedWh,
-        trackingEnabled: trackingEnabled
+        trackingEnabled: trackingEnabled,
+        exemptFromAbsenceCheck: exemptFromAbsenceCheck,
       });
 
       refetchProfiles();
@@ -412,6 +415,22 @@ export default function ReportsPage() {
                 <div>
                   <span className="text-slate-900 block font-bold text-[11px] uppercase tracking-wide">Enable Workstation Monitoring</span>
                   <span className="text-[10px] text-slate-400 font-medium leading-tight block mt-0.5">Activate screenshot captures, activity timeline logs, and active application checks.</span>
+                </div>
+              </label>
+            </div>
+
+            {/* Part-time / Absence Check Exempt Toggle */}
+            <div className="space-y-2 pt-2">
+              <label className="flex items-center gap-2.5 text-xs font-bold text-slate-800 cursor-pointer select-none bg-amber-50/40 border border-amber-100/50 p-3 rounded-xl hover:bg-amber-50/70 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={exemptFromAbsenceCheck}
+                  onChange={(e) => setExemptFromAbsenceCheck(e.target.checked)}
+                  className="rounded border-slate-300 text-amber-500 focus:ring-amber-400 h-4 w-4"
+                />
+                <div>
+                  <span className="text-slate-900 block font-bold text-[11px] uppercase tracking-wide">Exempt from Absence Check</span>
+                  <span className="text-[10px] text-slate-400 font-medium leading-tight block mt-0.5">Part-time or flexible-schedule employees will never be auto-marked absent. Existing false records must still be removed manually.</span>
                 </div>
               </label>
             </div>

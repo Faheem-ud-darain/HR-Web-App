@@ -129,6 +129,10 @@ export interface Profile {
   // joinedDate for employees onboarded before this field existed. PTO
   // accrual is keyed off this instead of joinedDate (see getPTOAccrualDate).
   accountCreationDate?: string;
+  // When true, runAbsenceCheck completely skips this employee — used for
+  // part-time employees, contractors, or anyone whose schedule means the
+  // "no clock-in on a weekday" rule does not apply to them.
+  exemptFromAbsenceCheck?: boolean;
   offboarded?: boolean;
   offboardDate?: string;
   offboardingStatus?: {
@@ -698,6 +702,7 @@ const OVERLAY_KEYS: (keyof Profile)[] = [
   'offboarded', 'offboardDate', 'offboardingStatus', 'lastIncrementProcessedYear',
   'accountCreationDate', 'alias', 'approvalStatus', 'approvalReviewedBy',
   'approvalReviewedAt', 'approvalRejectionReason', 'personalPhone', 'companyPhone',
+  'exemptFromAbsenceCheck',
 ];
 
 function toWarehouse(w: any): Warehouse {
@@ -2377,10 +2382,35 @@ export const hrActions = {
     const all = await hrActions.getAbsenceRecords();
     const next = all.filter(a => a.id !== recordId);
     await pbSetKV('hr_absence_records_v1', next);
-    // Track deleted IDs so background runAbsenceCheck never re-marks them absent
+    // Track deleted IDs so background runAbsenceCheck never re-marks them absent.
+    // Store both the raw recordId AND the canonical email_date key (lowercase)
+    // so the tombstone survives even if the email casing drifts between runs.
     const deletedIds = await hrActions.getDeletedAbsenceIds();
-    if (!deletedIds.includes(recordId)) {
-      await pbSetKV('hr_absence_deleted_v1', [...deletedIds, recordId]);
+    const toAdd: string[] = [];
+    if (!deletedIds.includes(recordId)) toAdd.push(recordId);
+    const lower = recordId.toLowerCase();
+    if (!deletedIds.includes(lower)) toAdd.push(lower);
+    if (toAdd.length > 0) {
+      await pbSetKV('hr_absence_deleted_v1', [...deletedIds, ...toAdd]);
+    }
+  },
+  // Bulk removal — removes many records in one write per store rather than
+  // N sequential reads/writes (avoids the race window where a parallel
+  // runAbsenceCheck could re-create a record that was mid-deletion).
+  bulkDeleteAbsenceRecords: async (recordIds: string[]): Promise<void> => {
+    if (recordIds.length === 0) return;
+    const idSet = new Set(recordIds.map(id => id.toLowerCase()));
+    const all = await hrActions.getAbsenceRecords();
+    const next = all.filter(a => !idSet.has(a.id.toLowerCase()));
+    await pbSetKV('hr_absence_records_v1', next);
+    const deletedIds = await hrActions.getDeletedAbsenceIds();
+    const existing = new Set(deletedIds.map((d: string) => d.toLowerCase()));
+    const toAdd: string[] = [];
+    for (const id of recordIds) {
+      if (!existing.has(id.toLowerCase())) toAdd.push(id.toLowerCase());
+    }
+    if (toAdd.length > 0) {
+      await pbSetKV('hr_absence_deleted_v1', [...deletedIds, ...toAdd]);
     }
   },
   // Marks a record as seen so AbsentPopup stops showing it — called by the
@@ -2423,6 +2453,8 @@ export const hrActions = {
     for (const emp of employees) {
       if (emp.region !== 'Pakistan') continue;
       if (emp.role !== 'employee' && emp.role !== 'team_lead') continue;
+      // Skip part-time employees or anyone explicitly marked exempt by HR/Admin
+      if (emp.exemptFromAbsenceCheck) continue;
 
       const empTimesheets = timesheets.filter(t => t.employeeEmail && t.employeeEmail.toLowerCase() === emp.email.toLowerCase() && t.clockIn);
       const empInactivity = inactivityLogs.filter(l => l.employeeEmail && l.employeeEmail.toLowerCase() === emp.email.toLowerCase());
@@ -2470,7 +2502,10 @@ export const hrActions = {
         if (joinedStr && dateStr < joinedStr) continue;
         if (!isWeekday(dateStr)) continue;
         const recordId = `${emp.email.toLowerCase()}_${dateStr}`;
-        if (ignoredIds.has(recordId)) continue; // already decided or manually deleted by HR/Admin
+        // Check both the canonical lowercase key AND the raw stored form to
+        // prevent case-drift re-creation (the historic bug that caused deleted
+        // records to keep coming back).
+        if (ignoredIds.has(recordId) || ignoredIds.has(recordId.toLowerCase())) continue;
 
         const hadShift = shiftDatesWithInactivity.has(dateStr);
         const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
