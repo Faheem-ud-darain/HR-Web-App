@@ -33,6 +33,6 @@ export const appReleaseActions = {
   },
 
   getApkUrl: (release: AppRelease): string => {
-    return pb.getFileUrl(release, release.apk_file);
+    return pb.getFileUrl(release, release.apk_file, { download: 1 });
   }
 };

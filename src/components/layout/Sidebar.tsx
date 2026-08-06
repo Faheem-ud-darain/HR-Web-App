@@ -356,7 +356,7 @@ export function Sidebar({ role }: SidebarProps) {
               const { appReleaseActions } = await import('@/lib/appReleases');
               const latest = await appReleaseActions.getLatestRelease();
               if (latest) {
-                window.open(appReleaseActions.getApkUrl(latest), '_blank');
+                window.location.href = appReleaseActions.getApkUrl(latest);
               } else {
                 alert('No app release available yet.');
               }

@@ -15,11 +15,11 @@ import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManag
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { data: employees = [] } = useProfiles();
-  const { data: leaves = [], refetch: refetchLeaves } = useLeaves();
+  const { data: employees = [], isLoading: isEmployeesLoading } = useProfiles();
+  const { data: leaves = [], isLoading: isLeavesLoading, refetch: refetchLeaves } = useLeaves();
   const { data: payrollRecords = [] } = usePayroll();
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
-  const { data: timesheets = [] } = useTimesheets();
+  const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets();
 
   // LeaveApplication only snapshots a fullName, not a live Profile reference.
   const nameFor = (employeeName: string): string => {
@@ -81,11 +81,11 @@ export default function AdminDashboard() {
   // for employee+date combinations not already decided, so calling it from
   // both pages is a no-op the second time).
   useEffect(() => {
-    if (employees.length === 0) return;
+    if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
     hrActions.getInactivityLogs({ sinceISO: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString() })
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
-  }, [employees.length, timesheets.length, leaves.length]);
+  }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
 
   const handleAnnouncementSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

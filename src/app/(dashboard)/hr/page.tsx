@@ -18,11 +18,12 @@ export default function HRDashboard() {
   const router = useRouter();
 
   // Data
-  const { data: employees = [], refetch: refetchProfiles } = useProfiles();
-  const { data: leaves = [], refetch: refetchLeaves } = useLeaves();
+  const { data: employees = [], isLoading: isEmployeesLoading, refetch: refetchProfiles } = useProfiles();
+  const { data: leaves = [], isLoading: isLeavesLoading, refetch: refetchLeaves } = useLeaves();
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
   const { data: teamsData = [], refetch: refetchTeams } = useTeams();
-  const { data: timesheets = [] } = useTimesheets();
+  const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets();
+  const { data: payrollRecords = [] } = usePayroll();
 
   // LeaveApplication only snapshots a fullName, not a live Profile reference.
   const nameFor = (employeeName: string): string => {
@@ -103,11 +104,11 @@ export default function HRDashboard() {
   // moment HR's dashboard loads with real data — no-ops on every subsequent
   // load unless a new absence has actually occurred since the last check.
   useEffect(() => {
-    if (employees.length === 0) return;
+    if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
     hrActions.getInactivityLogs({ sinceISO: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString() })
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
-  }, [employees.length, timesheets.length, leaves.length]);
+  }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
 
   useEffect(() => {
     hrActions.getAnnouncementReadMap().then(setAnnouncementReadMap);
