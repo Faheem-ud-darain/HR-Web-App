@@ -162,13 +162,24 @@ export function TicketsView({ role }: TicketsViewProps) {
   // told apart from "there are genuinely zero tickets".
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [deptFilter, setDeptFilter] = useState<'all' | 'hr' | 'technical'>('all');
+  const [viewTab, setViewTab] = useState<'assigned' | 'my_tickets'>('assigned');
   const [searchQuery, setSearchQuery] = useState('');
 
   const visibleTickets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const myEmailLower = (currentEmail || '').toLowerCase();
+
     return tickets
       .filter(t => statusFilter === 'all' || t.status === statusFilter)
       .filter(t => deptFilter === 'all' || t.department === deptFilter)
+      .filter(t => {
+        if (!isTechnicalTeam || role === 'admin') return true;
+        if (viewTab === 'my_tickets') {
+          return t.employeeEmail.toLowerCase() === myEmailLower;
+        }
+        // 'assigned': incoming technical support tickets from other employees (or technical tickets assigned to handle)
+        return t.department === 'technical' && t.employeeEmail.toLowerCase() !== myEmailLower;
+      })
       .filter(t => {
         if (!q) return true;
         return (
@@ -179,7 +190,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         );
       })
       .sort((a, b) => ticketActivityMs(b) - ticketActivityMs(a));
-  }, [tickets, statusFilter, deptFilter, searchQuery, employees, isPrivileged]);
+  }, [tickets, statusFilter, deptFilter, viewTab, searchQuery, employees, isPrivileged, isTechnicalTeam, currentEmail, role]);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -582,6 +593,34 @@ export function TicketsView({ role }: TicketsViewProps) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Tickets List */}
         <div className={`lg:col-span-5 space-y-3 ${selectedTicket ? 'hidden lg:block' : 'block'}`}>
+          {/* Tab Switcher for Technical Team members */}
+          {isTechnicalTeam && role !== 'admin' && (
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewTab('assigned')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  viewTab === 'assigned'
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Headset className="h-3.5 w-3.5" /> Support Queue
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewTab('my_tickets')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  viewTab === 'my_tickets'
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <User className="h-3.5 w-3.5" /> My Tickets
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-bold text-xs text-slate-500 uppercase tracking-wider">
               Tickets ({visibleTickets.length}{visibleTickets.length !== tickets.length ? ` of ${tickets.length}` : ''})
@@ -661,13 +700,27 @@ export function TicketsView({ role }: TicketsViewProps) {
                         </span>
                       )}
                     </span>
-                    <Badge variant={t.status === 'open' ? 'warning' : 'success'}>
-                      {t.status === 'open' ? 'Open' : 'Closed'}
-                    </Badge>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border uppercase ${
+                        t.department === 'technical'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-purple-50 text-purple-700 border-purple-200'
+                      }`}>
+                        {t.department === 'technical' ? 'Tech' : 'HR'}
+                      </span>
+                      <Badge variant={t.status === 'open' ? 'warning' : 'success'}>
+                        {t.status === 'open' ? 'Open' : 'Closed'}
+                      </Badge>
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 line-clamp-1 mb-2">{t.description}</p>
                   <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
-                    <span className="flex items-center gap-1"><User className="h-3 w-3" /> {nameFor(t.employeeName)}</span>
+                    <span className="flex items-center gap-1">
+                      <User className="h-3 w-3" /> {nameFor(t.employeeName)}
+                      {t.employeeEmail.toLowerCase() === (currentEmail || '').toLowerCase() && (
+                        <span className="text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1 rounded">You</span>
+                      )}
+                    </span>
                     <span>{formatTicketDate(t.createdAt)}</span>
                   </div>
                 </Card>
