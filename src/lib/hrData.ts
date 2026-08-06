@@ -386,7 +386,7 @@ export const MAX_USER_SESSION_DEVICES = 2;
 // abandoned (browser/tab closed without hitting Log Out) and doesn't count
 // against the cap — so an employee whose old laptop just silently died
 // isn't ever permanently locked out of one of their 2 slots.
-export const USER_SESSION_STALE_MS = 15 * 1000;
+export const USER_SESSION_STALE_MS = 3 * 60 * 1000; // 3 minutes tolerance for multi-device heartbeat check
 const userSessionKeyFor = (email: string) => `user_session_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
 // `imageUrl` points at either a real PocketBase file URL (hr_screenshots
@@ -2610,12 +2610,31 @@ export const hrActions = {
   // or evicted by a "log out everywhere" forced login — the caller should
   // force a local logout when this happens.
   touchUserSessionSlot: async (email: string, deviceId: string, sessionToken: string): Promise<boolean> => {
-    const all = await hrActions.getUserSessions(email);
-    const mine = all.find(s => s.deviceId === deviceId);
-    if (!mine || mine.sessionToken !== sessionToken) return false;
-    const next = all.map(s => s.deviceId === deviceId ? { ...s, lastSeenAt: new Date().toISOString() } : s);
-    await pbSetKV(userSessionKeyFor(email), next);
-    return true;
+    try {
+      const cleanEmail = (email || '').toLowerCase().trim();
+      if (!cleanEmail || !deviceId || !sessionToken) return true;
+
+      const all = await hrActions.getUserSessions(cleanEmail);
+      const mine = all.find(s => s.deviceId === deviceId);
+
+      if (!mine) {
+        // Device slot was cleared or predates current session — re-claim slot for this active device session
+        await hrActions.claimUserSessionSlot(cleanEmail, deviceId, typeof navigator !== 'undefined' ? (navigator.userAgent.includes('Chrome') ? 'Browser' : 'Device') : 'Device', sessionToken);
+        return true;
+      }
+
+      // If slot exists but sessionToken was explicitly changed by another login on this device -> superseded
+      if (mine.sessionToken && mine.sessionToken !== sessionToken) {
+        return false;
+      }
+
+      const next = all.map(s => s.deviceId === deviceId ? { ...s, sessionToken, lastSeenAt: new Date().toISOString() } : s);
+      await pbSetKV(userSessionKeyFor(cleanEmail), next);
+      return true;
+    } catch (err) {
+      console.warn('[session] touchUserSessionSlot network/server error, maintaining local session:', err);
+      return true; // Never log user out on a temporary network error or fetch timeout
+    }
   },
   // Removes exactly one device's slot — used both by the Profile page's
   // "Logged-in Devices" card (logging out another device remotely) and by

@@ -95,9 +95,10 @@ async function mirrorToNativePreferences(email: string | null, role: string | nu
 
 export async function setSession(email: string, role: string, remember: boolean, sessionToken?: string): Promise<void> {
   if (typeof window === 'undefined') return;
+  const cleanEmail = (email || '').toLowerCase().trim();
   const primary = remember ? window.localStorage : window.sessionStorage;
   const other = remember ? window.sessionStorage : window.localStorage;
-  primary.setItem(EMAIL_KEY, email);
+  primary.setItem(EMAIL_KEY, cleanEmail);
   primary.setItem(ROLE_KEY, role);
   if (sessionToken) primary.setItem(TOKEN_KEY, sessionToken);
   else primary.removeItem(TOKEN_KEY);
@@ -107,17 +108,8 @@ export async function setSession(email: string, role: string, remember: boolean,
   other.removeItem(ROLE_KEY);
   other.removeItem(TOKEN_KEY);
 
-  // Only mirror into durable native storage when "Remember me" was actually
-  // checked — an unchecked session is meant to disappear when the app/tab
-  // closes, native storage would defeat that.
-  //
-  // Awaited (not fire-and-forget) so callers — see auth/page.tsx — can be
-  // sure the durable copy actually landed in native storage before they
-  // navigate away/close out of the login flow. Previously this ran
-  // unawaited, which left a real (if narrow) window where the app could be
-  // killed a moment after login before the native write finished.
   if (remember) {
-    await mirrorToNativePreferences(email, role, sessionToken || null);
+    await mirrorToNativePreferences(cleanEmail, role, sessionToken || null);
   } else {
     await mirrorToNativePreferences(null, null, null);
   }
