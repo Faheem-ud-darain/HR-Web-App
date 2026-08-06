@@ -248,32 +248,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener('visibilitychange', handleVisible);
   }, [email, queryClient]);
 
-  // Multi-device session enforcement — Employee/Team Lead accounts only
-  // (Admin/HR are exempt, see auth/page.tsx). Periodically "touches" this
-  // device's claimed slot; if it's gone (removed remotely from the Devices
-  // card on another device/tab, or evicted by a "log out everywhere" forced
-  // login — see touchUserSessionSlot in hrData.ts), force a logout here
-  // rather than leaving a device quietly signed in after it's been
-  // deliberately logged out from elsewhere.
-  useEffect(() => {
-    if (!email || !role || role === 'admin' || role === 'hr') return;
-    const token = getSessionToken();
-    if (!token) return; // e.g. a session that predates this feature — nothing to enforce yet
 
-    let cancelled = false;
-    const check = async () => {
-      const deviceId = await getOrCreateDeviceId();
-      const stillOwner = await hrActions.touchUserSessionSlot(email, deviceId, token);
-      if (!stillOwner && !cancelled) {
-        clearSession();
-        try { window.sessionStorage.setItem('session_superseded', '1'); } catch { /* ignore */ }
-        router.push('/auth');
-      }
-    };
-    check();
-    const interval = setInterval(check, 5000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [email, role, router]);
 
   const handleConsentAccept = () => {
     if (email) {

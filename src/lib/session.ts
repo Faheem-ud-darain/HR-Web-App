@@ -96,23 +96,19 @@ async function mirrorToNativePreferences(email: string | null, role: string | nu
 export async function setSession(email: string, role: string, remember: boolean, sessionToken?: string): Promise<void> {
   if (typeof window === 'undefined') return;
   const cleanEmail = (email || '').toLowerCase().trim();
-  const primary = remember ? window.localStorage : window.sessionStorage;
-  const other = remember ? window.sessionStorage : window.localStorage;
-  primary.setItem(EMAIL_KEY, cleanEmail);
-  primary.setItem(ROLE_KEY, role);
-  if (sessionToken) primary.setItem(TOKEN_KEY, sessionToken);
-  else primary.removeItem(TOKEN_KEY);
-  // Clear any stale copy left in the other storage — e.g. logging back in
-  // without "Remember me" after a previous session had it checked.
-  other.removeItem(EMAIL_KEY);
-  other.removeItem(ROLE_KEY);
-  other.removeItem(TOKEN_KEY);
 
-  if (remember) {
-    await mirrorToNativePreferences(cleanEmail, role, sessionToken || null);
-  } else {
-    await mirrorToNativePreferences(null, null, null);
-  }
+  // Always persist in localStorage so sessions survive tab closes, page refreshes, and app restarts
+  window.localStorage.setItem(EMAIL_KEY, cleanEmail);
+  window.localStorage.setItem(ROLE_KEY, role);
+  if (sessionToken) window.localStorage.setItem(TOKEN_KEY, sessionToken);
+  else window.localStorage.removeItem(TOKEN_KEY);
+
+  // Clear any temporary copies from sessionStorage
+  window.sessionStorage.removeItem(EMAIL_KEY);
+  window.sessionStorage.removeItem(ROLE_KEY);
+  window.sessionStorage.removeItem(TOKEN_KEY);
+
+  await mirrorToNativePreferences(cleanEmail, role, sessionToken || null);
 }
 
 // Call once at app boot, before anything reads getSessionEmail()/
