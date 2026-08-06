@@ -2,42 +2,45 @@
 // Runs `next build` for a native (Capacitor) build, working around a real
 // incompatibility: `output: 'export'` (set in next.config.ts whenever
 // CAPACITOR_BUILD=true) does not allow ANY dynamic API route to exist
-// anywhere under src/app/api — and src/app/api/pb/api/realtime/route.ts
-// (`export const dynamic = 'force-dynamic'`) has to be dynamic, since it's
-// a streaming SSE proxy for PocketBase's realtime endpoint, needed for the
-// *web* deployment only.
+// anywhere under src/app/api.
 //
-// The native app never calls this route at all — see src/lib/pocketbase.ts,
-// which points native builds straight at https://pb.delcargo.us and only
-// uses the local '/api/pb' proxy on the web. So this file is genuinely dead
-// weight for a Capacitor build, but its mere presence makes `next build`
-// hard-fail with:
-//   "export const dynamic = 'force-dynamic' on page
-//   '/api/pb/api/realtime' cannot be used with 'output: export'"
-//
-// Critically, `npx cap sync` does NOT check whether the `next build` that's
-// supposed to run before it actually succeeded — it just re-syncs whatever
-// is already sitting in out/, silently. That means every native rebuild
-// since this route file was added may have been re-syncing a stale out/
-// folder from before it existed, even though the terminal printed a real
-// build failure right above the (unrelated, always-"successful") cap sync
-// output.
-//
-// Fix: temporarily move src/app/api out of the tree, run the real build,
-// then restore it — success or failure, via try/finally.
-//
-// Also deletes .next before building. Without this, a previous `next dev`
-// or `next build` run (from before this route was moved) leaves behind
-// cached type-checking artifacts under .next/dev/types/ or .next/types/
-// that still reference src/app/api/pb/api/realtime/route.ts at its normal
-// path. With that file moved aside, TypeScript then fails with "Cannot
-// find module '.../api/pb/api/realtime/route.js'" — a stale-cache problem,
-// not a real one. Deleting .next forces every one of those to regenerate
-// fresh against the current (api-folder-moved) state of the tree.
+// Automatically syncs package.json version -> android/app/build.gradle
+// (versionName & versionCode) so version numbers never get out of sync.
 
-import { existsSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, renameSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+
+// ── 0. Auto-sync package.json version -> native config files ─────────────────
+function syncVersionToNative() {
+  try {
+    const pkgPath = path.join(process.cwd(), 'package.json');
+    if (!existsSync(pkgPath)) return;
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    const version = (pkg.version || '1.0.0').trim();
+
+    // Parse semver into numeric code (e.g., "1.6.0" -> 10600, "1.6" -> 10600)
+    const parts = version.replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+    const major = parts[0] || 1;
+    const minor = parts[1] || 0;
+    const patch = parts[2] || 0;
+    const versionCode = major * 10000 + minor * 100 + patch;
+
+    // 1. Android build.gradle
+    const gradlePath = path.join(process.cwd(), 'android', 'app', 'build.gradle');
+    if (existsSync(gradlePath)) {
+      let content = readFileSync(gradlePath, 'utf8');
+      content = content.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
+      content = content.replace(/versionName\s+["'].*?["']/, `versionName "${version}"`);
+      writeFileSync(gradlePath, content, 'utf8');
+      console.log(`[version-sync] Synced package.json v${version} -> Android build.gradle (versionName "${version}", versionCode ${versionCode})`);
+    }
+  } catch (err) {
+    console.error('[version-sync] Warning: Could not auto-sync version to native project files:', err);
+  }
+}
+
+syncVersionToNative();
 
 const apiDir = path.join(process.cwd(), 'src', 'app', 'api');
 const apiBackupDir = path.join(process.cwd(), 'src', 'app', '__api_backup_for_capacitor_build__');

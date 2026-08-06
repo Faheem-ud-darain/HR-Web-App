@@ -6,13 +6,17 @@ import { Capacitor } from '@capacitor/core';
 import { appReleaseActions, AppRelease } from '@/lib/appReleases';
 import { Download, Smartphone } from 'lucide-react';
 
-// Basic semver compare: returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
+function cleanVersion(v: string) {
+  return v ? v.replace(/^v/i, '').trim() : '0';
+}
+
+// Robust semver compare: returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
 function compareVersions(v1: string, v2: string) {
-  const p1 = v1.split('.').map(Number);
-  const p2 = v2.split('.').map(Number);
+  const p1 = cleanVersion(v1).split('.').map(n => parseInt(n, 10) || 0);
+  const p2 = cleanVersion(v2).split('.').map(n => parseInt(n, 10) || 0);
   for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
-    const num1 = p1[i] || 0;
-    const num2 = p2[i] || 0;
+    const num1 = p1[i] ?? 0;
+    const num2 = p2[i] ?? 0;
     if (num1 > num2) return 1;
     if (num1 < num2) return -1;
   }
