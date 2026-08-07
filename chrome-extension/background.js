@@ -104,98 +104,82 @@ async function getStorageData() {
 
 // ── PocketBase REST Helpers ────────────────────────────────────────────────
 async function pbSetKV(serverUrl, key, value) {
-  try {
-    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const filter = encodeURIComponent(`key = "${key}"`);
-    const getUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`;
+  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const filter = encodeURIComponent(`key = "${key}"`);
+  const getUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`;
 
-    const listRes = await fetch(getUrl, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const listRes = await fetch(getUrl, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  }).catch(() => null);
 
-    if (!listRes.ok) return;
+  if (!listRes || !listRes.ok) return;
 
-    const listData = await listRes.json();
-    const existingRecord = listData?.items?.[0];
+  const listData = await listRes.json().catch(() => null);
+  const existingRecord = listData?.items?.[0];
 
-    const body = JSON.stringify({ key, value });
-    if (existingRecord?.id) {
-      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body
-      });
-    } else {
-      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body
-      });
-    }
-  } catch (err) {
-    console.warn('[Delcargo Tracker] pbSetKV network retry:', err?.message || err);
+  const body = JSON.stringify({ key, value });
+  if (existingRecord?.id) {
+    await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    }).catch(() => null);
+  } else {
+    await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    }).catch(() => null);
   }
 }
 
 async function pbGetKV(serverUrl, key) {
-  try {
-    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const filter = encodeURIComponent(`key = "${key}"`);
-    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (!listRes.ok) return null;
-    const listData = await listRes.json();
-    return listData?.items?.[0]?.value || null;
-  } catch (err) {
-    console.warn('[Delcargo Tracker] pbGetKV network retry:', err?.message || err);
-    return null;
-  }
+  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const filter = encodeURIComponent(`key = "${key}"`);
+  const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  }).catch(() => null);
+
+  if (!listRes || !listRes.ok) return null;
+  const listData = await listRes.json().catch(() => null);
+  return listData?.items?.[0]?.value || null;
 }
 
 async function pbDeleteKV(serverUrl, key) {
-  try {
-    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const filter = encodeURIComponent(`key = "${key}"`);
-    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (!listRes.ok) return;
-    const listData = await listRes.json();
-    const existingRecord = listData?.items?.[0];
-    if (existingRecord?.id) {
-      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
-        method: 'DELETE'
-      });
-    }
-  } catch (err) {
-    console.warn('[Delcargo Tracker] pbDeleteKV network retry:', err?.message || err);
+  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const filter = encodeURIComponent(`key = "${key}"`);
+  const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  }).catch(() => null);
+
+  if (!listRes || !listRes.ok) return;
+  const listData = await listRes.json().catch(() => null);
+  const existingRecord = listData?.items?.[0];
+  if (existingRecord?.id) {
+    await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+      method: 'DELETE'
+    }).catch(() => null);
   }
 }
 
 // ── Automatic Active Shift Checker (Matches desktop agent check_active_shift) ─
 async function checkActiveShift(serverUrl, email) {
-  try {
-    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const res = await fetch(`${cleanUrl}/api/collections/hr_timesheets/records?filter=${encodeURIComponent('clock_out = ""')}&perPage=200`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const items = data?.items || [];
-    const wanted = (email || '').trim().toLowerCase();
+  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const res = await fetch(`${cleanUrl}/api/collections/hr_timesheets/records?filter=${encodeURIComponent('clock_out = ""')}&perPage=200`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  }).catch(() => null);
 
-    // Match employee_id (stores employeeEmail)
-    const openRecord = items.find(it => (it.employee_id || '').trim().toLowerCase() === wanted);
-    return openRecord || null;
-  } catch (e) {
-    console.warn('[Delcargo Tracker] checkActiveShift network retry:', e?.message || e);
-    return null;
-  }
+  if (!res || !res.ok) return null;
+  const data = await res.json().catch(() => null);
+  const items = data?.items || [];
+  const wanted = (email || '').trim().toLowerCase();
+
+  const openRecord = items.find(it => (it.employee_id || '').trim().toLowerCase() === wanted);
+  return openRecord || null;
 }
 
 // ── Heartbeat & Shift Tick Handler ─────────────────────────────────────────
