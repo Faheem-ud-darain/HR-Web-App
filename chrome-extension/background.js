@@ -35,6 +35,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch(() => sendResponse({ success: false }));
     return true;
   }
+  if (msg && msg.type === 'DISCONNECT_DEVICE') {
+    getStorageData().then(async (data) => {
+      if (data.employeeEmail) {
+        const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+        const email = data.employeeEmail.trim().toLowerCase();
+        await pbDeleteKV(serverUrl, getHeartbeatKey(email));
+      }
+      sendResponse({ success: true });
+    });
+    return true;
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -168,7 +179,27 @@ async function handleHeartbeatTick() {
   const heartbeatKey = getHeartbeatKey(email);
   const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
 
-  // Query real shift status on PocketBase (matches desktop tracker)
+  // 1. ALWAYS upload live tracker heartbeat while device is connected
+  // (so the web portal knows the Chromebook extension is live and allows Start Shift)
+  try {
+    const existingHb = await pbGetKV(serverUrl, heartbeatKey);
+    const connectedAt = existingHb?.connectedAt || nowIso;
+
+    const hbValue = {
+      employeeEmail: email,
+      deviceId: deviceId,
+      deviceLabel: 'Chromebook / Chrome OS',
+      connectedAt: connectedAt,
+      lastSeenAt: nowIso,
+      agentVersion: '6'
+    };
+
+    await pbSetKV(serverUrl, heartbeatKey, hbValue);
+  } catch (e) {
+    console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
+  }
+
+  // 2. Query real shift status on PocketBase (matches desktop tracker)
   const openShiftRecord = await checkActiveShift(serverUrl, email);
   const isShiftOpen = !!openShiftRecord;
 
@@ -179,26 +210,7 @@ async function handleHeartbeatTick() {
       shiftStartTime: clockInIso
     });
 
-    // Upload live tracker heartbeat to PocketBase ONLY during an active shift
-    try {
-      const existingHb = await pbGetKV(serverUrl, heartbeatKey);
-      const connectedAt = existingHb?.connectedAt || nowIso;
-
-      const hbValue = {
-        employeeEmail: email,
-        deviceId: deviceId,
-        deviceLabel: 'Chromebook / Chrome OS',
-        connectedAt: connectedAt,
-        lastSeenAt: nowIso,
-        agentVersion: '6'
-      };
-
-      await pbSetKV(serverUrl, heartbeatKey, hbValue);
-    } catch (e) {
-      console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
-    }
-
-    // Live continuous 37+ minutes idle check
+    // 3. Live continuous 37+ minutes idle check
     chrome.idle.queryState(180, async (state) => {
       if (state === 'idle' || state === 'locked') {
         const idleStart = data.idleStartTimestamp || Date.now();
@@ -212,11 +224,10 @@ async function handleHeartbeatTick() {
     });
 
   } else {
-    // Shift is ended / not open on Web Portal -> Clear heartbeat so portal shows Disconnected
+    // Shift is inactive / ended
     if (data.shiftActive) {
       chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
     }
-    await pbDeleteKV(serverUrl, heartbeatKey);
   }
 }
 
@@ -245,14 +256,10 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSec
       reason
     });
 
-    // 3. Delete live heartbeat row so dashboard immediately reflects Disconnected
-    const heartbeatKey = getHeartbeatKey(email);
-    await pbDeleteKV(cleanUrl, heartbeatKey);
-
-    // 4. Update local state
+    // 3. Update local state
     chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
 
-    // 5. Native Chrome OS Notification
+    // 4. Native Chrome OS Notification
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',

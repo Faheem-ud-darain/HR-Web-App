@@ -145,9 +145,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Disconnect Device ─────────────────────────────────────────────────
   disconnectBtn.addEventListener('click', () => {
     if (confirm('Disconnect this Chromebook from your account? You will need a new Setup Code to reconnect.')) {
-      chrome.storage.local.clear(() => {
-        stopTimer();
-        loadState();
+      chrome.runtime.sendMessage({ type: 'DISCONNECT_DEVICE' }, () => {
+        chrome.storage.local.clear(() => {
+          stopTimer();
+          loadState();
+        });
       });
     }
   });
