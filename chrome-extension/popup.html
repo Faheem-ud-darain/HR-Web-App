@@ -18,43 +18,63 @@
       </div>
       <div id="statusPill" class="status-pill status-offline">
         <span class="dot"></span>
-        <span id="statusText">Offline</span>
+        <span id="statusText">Disconnected</span>
       </div>
     </header>
 
-    <!-- Main Content Card -->
-    <main class="main-card">
-      <!-- Active Shift Timer Display -->
-      <div className="timer-section">
-        <div class="timer-label">Shift Duration</div>
-        <div id="timerDisplay" class="timer-digits">00:00:00</div>
-      </div>
-
-      <!-- Settings / Inputs -->
-      <div id="inputsForm" class="inputs-form">
-        <div class="form-group">
-          <label for="employeeEmail">Employee Email</label>
-          <input type="email" id="employeeEmail" placeholder="employee@delcargo.us" required />
+    <!-- SETUP SCREEN (When not connected with a Personal Code) -->
+    <div id="setupView" class="view-section">
+      <div class="main-card">
+        <div class="setup-header">
+          <h2>Connect Tracker</h2>
+          <p>Paste the Personal Setup Code generated for you on the HR Portal (Tracker Setup screen).</p>
         </div>
-        
-        <div class="form-group">
-          <label for="serverUrl">PocketBase Server</label>
-          <input type="url" id="serverUrl" value="https://pb.delcargo.us" />
-        </div>
-      </div>
 
-      <!-- Action Button -->
-      <button id="toggleShiftBtn" class="btn btn-primary">
-        <span id="btnIcon">▶</span>
-        <span id="btnText">Start Shift</span>
-      </button>
-    </main>
+        <div class="inputs-form">
+          <div class="form-group">
+            <label for="setupCodeInput">Personal Setup Code</label>
+            <textarea id="setupCodeInput" rows="3" placeholder="Paste your setup code here..." required></textarea>
+          </div>
+          <div id="setupError" class="error-msg" style="display: none;"></div>
+        </div>
+
+        <button id="connectCodeBtn" class="btn btn-primary">
+          <span>Connect Device</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN TRACKER SCREEN (When connected) -->
+    <div id="mainView" class="view-section" style="display: none;">
+      <div class="main-card">
+        <div class="user-badge">
+          <span class="user-label">Employee</span>
+          <span id="displayEmail" class="user-email">employee@delcargo.us</span>
+        </div>
+
+        <!-- Active Shift Timer Display -->
+        <div class="timer-section">
+          <div class="timer-label">Shift Duration</div>
+          <div id="timerDisplay" class="timer-digits">00:00:00</div>
+        </div>
+
+        <!-- Action Button -->
+        <button id="toggleShiftBtn" class="btn btn-primary">
+          <span id="btnIcon">▶</span>
+          <span id="btnText">Start Shift</span>
+        </button>
+
+        <button id="disconnectBtn" class="btn-text">
+          Change Setup Code / Disconnect
+        </button>
+      </div>
+    </div>
 
     <!-- Footer Stats / Indicators -->
     <footer class="app-footer">
       <div class="indicator">
         <span class="indicator-dot dot-active"></span>
-        <span>Idle Detection (37m limit)</span>
+        <span>37m continuous idle auto-stop</span>
       </div>
       <div class="version">v1.0.0</div>
     </footer>

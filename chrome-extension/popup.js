@@ -1,89 +1,192 @@
-// Delcargo HR Tracker — Popup Controller
+// Delcargo HR Tracker — Popup Controller (Personal Setup Code Auth)
 
 document.addEventListener('DOMContentLoaded', () => {
-  const emailInput = document.getElementById('employeeEmail');
-  const serverInput = document.getElementById('serverUrl');
-  const toggleBtn = document.getElementById('toggleShiftBtn');
+  const setupView = document.getElementById('setupView');
+  const mainView = document.getElementById('mainView');
+  const setupCodeInput = document.getElementById('setupCodeInput');
+  const connectCodeBtn = document.getElementById('connectCodeBtn');
+  const setupError = document.getElementById('setupError');
+
+  const displayEmail = document.getElementById('displayEmail');
+  const toggleShiftBtn = document.getElementById('toggleShiftBtn');
   const btnText = document.getElementById('btnText');
   const btnIcon = document.getElementById('btnIcon');
+  const disconnectBtn = document.getElementById('disconnectBtn');
   const statusPill = document.getElementById('statusPill');
   const statusText = document.getElementById('statusText');
   const timerDisplay = document.getElementById('timerDisplay');
-  const inputsForm = document.getElementById('inputsForm');
 
   let timerInterval = null;
   let isShiftActive = false;
   let shiftStartMs = 0;
 
-  // Load Initial Storage State
-  chrome.storage.local.get(['employeeEmail', 'serverUrl', 'shiftActive', 'shiftStartTime'], (res) => {
-    if (res.employeeEmail) emailInput.value = res.employeeEmail;
-    if (res.serverUrl) serverInput.value = res.serverUrl;
-
-    if (res.shiftActive && res.shiftStartTime) {
-      isShiftActive = true;
-      shiftStartMs = new Date(res.shiftStartTime).getTime();
-      updateUiActive();
-      startTimer();
-    } else {
-      updateUiInactive();
+  // ── Decode Setup Code ──────────────────────────────────────────────────
+  function decodeSetupCode(codeStr) {
+    try {
+      let code = (codeStr || '').trim();
+      code = code.replace(/\s+/g, '');
+      const padded = code + '='.repeat((4 - (code.length % 4)) % 4);
+      const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonStr = atob(base64);
+      const obj = JSON.parse(jsonStr);
+      if (obj && obj.u && obj.t) {
+        return { serverUrl: obj.u, token: obj.t };
+      }
+    } catch (e) {
+      console.error('Decode failed:', e);
     }
-  });
+    return null;
+  }
 
-  // Toggle Shift Button Click
-  toggleBtn.addEventListener('click', () => {
-    const email = emailInput.value.trim();
-    const serverUrl = serverInput.value.trim() || 'https://pb.delcargo.us';
+  // ── Load Storage State ─────────────────────────────────────────────────
+  function loadState() {
+    chrome.storage.local.get(['employeeEmail', 'serverUrl', 'agentToken', 'shiftActive', 'shiftStartTime'], (res) => {
+      if (res.agentToken && res.employeeEmail) {
+        // Device Connected with Setup Code
+        setupView.style.display = 'none';
+        mainView.style.display = 'block';
+        displayEmail.textContent = res.employeeEmail;
 
-    if (!email) {
-      alert('Please enter your employee email address.');
-      emailInput.focus();
+        if (res.shiftActive && res.shiftStartTime) {
+          isShiftActive = true;
+          shiftStartMs = new Date(res.shiftStartTime).getTime();
+          updateUiActive();
+          startTimer();
+        } else {
+          updateUiConnected();
+        }
+      } else {
+        // Disconnected — Show Setup Screen
+        setupView.style.display = 'block';
+        mainView.style.display = 'none';
+        updateUiDisconnected();
+      }
+    });
+  }
+
+  loadState();
+
+  // ── Connect Device via Setup Code ──────────────────────────────────────
+  connectCodeBtn.addEventListener('click', async () => {
+    setupError.style.display = 'none';
+    const rawCode = setupCodeInput.value.trim();
+
+    if (!rawCode) {
+      showError('Please paste your Personal Setup Code.');
       return;
     }
 
-    if (!isShiftActive) {
-      // START SHIFT
-      chrome.runtime.sendMessage({ type: 'START_SHIFT', email, serverUrl }, (resp) => {
-        if (resp && resp.success) {
-          isShiftActive = true;
-          shiftStartMs = Date.now();
-          updateUiActive();
-          startTimer();
-        }
-      });
-    } else {
-      // STOP SHIFT
-      if (confirm('Are you sure you want to end your shift?')) {
-        chrome.runtime.sendMessage({ type: 'STOP_SHIFT' }, (resp) => {
-          if (resp && resp.success) {
-            isShiftActive = false;
-            stopTimer();
-            updateUiInactive();
-          }
-        });
+    const decoded = decodeSetupCode(rawCode);
+    if (!decoded) {
+      showError("Invalid setup code format. Please copy a fresh setup code from HR/Admin (Tracker Setup screen).");
+      return;
+    }
+
+    connectCodeBtn.disabled = true;
+    connectCodeBtn.textContent = 'Verifying Code...';
+
+    try {
+      const { serverUrl, token } = decoded;
+      // Resolve email from hr_agent_tokens in PocketBase
+      const resp = await fetch(`${serverUrl}/api/collections/hr_agent_tokens/records?filter=(token='${token}')`);
+      if (!resp.ok) throw new Error('Could not reach server.');
+
+      const data = await resp.json();
+      const tokenRecord = data?.items?.[0];
+
+      if (!tokenRecord || !tokenRecord.employee_email) {
+        throw new Error("This setup code is not recognized or has expired. Please ask HR/Admin for a new code.");
       }
+
+      const email = tokenRecord.employee_email.toLowerCase();
+
+      // Save connection credentials
+      chrome.storage.local.set({
+        employeeEmail: email,
+        serverUrl: serverUrl,
+        agentToken: token
+      }, () => {
+        setupCodeInput.value = '';
+        connectCodeBtn.disabled = false;
+        connectCodeBtn.textContent = 'Connect Device';
+        loadState();
+      });
+    } catch (err) {
+      showError(err.message || 'Verification failed. Please check your internet connection.');
+      connectCodeBtn.disabled = false;
+      connectCodeBtn.textContent = 'Connect Device';
     }
   });
+
+  function showError(msg) {
+    setupError.textContent = msg;
+    setupError.style.display = 'block';
+  }
+
+  // ── Toggle Start/End Shift ─────────────────────────────────────────────
+  toggleShiftBtn.addEventListener('click', () => {
+    chrome.storage.local.get(['employeeEmail', 'serverUrl'], (res) => {
+      const email = res.employeeEmail;
+      const serverUrl = res.serverUrl || 'https://pb.delcargo.us';
+
+      if (!isShiftActive) {
+        // START SHIFT
+        chrome.runtime.sendMessage({ type: 'START_SHIFT', email, serverUrl }, (resp) => {
+          if (resp && resp.success) {
+            isShiftActive = true;
+            shiftStartMs = Date.now();
+            updateUiActive();
+            startTimer();
+          }
+        });
+      } else {
+        // END SHIFT
+        if (confirm('Are you sure you want to end your shift?')) {
+          chrome.runtime.sendMessage({ type: 'STOP_SHIFT' }, (resp) => {
+            if (resp && resp.success) {
+              isShiftActive = false;
+              stopTimer();
+              updateUiConnected();
+            }
+          });
+        }
+      }
+    });
+  });
+
+  // ── Disconnect Device ─────────────────────────────────────────────────
+  disconnectBtn.addEventListener('click', () => {
+    if (confirm('Disconnect this Chromebook from your account? You will need a new Setup Code to reconnect.')) {
+      if (isShiftActive) {
+        chrome.runtime.sendMessage({ type: 'STOP_SHIFT' });
+      }
+      chrome.storage.local.clear(() => {
+        stopTimer();
+        loadState();
+      });
+    }
+  });
+
+  function updateUiConnected() {
+    statusPill.className = 'status-pill status-offline';
+    statusText.textContent = 'Ready';
+    toggleShiftBtn.className = 'btn btn-primary';
+    btnIcon.textContent = '▶';
+    btnText.textContent = 'Start Shift';
+    timerDisplay.textContent = '00:00:00';
+  }
 
   function updateUiActive() {
     statusPill.className = 'status-pill status-online';
     statusText.textContent = 'Active Shift';
-    toggleBtn.className = 'btn btn-active';
+    toggleShiftBtn.className = 'btn btn-active';
     btnIcon.textContent = '■';
     btnText.textContent = 'End Shift';
-    emailInput.disabled = true;
-    serverInput.disabled = true;
   }
 
-  function updateUiInactive() {
+  function updateUiDisconnected() {
     statusPill.className = 'status-pill status-offline';
-    statusText.textContent = 'Offline';
-    toggleBtn.className = 'btn btn-primary';
-    btnIcon.textContent = '▶';
-    btnText.textContent = 'Start Shift';
-    emailInput.disabled = false;
-    serverInput.disabled = false;
-    timerDisplay.textContent = '00:00:00';
+    statusText.textContent = 'Disconnected';
   }
 
   function startTimer() {
