@@ -66,7 +66,9 @@ async function getStorageData() {
         'shiftActive',
         'shiftStartTime',
         'idleStartTimestamp',
-        'autoAbsentFired'
+        'autoAbsentFired',
+        'lastScreenshotTime',
+        'screenshotIntervalMinutes'
       ],
       (res) => resolve(res)
     );
@@ -179,7 +181,6 @@ async function handleHeartbeatTick() {
   const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
 
   // 1. ALWAYS upload live tracker heartbeat while extension is connected
-  // (matches desktop agent: allows employee to start shift on Web Portal)
   try {
     const existingHb = await pbGetKV(serverUrl, heartbeatKey);
     const connectedAt = existingHb?.connectedAt || nowIso;
@@ -210,17 +211,26 @@ async function handleHeartbeatTick() {
     });
 
     // 3. Fetch custom screenshot interval setting from PocketBase (hr_tracking_settings_prod_v1)
+    let intervalMinutes = 1;
     try {
       const settingsList = await pbGetKV(serverUrl, 'hr_tracking_settings_prod_v1');
       if (Array.isArray(settingsList)) {
         const empSetting = settingsList.find(s => s && (s.employeeEmail || '').toLowerCase() === email);
         if (empSetting && empSetting.intervalMinutes) {
-          const interval = Math.max(1, parseInt(empSetting.intervalMinutes, 10) || 1);
-          chrome.alarms.create('tracker_screenshot', { periodInMinutes: interval });
+          intervalMinutes = Math.max(1, parseInt(empSetting.intervalMinutes, 10) || 1);
         }
       }
     } catch (e) {
       console.error('[Delcargo Tracker] Fetch settings error:', e);
+    }
+
+    chrome.storage.local.set({ screenshotIntervalMinutes: intervalMinutes });
+
+    // Check if screenshot is due
+    const lastShot = data.lastScreenshotTime || 0;
+    const intervalMs = intervalMinutes * 60 * 1000;
+    if (Date.now() - lastShot >= intervalMs) {
+      handleScreenshotTick();
     }
 
     // 4. Live continuous 37+ minutes idle check (only during active shift)
@@ -237,7 +247,7 @@ async function handleHeartbeatTick() {
     });
 
   } else {
-    // Shift is not open (shift ended or not started yet) -> pause active shift flag
+    // Shift is not open (shift ended or not started yet)
     if (data.shiftActive) {
       chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
     }
@@ -269,14 +279,10 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSec
       reason
     });
 
-    // 3. Delete live heartbeat row so dashboard immediately reflects Offline / Disconnected
-    const heartbeatKey = getHeartbeatKey(email);
-    await pbDeleteKV(cleanUrl, heartbeatKey);
-
-    // 4. Update local state
+    // 3. Update local state
     chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
 
-    // 5. Native Chrome OS Notification
+    // 4. Native Chrome OS Notification
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
@@ -357,33 +363,41 @@ async function handleScreenshotTick() {
   const email = data.employeeEmail.trim().toLowerCase();
 
   try {
-    chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 60 }, async (dataUrl) => {
-      if (!dataUrl || chrome.runtime.lastError) {
-        console.warn('[Delcargo Tracker] Screen capture skipped or failed:', chrome.runtime.lastError?.message);
-        return;
-      }
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      const activeTab = tabs?.[0];
+      const windowId = activeTab?.windowId || null;
 
-      const blob = dataUrlToBlob(dataUrl);
-      const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
+      chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 60 }, async (dataUrl) => {
+        if (!dataUrl || chrome.runtime.lastError) {
+          console.warn('[Delcargo Tracker] Screen capture skipped or failed:', chrome.runtime.lastError?.message);
+          return;
+        }
 
-      const formData = new FormData();
-      formData.append('employee_email', email);
-      formData.append('captured_at', new Date().toISOString());
-      formData.append('width', '1920');
-      formData.append('height', '1080');
-      formData.append('device_label', 'Chromebook / Chrome OS');
-      formData.append('image', blob, filename);
+        const blob = dataUrlToBlob(dataUrl);
+        const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
+        const width = String(activeTab?.width || 1920);
+        const height = String(activeTab?.height || 1080);
 
-      const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
-        method: 'POST',
-        body: formData
+        const formData = new FormData();
+        formData.append('employee_email', email);
+        formData.append('captured_at', new Date().toISOString());
+        formData.append('width', width);
+        formData.append('height', height);
+        formData.append('device_label', 'Chromebook / Chrome OS');
+        formData.append('image', blob, filename);
+
+        const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (resp.ok) {
+          chrome.storage.local.set({ lastScreenshotTime: Date.now() });
+          console.log('[Delcargo Tracker] Screenshot captured & uploaded successfully.');
+        } else {
+          console.error('[Delcargo Tracker] Screenshot upload status:', resp.status, await resp.text());
+        }
       });
-
-      if (resp.ok) {
-        console.log('[Delcargo Tracker] Screenshot captured & uploaded successfully.');
-      } else {
-        console.error('[Delcargo Tracker] Screenshot upload status:', resp.status, await resp.text());
-      }
     });
   } catch (e) {
     console.error('[Delcargo Tracker] Screenshot tick failed:', e);

@@ -21,6 +21,7 @@
     "idle",
     "storage",
     "alarms",
+    "tabs",
     "activeTab",
     "desktopCapture",
     "notifications"
