@@ -861,7 +861,8 @@ export function TicketsView({ role }: TicketsViewProps) {
                 {(() => {
                   const isAuthorSelf = Boolean(
                     (currentEmail && selectedTicket.employeeEmail && selectedTicket.employeeEmail.toLowerCase() === currentEmail.toLowerCase()) ||
-                    (userProfile?.fullName && selectedTicket.employeeName && selectedTicket.employeeName.trim().toLowerCase() === userProfile.fullName.trim().toLowerCase())
+                    (userProfile?.fullName && selectedTicket.employeeName && selectedTicket.employeeName.trim().toLowerCase() === userProfile.fullName.trim().toLowerCase()) ||
+                    (userProfile?.email && selectedTicket.employeeEmail && selectedTicket.employeeEmail.toLowerCase() === userProfile.email.toLowerCase())
                   );
                   return (
                     <div className={`flex items-start gap-2.5 max-w-[85%] ${isAuthorSelf ? 'ml-auto flex-row-reverse' : ''}`}>
@@ -886,17 +887,27 @@ export function TicketsView({ role }: TicketsViewProps) {
                 {/* Replies list */}
                 {selectedTicket.replies.map((rep, repIdx) => {
                   let isSenderSelf = false;
-                  if (rep.senderEmail && currentEmail) {
-                    isSenderSelf = rep.senderEmail.toLowerCase() === currentEmail.toLowerCase();
-                  } else if (userProfile?.fullName && rep.senderName) {
+
+                  // 1. Direct email match if available
+                  if (rep.senderEmail && currentEmail && rep.senderEmail.toLowerCase() === currentEmail.toLowerCase()) {
+                    isSenderSelf = true;
+                  }
+                  // 2. HR role viewing an HR sender reply
+                  else if (role === 'hr' && rep.senderRole === 'hr') {
+                    isSenderSelf = true;
+                  }
+                  // 3. Admin role viewing an Admin sender reply
+                  else if (role === 'admin' && rep.senderRole === 'admin') {
+                    isSenderSelf = true;
+                  }
+                  // 4. Name matching for employees / tech team / profile matches
+                  else if (userProfile?.fullName && rep.senderName) {
                     const normSender = rep.senderName.trim().toLowerCase();
                     const normProfile = userProfile.fullName.trim().toLowerCase();
                     isSenderSelf = normSender === normProfile || normSender.startsWith(normProfile) || normProfile.startsWith(normSender);
-                  } else if (currentEmail && rep.senderName && rep.senderName.trim().toLowerCase() === currentEmail.split('@')[0].toLowerCase()) {
-                    isSenderSelf = true;
-                  } else if (role === 'hr' && rep.senderRole === 'hr' && (rep.senderName === 'HR Manager' || !userProfile)) {
-                    isSenderSelf = true;
-                  } else if (role === 'admin' && rep.senderRole === 'admin' && (rep.senderName === 'System Admin' || !userProfile)) {
+                  }
+                  // 5. Email prefix matching fallback
+                  else if (currentEmail && rep.senderName && rep.senderName.trim().toLowerCase().includes(currentEmail.split('@')[0].toLowerCase())) {
                     isSenderSelf = true;
                   }
 
