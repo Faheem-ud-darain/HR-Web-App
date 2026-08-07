@@ -7,12 +7,18 @@ const INACTIVITY_REPORT_SECONDS = 180; // 3 minutes — loggable idle threshold
 const AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60; // 37 minutes — continuous idle auto clock-out
 const SCREENSHOT_INTERVAL_MINUTES = 10;
 
+// Helper to format heartbeat KV key matching web portal's getTrackerHeartbeat(email)
+function getHeartbeatKey(email) {
+  return 'tracker_heartbeat_' + (email || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
 // Setup alarms & idle detection on extension load/install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.idle.setDetectionInterval(180); // 3 minutes
-  chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 }); // every 15 sec
+  chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 }); // every 15 sec (0.25 min)
   chrome.alarms.create('tracker_screenshot', { periodInMinutes: SCREENSHOT_INTERVAL_MINUTES });
   console.log('[Delcargo Tracker] Extension installed & alarms initialized.');
+  handleHeartbeatTick();
 });
 
 // Alarm Listener
@@ -117,8 +123,29 @@ async function handleHeartbeatTick() {
   const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const email = data.employeeEmail.toLowerCase();
   const nowIso = new Date().toISOString();
+  const heartbeatKey = getHeartbeatKey(email);
+  const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
 
-  // 1. Query real shift status on PocketBase (matches desktop tracker)
+  // 1. Upload live tracker heartbeat to PocketBase (read by Web Portal hrActions.getTrackerHeartbeat)
+  try {
+    const existingHb = await pbGetKV(serverUrl, heartbeatKey);
+    const connectedAt = existingHb?.connectedAt || nowIso;
+
+    const hbValue = {
+      employeeEmail: email,
+      deviceId: deviceId,
+      deviceLabel: 'Chromebook / Chrome OS',
+      connectedAt: connectedAt,
+      lastSeenAt: nowIso,
+      agentVersion: '6'
+    };
+
+    await pbSetKV(serverUrl, heartbeatKey, hbValue);
+  } catch (e) {
+    console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
+  }
+
+  // 2. Query real shift status on PocketBase (matches desktop tracker)
   const openShiftRecord = await checkActiveShift(serverUrl, email);
   const isShiftOpen = !!openShiftRecord;
 
@@ -128,19 +155,6 @@ async function handleHeartbeatTick() {
       shiftActive: true,
       shiftStartTime: clockInIso
     });
-
-    // 2. Upload live heartbeat KV
-    try {
-      const existingMap = (await pbGetKV(serverUrl, 'hr_tracker_heartbeats_prod_v1')) || {};
-      existingMap[email] = {
-        email,
-        timestamp: nowIso,
-        deviceLabel: 'Chromebook / Chrome OS'
-      };
-      await pbSetKV(serverUrl, 'hr_tracker_heartbeats_prod_v1', existingMap);
-    } catch (e) {
-      console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
-    }
 
     // 3. Live continuous 37+ minutes idle check
     chrome.idle.queryState(180, async (state) => {
