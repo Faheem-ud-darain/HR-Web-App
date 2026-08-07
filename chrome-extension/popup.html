@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delcargo HR Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">DC</div>
+        <div class="title-group">
+          <h1>Delcargo HR</h1>
+          <span class="subtitle">Chromebook Tracker</span>
+        </div>
+      </div>
+      <div id="statusPill" class="status-pill status-offline">
+        <span class="dot"></span>
+        <span id="statusText">Offline</span>
+      </div>
+    </header>
+
+    <!-- Main Content Card -->
+    <main class="main-card">
+      <!-- Active Shift Timer Display -->
+      <div className="timer-section">
+        <div class="timer-label">Shift Duration</div>
+        <div id="timerDisplay" class="timer-digits">00:00:00</div>
+      </div>
+
+      <!-- Settings / Inputs -->
+      <div id="inputsForm" class="inputs-form">
+        <div class="form-group">
+          <label for="employeeEmail">Employee Email</label>
+          <input type="email" id="employeeEmail" placeholder="employee@delcargo.us" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="serverUrl">PocketBase Server</label>
+          <input type="url" id="serverUrl" value="https://pb.delcargo.us" />
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="toggleShiftBtn" class="btn btn-primary">
+        <span id="btnIcon">▶</span>
+        <span id="btnText">Start Shift</span>
+      </button>
+    </main>
+
+    <!-- Footer Stats / Indicators -->
+    <footer class="app-footer">
+      <div class="indicator">
+        <span class="indicator-dot dot-active"></span>
+        <span>Idle Detection (37m limit)</span>
+      </div>
+      <div class="version">v1.0.0</div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
