@@ -86,19 +86,29 @@ document.addEventListener('DOMContentLoaded', () => {
     connectCodeBtn.textContent = 'Verifying Code...';
 
     try {
-      const { serverUrl, token } = decoded;
-      // Resolve email from hr_agent_tokens in PocketBase
-      const resp = await fetch(`${serverUrl}/api/collections/hr_agent_tokens/records?filter=(token='${token}')`);
-      if (!resp.ok) throw new Error('Could not reach server.');
+      const serverUrl = (decoded.serverUrl || 'https://pb.delcargo.us').replace(/\/+$/, '');
+      const token = decoded.token;
 
-      const data = await resp.json();
-      const tokenRecord = data?.items?.[0];
+      // Fetch tracking settings array from PocketBase KV store (key: "hr_tracking_settings_prod_v1")
+      const kvResp = await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent('key="hr_tracking_settings_prod_v1"')}`);
+      
+      if (!kvResp.ok) throw new Error('Could not reach server. Please check your network connection.');
 
-      if (!tokenRecord || !tokenRecord.employee_email) {
-        throw new Error("This setup code is not recognized or has expired. Please ask HR/Admin for a new code.");
+      const kvData = await kvResp.json();
+      const settingsList = kvData?.items?.[0]?.value;
+
+      if (!Array.isArray(settingsList)) {
+        throw new Error("Could not retrieve tracker settings from server.");
       }
 
-      const email = tokenRecord.employee_email.toLowerCase();
+      // Find setting record matching this setup code's token
+      const matchedSetting = settingsList.find(s => s && s.agentToken === token);
+
+      if (!matchedSetting || !matchedSetting.employeeEmail) {
+        throw new Error("This setup code is not recognized. Please ask HR/Admin for a fresh setup code from the Tracker Setup screen.");
+      }
+
+      const email = matchedSetting.employeeEmail.toLowerCase();
 
       // Save connection credentials
       chrome.storage.local.set({
