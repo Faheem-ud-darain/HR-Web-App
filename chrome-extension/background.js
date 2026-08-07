@@ -48,6 +48,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  console.log('[Delcargo Tracker] Alarm fired:', alarm.name);
   if (alarm.name === 'tracker_heartbeat') {
     handleHeartbeatTick();
   } else if (alarm.name === 'tracker_screenshot') {
@@ -195,6 +196,7 @@ async function handleHeartbeatTick() {
     };
 
     await pbSetKV(serverUrl, heartbeatKey, hbValue);
+    console.log(`[Delcargo Tracker] Heartbeat sent for ${email} (${nowIso})`);
   } catch (e) {
     console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
   }
@@ -202,6 +204,7 @@ async function handleHeartbeatTick() {
   // 2. Query real shift status on PocketBase (matches desktop tracker)
   const openShiftRecord = await checkActiveShift(serverUrl, email);
   const isShiftOpen = !!openShiftRecord;
+  console.log(`[Delcargo Tracker] Shift active status: ${isShiftOpen}`);
 
   if (isShiftOpen) {
     const clockInIso = openShiftRecord.clock_in || nowIso;
@@ -230,6 +233,7 @@ async function handleHeartbeatTick() {
     const lastShot = data.lastScreenshotTime || 0;
     const intervalMs = intervalMinutes * 60 * 1000;
     if (Date.now() - lastShot >= intervalMs) {
+      console.log('[Delcargo Tracker] Screenshot due -> capturing screen now...');
       handleScreenshotTick();
     }
 
@@ -247,7 +251,7 @@ async function handleHeartbeatTick() {
     });
 
   } else {
-    // Shift is not open (shift ended or not started yet)
+    // Shift is not open (shift ended or not started yet) -> pause active shift flag
     if (data.shiftActive) {
       chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
     }
@@ -403,3 +407,9 @@ async function handleScreenshotTick() {
     console.error('[Delcargo Tracker] Screenshot tick failed:', e);
   }
 }
+
+// ── Start Heartbeat Loop Immediately on Worker Evaluation ─────────────────
+handleHeartbeatTick();
+setInterval(() => {
+  handleHeartbeatTick();
+}, 10000); // Continuous 10-second polling & heartbeat tick
