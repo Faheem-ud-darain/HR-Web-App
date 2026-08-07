@@ -178,7 +178,27 @@ async function handleHeartbeatTick() {
   const heartbeatKey = getHeartbeatKey(email);
   const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
 
-  // Query real shift status on PocketBase (matches desktop tracker)
+  // 1. ALWAYS upload live tracker heartbeat while extension is connected
+  // (matches desktop agent: allows employee to start shift on Web Portal)
+  try {
+    const existingHb = await pbGetKV(serverUrl, heartbeatKey);
+    const connectedAt = existingHb?.connectedAt || nowIso;
+
+    const hbValue = {
+      employeeEmail: email,
+      deviceId: deviceId,
+      deviceLabel: 'Chromebook / Chrome OS',
+      connectedAt: connectedAt,
+      lastSeenAt: nowIso,
+      agentVersion: '6'
+    };
+
+    await pbSetKV(serverUrl, heartbeatKey, hbValue);
+  } catch (e) {
+    console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
+  }
+
+  // 2. Query real shift status on PocketBase (matches desktop tracker)
   const openShiftRecord = await checkActiveShift(serverUrl, email);
   const isShiftOpen = !!openShiftRecord;
 
@@ -189,26 +209,7 @@ async function handleHeartbeatTick() {
       shiftStartTime: clockInIso
     });
 
-    // 1. Upload live tracker heartbeat to PocketBase ONLY during active shift
-    try {
-      const existingHb = await pbGetKV(serverUrl, heartbeatKey);
-      const connectedAt = existingHb?.connectedAt || nowIso;
-
-      const hbValue = {
-        employeeEmail: email,
-        deviceId: deviceId,
-        deviceLabel: 'Chromebook / Chrome OS',
-        connectedAt: connectedAt,
-        lastSeenAt: nowIso,
-        agentVersion: '6'
-      };
-
-      await pbSetKV(serverUrl, heartbeatKey, hbValue);
-    } catch (e) {
-      console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
-    }
-
-    // 2. Fetch custom screenshot interval setting from PocketBase (hr_tracking_settings_prod_v1)
+    // 3. Fetch custom screenshot interval setting from PocketBase (hr_tracking_settings_prod_v1)
     try {
       const settingsList = await pbGetKV(serverUrl, 'hr_tracking_settings_prod_v1');
       if (Array.isArray(settingsList)) {
@@ -222,7 +223,7 @@ async function handleHeartbeatTick() {
       console.error('[Delcargo Tracker] Fetch settings error:', e);
     }
 
-    // 3. Live continuous 37+ minutes idle check
+    // 4. Live continuous 37+ minutes idle check (only during active shift)
     chrome.idle.queryState(180, async (state) => {
       if (state === 'idle' || state === 'locked') {
         const idleStart = data.idleStartTimestamp || Date.now();
@@ -236,11 +237,10 @@ async function handleHeartbeatTick() {
     });
 
   } else {
-    // Shift is NOT open (shift ended or stopped) -> Delete heartbeat so HR dashboard immediately shows Offline!
+    // Shift is not open (shift ended or not started yet) -> pause active shift flag
     if (data.shiftActive) {
       chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
     }
-    await pbDeleteKV(serverUrl, heartbeatKey);
   }
 }
 
