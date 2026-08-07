@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const stateTitle = document.getElementById('stateTitle');
   const stateSubtitle = document.getElementById('stateSubtitle');
   const grantScreenBtn = document.getElementById('grantScreenBtn');
+  const screenCaptureBadge = document.getElementById('screenCaptureBadge');
+  const screenDesc = document.getElementById('screenDesc');
 
   const disconnectBtn = document.getElementById('disconnectBtn');
   const statusPill = document.getElementById('statusPill');
@@ -43,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Load Storage State ─────────────────────────────────────────────────
   function loadState() {
-    chrome.storage.local.get(['employeeEmail', 'serverUrl', 'agentToken', 'shiftActive', 'shiftStartTime', 'desktopStreamGranted'], (res) => {
+    chrome.storage.local.get(['employeeEmail', 'serverUrl', 'agentToken', 'shiftActive', 'shiftStartTime', 'desktopStreamGranted', 'desktopResolution'], (res) => {
       if (res.agentToken && res.employeeEmail) {
         setupView.style.display = 'none';
         mainView.style.display = 'block';
@@ -51,8 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (res.desktopStreamGranted) {
           grantScreenBtn.style.display = 'none';
+          screenCaptureBadge.style.display = 'flex';
+          if (res.desktopResolution) {
+            screenDesc.textContent = `Entire monitor display active (${res.desktopResolution})`;
+          }
         } else {
           grantScreenBtn.style.display = 'flex';
+          screenCaptureBadge.style.display = 'none';
         }
 
         if (res.shiftActive && res.shiftStartTime) {
@@ -83,12 +90,24 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Desktop screen capture was cancelled. Please select Entire Screen to allow full desktop tracking.');
         return;
       }
+      grantScreenBtn.disabled = true;
+      grantScreenBtn.textContent = 'Initializing Screen Stream...';
+
       chrome.runtime.sendMessage({ type: 'INIT_DESKTOP_STREAM', streamId }, (resp) => {
         if (resp && resp.success) {
-          chrome.storage.local.set({ desktopStreamGranted: true }, () => {
+          const resStr = (resp.width && resp.height) ? `${resp.width}x${resp.height}` : 'Full Display';
+          chrome.storage.local.set({
+            desktopStreamGranted: true,
+            desktopResolution: resStr
+          }, () => {
             grantScreenBtn.style.display = 'none';
-            alert('Full Desktop Screen Capture enabled successfully!');
+            screenCaptureBadge.style.display = 'flex';
+            screenDesc.textContent = `Entire monitor display active (${resStr})`;
           });
+        } else {
+          alert('Failed to initialize desktop stream. Please try again.');
+          grantScreenBtn.disabled = false;
+          grantScreenBtn.textContent = '🖥️ Select Entire Desktop Screen';
         }
       });
     });

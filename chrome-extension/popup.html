@@ -62,9 +62,19 @@
         </div>
 
         <!-- Desktop Screen Capture Permission Button -->
-        <button id="grantScreenBtn" class="btn btn-primary" style="background-color: #0284c7; font-size: 11px; padding: 8px;">
+        <button id="grantScreenBtn" class="btn btn-primary" style="background-color: #0284c7; font-size: 11px; padding: 10px 12px;">
           <span>🖥️ Select Entire Desktop Screen</span>
         </button>
+
+        <!-- Full Desktop Capture Confirmed Badge -->
+        <div id="screenCaptureBadge" class="screen-capture-badge" style="display: none;">
+          <span class="screen-icon">🖥️</span>
+          <div class="screen-info">
+            <span class="screen-title">Full Desktop Mode Active</span>
+            <span id="screenDesc" class="screen-desc">Entire monitor display (all apps & windows)</span>
+          </div>
+          <span class="check-icon">✓</span>
+        </div>
 
         <!-- Shift Duration Display -->
         <div class="timer-section">

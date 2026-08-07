@@ -24,19 +24,25 @@ async function startScreenStream(streamId) {
       video: {
         mandatory: {
           chromeMediaSource: 'desktop',
-          chromeMediaSourceId: streamId,
-          maxWidth: 1920,
-          maxHeight: 1080
+          chromeMediaSourceId: streamId
         }
       }
     });
 
     const video = document.getElementById('screenVideo');
     video.srcObject = screenStream;
-    await video.play();
 
-    console.log('[Offscreen] Full desktop media stream started successfully.');
-    return { success: true };
+    return new Promise((resolve) => {
+      video.onloadedmetadata = async () => {
+        try {
+          await video.play();
+          console.log(`[Offscreen] Full desktop media stream active: ${video.videoWidth}x${video.videoHeight}`);
+          resolve({ success: true, width: video.videoWidth, height: video.videoHeight });
+        } catch (e) {
+          resolve({ success: false, error: e.message });
+        }
+      };
+    });
   } catch (err) {
     console.error('[Offscreen] Stream start error:', err);
     return { success: false, error: err.message };

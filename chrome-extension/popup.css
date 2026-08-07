@@ -187,6 +187,46 @@ body {
   color: #94a3b8;
 }
 
+/* Full Desktop Capture Badge */
+.screen-capture-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.screen-capture-badge .screen-icon {
+  font-size: 16px;
+}
+
+.screen-capture-badge .screen-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.screen-capture-badge .screen-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.screen-capture-badge .screen-desc {
+  font-size: 9px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.screen-capture-badge .check-icon {
+  font-size: 14px;
+  font-weight: 900;
+  color: #10b981;
+}
+
 .timer-section {
   text-align: center;
   padding: 2px 0;
