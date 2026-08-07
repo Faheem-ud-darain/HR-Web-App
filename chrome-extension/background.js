@@ -380,7 +380,7 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([u8arr], { type: mime });
 }
 
-// ── Screen Capture Tick (Full Display Capture & Upload) ─────────────────────
+// ── Screen Capture Tick (Full Desktop Monitor via Offscreen / VisibleTab) ───
 async function handleScreenshotTick() {
   const data = await getStorageData();
   if (!data.shiftActive || !data.employeeEmail) return;
@@ -389,36 +389,58 @@ async function handleScreenshotTick() {
   const email = data.employeeEmail.trim().toLowerCase();
 
   try {
-    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-      const activeTab = tabs?.[0];
-      const windowId = activeTab?.windowId || null;
-      const width = String(activeTab?.width || 1920);
-      const height = String(activeTab?.height || 1080);
+    await ensureOffscreenDocument();
 
-      chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 65 }, async (dataUrl) => {
-        if (!dataUrl || chrome.runtime.lastError) return;
+    // 1. Query full desktop frame from offscreen MediaStream
+    chrome.runtime.sendMessage({ type: 'CAPTURE_DESKTOP_FRAME' }, async (offscreenRes) => {
+      let dataUrl = null;
+      let width = '1920';
+      let height = '1080';
 
-        const blob = dataUrlToBlob(dataUrl);
-        const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
+      if (offscreenRes && offscreenRes.success && offscreenRes.dataUrl) {
+        dataUrl = offscreenRes.dataUrl;
+        width = String(offscreenRes.width || 1920);
+        height = String(offscreenRes.height || 1080);
+      } else {
+        // 2. Fallback: capture active visible browser window
+        dataUrl = await new Promise((resolve) => {
+          chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+            const activeTab = tabs?.[0];
+            const windowId = activeTab?.windowId || null;
+            if (activeTab) {
+              width = String(activeTab.width || 1920);
+              height = String(activeTab.height || 1080);
+            }
+            chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 65 }, (url) => {
+              if (chrome.runtime.lastError) resolve(null);
+              else resolve(url);
+            });
+          });
+        });
+      }
 
-        const formData = new FormData();
-        formData.append('employee_email', email);
-        formData.append('captured_at', new Date().toISOString());
-        formData.append('width', width);
-        formData.append('height', height);
-        formData.append('device_label', 'Chromebook / Chrome OS');
-        formData.append('image', blob, filename);
+      if (!dataUrl) return;
 
-        const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
-          method: 'POST',
-          body: formData
-        }).catch(() => null);
+      const blob = dataUrlToBlob(dataUrl);
+      const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
 
-        if (resp && resp.ok) {
-          chrome.storage.local.set({ lastScreenshotTime: Date.now() });
-          console.log('[Delcargo Tracker] Full Display Screenshot captured & uploaded successfully.');
-        }
-      });
+      const formData = new FormData();
+      formData.append('employee_email', email);
+      formData.append('captured_at', new Date().toISOString());
+      formData.append('width', width);
+      formData.append('height', height);
+      formData.append('device_label', 'Chromebook / Chrome OS (Full Desktop Screen)');
+      formData.append('image', blob, filename);
+
+      const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
+        method: 'POST',
+        body: formData
+      }).catch(() => null);
+
+      if (resp && resp.ok) {
+        chrome.storage.local.set({ lastScreenshotTime: Date.now() });
+        console.log('[Delcargo Tracker] Full Desktop Screenshot captured & uploaded successfully.');
+      }
     });
   } catch (e) {
     console.warn('[Delcargo Tracker] Screenshot tick exception:', e);

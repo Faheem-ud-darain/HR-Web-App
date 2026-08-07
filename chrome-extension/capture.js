@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
           showError('Screen selection was cancelled. Click button to try again.');
           return;
         }
+        // Send streamId to offscreen document via background worker
+        chrome.runtime.sendMessage({ type: 'INIT_DESKTOP_STREAM', streamId }, (resp) => {
+          console.log('[Capture] INIT_DESKTOP_STREAM response:', resp);
+        });
         await initializeStreamWithId(streamId);
       });
     } else {
