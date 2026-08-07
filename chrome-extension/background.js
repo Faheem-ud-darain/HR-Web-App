@@ -7,15 +7,14 @@ const INACTIVITY_REPORT_SECONDS = 180; // 3 minutes — loggable idle threshold
 const AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60; // 37 minutes — continuous idle auto clock-out
 const SCREENSHOT_INTERVAL_MINUTES = 10;
 
-// Helper to format heartbeat KV key matching web portal's getTrackerHeartbeat(email)
 function getHeartbeatKey(email) {
-  return 'tracker_heartbeat_' + (email || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+  return 'tracker_heartbeat_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
 }
 
 // Set detection interval & alarms at top level
 try {
   chrome.idle.setDetectionInterval(180);
-  chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 });
+  chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 }); // every 15 sec
   chrome.alarms.create('tracker_screenshot', { periodInMinutes: SCREENSHOT_INTERVAL_MINUTES });
 } catch (e) {
   console.error('[Delcargo Tracker] Alarm setup error:', e);
@@ -23,13 +22,11 @@ try {
 
 // ── Top-level Event Listeners (Manifest V3 Requirement) ─────────────────────
 
-// 1. Installed listener
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Delcargo Tracker] Extension installed.');
   handleHeartbeatTick();
 });
 
-// 2. Message listener (registered during script evaluation)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'HEARTBEAT_NOW') {
     console.log('[Delcargo Tracker] Immediate heartbeat requested by UI.');
@@ -40,7 +37,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-// 3. Alarm listener
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'tracker_heartbeat') {
     handleHeartbeatTick();
@@ -79,37 +75,24 @@ async function pbSetKV(serverUrl, key, value) {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    if (!listRes.ok) {
-      console.error('[Delcargo Tracker] pbSetKV GET list failed:', listRes.status);
-      return;
-    }
+    if (!listRes.ok) return;
 
     const listData = await listRes.json();
     const existingRecord = listData?.items?.[0];
 
     const body = JSON.stringify({ key, value });
     if (existingRecord?.id) {
-      const patchRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body
       });
-      if (!patchRes.ok) {
-        console.error('[Delcargo Tracker] pbSetKV PATCH failed:', patchRes.status);
-      } else {
-        console.log(`[Delcargo Tracker] Heartbeat updated for key "${key}"`);
-      }
     } else {
-      const postRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
+      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body
       });
-      if (!postRes.ok) {
-        console.error('[Delcargo Tracker] pbSetKV POST failed:', postRes.status);
-      } else {
-        console.log(`[Delcargo Tracker] Heartbeat created for key "${key}"`);
-      }
     }
   } catch (err) {
     console.error('[Delcargo Tracker] pbSetKV error:', err);
@@ -129,6 +112,26 @@ async function pbGetKV(serverUrl, key) {
   } catch (err) {
     console.error('[Delcargo Tracker] pbGetKV failed:', err);
     return null;
+  }
+}
+
+async function pbDeleteKV(serverUrl, key) {
+  try {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    const filter = encodeURIComponent(`key = "${key}"`);
+    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const listData = await listRes.json();
+    const existingRecord = listData?.items?.[0];
+    if (existingRecord?.id) {
+      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+        method: 'DELETE'
+      });
+    }
+  } catch (err) {
+    console.error('[Delcargo Tracker] pbDeleteKV error:', err);
   }
 }
 
@@ -165,26 +168,7 @@ async function handleHeartbeatTick() {
   const heartbeatKey = getHeartbeatKey(email);
   const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
 
-  // 1. Upload live tracker heartbeat to PocketBase (read by Web Portal hrActions.getTrackerHeartbeat)
-  try {
-    const existingHb = await pbGetKV(serverUrl, heartbeatKey);
-    const connectedAt = existingHb?.connectedAt || nowIso;
-
-    const hbValue = {
-      employeeEmail: email,
-      deviceId: deviceId,
-      deviceLabel: 'Chromebook / Chrome OS',
-      connectedAt: connectedAt,
-      lastSeenAt: nowIso,
-      agentVersion: '6'
-    };
-
-    await pbSetKV(serverUrl, heartbeatKey, hbValue);
-  } catch (e) {
-    console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
-  }
-
-  // 2. Query real shift status on PocketBase (matches desktop tracker)
+  // Query real shift status on PocketBase (matches desktop tracker)
   const openShiftRecord = await checkActiveShift(serverUrl, email);
   const isShiftOpen = !!openShiftRecord;
 
@@ -195,7 +179,26 @@ async function handleHeartbeatTick() {
       shiftStartTime: clockInIso
     });
 
-    // 3. Live continuous 37+ minutes idle check
+    // Upload live tracker heartbeat to PocketBase ONLY during an active shift
+    try {
+      const existingHb = await pbGetKV(serverUrl, heartbeatKey);
+      const connectedAt = existingHb?.connectedAt || nowIso;
+
+      const hbValue = {
+        employeeEmail: email,
+        deviceId: deviceId,
+        deviceLabel: 'Chromebook / Chrome OS',
+        connectedAt: connectedAt,
+        lastSeenAt: nowIso,
+        agentVersion: '6'
+      };
+
+      await pbSetKV(serverUrl, heartbeatKey, hbValue);
+    } catch (e) {
+      console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
+    }
+
+    // Live continuous 37+ minutes idle check
     chrome.idle.queryState(180, async (state) => {
       if (state === 'idle' || state === 'locked') {
         const idleStart = data.idleStartTimestamp || Date.now();
@@ -209,10 +212,11 @@ async function handleHeartbeatTick() {
     });
 
   } else {
-    // Shift is paused / not open on Web Portal
+    // Shift is ended / not open on Web Portal -> Clear heartbeat so portal shows Disconnected
     if (data.shiftActive) {
       chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
     }
+    await pbDeleteKV(serverUrl, heartbeatKey);
   }
 }
 
@@ -241,28 +245,9 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSec
       reason
     });
 
-    // 3. If inactivity absence, record real-time absence entry
-    if (reason === 'inactivity_absence') {
-      const pktTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
-      const recordId = `${email.toLowerCase()}_${pktTodayStr}`;
-      const inactivityMinutes = Math.round(idleSeconds / 60);
-
-      const existingAbsences = (await pbGetKV(cleanUrl, 'hr_absence_records_v1')) || [];
-      if (!existingAbsences.some(r => r.id === recordId)) {
-        existingAbsences.push({
-          id: recordId,
-          employeeEmail: email,
-          employeeName: email,
-          date: pktTodayStr,
-          reason: 'inactivity',
-          inactivityMinutes,
-          deductionAmount: 0,
-          createdAt: new Date().toISOString(),
-          acknowledged: false
-        });
-        await pbSetKV(cleanUrl, 'hr_absence_records_v1', existingAbsences);
-      }
-    }
+    // 3. Delete live heartbeat row so dashboard immediately reflects Disconnected
+    const heartbeatKey = getHeartbeatKey(email);
+    await pbDeleteKV(cleanUrl, heartbeatKey);
 
     // 4. Update local state
     chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
@@ -287,20 +272,17 @@ chrome.idle.onStateChanged.addListener(async (newState) => {
   if (!data.shiftActive || !data.employeeEmail) return;
 
   const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const email = data.employeeEmail.toLowerCase();
+  const email = data.employeeEmail.trim().toLowerCase();
   const now = Date.now();
 
   if (newState === 'idle' || newState === 'locked') {
-    // Idle stretch started
     chrome.storage.local.set({ idleStartTimestamp: now });
   } else if (newState === 'active') {
-    // Idle stretch ended — calculate completed interval
     const idleStart = data.idleStartTimestamp;
     chrome.storage.local.set({ idleStartTimestamp: null, autoAbsentFired: false });
 
     if (idleStart) {
       const durationSeconds = Math.floor((now - idleStart) / 1000);
-      // Log idle entry if >= 3 minutes
       if (durationSeconds >= INACTIVITY_REPORT_SECONDS) {
         await uploadInactivityLog(serverUrl, email, new Date(idleStart).toISOString(), new Date(now).toISOString(), durationSeconds);
       }
@@ -329,31 +311,50 @@ async function uploadInactivityLog(serverUrl, email, startIso, endIso, durationS
   }
 }
 
-// ── Screen Capture Tick ───────────────────────────────────────────────────
+// Helper to convert Data URL to Blob for multipart upload
+function dataUrlToBlob(dataUrl) {
+  const arr = dataUrl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+// ── Screen Capture Tick (Multipart Form-Data to hr_screenshots) ───────────
 async function handleScreenshotTick() {
   const data = await getStorageData();
   if (!data.shiftActive || !data.employeeEmail) return;
 
   const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const email = data.employeeEmail.toLowerCase();
+  const email = data.employeeEmail.trim().toLowerCase();
 
   try {
     chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 60 }, async (dataUrl) => {
       if (!dataUrl || chrome.runtime.lastError) return;
 
-      const body = {
-        employee_email: email,
-        image_data: dataUrl,
-        timestamp: new Date().toISOString(),
-        device_label: 'Chromebook / Chrome OS'
-      };
+      const blob = dataUrlToBlob(dataUrl);
+      const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
 
-      await fetch(`${cleanUrl}/api/collections/hr_screenshots/records`, {
+      const formData = new FormData();
+      formData.append('employee_email', email);
+      formData.append('captured_at', new Date().toISOString());
+      formData.append('device_label', 'Chromebook / Chrome OS');
+      formData.append('image', blob, filename);
+
+      const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: formData
       });
-      console.log('[Delcargo Tracker] Screenshot captured & uploaded.');
+
+      if (resp.ok) {
+        console.log('[Delcargo Tracker] Screenshot captured & uploaded successfully.');
+      } else {
+        console.error('[Delcargo Tracker] Screenshot upload status:', resp.status, await resp.text());
+      }
     });
   } catch (e) {
     console.error('[Delcargo Tracker] Screenshot tick failed:', e);
