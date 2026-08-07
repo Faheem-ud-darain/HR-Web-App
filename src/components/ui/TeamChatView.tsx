@@ -675,7 +675,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     <div className="flex flex-col md:flex-row gap-2 md:gap-4 flex-1 h-full min-h-0">
       {/* Team selector — only shown when there's more than one team to pick from */}
       {teams.length > 1 && (
-        <div className={`md:w-56 shrink-0 md:flex flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-hide px-1 md:px-0 ${mobileSelectorStyle === 'dropdown' ? 'hidden' : 'flex'}`}>
+        <div className={`md:w-56 shrink-0 md:flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-hide px-1 md:px-0 ${mobileSelectorStyle === 'dropdown' ? 'hidden' : 'flex'}`}>
           {teams.map(t => (
             <button
               key={t.id}
@@ -685,7 +685,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               }`}
             >
               {t.name}
-              {oversight && <span className={`block text-[9px] font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-400'}`}>{t.members.length} members</span>}
+              {oversight && <span className={`hidden md:block text-[9px] font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-400'}`}>{t.members.length} members</span>}
             </button>
           ))}
         </div>
