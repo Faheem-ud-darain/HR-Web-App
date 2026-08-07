@@ -22,7 +22,7 @@
       </div>
     </header>
 
-    <!-- SETUP SCREEN (When not connected with a Personal Code) -->
+    <!-- SETUP SCREEN (When not connected) -->
     <div id="setupView" class="view-section">
       <div class="main-card">
         <div class="setup-header">
@@ -44,25 +44,32 @@
       </div>
     </div>
 
-    <!-- MAIN TRACKER SCREEN (When connected) -->
+    <!-- MAIN TRACKER SCREEN (When connected — matches desktop tracker) -->
     <div id="mainView" class="view-section" style="display: none;">
       <div class="main-card">
         <div class="user-badge">
-          <span class="user-label">Employee</span>
+          <span class="user-label">Connected Employee</span>
           <span id="displayEmail" class="user-email">employee@delcargo.us</span>
         </div>
 
-        <!-- Active Shift Timer Display -->
+        <!-- Shift Active / Paused Indicator -->
+        <div id="trackingStateCard" class="tracking-state-card state-paused">
+          <div class="state-icon" id="stateIcon">⏸️</div>
+          <div class="state-details">
+            <div class="state-title" id="stateTitle">Shift Paused</div>
+            <div class="state-subtitle" id="stateSubtitle">Start shift from Web Portal</div>
+          </div>
+        </div>
+
+        <!-- Shift Duration Display -->
         <div class="timer-section">
           <div class="timer-label">Shift Duration</div>
           <div id="timerDisplay" class="timer-digits">00:00:00</div>
         </div>
 
-        <!-- Action Button -->
-        <button id="toggleShiftBtn" class="btn btn-primary">
-          <span id="btnIcon">▶</span>
-          <span id="btnText">Start Shift</span>
-        </button>
+        <p class="auto-notice">
+          Tracking starts automatically whenever your shift is active on the portal. Closing Chrome or idling 37+ min auto-ends the shift.
+        </p>
 
         <button id="disconnectBtn" class="btn-text">
           Change Setup Code / Disconnect
@@ -74,7 +81,7 @@
     <footer class="app-footer">
       <div class="indicator">
         <span class="indicator-dot dot-active"></span>
-        <span>37m continuous idle auto-stop</span>
+        <span>Auto-tracking enabled</span>
       </div>
       <div class="version">v1.0.0</div>
     </footer>

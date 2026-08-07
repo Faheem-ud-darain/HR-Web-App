@@ -1,11 +1,10 @@
 // Delcargo HR Tracker — Background Service Worker (Manifest V3)
-// Handles idle detection, shift heartbeats, auto clock-out on 37+ min inactivity,
-// and periodic screen captures on ChromeOS & Chrome browser.
+// Automatic active shift detection, idle tracking, heartbeats, screen captures,
+// and 37-minute continuous idle auto clock-out on ChromeOS & Chrome browser.
 
 const DEFAULT_SERVER_URL = 'https://pb.delcargo.us';
 const INACTIVITY_REPORT_SECONDS = 180; // 3 minutes — loggable idle threshold
 const AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60; // 37 minutes — continuous idle auto clock-out
-const HEARTBEAT_INTERVAL_SECONDS = 15;
 const SCREENSHOT_INTERVAL_MINUTES = 10;
 
 // Setup alarms & idle detection on extension load/install
@@ -32,6 +31,7 @@ async function getStorageData() {
       [
         'employeeEmail',
         'serverUrl',
+        'agentToken',
         'shiftActive',
         'shiftStartTime',
         'idleStartTimestamp',
@@ -45,7 +45,8 @@ async function getStorageData() {
 // ── PocketBase REST Helpers ────────────────────────────────────────────────
 async function pbSetKV(serverUrl, key, value) {
   try {
-    const listRes = await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records?filter=(key='${key}')`, {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key="${key}"`)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -54,13 +55,13 @@ async function pbSetKV(serverUrl, key, value) {
 
     const body = JSON.stringify({ key, value });
     if (existingRecord?.id) {
-      await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body
       });
     } else {
-      await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records`, {
+      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body
@@ -73,7 +74,8 @@ async function pbSetKV(serverUrl, key, value) {
 
 async function pbGetKV(serverUrl, key) {
   try {
-    const listRes = await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records?filter=(key='${key}')`, {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key="${key}"`)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -85,80 +87,114 @@ async function pbGetKV(serverUrl, key) {
   }
 }
 
-// ── Heartbeat Handler ──────────────────────────────────────────────────────
+// ── Automatic Active Shift Checker (Matches desktop agent check_active_shift) ─
+async function checkActiveShift(serverUrl, email) {
+  try {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    const res = await fetch(`${cleanUrl}/api/collections/hr_timesheets/records?filter=${encodeURIComponent('clock_out=""')}&perPage=200`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const items = data?.items || [];
+    const wanted = email.toLowerCase();
+
+    // Match employee_id (stores employeeEmail)
+    const openRecord = items.find(it => (it.employee_id || '').toLowerCase() === wanted);
+    return openRecord || null;
+  } catch (e) {
+    console.error('[Delcargo Tracker] checkActiveShift failed:', e);
+    return null;
+  }
+}
+
+// ── Heartbeat & Shift Tick Handler ─────────────────────────────────────────
 async function handleHeartbeatTick() {
   const data = await getStorageData();
-  if (!data.shiftActive || !data.employeeEmail) return;
+  if (!data.employeeEmail) return;
 
-  const serverUrl = data.serverUrl || DEFAULT_SERVER_URL;
+  const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const email = data.employeeEmail.toLowerCase();
   const nowIso = new Date().toISOString();
 
-  // 1. Update live heartbeat KV
-  try {
-    const existingMap = (await pbGetKV(serverUrl, 'hr_tracker_heartbeats_prod_v1')) || {};
-    existingMap[email] = {
-      email,
-      timestamp: nowIso,
-      deviceLabel: 'Chromebook / Chrome OS'
-    };
-    await pbSetKV(serverUrl, 'hr_tracker_heartbeats_prod_v1', existingMap);
-  } catch (e) {
-    console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
-  }
+  // 1. Query real shift status on PocketBase (matches desktop tracker)
+  const openShiftRecord = await checkActiveShift(serverUrl, email);
+  const isShiftOpen = !!openShiftRecord;
 
-  // 2. Check live continuous idle duration if currently idle
-  chrome.idle.queryState(180, async (state) => {
-    if (state === 'idle' || state === 'locked') {
-      const idleStart = data.idleStartTimestamp || Date.now();
-      const continuousIdleSec = Math.floor((Date.now() - idleStart) / 1000);
+  if (isShiftOpen) {
+    const clockInIso = openShiftRecord.clock_in || nowIso;
+    chrome.storage.local.set({
+      shiftActive: true,
+      shiftStartTime: clockInIso
+    });
 
-      // Continuous 37+ minutes idle threshold check
-      if (continuousIdleSec >= AUTO_ABSENT_INACTIVITY_SECONDS && !data.autoAbsentFired) {
-        chrome.storage.local.set({ autoAbsentFired: true });
-        await autoClockOut(serverUrl, email, 'inactivity_absence', continuousIdleSec);
-      }
+    // 2. Upload live heartbeat KV
+    try {
+      const existingMap = (await pbGetKV(serverUrl, 'hr_tracker_heartbeats_prod_v1')) || {};
+      existingMap[email] = {
+        email,
+        timestamp: nowIso,
+        deviceLabel: 'Chromebook / Chrome OS'
+      };
+      await pbSetKV(serverUrl, 'hr_tracker_heartbeats_prod_v1', existingMap);
+    } catch (e) {
+      console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
     }
-  });
+
+    // 3. Live continuous 37+ minutes idle check
+    chrome.idle.queryState(180, async (state) => {
+      if (state === 'idle' || state === 'locked') {
+        const idleStart = data.idleStartTimestamp || Date.now();
+        const continuousIdleSec = Math.floor((Date.now() - idleStart) / 1000);
+
+        if (continuousIdleSec >= AUTO_ABSENT_INACTIVITY_SECONDS && !data.autoAbsentFired) {
+          chrome.storage.local.set({ autoAbsentFired: true });
+          await autoClockOut(serverUrl, email, 'inactivity_absence', continuousIdleSec);
+        }
+      }
+    });
+
+  } else {
+    // Shift is paused / not open on Web Portal
+    if (data.shiftActive) {
+      chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
+    }
+  }
 }
 
 // ── Auto Clock Out / Shift Stop ───────────────────────────────────────────
 async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSeconds = 0) {
   try {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
     console.log(`[Delcargo Tracker] Auto clock-out triggered. Reason: ${reason}`);
 
     // 1. Clock out open timesheet record
-    const tsRes = await fetch(`${serverUrl}/api/collections/hr_timesheets/records?filter=(employee_email='${email}'%26%26clock_out=null)`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    const tsData = await tsRes.json();
-    const openRecord = tsData?.items?.[0];
-
+    const openRecord = await checkActiveShift(cleanUrl, email);
     if (openRecord?.id) {
       const nowIso = new Date().toISOString();
-      await fetch(`${serverUrl}/api/collections/hr_timesheets/records/${openRecord.id}`, {
+      await fetch(`${cleanUrl}/api/collections/hr_timesheets/records/${openRecord.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clock_out: nowIso, status: 'Completed' })
       });
     }
 
-    // 2. Write shift_stop_signal for live frontend web dashboard notification
+    // 2. Write shift_stop_signal for live web dashboard notification
     const signalKey = 'shift_stop_signal_' + email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    await pbSetKV(serverUrl, signalKey, {
+    await pbSetKV(cleanUrl, signalKey, {
       employeeEmail: email,
       timestamp: new Date().toISOString(),
       reason
     });
 
-    // 3. If inactivity absence, create real-time absence record
+    // 3. If inactivity absence, record real-time absence entry
     if (reason === 'inactivity_absence') {
       const pktTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
       const recordId = `${email.toLowerCase()}_${pktTodayStr}`;
       const inactivityMinutes = Math.round(idleSeconds / 60);
 
-      const existingAbsences = (await pbGetKV(serverUrl, 'hr_absence_records_v1')) || [];
+      const existingAbsences = (await pbGetKV(cleanUrl, 'hr_absence_records_v1')) || [];
       if (!existingAbsences.some(r => r.id === recordId)) {
         existingAbsences.push({
           id: recordId,
@@ -167,11 +203,11 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSec
           date: pktTodayStr,
           reason: 'inactivity',
           inactivityMinutes,
-          deductionAmount: 0, // calculate server-side
+          deductionAmount: 0,
           createdAt: new Date().toISOString(),
           acknowledged: false
         });
-        await pbSetKV(serverUrl, 'hr_absence_records_v1', existingAbsences);
+        await pbSetKV(cleanUrl, 'hr_absence_records_v1', existingAbsences);
       }
     }
 
@@ -197,7 +233,7 @@ chrome.idle.onStateChanged.addListener(async (newState) => {
   const data = await getStorageData();
   if (!data.shiftActive || !data.employeeEmail) return;
 
-  const serverUrl = data.serverUrl || DEFAULT_SERVER_URL;
+  const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const email = data.employeeEmail.toLowerCase();
   const now = Date.now();
 
@@ -222,7 +258,8 @@ chrome.idle.onStateChanged.addListener(async (newState) => {
 // Upload completed inactivity interval to hr_inactivity_logs
 async function uploadInactivityLog(serverUrl, email, startIso, endIso, durationSeconds) {
   try {
-    await fetch(`${serverUrl}/api/collections/hr_inactivity_logs/records`, {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    await fetch(`${cleanUrl}/api/collections/hr_inactivity_logs/records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -244,15 +281,13 @@ async function handleScreenshotTick() {
   const data = await getStorageData();
   if (!data.shiftActive || !data.employeeEmail) return;
 
-  const serverUrl = data.serverUrl || DEFAULT_SERVER_URL;
+  const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const email = data.employeeEmail.toLowerCase();
 
   try {
-    // Capture current active tab image
     chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 60 }, async (dataUrl) => {
       if (!dataUrl || chrome.runtime.lastError) return;
 
-      // Upload base64 image data to hr_screenshots
       const body = {
         employee_email: email,
         image_data: dataUrl,
@@ -260,7 +295,7 @@ async function handleScreenshotTick() {
         device_label: 'Chromebook / Chrome OS'
       };
 
-      await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
+      await fetch(`${cleanUrl}/api/collections/hr_screenshots/records`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -271,32 +306,3 @@ async function handleScreenshotTick() {
     console.error('[Delcargo Tracker] Screenshot tick failed:', e);
   }
 }
-
-// ── Message Listener from Popup UI ────────────────────────────────────────
-chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
-  if (req.type === 'START_SHIFT') {
-    const nowIso = new Date().toISOString();
-    chrome.storage.local.set({
-      shiftActive: true,
-      shiftStartTime: nowIso,
-      employeeEmail: req.email,
-      serverUrl: req.serverUrl || DEFAULT_SERVER_URL,
-      autoAbsentFired: false,
-      idleStartTimestamp: null
-    }, () => {
-      handleHeartbeatTick();
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-
-  if (req.type === 'STOP_SHIFT') {
-    getStorageData().then(async (data) => {
-      const serverUrl = data.serverUrl || DEFAULT_SERVER_URL;
-      const email = data.employeeEmail;
-      await autoClockOut(serverUrl, email, 'manual_stop');
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-});

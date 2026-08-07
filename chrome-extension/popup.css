@@ -84,6 +84,12 @@ body {
   border-color: rgba(16, 185, 129, 0.3);
 }
 
+.status-active {
+  background-color: rgba(234, 88, 12, 0.15);
+  color: #f97316;
+  border-color: rgba(234, 88, 12, 0.3);
+}
+
 .dot {
   width: 6px;
   height: 6px;
@@ -91,8 +97,8 @@ body {
   background-color: currentColor;
 }
 
-.status-online .dot {
-  box-shadow: 0 0 6px #34d399;
+.status-online .dot, .status-active .dot {
+  box-shadow: 0 0 6px currentColor;
 }
 
 /* Main Card */
@@ -103,7 +109,7 @@ body {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .setup-header h2 {
@@ -144,18 +150,55 @@ body {
   word-break: break-all;
 }
 
+/* Tracking State Card */
+.tracking-state-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.state-paused {
+  background-color: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.15);
+}
+
+.state-active {
+  background-color: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.state-icon {
+  font-size: 20px;
+}
+
+.state-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.state-subtitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
 .timer-section {
   text-align: center;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .timer-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .timer-digits {
@@ -164,6 +207,13 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color: #ffffff;
   letter-spacing: -0.02em;
+}
+
+.auto-notice {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.4;
+  text-align: center;
 }
 
 /* Inputs Form */
@@ -236,16 +286,6 @@ body {
 
 .btn-primary:hover {
   background-color: #c2410c;
-}
-
-.btn-active {
-  background-color: #dc2626;
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
-}
-
-.btn-active:hover {
-  background-color: #b91c1c;
 }
 
 .btn-text {

@@ -1,4 +1,4 @@
-// Delcargo HR Tracker — Popup Controller (Personal Setup Code Auth)
+// Delcargo HR Tracker — Popup Controller (Desktop Tracker Behavior)
 
 document.addEventListener('DOMContentLoaded', () => {
   const setupView = document.getElementById('setupView');
@@ -8,9 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const setupError = document.getElementById('setupError');
 
   const displayEmail = document.getElementById('displayEmail');
-  const toggleShiftBtn = document.getElementById('toggleShiftBtn');
-  const btnText = document.getElementById('btnText');
-  const btnIcon = document.getElementById('btnIcon');
+  const trackingStateCard = document.getElementById('trackingStateCard');
+  const stateIcon = document.getElementById('stateIcon');
+  const stateTitle = document.getElementById('stateTitle');
+  const stateSubtitle = document.getElementById('stateSubtitle');
+
   const disconnectBtn = document.getElementById('disconnectBtn');
   const statusPill = document.getElementById('statusPill');
   const statusText = document.getElementById('statusText');
@@ -53,7 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
           updateUiActive();
           startTimer();
         } else {
-          updateUiConnected();
+          isShiftActive = false;
+          stopTimer();
+          updateUiPaused();
         }
       } else {
         // Disconnected — Show Setup Screen
@@ -65,6 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   loadState();
+
+  // Poll state every 3 seconds while popup is open
+  setInterval(loadState, 3000);
 
   // ── Connect Device via Setup Code ──────────────────────────────────────
   connectCodeBtn.addEventListener('click', async () => {
@@ -114,7 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.storage.local.set({
         employeeEmail: email,
         serverUrl: serverUrl,
-        agentToken: token
+        agentToken: token,
+        shiftActive: false
       }, () => {
         setupCodeInput.value = '';
         connectCodeBtn.disabled = false;
@@ -133,43 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupError.style.display = 'block';
   }
 
-  // ── Toggle Start/End Shift ─────────────────────────────────────────────
-  toggleShiftBtn.addEventListener('click', () => {
-    chrome.storage.local.get(['employeeEmail', 'serverUrl'], (res) => {
-      const email = res.employeeEmail;
-      const serverUrl = res.serverUrl || 'https://pb.delcargo.us';
-
-      if (!isShiftActive) {
-        // START SHIFT
-        chrome.runtime.sendMessage({ type: 'START_SHIFT', email, serverUrl }, (resp) => {
-          if (resp && resp.success) {
-            isShiftActive = true;
-            shiftStartMs = Date.now();
-            updateUiActive();
-            startTimer();
-          }
-        });
-      } else {
-        // END SHIFT
-        if (confirm('Are you sure you want to end your shift?')) {
-          chrome.runtime.sendMessage({ type: 'STOP_SHIFT' }, (resp) => {
-            if (resp && resp.success) {
-              isShiftActive = false;
-              stopTimer();
-              updateUiConnected();
-            }
-          });
-        }
-      }
-    });
-  });
-
   // ── Disconnect Device ─────────────────────────────────────────────────
   disconnectBtn.addEventListener('click', () => {
     if (confirm('Disconnect this Chromebook from your account? You will need a new Setup Code to reconnect.')) {
-      if (isShiftActive) {
-        chrome.runtime.sendMessage({ type: 'STOP_SHIFT' });
-      }
       chrome.storage.local.clear(() => {
         stopTimer();
         loadState();
@@ -177,21 +151,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function updateUiConnected() {
+  function updateUiPaused() {
     statusPill.className = 'status-pill status-offline';
-    statusText.textContent = 'Ready';
-    toggleShiftBtn.className = 'btn btn-primary';
-    btnIcon.textContent = '▶';
-    btnText.textContent = 'Start Shift';
+    statusText.textContent = 'Shift Paused';
+    trackingStateCard.className = 'tracking-state-card state-paused';
+    stateIcon.textContent = '⏸️';
+    stateTitle.textContent = 'Shift Paused';
+    stateSubtitle.textContent = 'Start shift from Web Portal';
     timerDisplay.textContent = '00:00:00';
   }
 
   function updateUiActive() {
-    statusPill.className = 'status-pill status-online';
-    statusText.textContent = 'Active Shift';
-    toggleShiftBtn.className = 'btn btn-active';
-    btnIcon.textContent = '■';
-    btnText.textContent = 'End Shift';
+    statusPill.className = 'status-pill status-active';
+    statusText.textContent = 'Tracking Active';
+    trackingStateCard.className = 'tracking-state-card state-active';
+    stateIcon.textContent = '🟢';
+    stateTitle.textContent = 'Tracking Active';
+    stateSubtitle.textContent = 'Shift in progress';
   }
 
   function updateUiDisconnected() {
