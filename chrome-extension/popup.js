@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Grant Full Desktop Screen Capture ──────────────────────────────────
   grantScreenBtn.addEventListener('click', () => {
-    chrome.desktopCapture.chooseDesktopMedia(['screen'], (streamId) => {
+    chrome.desktopCapture.chooseDesktopMedia(['screen'], async (streamId) => {
       if (!streamId) {
         alert('Desktop screen capture was cancelled. Please select Entire Screen to allow full desktop tracking.');
         return;
@@ -93,23 +93,49 @@ document.addEventListener('DOMContentLoaded', () => {
       grantScreenBtn.disabled = true;
       grantScreenBtn.textContent = 'Initializing Screen Stream...';
 
-      chrome.runtime.sendMessage({ type: 'INIT_DESKTOP_STREAM', streamId }, (resp) => {
-        if (resp && resp.success) {
-          const resStr = (resp.width && resp.height) ? `${resp.width}x${resp.height}` : 'Full Display';
-          chrome.storage.local.set({
-            desktopStreamGranted: true,
-            desktopResolution: resStr
-          }, () => {
-            grantScreenBtn.style.display = 'none';
-            screenCaptureBadge.style.display = 'flex';
-            screenDesc.textContent = `Entire monitor display active (${resStr})`;
-          });
-        } else {
-          alert('Failed to initialize desktop stream. Please try again.');
-          grantScreenBtn.disabled = false;
-          grantScreenBtn.textContent = '🖥️ Select Entire Desktop Screen';
-        }
-      });
+      try {
+        // Immediately initialize getUserMedia in popup context before streamId expires
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: streamId
+            }
+          }
+        });
+
+        const video = document.createElement('video');
+        video.srcObject = stream;
+
+        video.onloadedmetadata = async () => {
+          try {
+            await video.play();
+            const width = video.videoWidth || 1920;
+            const height = video.videoHeight || 1080;
+            const resStr = `${width}x${height}`;
+
+            chrome.storage.local.set({
+              desktopStreamGranted: true,
+              desktopResolution: resStr
+            }, () => {
+              grantScreenBtn.style.display = 'none';
+              screenCaptureBadge.style.display = 'flex';
+              screenDesc.textContent = `Entire monitor display active (${resStr})`;
+              alert(`Full Desktop Screen Capture enabled successfully! (${resStr})`);
+            });
+          } catch (e) {
+            alert('Video play error: ' + e.message);
+            grantScreenBtn.disabled = false;
+            grantScreenBtn.textContent = '🖥️ Select Entire Desktop Screen';
+          }
+        };
+
+      } catch (err) {
+        alert('Screen capture initialization error: ' + (err.message || err));
+        grantScreenBtn.disabled = false;
+        grantScreenBtn.textContent = '🖥️ Select Entire Desktop Screen';
+      }
     });
   });
 
