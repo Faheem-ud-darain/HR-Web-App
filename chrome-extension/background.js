@@ -19,10 +19,28 @@ try {
   console.error('[Delcargo Tracker] Alarm setup error:', e);
 }
 
+// Ensure Offscreen Document exists for full desktop MediaStream capture
+async function ensureOffscreenDocument() {
+  try {
+    const existing = await chrome.offscreen.hasDocument();
+    if (!existing) {
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['USER_MEDIA'],
+        justification: 'Capture full desktop screen for HR activity logging'
+      });
+      console.log('[Delcargo Tracker] Offscreen capture document created.');
+    }
+  } catch (err) {
+    console.error('[Delcargo Tracker] Offscreen document creation error:', err);
+  }
+}
+
 // ── Top-level Event Listeners (Manifest V3 Requirement) ─────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Delcargo Tracker] Extension installed.');
+  ensureOffscreenDocument();
   handleHeartbeatTick();
 });
 
@@ -32,6 +50,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     handleHeartbeatTick()
       .then(() => sendResponse({ success: true }))
       .catch(() => sendResponse({ success: false }));
+    return true;
+  }
+  if (msg && msg.type === 'INIT_DESKTOP_STREAM') {
+    (async () => {
+      await ensureOffscreenDocument();
+      const res = await chrome.runtime.sendMessage({ type: 'START_SCREEN_STREAM', streamId: msg.streamId });
+      sendResponse(res || { success: true });
+    })();
     return true;
   }
   if (msg && msg.type === 'DISCONNECT_DEVICE') {
@@ -358,7 +384,7 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([u8arr], { type: mime });
 }
 
-// ── Screen Capture Tick (Multipart Form-Data to hr_screenshots) ───────────
+// ── Screen Capture Tick (Full Desktop Monitor via Offscreen / VisibleTab) ───
 async function handleScreenshotTick() {
   const data = await getStorageData();
   if (!data.shiftActive || !data.employeeEmail) return;
@@ -367,41 +393,64 @@ async function handleScreenshotTick() {
   const email = data.employeeEmail.trim().toLowerCase();
 
   try {
-    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-      const activeTab = tabs?.[0];
-      const windowId = activeTab?.windowId || null;
+    await ensureOffscreenDocument();
 
-      chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 60 }, async (dataUrl) => {
-        if (!dataUrl || chrome.runtime.lastError) {
-          console.warn('[Delcargo Tracker] Screen capture skipped or failed:', chrome.runtime.lastError?.message);
-          return;
-        }
+    // 1. Try Full Desktop Frame from Offscreen MediaStream
+    chrome.runtime.sendMessage({ type: 'CAPTURE_DESKTOP_FRAME' }, async (offscreenRes) => {
+      let dataUrl = null;
+      let width = '1920';
+      let height = '1080';
 
-        const blob = dataUrlToBlob(dataUrl);
-        const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
-        const width = String(activeTab?.width || 1920);
-        const height = String(activeTab?.height || 1080);
-
-        const formData = new FormData();
-        formData.append('employee_email', email);
-        formData.append('captured_at', new Date().toISOString());
-        formData.append('width', width);
-        formData.append('height', height);
-        formData.append('device_label', 'Chromebook / Chrome OS');
-        formData.append('image', blob, filename);
-
-        const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
-          method: 'POST',
-          body: formData
+      if (offscreenRes && offscreenRes.success && offscreenRes.dataUrl) {
+        dataUrl = offscreenRes.dataUrl;
+        width = String(offscreenRes.width || 1920);
+        height = String(offscreenRes.height || 1080);
+      } else {
+        // 2. Fallback: capture active visible window
+        dataUrl = await new Promise((resolve) => {
+          chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+            const activeTab = tabs?.[0];
+            const windowId = activeTab?.windowId || null;
+            if (activeTab) {
+              width = String(activeTab.width || 1920);
+              height = String(activeTab.height || 1080);
+            }
+            chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 65 }, (url) => {
+              if (chrome.runtime.lastError) {
+                console.warn('[Delcargo Tracker] Fallback captureVisibleTab skipped:', chrome.runtime.lastError.message);
+                resolve(null);
+              } else {
+                resolve(url);
+              }
+            });
+          });
         });
+      }
 
-        if (resp.ok) {
-          chrome.storage.local.set({ lastScreenshotTime: Date.now() });
-          console.log('[Delcargo Tracker] Screenshot captured & uploaded successfully.');
-        } else {
-          console.error('[Delcargo Tracker] Screenshot upload status:', resp.status, await resp.text());
-        }
+      if (!dataUrl) return;
+
+      const blob = dataUrlToBlob(dataUrl);
+      const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
+
+      const formData = new FormData();
+      formData.append('employee_email', email);
+      formData.append('captured_at', new Date().toISOString());
+      formData.append('width', width);
+      formData.append('height', height);
+      formData.append('device_label', 'Chromebook / Chrome OS');
+      formData.append('image', blob, filename);
+
+      const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
+        method: 'POST',
+        body: formData
       });
+
+      if (resp.ok) {
+        chrome.storage.local.set({ lastScreenshotTime: Date.now() });
+        console.log('[Delcargo Tracker] Full Desktop Screenshot captured & uploaded successfully.');
+      } else {
+        console.error('[Delcargo Tracker] Screenshot upload status:', resp.status, await resp.text());
+      }
     });
   } catch (e) {
     console.error('[Delcargo Tracker] Screenshot tick failed:', e);

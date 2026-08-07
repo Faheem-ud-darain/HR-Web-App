@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const stateIcon = document.getElementById('stateIcon');
   const stateTitle = document.getElementById('stateTitle');
   const stateSubtitle = document.getElementById('stateSubtitle');
+  const grantScreenBtn = document.getElementById('grantScreenBtn');
 
   const disconnectBtn = document.getElementById('disconnectBtn');
   const statusPill = document.getElementById('statusPill');
@@ -42,12 +43,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Load Storage State ─────────────────────────────────────────────────
   function loadState() {
-    chrome.storage.local.get(['employeeEmail', 'serverUrl', 'agentToken', 'shiftActive', 'shiftStartTime'], (res) => {
+    chrome.storage.local.get(['employeeEmail', 'serverUrl', 'agentToken', 'shiftActive', 'shiftStartTime', 'desktopStreamGranted'], (res) => {
       if (res.agentToken && res.employeeEmail) {
-        // Device Connected with Setup Code
         setupView.style.display = 'none';
         mainView.style.display = 'block';
         displayEmail.textContent = res.employeeEmail;
+
+        if (res.desktopStreamGranted) {
+          grantScreenBtn.style.display = 'none';
+        } else {
+          grantScreenBtn.style.display = 'flex';
+        }
 
         if (res.shiftActive && res.shiftStartTime) {
           isShiftActive = true;
@@ -60,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
           updateUiPaused();
         }
       } else {
-        // Disconnected — Show Setup Screen
         setupView.style.display = 'block';
         mainView.style.display = 'none';
         updateUiDisconnected();
@@ -69,9 +74,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   loadState();
-
-  // Poll state every 3 seconds while popup is open
   setInterval(loadState, 3000);
+
+  // ── Grant Full Desktop Screen Capture ──────────────────────────────────
+  grantScreenBtn.addEventListener('click', () => {
+    chrome.desktopCapture.chooseDesktopMedia(['screen'], (streamId) => {
+      if (!streamId) {
+        alert('Desktop screen capture was cancelled. Please select Entire Screen to allow full desktop tracking.');
+        return;
+      }
+      chrome.runtime.sendMessage({ type: 'INIT_DESKTOP_STREAM', streamId }, (resp) => {
+        if (resp && resp.success) {
+          chrome.storage.local.set({ desktopStreamGranted: true }, () => {
+            grantScreenBtn.style.display = 'none';
+            alert('Full Desktop Screen Capture enabled successfully!');
+          });
+        }
+      });
+    });
+  });
 
   // ── Connect Device via Setup Code ──────────────────────────────────────
   connectCodeBtn.addEventListener('click', async () => {
@@ -96,9 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const serverUrl = (decoded.serverUrl || 'https://pb.delcargo.us').replace(/\/+$/, '');
       const token = decoded.token;
 
-      // Fetch tracking settings array from PocketBase KV store (key: "hr_tracking_settings_prod_v1")
       const kvResp = await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent('key="hr_tracking_settings_prod_v1"')}`);
-      
       if (!kvResp.ok) throw new Error('Could not reach server. Please check your network connection.');
 
       const kvData = await kvResp.json();
@@ -108,16 +127,13 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error("Could not retrieve tracker settings from server.");
       }
 
-      // Find setting record matching this setup code's token
       const matchedSetting = settingsList.find(s => s && s.agentToken === token);
-
       if (!matchedSetting || !matchedSetting.employeeEmail) {
         throw new Error("This setup code is not recognized. Please ask HR/Admin for a fresh setup code from the Tracker Setup screen.");
       }
 
       const email = matchedSetting.employeeEmail.toLowerCase();
 
-      // Save connection credentials
       chrome.storage.local.set({
         employeeEmail: email,
         serverUrl: serverUrl,

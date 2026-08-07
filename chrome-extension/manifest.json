@@ -24,7 +24,8 @@
     "tabs",
     "activeTab",
     "desktopCapture",
-    "notifications"
+    "notifications",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>",
