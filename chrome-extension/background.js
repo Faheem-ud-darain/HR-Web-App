@@ -55,8 +55,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'INIT_DESKTOP_STREAM') {
     (async () => {
       await ensureOffscreenDocument();
-      const res = await chrome.runtime.sendMessage({ type: 'START_SCREEN_STREAM', streamId: msg.streamId });
-      sendResponse(res || { success: true });
+      await new Promise(r => setTimeout(r, 150));
+      chrome.runtime.sendMessage({ type: 'START_SCREEN_STREAM', streamId: msg.streamId }, (offscreenRes) => {
+        const err = chrome.runtime.lastError;
+        if (err) {
+          console.error('[Delcargo Tracker] Offscreen message error:', err.message);
+          sendResponse({ success: false, error: err.message });
+        } else {
+          console.log('[Delcargo Tracker] Offscreen stream init response:', offscreenRes);
+          sendResponse(offscreenRes || { success: false, error: 'No response from offscreen document' });
+        }
+      });
     })();
     return true;
   }
