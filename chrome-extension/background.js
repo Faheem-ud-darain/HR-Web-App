@@ -71,36 +71,56 @@ async function getStorageData() {
 async function pbSetKV(serverUrl, key, value) {
   try {
     const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key="${key}"`)}`, {
+    const filter = encodeURIComponent(`key = "${key}"`);
+    const getUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`;
+
+    const listRes = await fetch(getUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
+
+    if (!listRes.ok) {
+      console.error('[Delcargo Tracker] pbSetKV GET list failed:', listRes.status);
+      return;
+    }
+
     const listData = await listRes.json();
     const existingRecord = listData?.items?.[0];
 
     const body = JSON.stringify({ key, value });
     if (existingRecord?.id) {
-      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+      const patchRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body
       });
+      if (!patchRes.ok) {
+        console.error('[Delcargo Tracker] pbSetKV PATCH failed:', patchRes.status);
+      } else {
+        console.log(`[Delcargo Tracker] Heartbeat updated for key "${key}"`);
+      }
     } else {
-      await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
+      const postRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body
       });
+      if (!postRes.ok) {
+        console.error('[Delcargo Tracker] pbSetKV POST failed:', postRes.status);
+      } else {
+        console.log(`[Delcargo Tracker] Heartbeat created for key "${key}"`);
+      }
     }
   } catch (err) {
-    console.error('[Delcargo Tracker] pbSetKV failed:', err);
+    console.error('[Delcargo Tracker] pbSetKV error:', err);
   }
 }
 
 async function pbGetKV(serverUrl, key) {
   try {
     const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key="${key}"`)}`, {
+    const filter = encodeURIComponent(`key = "${key}"`);
+    const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -116,17 +136,17 @@ async function pbGetKV(serverUrl, key) {
 async function checkActiveShift(serverUrl, email) {
   try {
     const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const res = await fetch(`${cleanUrl}/api/collections/hr_timesheets/records?filter=${encodeURIComponent('clock_out=""')}&perPage=200`, {
+    const res = await fetch(`${cleanUrl}/api/collections/hr_timesheets/records?filter=${encodeURIComponent('clock_out = ""')}&perPage=200`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) return null;
     const data = await res.json();
     const items = data?.items || [];
-    const wanted = email.toLowerCase();
+    const wanted = (email || '').trim().toLowerCase();
 
     // Match employee_id (stores employeeEmail)
-    const openRecord = items.find(it => (it.employee_id || '').toLowerCase() === wanted);
+    const openRecord = items.find(it => (it.employee_id || '').trim().toLowerCase() === wanted);
     return openRecord || null;
   } catch (e) {
     console.error('[Delcargo Tracker] checkActiveShift failed:', e);
@@ -140,7 +160,7 @@ async function handleHeartbeatTick() {
   if (!data.employeeEmail) return;
 
   const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const email = data.employeeEmail.toLowerCase();
+  const email = data.employeeEmail.trim().toLowerCase();
   const nowIso = new Date().toISOString();
   const heartbeatKey = getHeartbeatKey(email);
   const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
