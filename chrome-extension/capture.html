@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delcargo Screen Tracker Setup</title>
+  <style>
+    body {
+      background-color: #0b0f1a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-h: 100vh;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .card {
+      background-color: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 440px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+    .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 800;
+      margin: 0 0 8px 0;
+      color: #ffffff;
+    }
+    p {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin: 0 0 24px 0;
+    }
+    .btn {
+      background-color: #ea580c;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 14px 24px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+      box-shadow: 0 4px 14px rgba(234, 88, 12, 0.4);
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background-color: #c2410c;
+    }
+    .status-msg {
+      margin-top: 16px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🖥️</div>
+    <h1>Full Desktop Screen Capture</h1>
+    <p>Click below and select <strong>Entire Screen</strong> when prompted to enable activity tracking across all desktop apps and windows.</p>
+    <button id="startBtn" class="btn">Select Entire Screen</button>
+    <div id="statusMsg" class="status-msg" style="display: none;"></div>
+  </div>
+  <video id="captureVideo" autoplay style="display:none;"></video>
+  <canvas id="captureCanvas" style="display:none;"></canvas>
+  <script src="capture.js"></script>
+</body>
+</html>

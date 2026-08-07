@@ -85,35 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Grant Full Desktop Screen Capture ──────────────────────────────────
   grantScreenBtn.addEventListener('click', () => {
-    chrome.desktopCapture.chooseDesktopMedia(['screen'], (streamId) => {
-      if (!streamId) {
-        alert('Desktop screen capture was cancelled. Please select Entire Screen to allow full desktop tracking.');
-        return;
-      }
-      grantScreenBtn.disabled = true;
-      grantScreenBtn.textContent = 'Initializing Screen Stream...';
-
-      chrome.runtime.sendMessage({ type: 'INIT_DESKTOP_STREAM', streamId }, (resp) => {
-        const err = chrome.runtime.lastError;
-        if (err || !resp || !resp.success) {
-          const errMsg = err?.message || resp?.error || 'Unknown initialization error';
-          alert('Screen capture initialization error: ' + errMsg);
-          grantScreenBtn.disabled = false;
-          grantScreenBtn.textContent = '🖥️ Select Entire Desktop Screen';
-        } else {
-          const resStr = (resp.width && resp.height) ? `${resp.width}x${resp.height}` : 'Full Display';
-          chrome.storage.local.set({
-            desktopStreamGranted: true,
-            desktopResolution: resStr
-          }, () => {
-            grantScreenBtn.style.display = 'none';
-            screenCaptureBadge.style.display = 'flex';
-            screenDesc.textContent = `Entire monitor display active (${resStr})`;
-            alert(`Full Desktop Screen Capture enabled successfully! (${resStr})`);
-          });
-        }
-      });
-    });
+    chrome.tabs.create({ url: 'capture.html' });
   });
 
   // ── Connect Device via Setup Code ──────────────────────────────────────

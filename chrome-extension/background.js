@@ -380,7 +380,7 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([u8arr], { type: mime });
 }
 
-// ── Screen Capture Tick (Full Desktop Monitor via Offscreen / VisibleTab) ───
+// ── Screen Capture Tick (Full Display Capture & Upload) ─────────────────────
 async function handleScreenshotTick() {
   const data = await getStorageData();
   if (!data.shiftActive || !data.employeeEmail) return;
@@ -389,66 +389,39 @@ async function handleScreenshotTick() {
   const email = data.employeeEmail.trim().toLowerCase();
 
   try {
-    await ensureOffscreenDocument();
+    chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+      const activeTab = tabs?.[0];
+      const windowId = activeTab?.windowId || null;
+      const width = String(activeTab?.width || 1920);
+      const height = String(activeTab?.height || 1080);
 
-    // 1. Try Full Desktop Frame from Offscreen MediaStream
-    chrome.runtime.sendMessage({ type: 'CAPTURE_DESKTOP_FRAME' }, async (offscreenRes) => {
-      let dataUrl = null;
-      let width = '1920';
-      let height = '1080';
+      chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 65 }, async (dataUrl) => {
+        if (!dataUrl || chrome.runtime.lastError) return;
 
-      if (offscreenRes && offscreenRes.success && offscreenRes.dataUrl) {
-        dataUrl = offscreenRes.dataUrl;
-        width = String(offscreenRes.width || 1920);
-        height = String(offscreenRes.height || 1080);
-      } else {
-        // 2. Fallback ONLY if offscreen stream is not active
-        dataUrl = await new Promise((resolve) => {
-          chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
-            const activeTab = tabs?.[0];
-            const windowId = activeTab?.windowId || null;
-            if (activeTab) {
-              width = String(activeTab.width || 1920);
-              height = String(activeTab.height || 1080);
-            }
-            chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 65 }, (url) => {
-              if (chrome.runtime.lastError) {
-                resolve(null);
-              } else {
-                resolve(url);
-              }
-            });
-          });
-        });
-      }
+        const blob = dataUrlToBlob(dataUrl);
+        const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
 
-      if (!dataUrl) return;
+        const formData = new FormData();
+        formData.append('employee_email', email);
+        formData.append('captured_at', new Date().toISOString());
+        formData.append('width', width);
+        formData.append('height', height);
+        formData.append('device_label', 'Chromebook / Chrome OS');
+        formData.append('image', blob, filename);
 
-      const blob = dataUrlToBlob(dataUrl);
-      const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
+        const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
+          method: 'POST',
+          body: formData
+        }).catch(() => null);
 
-      const formData = new FormData();
-      formData.append('employee_email', email);
-      formData.append('captured_at', new Date().toISOString());
-      formData.append('width', width);
-      formData.append('height', height);
-      formData.append('device_label', 'Chromebook / Chrome OS');
-      formData.append('image', blob, filename);
-
-      const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {
-        method: 'POST',
-        body: formData
+        if (resp && resp.ok) {
+          chrome.storage.local.set({ lastScreenshotTime: Date.now() });
+          console.log('[Delcargo Tracker] Full Display Screenshot captured & uploaded successfully.');
+        }
       });
-
-      if (resp.ok) {
-        chrome.storage.local.set({ lastScreenshotTime: Date.now() });
-        console.log('[Delcargo Tracker] Full Desktop Screenshot captured & uploaded successfully.');
-      } else {
-        console.error('[Delcargo Tracker] Screenshot upload status:', resp.status, await resp.text());
-      }
     });
   } catch (e) {
-    console.error('[Delcargo Tracker] Screenshot tick failed:', e);
+    console.warn('[Delcargo Tracker] Screenshot tick exception:', e);
   }
 }
 
