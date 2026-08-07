@@ -12,30 +12,40 @@ function getHeartbeatKey(email) {
   return 'tracker_heartbeat_' + (email || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
 }
 
-// Setup alarms & idle detection on extension load/install
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.idle.setDetectionInterval(180); // 3 minutes
-  chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 }); // every 15 sec (0.25 min)
+// Set detection interval & alarms at top level
+try {
+  chrome.idle.setDetectionInterval(180);
+  chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 });
   chrome.alarms.create('tracker_screenshot', { periodInMinutes: SCREENSHOT_INTERVAL_MINUTES });
-  console.log('[Delcargo Tracker] Extension installed & alarms initialized.');
+} catch (e) {
+  console.error('[Delcargo Tracker] Alarm setup error:', e);
+}
+
+// ── Top-level Event Listeners (Manifest V3 Requirement) ─────────────────────
+
+// 1. Installed listener
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('[Delcargo Tracker] Extension installed.');
   handleHeartbeatTick();
 });
 
-// Message Listener from Popup UI
+// 2. Message listener (registered during script evaluation)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'HEARTBEAT_NOW') {
     console.log('[Delcargo Tracker] Immediate heartbeat requested by UI.');
-    handleHeartbeatTick().then(() => sendResponse({ success: true }));
+    handleHeartbeatTick()
+      .then(() => sendResponse({ success: true }))
+      .catch(() => sendResponse({ success: false }));
     return true;
   }
 });
 
-// Alarm Listener
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+// 3. Alarm listener
+chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'tracker_heartbeat') {
-    await handleHeartbeatTick();
+    handleHeartbeatTick();
   } else if (alarm.name === 'tracker_screenshot') {
-    await handleScreenshotTick();
+    handleScreenshotTick();
   }
 });
 
