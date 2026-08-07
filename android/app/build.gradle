@@ -98,3 +98,12 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+// Automatically sync Next.js web assets into Android before building
+task syncWebAssets(type: Exec) {
+    workingDir '../../'
+    commandLine 'sh', '-c', 'npm run cap:sync || true'
+}
+
+preBuild.dependsOn syncWebAssets
+
