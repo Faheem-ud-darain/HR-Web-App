@@ -259,6 +259,7 @@ async function handleHeartbeatTick() {
     const lastShot = data.lastScreenshotTime || 0;
     const intervalMs = intervalMinutes * 60 * 1000;
     if (Date.now() - lastShot >= intervalMs) {
+      chrome.storage.local.set({ lastScreenshotTime: Date.now() });
       console.log('[Delcargo Tracker] Screenshot due -> capturing screen now...');
       handleScreenshotTick();
     }
@@ -406,7 +407,7 @@ async function handleScreenshotTick() {
         width = String(offscreenRes.width || 1920);
         height = String(offscreenRes.height || 1080);
       } else {
-        // 2. Fallback: capture active visible window
+        // 2. Fallback ONLY if offscreen stream is not active
         dataUrl = await new Promise((resolve) => {
           chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
             const activeTab = tabs?.[0];
@@ -417,7 +418,6 @@ async function handleScreenshotTick() {
             }
             chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 65 }, (url) => {
               if (chrome.runtime.lastError) {
-                console.warn('[Delcargo Tracker] Fallback captureVisibleTab skipped:', chrome.runtime.lastError.message);
                 resolve(null);
               } else {
                 resolve(url);
