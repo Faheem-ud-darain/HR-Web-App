@@ -389,20 +389,19 @@ async function handleScreenshotTick() {
   const email = data.employeeEmail.trim().toLowerCase();
 
   try {
-    await ensureOffscreenDocument();
-
-    // 1. Query full desktop frame from offscreen MediaStream
-    chrome.runtime.sendMessage({ type: 'CAPTURE_DESKTOP_FRAME' }, async (offscreenRes) => {
+    // 1. Query full desktop frame from active stream (capture page / offscreen)
+    chrome.runtime.sendMessage({ type: 'CAPTURE_DESKTOP_FRAME' }, async (frameRes) => {
       let dataUrl = null;
       let width = '1920';
       let height = '1080';
 
-      if (offscreenRes && offscreenRes.success && offscreenRes.dataUrl) {
-        dataUrl = offscreenRes.dataUrl;
-        width = String(offscreenRes.width || 1920);
-        height = String(offscreenRes.height || 1080);
+      if (frameRes && frameRes.success && frameRes.dataUrl) {
+        dataUrl = frameRes.dataUrl;
+        width = String(frameRes.width || 1920);
+        height = String(frameRes.height || 1080);
+        console.log(`[Delcargo Tracker] Capturing FULL DESKTOP MONITOR display (${width}x${height})...`);
       } else {
-        // 2. Fallback: capture active visible browser window
+        // 2. Fallback to visible tab capture if full desktop stream tab is not open
         dataUrl = await new Promise((resolve) => {
           chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
             const activeTab = tabs?.[0];
@@ -429,7 +428,7 @@ async function handleScreenshotTick() {
       formData.append('captured_at', new Date().toISOString());
       formData.append('width', width);
       formData.append('height', height);
-      formData.append('device_label', 'Chromebook / Chrome OS (Full Desktop Screen)');
+      formData.append('device_label', frameRes?.success ? 'Chromebook / Chrome OS (Full Desktop Screen)' : 'Chromebook / Chrome OS');
       formData.append('image', blob, filename);
 
       const resp = await fetch(`${serverUrl}/api/collections/hr_screenshots/records`, {

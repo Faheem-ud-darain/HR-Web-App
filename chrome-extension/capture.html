@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Delcargo Screen Tracker Setup</title>
+  <title>Delcargo HR — Desktop Monitor Tracker</title>
   <style>
     body {
       background-color: #0b0f1a;
@@ -11,7 +11,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      min-h: 100vh;
+      min-height: 100vh;
       height: 100vh;
       margin: 0;
       padding: 20px;
@@ -22,7 +22,7 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 16px;
       padding: 32px;
-      max-width: 440px;
+      max-width: 460px;
       text-align: center;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
@@ -58,24 +58,47 @@
     .btn:hover {
       background-color: #c2410c;
     }
-    .status-msg {
+    .active-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background-color: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 10px 16px;
+      border-radius: 12px;
       margin-top: 16px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #38bdf8;
+    }
+    .subtext {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #64748b;
     }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="icon">🖥️</div>
-    <h1>Full Desktop Screen Capture</h1>
-    <p>Click below and select <strong>Entire Screen</strong> when prompted to enable activity tracking across all desktop apps and windows.</p>
+    <h1>Full Desktop Screen Tracker</h1>
+    <p id="instructionText">Select <strong>Entire Screen</strong> when prompted to enable activity tracking across all desktop applications and windows.</p>
+    
     <button id="startBtn" class="btn">Select Entire Screen</button>
-    <div id="statusMsg" class="status-msg" style="display: none;"></div>
+
+    <div id="activeBadge" class="active-badge" style="display: none;">
+      <span>🟢</span>
+      <span id="resText">Full Desktop Monitor Tracking Active</span>
+    </div>
+    
+    <div id="subtext" class="subtext" style="display: none;">
+      You may minimize or keep this tab in the background while working.
+    </div>
   </div>
-  <video id="captureVideo" autoplay style="display:none;"></video>
-  <canvas id="captureCanvas" style="display:none;"></canvas>
+
+  <video id="screenVideo" autoplay muted playsinline style="display:none;"></video>
+  <canvas id="screenCanvas" style="display:none;"></canvas>
+
   <script src="capture.js"></script>
 </body>
 </html>

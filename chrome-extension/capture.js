@@ -1,43 +1,50 @@
-// Delcargo HR Tracker — Full Desktop Monitor Screen Capture Handler
+// Delcargo HR Tracker — Dedicated Full Desktop Monitor Stream Handler
+
+let desktopStream = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startBtn');
-  const statusMsg = document.getElementById('statusMsg');
+  const instructionText = document.getElementById('instructionText');
+  const activeBadge = document.getElementById('activeBadge');
+  const resText = document.getElementById('resText');
+  const subtext = document.getElementById('subtext');
 
-  startBtn.addEventListener('click', requestDesktopCapture);
-  requestDesktopCapture();
+  // Register Message Listener for Frame Requests from Background Worker
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.type === 'CAPTURE_DESKTOP_FRAME') {
+      captureDesktopFrame().then(res => sendResponse(res));
+      return true;
+    }
+  });
 
-  function requestDesktopCapture() {
+  startBtn.addEventListener('click', promptDesktopCapture);
+  promptDesktopCapture();
+
+  function promptDesktopCapture() {
     startBtn.disabled = true;
     startBtn.textContent = 'Awaiting Screen Selection...';
-    statusMsg.style.display = 'block';
-    statusMsg.textContent = 'Please select "Entire Screen" in the popup prompt...';
 
     if (chrome.desktopCapture && chrome.desktopCapture.chooseDesktopMedia) {
       chrome.desktopCapture.chooseDesktopMedia(['screen'], async (streamId) => {
         if (!streamId) {
-          showError('Screen selection was cancelled. Click button to try again.');
+          showError('Screen selection was cancelled. Click button below to try again.');
           return;
         }
-        // Send streamId to offscreen document via background worker
-        chrome.runtime.sendMessage({ type: 'INIT_DESKTOP_STREAM', streamId }, (resp) => {
-          console.log('[Capture] INIT_DESKTOP_STREAM response:', resp);
-        });
-        await initializeStreamWithId(streamId);
+        await initStream(streamId);
       });
     } else {
       navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'monitor' },
         audio: false
       }).then(async (stream) => {
-        await handleLiveStream(stream);
-      }).catch((err) => {
-        showError(err.message || 'Screen selection failed');
+        await activateStream(stream);
+      }).catch(err => {
+        showError(err.message || 'Screen selection failed.');
       });
     }
   }
 
-  async function initializeStreamWithId(streamId) {
+  async function initStream(streamId) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -48,44 +55,72 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       });
-      await handleLiveStream(stream);
+      await activateStream(stream);
     } catch (err) {
-      showError(err.message || 'Stream initialization error');
+      showError(err.message || 'Stream initialization error.');
     }
   }
 
-  async function handleLiveStream(stream) {
+  async function activateStream(stream) {
     try {
-      const video = document.getElementById('captureVideo');
-      video.srcObject = stream;
+      if (desktopStream) {
+        desktopStream.getTracks().forEach(t => t.stop());
+      }
+      desktopStream = stream;
+
+      const video = document.getElementById('screenVideo');
+      video.muted = true;
+      video.srcObject = desktopStream;
 
       video.onloadedmetadata = async () => {
         await video.play();
-        const width = video.videoWidth || 1920;
-        const height = video.videoHeight || 1080;
-        const resStr = `${width}x${height}`;
+        const w = video.videoWidth || 1920;
+        const h = video.videoHeight || 1080;
+        const resStr = `${w}x${h}`;
 
-        statusMsg.style.color = '#34d399';
-        statusMsg.textContent = `✓ Full Desktop Capture Active (${resStr})! Closing in 2s...`;
+        startBtn.style.display = 'none';
+        instructionText.style.display = 'none';
+        activeBadge.style.display = 'inline-flex';
+        subtext.style.display = 'block';
+        resText.textContent = `Full Desktop Monitor Active (${resStr})`;
 
         chrome.storage.local.set({
           desktopStreamGranted: true,
           desktopResolution: resStr
-        }, () => {
-          setTimeout(() => {
-            window.close();
-          }, 2000);
         });
+        console.log(`[Capture Page] Full Desktop Stream active: ${resStr}`);
       };
     } catch (err) {
-      showError(err.message || 'Video stream setup error');
+      showError(err.message || 'Video stream setup error.');
     }
   }
 
   function showError(msg) {
-    statusMsg.style.color = '#fca5a5';
-    statusMsg.textContent = msg;
     startBtn.disabled = false;
+    startBtn.style.display = 'block';
     startBtn.textContent = 'Select Entire Screen';
+    instructionText.style.display = 'block';
+    instructionText.textContent = msg;
+  }
+
+  async function captureDesktopFrame() {
+    try {
+      const video = document.getElementById('screenVideo');
+      if (!video || !video.videoWidth || !desktopStream || !desktopStream.active) {
+        return { success: false, error: 'Desktop stream not active' };
+      }
+
+      const canvas = document.getElementById('screenCanvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+      return { success: true, dataUrl, width: canvas.width, height: canvas.height };
+    } catch (e) {
+      console.error('[Capture Page] Frame capture error:', e);
+      return { success: false, error: e.message };
+    }
   }
 });
