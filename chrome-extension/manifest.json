@@ -24,14 +24,13 @@
     "tabs",
     "activeTab",
     "desktopCapture",
-    "notifications",
-    "<all_urls>"
+    "notifications"
   ],
   "host_permissions": [
+    "<all_urls>",
     "https://pb.delcargo.us/*",
     "https://delcargo-io.vercel.app/*",
-    "http://localhost:8090/*",
-    "https://*/*"
+    "http://localhost:8090/*"
   ],
   "background": {
     "service_worker": "background.js"
