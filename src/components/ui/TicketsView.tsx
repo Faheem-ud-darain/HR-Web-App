@@ -448,6 +448,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         await hrActions.addTicketReply(created, {
           senderName: userProfile.fullName,
           senderRole: role,
+          senderEmail: currentEmail,
           message: '',
           attachmentName: newTicketFile!.name,
           attachmentUrl: attachment.data,
@@ -496,6 +497,7 @@ export function TicketsView({ role }: TicketsViewProps) {
       await hrActions.addTicketReply(selectedTicket, {
         senderName,
         senderRole: role,
+        senderEmail: currentEmail,
         message: replyMsg.trim(),
         ...attachmentFields,
       });
@@ -857,7 +859,10 @@ export function TicketsView({ role }: TicketsViewProps) {
               <div className="flex-1 min-h-0 p-5 space-y-4 overflow-y-auto bg-slate-50/30">
                 {/* Employee Description */}
                 {(() => {
-                  const isAuthorSelf = role === 'employee' || role === 'team_lead';
+                  const isAuthorSelf = Boolean(
+                    (currentEmail && selectedTicket.employeeEmail && selectedTicket.employeeEmail.toLowerCase() === currentEmail.toLowerCase()) ||
+                    (userProfile?.fullName && selectedTicket.employeeName && selectedTicket.employeeName.trim().toLowerCase() === userProfile.fullName.trim().toLowerCase())
+                  );
                   return (
                     <div className={`flex items-start gap-2.5 max-w-[85%] ${isAuthorSelf ? 'ml-auto flex-row-reverse' : ''}`}>
                       <Avatar src={profileFor(selectedTicket.employeeName)?.profilePicture} name={selectedTicket.employeeName} size={28} className="flex-shrink-0" />
@@ -881,9 +886,19 @@ export function TicketsView({ role }: TicketsViewProps) {
                 {/* Replies list */}
                 {selectedTicket.replies.map((rep, repIdx) => {
                   let isSenderSelf = false;
-                  if (role === 'hr' && rep.senderRole === 'hr') isSenderSelf = true;
-                  else if (role === 'admin' && rep.senderRole === 'admin') isSenderSelf = true;
-                  else if ((role === 'employee' || role === 'team_lead') && (rep.senderRole === 'employee' || rep.senderRole === 'team_lead')) isSenderSelf = true;
+                  if (rep.senderEmail && currentEmail) {
+                    isSenderSelf = rep.senderEmail.toLowerCase() === currentEmail.toLowerCase();
+                  } else if (userProfile?.fullName && rep.senderName) {
+                    const normSender = rep.senderName.trim().toLowerCase();
+                    const normProfile = userProfile.fullName.trim().toLowerCase();
+                    isSenderSelf = normSender === normProfile || normSender.startsWith(normProfile) || normProfile.startsWith(normSender);
+                  } else if (currentEmail && rep.senderName && rep.senderName.trim().toLowerCase() === currentEmail.split('@')[0].toLowerCase()) {
+                    isSenderSelf = true;
+                  } else if (role === 'hr' && rep.senderRole === 'hr' && (rep.senderName === 'HR Manager' || !userProfile)) {
+                    isSenderSelf = true;
+                  } else if (role === 'admin' && rep.senderRole === 'admin' && (rep.senderName === 'System Admin' || !userProfile)) {
+                    isSenderSelf = true;
+                  }
 
                   // "Seen" only ever shows under the single most recent
                   // HR reply, same one-badge-at-a-time convention as most

@@ -9,7 +9,18 @@ export async function GET(request: Request) {
       return new NextResponse('Missing url parameter', { status: 400 });
     }
 
-    const targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf-8');
+    // The url param is a base64-encoded PocketBase file URL.
+    // Decode any URI-encoding that might have been applied on top of the
+    // base64 (from older clients), then base64-decode to get the raw URL.
+    const cleanBase64 = decodeURIComponent(encodedUrl);
+    let targetUrl: string;
+    try {
+      targetUrl = Buffer.from(cleanBase64, 'base64').toString('utf-8');
+      // Validate it looks like a URL
+      new URL(targetUrl);
+    } catch {
+      return new NextResponse('Invalid url parameter', { status: 400 });
+    }
 
     const res = await fetch(targetUrl);
     if (!res.ok) {

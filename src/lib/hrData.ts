@@ -503,7 +503,7 @@ export interface CareerApplication {
 // imageCompressor.ts) since the whole ticket round-trips on every read/write.
 export interface TicketReply {
   id: string; senderName: string; senderRole: 'employee' | 'hr' | 'admin' | 'team_lead'; message: string; timestamp: string;
-  attachmentName?: string; attachmentUrl?: string; attachmentSize?: number;
+  attachmentName?: string; attachmentUrl?: string; attachmentSize?: number; senderEmail?: string;
 }
 export interface Ticket {
   id: string; employeeName: string; employeeEmail: string; title: string; description: string;

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { appReleaseActions, AppRelease } from '@/lib/appReleases';
-import { Download, Smartphone } from 'lucide-react';
+import { Download, Smartphone, X } from 'lucide-react';
 
 function cleanVersion(v: string) {
   return v ? v.replace(/^v/i, '').trim() : '0';
@@ -26,24 +26,26 @@ function compareVersions(v1: string, v2: string) {
 export function ForceUpdateProvider({ children }: { children: React.ReactNode }) {
   const [latestRelease, setLatestRelease] = useState<AppRelease | null>(null);
   const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   
   useEffect(() => {
     async function checkUpdate() {
-      // 1. Only run this check inside the native Android Capacitor app.
+      // Only run this check inside the native Android Capacitor app.
+      // Web portal users should never see this popup — they always use the
+      // latest deployed version by definition.
       if (Capacitor.getPlatform() !== 'android') return;
 
       try {
         const release = await appReleaseActions.getLatestRelease();
-        if (!release || !release.is_mandatory) return;
+        if (!release) return;
         
-        setLatestRelease(release);
-        
-        // 2. Get current installed version
+        // Get current installed version from native build config
         const info = await App.getInfo();
         const currentVersion = info.version; // e.g. "1.0.5"
 
-        // 3. Compare
+        // Only prompt if the latest published release is newer than installed
         if (compareVersions(release.version, currentVersion) === 1) {
+          setLatestRelease(release);
           setNeedsUpdate(true);
         }
       } catch (e) {
@@ -54,35 +56,64 @@ export function ForceUpdateProvider({ children }: { children: React.ReactNode })
     checkUpdate();
   }, []);
 
-  if (needsUpdate && latestRelease) {
+  const handleDownload = () => {
+    if (!latestRelease) return;
+    const url = appReleaseActions.getApkUrl(latestRelease);
+    // On Capacitor native, open in system browser so Android can pick up the APK install intent
+    if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
+      window.open(url, '_system');
+    } else {
+      window.location.href = url;
+    }
+  };
+
+  const isMandatory = latestRelease?.is_mandatory ?? true;
+
+  if (needsUpdate && latestRelease && !dismissed) {
     return (
-      <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center">
+      <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center relative">
+          {/* Close/Later button — only for optional updates */}
+          {!isMandatory && (
+            <button
+              onClick={() => setDismissed(true)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors p-1"
+              title="Skip for now"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+
           <div className="h-20 w-20 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mb-6">
             <Smartphone className="h-10 w-10" />
           </div>
           
-          <h1 className="text-2xl font-black text-slate-900 mb-2">Update Required</h1>
+          <h1 className="text-2xl font-black text-slate-900 mb-2">
+            {isMandatory ? 'Update Required' : 'Update Available'}
+          </h1>
           <p className="text-slate-500 font-medium mb-6">
-            You are using an older version of the app. Please update to version <span className="font-bold text-slate-700">{latestRelease.version}</span> to continue using the system.
+            {isMandatory
+              ? <>A mandatory update to version <span className="font-bold text-slate-700">{latestRelease.version}</span> is required to continue using the app.</>
+              : <>Version <span className="font-bold text-slate-700">{latestRelease.version}</span> is available. Update now for the latest features and fixes.</>
+            }
           </p>
 
-          <a 
-            href={appReleaseActions.getApkUrl(latestRelease)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
-              const url = appReleaseActions.getApkUrl(latestRelease);
-              if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
-                e.preventDefault();
-                window.location.href = url;
-              }
-            }}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
+          <button
+            onClick={handleDownload}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-95"
           >
             <Download className="h-5 w-5" />
             Download Update
-          </a>
+          </button>
+
+          {!isMandatory && (
+            <button
+              onClick={() => setDismissed(true)}
+              className="mt-3 w-full py-3 rounded-xl font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors text-sm"
+            >
+              Later
+            </button>
+          )}
 
           {latestRelease.release_notes && (
             <div className="mt-6 text-left w-full">
@@ -97,6 +128,6 @@ export function ForceUpdateProvider({ children }: { children: React.ReactNode })
     );
   }
 
-  // If no update needed, render the normal app.
+  // If no update needed (or dismissed optional update), render the normal app.
   return <>{children}</>;
 }

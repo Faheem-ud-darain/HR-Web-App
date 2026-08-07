@@ -59,7 +59,15 @@ export const appReleaseActions = {
     const originalUrl = pb.getFileUrl(release, release.apk_file);
     // Always use the absolute production domain so native mobile apps & browser clients hit Vercel's proxy route
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://delcargo-io.vercel.app';
-    const encodedUrl = typeof window !== 'undefined' ? btoa(originalUrl) : Buffer.from(originalUrl).toString('base64');
-    return `${siteUrl}/api/download/app.apk?url=${encodeURIComponent(encodedUrl)}`;
+    // Base64-encode the raw PocketBase file URL so it survives as a query param.
+    // Do NOT additionally encodeURIComponent the base64 output — base64 chars
+    // (A-Z a-z 0-9 + / =) are all URL-safe when passed as a query value, and
+    // double-encoding causes Buffer.from(str,'base64') on the server to decode
+    // a URI-encoded string instead of pure base64, producing garbage bytes and
+    // returning a corrupted response (manifest as 404 or .apk.zip renaming).
+    const encodedUrl = typeof window !== 'undefined'
+      ? btoa(unescape(encodeURIComponent(originalUrl)))
+      : Buffer.from(originalUrl).toString('base64');
+    return `${siteUrl}/api/download/app.apk?url=${encodedUrl}`;
   }
 };
