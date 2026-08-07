@@ -124,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         agentToken: token,
         shiftActive: false
       }, () => {
+        chrome.runtime.sendMessage({ type: 'HEARTBEAT_NOW' });
         setupCodeInput.value = '';
         connectCodeBtn.disabled = false;
         connectCodeBtn.textContent = 'Connect Device';

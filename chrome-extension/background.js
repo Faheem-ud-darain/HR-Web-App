@@ -21,6 +21,15 @@ chrome.runtime.onInstalled.addListener(() => {
   handleHeartbeatTick();
 });
 
+// Message Listener from Popup UI
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === 'HEARTBEAT_NOW') {
+    console.log('[Delcargo Tracker] Immediate heartbeat requested by UI.');
+    handleHeartbeatTick().then(() => sendResponse({ success: true }));
+    return true;
+  }
+});
+
 // Alarm Listener
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'tracker_heartbeat') {
