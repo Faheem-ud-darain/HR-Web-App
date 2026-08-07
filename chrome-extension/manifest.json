@@ -24,7 +24,8 @@
     "tabs",
     "activeTab",
     "desktopCapture",
-    "notifications"
+    "notifications",
+    "<all_urls>"
   ],
   "host_permissions": [
     "https://pb.delcargo.us/*",
