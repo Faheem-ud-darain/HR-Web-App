@@ -2444,7 +2444,7 @@ export const hrActions = {
   // safe to call from every HR/Admin dashboard mount, it just no-ops once a
   // given employee+date combination has already been decided.
   runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
-    const INACTIVITY_THRESHOLD_SECONDS = 35 * 60;
+    const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
     const pktTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
     const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
     const existingRecords = await hrActions.getAbsenceRecords();
@@ -2485,7 +2485,7 @@ export const hrActions = {
           const inTime = d.getTime();
           const outTime = new Date(t.clockOut).getTime();
           
-          // Absence is only triggered if a SINGLE continuous inactivity run reaches 35+ mins (2100s),
+          // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
           // not by summing up multiple smaller inactive periods across the shift.
           const logsForShift = empInactivity.filter(l => {
             const lt = new Date(l.startAt).getTime();

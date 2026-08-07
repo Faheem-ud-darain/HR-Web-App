@@ -112,7 +112,7 @@ SETTINGS_POLL_SECONDS = 20  # how often we re-check tracking/shift status (was 6
 MOUSE_POLL_SECONDS = 5       # how often we sample the cursor position
 INACTIVITY_THRESHOLD_SECONDS = 180  # 3 minutes — matches the HR/Admin-facing spec
 
-# 35 minutes of CONTINUOUS idle time (mouse hasn't moved at all, checked
+# 37 minutes of CONTINUOUS idle time (mouse hasn't moved at all, checked
 # live while still idle — not the completed-interval log above, which only
 # gets written once the mouse moves again) auto-ends the shift and marks
 # the employee absent for the day, per explicit product decision. This is
@@ -121,7 +121,7 @@ INACTIVITY_THRESHOLD_SECONDS = 180  # 3 minutes — matches the HR/Admin-facing 
 # counts as a loggable idle stretch at all; this one is the much longer
 # "you weren't actually working" cutoff that has a real payroll
 # consequence. See handle_inactivity_auto_absence() below.
-AUTO_ABSENT_INACTIVITY_SECONDS = 35 * 60
+AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60
 
 MAX_ERROR_DISPLAY_LEN = 140  # see _short_error() below
 

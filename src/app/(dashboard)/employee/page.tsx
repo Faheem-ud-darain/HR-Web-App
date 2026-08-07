@@ -107,7 +107,7 @@ export default function EmployeeDashboard() {
   // immediately if the dashboard happens to already be open in a browser.
   const [shiftStopModal, setShiftStopModal] = useState(false);
   // Which signal reason triggered the modal above — 'tracker_closed' (the
-  // original case) or 'inactivity_absence' (35+ continuous idle minutes —
+  // original case) or 'inactivity_absence' (37+ continuous idle minutes —
   // see ShiftStopSignal in hrData.ts). Drives which copy the modal shows.
   const [shiftStopReason, setShiftStopReason] = useState<'tracker_closed' | 'inactivity_absence'>('tracker_closed');
 

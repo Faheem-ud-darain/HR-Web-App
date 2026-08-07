@@ -11,7 +11,7 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 9,
+      "versionCode": 10900,
       "versionName": "1.9",
       "outputFile": "app-release.apk"
     }
