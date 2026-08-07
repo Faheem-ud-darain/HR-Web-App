@@ -134,7 +134,7 @@ async function pbSetKV(serverUrl, key, value) {
       });
     }
   } catch (err) {
-    console.error('[Delcargo Tracker] pbSetKV error:', err);
+    console.warn('[Delcargo Tracker] pbSetKV network retry:', err?.message || err);
   }
 }
 
@@ -146,10 +146,11 @@ async function pbGetKV(serverUrl, key) {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
+    if (!listRes.ok) return null;
     const listData = await listRes.json();
     return listData?.items?.[0]?.value || null;
   } catch (err) {
-    console.error('[Delcargo Tracker] pbGetKV failed:', err);
+    console.warn('[Delcargo Tracker] pbGetKV network retry:', err?.message || err);
     return null;
   }
 }
@@ -162,6 +163,7 @@ async function pbDeleteKV(serverUrl, key) {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
+    if (!listRes.ok) return;
     const listData = await listRes.json();
     const existingRecord = listData?.items?.[0];
     if (existingRecord?.id) {
@@ -170,7 +172,7 @@ async function pbDeleteKV(serverUrl, key) {
       });
     }
   } catch (err) {
-    console.error('[Delcargo Tracker] pbDeleteKV error:', err);
+    console.warn('[Delcargo Tracker] pbDeleteKV network retry:', err?.message || err);
   }
 }
 
@@ -191,7 +193,7 @@ async function checkActiveShift(serverUrl, email) {
     const openRecord = items.find(it => (it.employee_id || '').trim().toLowerCase() === wanted);
     return openRecord || null;
   } catch (e) {
-    console.error('[Delcargo Tracker] checkActiveShift failed:', e);
+    console.warn('[Delcargo Tracker] checkActiveShift network retry:', e?.message || e);
     return null;
   }
 }
