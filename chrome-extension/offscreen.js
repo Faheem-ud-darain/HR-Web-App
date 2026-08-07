@@ -30,6 +30,7 @@ async function startScreenStream(streamId) {
     });
 
     const video = document.getElementById('screenVideo');
+    video.muted = true;
     video.srcObject = screenStream;
 
     return new Promise((resolve) => {

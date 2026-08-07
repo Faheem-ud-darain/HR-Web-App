@@ -26,7 +26,7 @@ async function ensureOffscreenDocument() {
     if (!existing) {
       await chrome.offscreen.createDocument({
         url: 'offscreen.html',
-        reasons: ['USER_MEDIA'],
+        reasons: ['DISPLAY_MEDIA', 'USER_MEDIA'],
         justification: 'Capture full desktop screen for HR activity logging'
       });
       console.log('[Delcargo Tracker] Offscreen capture document created.');
