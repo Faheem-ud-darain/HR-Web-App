@@ -2890,4 +2890,9 @@ export const hrActions = {
     try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(employeeEmail)]); } catch { /* best-effort cleanup */ }
     return toTimesheet(updated);
   },
+
+  // ── KV Overlay Helpers ───────────────────────────────────────────────
+  getKV: async (key: string): Promise<any | null> => pbGetKV(key),
+  setKV: async (key: string, value: any): Promise<void> => pbSetKV(key, value),
+  deleteKV: async (key: string): Promise<void> => pbDeleteKVByKeys([key]),
 };

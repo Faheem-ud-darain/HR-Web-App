@@ -11,6 +11,7 @@ import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import { LoggedInDevicesCard } from '@/components/ui/LoggedInDevicesCard';
+import { GoogleIntegrationCard } from '@/components/ui/GoogleIntegrationCard';
 import {
   User, Mail, Briefcase, Calendar, Users, ShieldCheck,
   KeyRound, CheckCircle2, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
@@ -505,6 +506,9 @@ export default function EmployeeProfilePage() {
         </div>
 
         <div className="space-y-6 md:space-y-8">
+          {/* Google Integration & Calendar Sync */}
+          <GoogleIntegrationCard profile={profile} />
+
           {/* Contact Numbers section */}
           <Card className="border border-slate-200 p-0 overflow-hidden">
             <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">

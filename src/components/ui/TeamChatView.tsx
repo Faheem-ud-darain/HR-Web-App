@@ -6,7 +6,7 @@ import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { TypingIndicator } from './TypingIndicator';
-import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star, Video } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { OptimizedImage } from './OptimizedImage';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
@@ -1054,10 +1054,23 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
             )}
 
             <div className="flex items-center gap-1.5 md:gap-2">
-              <label className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors shrink-0 flex items-center justify-center">
+              <label className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors shrink-0 flex items-center justify-center" title="Attach file">
                 <Paperclip className="h-4 w-4" />
                 <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFilePick(e.target.files?.[0])} />
               </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const meetLink = 'https://meet.google.com/new';
+                  const title = `🎥 Google Meet Video Room\nClick to join video call: ${meetLink}`;
+                  setDraft(prev => prev ? `${prev}\n${title}` : title);
+                }}
+                title="Create Google Meet Video Call"
+                className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center transition-colors shrink-0"
+              >
+                <Video className="h-4 w-4" />
+              </button>
               
               {oversight && (
                 <button
