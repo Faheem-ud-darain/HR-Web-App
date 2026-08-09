@@ -425,6 +425,7 @@ export default function EmployeeProfilePage() {
           wide screens. items-start keeps each column's height independent
           so a short column doesn't get stretched to match a tall one. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 items-start">
+        {/* Left Column */}
         <div className="space-y-6 md:space-y-8">
           {/* Info grid */}
           <Card className="border border-slate-200 p-0 overflow-hidden">
@@ -503,11 +504,6 @@ export default function EmployeeProfilePage() {
               </div>
             )}
           </Card>
-        </div>
-
-        <div className="space-y-6 md:space-y-8">
-          {/* Google Integration & Calendar Sync */}
-          <GoogleIntegrationCard profile={profile} />
 
           {/* Contact Numbers section */}
           <Card className="border border-slate-200 p-0 overflow-hidden">
@@ -547,6 +543,36 @@ export default function EmployeeProfilePage() {
               </div>
             )}
           </Card>
+
+          {/* Security section */}
+          <Card className="border border-slate-200 p-0 overflow-hidden">
+            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Security</h3>
+            </div>
+            <div className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                  <KeyRound className="h-4 w-4 text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Password</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsResetOpen(true)}
+                className="w-full sm:w-auto flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm"
+              >
+                Change Password
+              </button>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-6 md:space-y-8">
+          {/* Google Integration & Calendar Sync */}
+          <GoogleIntegrationCard profile={profile} />
 
           {/* Documents section */}
           <Card className="border border-slate-200 p-0 overflow-hidden">
@@ -630,35 +656,9 @@ export default function EmployeeProfilePage() {
             </div>
           </Card>
 
-          {/* Security section */}
-          <Card className="border border-slate-200 p-0 overflow-hidden">
-            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">Security</h3>
-            </div>
-            <div className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <KeyRound className="h-4 w-4 text-slate-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">Password</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsResetOpen(true)}
-                className="w-full sm:w-auto flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm"
-              >
-                Change Password
-              </button>
-            </div>
-          </Card>
-
           {/* Push Notification Preferences */}
           {profile?.email && <NotificationPreferencesCard email={profile.email} />}
-          {/* Logged-in Devices — Employee/Team Lead only, since Admin/HR are
-              exempt from the 2-device cap and never claim a session slot at
-              all (see claimUserSessionSlot in hrData.ts). */}
+          {/* Logged-in Devices */}
           {profile?.email && <LoggedInDevicesCard email={profile.email} />}
           <AppVersionCard />
         </div>
