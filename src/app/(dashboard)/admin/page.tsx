@@ -7,11 +7,12 @@ import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { OrgCalendar } from '@/components/ui/OrgCalendar';
 import { TaskModal } from '@/components/ui/TaskModal';
-import { DollarSign, TrendingUp, Users, Clock, ClipboardList, CheckCircle2, AlertTriangle, PlusCircle, Loader2, Trash2, Eye } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, Clock, ClipboardList, CheckCircle2, AlertTriangle, PlusCircle, Loader2, Trash2, Eye, Video } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, useAnnouncements, useWarehouses, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
+import { ScheduleMeetModal } from '@/components/ui/ScheduleMeetModal';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function AdminDashboard() {
     return emp ? displayName(emp, 'admin') : employeeName;
   };
   const [isTaskOpen, setIsTaskOpen] = useState(false);
+  const [isScheduleMeetOpen, setIsScheduleMeetOpen] = useState(false);
 
   const { data: announcements = [], refetch: refetchAnnouncements } = useAnnouncements();
   const { data: warehouses = [] } = useWarehouses();
@@ -177,6 +179,12 @@ export default function AdminDashboard() {
             className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-xs md:text-sm active:scale-97 transition-colors transition-transform transition-shadow min-h-[44px] md:min-h-0"
           >
             View All Tasks
+          </button>
+          <button
+            onClick={() => setIsScheduleMeetOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-xs md:text-sm active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1.5 shadow-sm min-h-[44px] md:min-h-0"
+          >
+            <Video className="h-4 w-4" /> Schedule Google Meet
           </button>
           <button
             onClick={() => setIsAnnounceOpen(true)}
@@ -573,6 +581,12 @@ export default function AdminDashboard() {
         employees={employees.filter(e => e.role === 'employee' || e.isTeamLead)}
         createdBy="admin"
         onTaskAdded={() => refetchTasks()}
+      />
+
+      {/* Schedule Google Meet Modal */}
+      <ScheduleMeetModal
+        isOpen={isScheduleMeetOpen}
+        onClose={() => setIsScheduleMeetOpen(false)}
       />
     </div>
   );

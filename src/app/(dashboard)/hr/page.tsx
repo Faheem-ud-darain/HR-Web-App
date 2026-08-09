@@ -7,12 +7,13 @@ import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { OrgCalendar } from '@/components/ui/OrgCalendar';
 import { TaskModal } from '@/components/ui/TaskModal';
-import { Users, Clock, CheckCircle2, ClipboardList, PlusCircle, Loader2, Trash2, Eye, AlertTriangle } from 'lucide-react';
+import { Users, Clock, CheckCircle2, ClipboardList, PlusCircle, Loader2, Trash2, Eye, AlertTriangle, Video } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
+import { ScheduleMeetModal } from '@/components/ui/ScheduleMeetModal';
 
 export default function HRDashboard() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function HRDashboard() {
 
   // Modals
   const [isTaskOpen, setIsTaskOpen] = useState(false);
+  const [isScheduleMeetOpen, setIsScheduleMeetOpen] = useState(false);
   const [isTeamLeadOpen, setIsTeamLeadOpen] = useState(false);
   const [isOnboardOpen, setIsOnboardOpen] = useState(false);
   const [isAnnounceOpen, setIsAnnounceOpen] = useState(false);
@@ -192,6 +194,12 @@ export default function HRDashboard() {
           <p className="text-xs md:text-sm text-slate-500">Overview, scheduling calendar, and team operations.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setIsScheduleMeetOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm min-h-[44px] md:min-h-0"
+          >
+            <Video className="h-4 w-4" /> Schedule Google Meet
+          </button>
           <button
             onClick={() => setIsAnnounceOpen(true)}
             className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 min-h-[44px] md:min-h-0"
@@ -504,6 +512,12 @@ export default function HRDashboard() {
         employees={employees.filter((e: Profile) => e.role === 'employee' || e.isTeamLead)}
         createdBy="hr"
         onTaskAdded={(task) => refetchTasks()}
+      />
+
+      {/* Schedule Google Meet Modal */}
+      <ScheduleMeetModal
+        isOpen={isScheduleMeetOpen}
+        onClose={() => setIsScheduleMeetOpen(false)}
       />
 
     </div>
