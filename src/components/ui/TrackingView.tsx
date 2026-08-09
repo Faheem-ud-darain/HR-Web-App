@@ -21,6 +21,7 @@ import {
 import { pushModal, popModal } from '@/lib/modalStack';
 import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle } from 'lucide-react';
 
 interface TrackingViewProps {
@@ -869,7 +870,11 @@ AGENT_TOKEN=${settings.agentToken}`}
             )}
 
             {viewerLoading ? (
-              <p className="text-center text-slate-400 text-xs font-semibold py-10">Loading screenshots…</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 py-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-24 bg-slate-200/70 rounded-lg animate-pulse" />
+                ))}
+              </div>
             ) : viewerShots.length === 0 ? (
               <p className="text-center text-slate-400 text-xs font-semibold italic py-10">No screenshots captured in this period.</p>
             ) : (
@@ -881,7 +886,13 @@ AGENT_TOKEN=${settings.agentToken}`}
                     className="space-y-1 text-left group"
                   >
                     <div className="relative overflow-hidden rounded-lg border border-slate-200 group-hover:border-orange-300 transition-colors">
-                      <img src={shot.imageUrl} alt="Screenshot" loading="lazy" className="w-full h-24 object-cover" />
+                      <OptimizedImage
+                        src={shot.imageUrl}
+                        alt="Screenshot"
+                        width={300}
+                        height={180}
+                        className="w-full h-24 object-cover"
+                      />
                       <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/30 transition-colors flex items-center justify-center">
                         <ZoomIn className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>

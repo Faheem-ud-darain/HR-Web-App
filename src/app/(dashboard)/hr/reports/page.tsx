@@ -187,7 +187,7 @@ export default function ReportsPage() {
                 <th className="px-6 py-4">Base Salary</th>
                 <th className="px-6 py-4">Onboarding</th>
                 <th className="px-6 py-4">Bank Details</th>
-                <th className="px-6 py-4 text-center">Tracking</th>
+                <th className="px-6 py-4 text-center">Quick Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
@@ -226,7 +226,7 @@ export default function ReportsPage() {
                         onClick={() => handleOpenReviewModal(emp)}
                         className="text-[10px] font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
                       >
-                        <FileText className="h-3.5 w-3.5" /> View Tracking
+                        <FileText className="h-3.5 w-3.5" /> View Shift Logs
                       </button>
                       <button
                         onClick={() => setSelectedDocsEmp(emp)}
@@ -292,7 +292,7 @@ export default function ReportsPage() {
                   onClick={() => handleOpenReviewModal(emp)}
                   className="flex-1 text-[10px] font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
                 >
-                  <FileText className="h-3.5 w-3.5" /> View Tracking
+                  <FileText className="h-3.5 w-3.5" /> View Shift Logs
                 </button>
                 <button
                   onClick={() => setSelectedDocsEmp(emp)}

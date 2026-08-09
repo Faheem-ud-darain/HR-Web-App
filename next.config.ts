@@ -23,6 +23,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  images: {
+    unoptimized: isCapacitor,
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'pb.delcargo.us' },
+      { protocol: 'https', hostname: 'delcargo-io.vercel.app' },
+    ],
+  },
   /* config options here */
 };
 

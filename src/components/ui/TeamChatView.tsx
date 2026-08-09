@@ -8,6 +8,7 @@ import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
+import { OptimizedImage } from './OptimizedImage';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 
@@ -339,9 +340,15 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     setActiveTeamId(teams[0].id);
   }, [teams, activeTeamId]);
 
-  const { data: messages = [], isLoading } = useMessages(activeTeamId);
+  const [messageLimit, setMessageLimit] = useState(50);
+  const { data: messages = [], isLoading } = useMessages(activeTeamId, messageLimit);
   const { data: teamDocuments = [] } = useTeamDocuments(activeTeamId);
   const docTagList = teamDocuments.map(d => ({ title: d.title, url: d.fileUrl }));
+
+  // Reset windowing limit when switching active team
+  useEffect(() => {
+    setMessageLimit(50);
+  }, [activeTeamId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -849,6 +856,16 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
 
         {activePanel === 'chat' && (
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
+          {messages.length >= messageLimit && (
+            <div className="text-center py-2">
+              <button
+                onClick={() => setMessageLimit(prev => prev + 50)}
+                className="text-[11px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-colors"
+              >
+                Load earlier messages
+              </button>
+            </div>
+          )}
           {isLoading && <p className="text-xs text-slate-400 text-center font-semibold py-6">Loading messages…</p>}
           {!isLoading && messages.length === 0 && (
             <p className="text-xs text-slate-400 text-center font-semibold py-6 italic">No messages yet — say hi 👋</p>
@@ -889,7 +906,13 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                         onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
                         className={m.text ? 'block mt-2' : 'block'}
                       >
-                        <img src={m.attachmentUrl} alt={m.attachmentName || 'attachment'} className="rounded-lg max-h-56 object-cover" />
+                        <OptimizedImage
+                          src={m.attachmentUrl}
+                          alt={m.attachmentName || 'attachment'}
+                          width={400}
+                          height={220}
+                          className="rounded-lg max-h-56 object-cover"
+                        />
                       </button>
                     ) : (
                       <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline text-amber-700 ${m.text ? 'mt-2' : ''}`}>
@@ -934,7 +957,13 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                           onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
                           className={m.text ? 'block mt-2' : 'block'}
                         >
-                          <img src={m.attachmentUrl} alt={m.attachmentName || 'attachment'} className="rounded-lg max-h-56 object-cover" />
+                          <OptimizedImage
+                            src={m.attachmentUrl}
+                            alt={m.attachmentName || 'attachment'}
+                            width={400}
+                            height={220}
+                            className="rounded-lg max-h-56 object-cover"
+                          />
                         </button>
                       ) : (
                         <a

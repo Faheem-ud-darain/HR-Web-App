@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, useProfiles, useProfileDocuments, useTeams, displayName } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { UserPlus, CheckCircle2, AlertCircle, FileText, ShieldCheck, XCircle, ClipboardCheck } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
+import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
 
 export default function HROnboardingPage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -14,11 +15,19 @@ export default function HROnboardingPage() {
   const teams = teamsData.map(t => t.name);
   const [isOnboardOpen, setIsOnboardOpen] = useState(false);
 
-  // Pending onboarding-document approvals — anyone who finished the
-  // self-service stepper (onboardingCompleted) but is still gated out of
-  // their dashboard (approvalStatus 'pending'). See the gate screen in
-  // (dashboard)/layout.tsx and hrActions.approveOnboarding/rejectOnboarding.
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'rejected' | 'approved'>('all');
+
   const pendingApprovals = employees.filter(e => e.onboardingCompleted && e.approvalStatus === 'pending');
+  const rejectedEmployees = employees.filter(e => e.approvalStatus === 'rejected');
+  const approvedEmployees = employees.filter(e => e.approvalStatus === 'approved' || (!e.approvalStatus && e.onboardingCompleted));
+
+  const filteredEmployees = employees.filter(e => {
+    if (activeTab === 'pending') return e.onboardingCompleted && e.approvalStatus === 'pending';
+    if (activeTab === 'rejected') return e.approvalStatus === 'rejected';
+    if (activeTab === 'approved') return e.approvalStatus === 'approved' || (!e.approvalStatus && e.onboardingCompleted);
+    return true;
+  });
+
   const [reviewingEmp, setReviewingEmp] = useState<Profile | null>(null);
   // Their CV/passport/identity scans are fetched on demand, only while
   // their review modal is open — not part of the eager employees list.
@@ -27,6 +36,7 @@ export default function HROnboardingPage() {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null);
 
   const handleApprove = async (emp: Profile) => {
     setIsReviewSubmitting(true);
@@ -154,7 +164,7 @@ export default function HROnboardingPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Onboarding Pipelines</h1>
-          <p className="text-slate-500">Track registration completeness and generate invitation credentials.</p>
+          <p className="text-slate-500">Track registration completeness and review document submissions.</p>
         </div>
         <button
           onClick={() => setIsOnboardOpen(true)}
@@ -164,10 +174,44 @@ export default function HROnboardingPage() {
         </button>
       </div>
 
-      {/* Pending Onboarding Approvals — dashboard stays locked for these
-          employees until reviewed here (or on the Admin side, since /hr
-          routes are also reachable by Admin). */}
-      {pendingApprovals.length > 0 && (
+      {/* Status Filter Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors ${
+            activeTab === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          All ({employees.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+            activeTab === 'pending' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+          }`}
+        >
+          Pending Approval ({pendingApprovals.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('rejected')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+            activeTab === 'rejected' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+          }`}
+        >
+          Rejected ({rejectedEmployees.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('approved')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+            activeTab === 'approved' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+          }`}
+        >
+          Approved / Active ({approvedEmployees.length})
+        </button>
+      </div>
+
+      {/* Pending Onboarding Approvals Banner */}
+      {pendingApprovals.length > 0 && activeTab === 'all' && (
         <Card className="border border-amber-200 bg-amber-50/40 overflow-hidden">
           <div className="px-5 py-4 border-b border-amber-200/70 flex items-center gap-2">
             <ClipboardCheck className="h-4 w-4 text-amber-600" />
@@ -202,64 +246,124 @@ export default function HROnboardingPage() {
                 <th className="px-6 py-4">Job Title (Role)</th>
                 <th className="px-6 py-4 text-center">Gender</th>
                 <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-center">Invited Date</th>
+                <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {employees.map((emp) => (
-                <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-slate-900">{displayName(emp, 'hr')}</td>
-                  <td className="px-6 py-4">{emp.email}</td>
-                  <td className="px-6 py-4 capitalize font-medium text-slate-800">
-                    {emp.jobTitle || 'Employee'} <span className="text-[10px] text-slate-400 font-bold uppercase">({emp.role})</span>
+              {filteredEmployees.map((emp) => {
+                const statusLabel = emp.approvalStatus === 'pending'
+                  ? 'Pending Approval'
+                  : emp.approvalStatus === 'rejected'
+                  ? 'Rejected'
+                  : emp.approvalStatus === 'approved' || emp.onboardingCompleted
+                  ? 'Approved'
+                  : 'Invite Sent';
+
+                const badgeVariant = emp.approvalStatus === 'pending'
+                  ? 'warning'
+                  : emp.approvalStatus === 'rejected'
+                  ? 'danger'
+                  : emp.approvalStatus === 'approved' || emp.onboardingCompleted
+                  ? 'success'
+                  : 'warning';
+
+                return (
+                  <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-semibold text-slate-900">{displayName(emp, 'hr')}</td>
+                    <td className="px-6 py-4">{emp.email}</td>
+                    <td className="px-6 py-4 capitalize font-medium text-slate-800">
+                      {emp.jobTitle || 'Employee'} <span className="text-[10px] text-slate-400 font-bold uppercase">({emp.role})</span>
+                    </td>
+                    <td className="px-6 py-4 text-center capitalize font-semibold text-slate-500">{emp.gender || 'male'}</td>
+                    <td className="px-6 py-4">
+                      <Badge variant={badgeVariant}>
+                        {statusLabel}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {(emp.approvalStatus === 'pending' || emp.approvalStatus === 'rejected' || emp.onboardingCompleted) && (
+                        <button
+                          onClick={() => { setReviewingEmp(emp); setShowRejectForm(false); setRejectReason(emp.approvalRejectionReason || ''); setReviewError(''); }}
+                          className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Review Docs
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredEmployees.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+                    No employees found for this tab.
                   </td>
-                  <td className="px-6 py-4 text-center capitalize font-semibold text-slate-500">{emp.gender || 'male'}</td>
-                  <td className="px-6 py-4">
-                    <Badge variant={emp.approvalStatus === 'pending' ? 'warning' : emp.approvalStatus === 'rejected' ? 'danger' : emp.onboardingCompleted ? 'success' : 'warning'}>
-                      {emp.approvalStatus === 'pending' ? 'Pending Approval' : emp.approvalStatus === 'rejected' ? 'Rejected' : emp.onboardingCompleted ? 'Completed' : 'Invite Sent'}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-center text-slate-600">{emp.joinedDate}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
         
         <div className="md:hidden space-y-3 p-4">
-          {employees.map((emp) => (
-            <div key={emp.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-900 truncate pr-2">{displayName(emp, 'hr')}</p>
-                <Badge variant={emp.onboardingCompleted ? 'success' : 'warning'} className="shrink-0">
-                  {emp.onboardingCompleted ? 'Completed' : 'Invite Sent'}
-                </Badge>
+          {filteredEmployees.map((emp) => {
+            const statusLabel = emp.approvalStatus === 'pending'
+              ? 'Pending Approval'
+              : emp.approvalStatus === 'rejected'
+              ? 'Rejected'
+              : emp.approvalStatus === 'approved' || emp.onboardingCompleted
+              ? 'Approved'
+              : 'Invite Sent';
+
+            const badgeVariant = emp.approvalStatus === 'pending'
+              ? 'warning'
+              : emp.approvalStatus === 'rejected'
+              ? 'danger'
+              : emp.approvalStatus === 'approved' || emp.onboardingCompleted
+              ? 'success'
+              : 'warning';
+
+            return (
+              <div key={emp.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-slate-900 truncate pr-2">{displayName(emp, 'hr')}</p>
+                  <Badge variant={badgeVariant} className="shrink-0">
+                    {statusLabel}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Email</p>
+                    <p className="text-xs font-semibold text-slate-700">{emp.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Job Title (Role)</p>
+                    <p className="text-xs font-medium text-slate-800 capitalize">
+                      {emp.jobTitle || 'Employee'} <span className="text-[10px] text-slate-400 font-bold uppercase">({emp.role})</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Gender</p>
+                    <p className="text-xs font-semibold text-slate-700 capitalize">{emp.gender || 'male'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Invited Date</p>
+                    <p className="text-xs font-medium text-slate-600">{emp.joinedDate}</p>
+                  </div>
+                </div>
+                {(emp.approvalStatus === 'pending' || emp.approvalStatus === 'rejected' || emp.onboardingCompleted) && (
+                  <button
+                    onClick={() => { setReviewingEmp(emp); setShowRejectForm(false); setRejectReason(emp.approvalRejectionReason || ''); setReviewError(''); }}
+                    className="w-full text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 py-2 rounded-lg transition-colors text-center"
+                  >
+                    Review Docs
+                  </button>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="col-span-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Email</p>
-                  <p className="text-xs font-semibold text-slate-700">{emp.email}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Job Title (Role)</p>
-                  <p className="text-xs font-medium text-slate-800 capitalize">
-                    {emp.jobTitle || 'Employee'} <span className="text-[10px] text-slate-400 font-bold uppercase">({emp.role})</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Gender</p>
-                  <p className="text-xs font-semibold text-slate-700 capitalize">{emp.gender || 'male'}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Invited Date</p>
-                  <p className="text-xs font-medium text-slate-600">{emp.joinedDate}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-          {employees.length === 0 && (
+            );
+          })}
+          {filteredEmployees.length === 0 && (
             <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">
-              No employees found.
+              No employees found for this tab.
             </p>
           )}
         </div>
@@ -485,21 +589,81 @@ export default function HROnboardingPage() {
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Uploaded Documents</h4>
 
               {reviewingEmpDocs?.cvFileData && reviewingEmpDocs?.cvFileName && (
-                <a href={reviewingEmpDocs.cvFileData} download={reviewingEmpDocs.cvFileName} className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
-                  <FileText className="h-4 w-4 text-orange-600 shrink-0" /> {reviewingEmpDocs.cvFileName} <span className="text-slate-400 font-medium ml-auto">CV</span>
-                </a>
+                <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-orange-600 shrink-0" />
+                    <span className="truncate">{reviewingEmpDocs.cvFileName}</span>
+                    <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded">CV</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc({ url: reviewingEmpDocs.cvFileData!, name: reviewingEmpDocs.cvFileName! })}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Preview
+                    </button>
+                    <a
+                      href={reviewingEmpDocs.cvFileData}
+                      download={reviewingEmpDocs.cvFileName}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
               )}
 
               {(reviewingEmpDocs?.identityDocs || []).map((doc, idx) => (
-                <a key={idx} href={doc.data} download={doc.name} className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
-                  <FileText className="h-4 w-4 text-orange-600 shrink-0" /> {doc.name} <span className="text-slate-400 font-medium ml-auto">Identity Doc</span>
-                </a>
+                <div key={idx} className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-orange-600 shrink-0" />
+                    <span className="truncate">{doc.name}</span>
+                    <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded">Identity Doc</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc({ url: doc.data, name: doc.name })}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Preview
+                    </button>
+                    <a
+                      href={doc.data}
+                      download={doc.name}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
               ))}
 
               {reviewingEmpDocs?.passportFileData && reviewingEmpDocs?.passportFileName && (
-                <a href={reviewingEmpDocs.passportFileData} download={reviewingEmpDocs.passportFileName} className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3 hover:bg-slate-50 transition-colors">
-                  <FileText className="h-4 w-4 text-orange-600 shrink-0" /> {reviewingEmpDocs.passportFileName} <span className="text-slate-400 font-medium ml-auto">Passport</span>
-                </a>
+                <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-orange-600 shrink-0" />
+                    <span className="truncate">{reviewingEmpDocs.passportFileName}</span>
+                    <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded">Passport</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc({ url: reviewingEmpDocs.passportFileData!, name: reviewingEmpDocs.passportFileName! })}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Preview
+                    </button>
+                    <a
+                      href={reviewingEmpDocs.passportFileData}
+                      download={reviewingEmpDocs.passportFileName}
+                      className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
               )}
 
               {!reviewingEmpDocs?.cvFileData && (reviewingEmpDocs?.identityDocs || []).length === 0 && !reviewingEmpDocs?.passportFileData && (
@@ -563,6 +727,15 @@ export default function HROnboardingPage() {
             )}
           </div>
         </Modal>
+      )}
+
+      {/* Document In-App Preview Modal (PDF & Images) */}
+      {previewDoc && (
+        <DocumentPreviewModal
+          url={previewDoc.url}
+          name={previewDoc.name}
+          onClose={() => setPreviewDoc(null)}
+        />
       )}
     </div>
   );

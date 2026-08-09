@@ -16,6 +16,8 @@ interface AvatarProps {
 // ratio, and doesn't depend on any Tailwind class actually being present
 // in the generated stylesheet at the sizes used here.
 export function Avatar({ src, name, size = 40, className = '' }: AvatarProps) {
+  const [imgError, setImgError] = React.useState(false);
+
   const initials = name
     .split(' ')
     .filter(Boolean)
@@ -36,15 +38,17 @@ export function Avatar({ src, name, size = 40, className = '' }: AvatarProps) {
     justifyContent: 'center',
     flexShrink: 0,
     border: '1px solid var(--border, #e2e8f0)',
-    background: src ? undefined : '#fff7ed',
+    background: src && !imgError ? undefined : '#fff7ed',
   };
 
   return (
     <div className={className} style={wrapperStyle}>
-      {src ? (
+      {src && !imgError ? (
         <img
           src={src}
           alt={name}
+          loading="lazy"
+          onError={() => setImgError(true)}
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
         />
       ) : (

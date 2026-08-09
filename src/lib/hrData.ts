@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from './pocketbase';
 import { getNYDateString, formatTimeNY, formatDateNY } from './timezone';
@@ -894,16 +895,46 @@ export function useTeams() {
 // for hr_tickets above and is proven to work here. If you confirm SSE stays
 // connected in your actual deployment, this can be upgraded to
 // pb.collection('hr_messages').subscribe(...) for instant delivery.
-export function useMessages(teamId: string | null | undefined) {
+export function useMessages(teamId: string | null | undefined, limit: number = 50) {
+  const queryClient = useQueryClient();
+
+  React.useEffect(() => {
+    if (!teamId) return;
+    let unsubscribed = false;
+
+    // Real-time delta sync subscription via PocketBase WebSocket
+    pb.collection('hr_messages')
+      .subscribe('*', (e) => {
+        if (unsubscribed) return;
+        if (e.record && e.record.team_id === teamId) {
+          queryClient.invalidateQueries({ queryKey: ['hr_messages', teamId] });
+        }
+      })
+      .catch((err) => {
+        console.warn('[hrData] PocketBase realtime subscription fallback to polling:', err);
+      });
+
+    return () => {
+      unsubscribed = true;
+      pb.collection('hr_messages').unsubscribe('*').catch(() => {});
+    };
+  }, [teamId, queryClient]);
+
   return useQuery({
-    queryKey: ['hr_messages', teamId],
+    queryKey: ['hr_messages', teamId, limit],
     queryFn: async () => {
       if (!teamId) return [];
-      const rows = await pbList('hr_messages', { filter: `team_id = "${teamId}"`, sort: 'created' });
-      return rows.map(toMessage);
+      const rows = await pb.collection('hr_messages').getList(1, limit, {
+        filter: `team_id = "${teamId}"`,
+        sort: '-created',
+        requestKey: null,
+      });
+      // Reverse to return in chronological order
+      return rows.items.map(toMessage).reverse();
     },
     enabled: !!teamId,
-    refetchInterval: 4000,
+    refetchInterval: 8000,
+    staleTime: 4000,
   });
 }
 // Every message across every team, unscoped — used only for the sidebar's
@@ -2753,7 +2784,10 @@ export const hrActions = {
       imageUrl: row.value.imageData,
       legacy: true,
     } as Screenshot));
-    if (filters?.employeeEmail) legacyShots = legacyShots.filter(s => s.employeeEmail.toLowerCase() === filters.employeeEmail!.toLowerCase());
+    if (filters?.employeeEmail) {
+      const wanted = filters.employeeEmail.toLowerCase();
+      legacyShots = legacyShots.filter(s => (s.employeeEmail || '').toLowerCase() === wanted);
+    }
     if (filters?.sinceISO) legacyShots = legacyShots.filter(s => s.timestamp >= filters.sinceISO!);
     if (filters?.untilISO) legacyShots = legacyShots.filter(s => s.timestamp <= filters.untilISO!);
 

@@ -1034,6 +1034,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="font-bold">HR note:</span> {profile.approvalRejectionReason}
             </div>
           )}
+          {isRejected && (
+            <div className="pt-2 space-y-2">
+              <button
+                onClick={async () => {
+                  if (profile?.id) {
+                    await hrActions.updateProfileDetails(profile.id, {
+                      onboardingCompleted: false,
+                    });
+                    window.location.reload();
+                  }
+                }}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-md shadow-orange-600/10"
+              >
+                Re-submit Documents
+              </button>
+            </div>
+          )}
           <button
             onClick={async () => {
               await hrActions.performLogout(email || '', role);
