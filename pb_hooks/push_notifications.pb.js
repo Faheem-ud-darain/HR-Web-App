@@ -1,11 +1,12 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Fires every time a new row is created in hr_notifications (i.e. every
+// Fired every time a new row is created in hr_notifications (i.e. every
 // call to hrActions.addNotification(...) in the app — see hrData.ts) and,
 // if it's one of the 3 pushable categories below, sends a real OneSignal
 // push to whoever it's addressed to (after checking their own Settings
 // preferences — see NotificationPreferencesCard.tsx / getNotificationPrefs
 // in hrData.ts).
+// Updated: 2026-08-10 for smart tracker inactivity alerts.
 //
 // 'announcement' is NOT handled here — hr_announcements is a totally
 // separate collection that never goes through addNotification, so it gets
