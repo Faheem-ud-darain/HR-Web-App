@@ -88,13 +88,20 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(loadState, 3000);
 
   // ── Grant / Re-select Full Desktop Screen Capture ─────────────────────
-  grantScreenBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'capture.html' });
-  });
+  function openCaptureWindow() {
+    // Open as a small popup window (not a tab) so it can be auto-minimized
+    // by capture.js after the stream starts, leaving the desktop visible.
+    chrome.windows.create({
+      url: chrome.runtime.getURL('capture.html'),
+      type: 'popup',
+      width: 520,
+      height: 480,
+      focused: true
+    });
+  }
 
-  screenCaptureBadge.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'capture.html' });
-  });
+  grantScreenBtn.addEventListener('click', openCaptureWindow);
+  screenCaptureBadge.addEventListener('click', openCaptureWindow);
 
   // ── Connect Device via Setup Code ──────────────────────────────────────
   connectCodeBtn.addEventListener('click', async () => {

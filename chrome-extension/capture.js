@@ -1,91 +1,69 @@
-// Delcargo HR Tracker — Full Desktop Screen Capture Tab
-// Uses getDisplayMedia() — the correct modern API for true full-screen capture.
-// The old chooseDesktopMedia + getUserMedia(streamId) path has been removed
-// because it frequently captures the picker UI or the wrong window on Windows/Mac.
+// Delcargo HR Tracker — Full Desktop Screen Capture
+// Uses getDisplayMedia() and then auto-minimizes this window so that the
+// captured stream shows the employee's actual desktop, not the capture UI.
 
 let desktopStream = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  const startBtn      = document.getElementById('startBtn');
+  const startBtn        = document.getElementById('startBtn');
   const instructionText = document.getElementById('instructionText');
-  const activeBadge   = document.getElementById('activeBadge');
-  const resText       = document.getElementById('resText');
-  const keepOpenBox   = document.getElementById('keepOpenBox');
+  const activeBadge    = document.getElementById('activeBadge');
+  const resText        = document.getElementById('resText');
+  const keepOpenBox    = document.getElementById('keepOpenBox');
 
   // ── Answer frame-capture requests from the background service worker ──────
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg && msg.type === 'CAPTURE_DESKTOP_FRAME') {
       captureDesktopFrame().then(sendResponse);
-      return true; // keep channel open for async response
+      return true;
     }
   });
 
-  // ── Warn before the tab is closed ────────────────────────────────────────
-  window.addEventListener('beforeunload', (e) => {
-    if (desktopStream && desktopStream.active) {
-      e.preventDefault();
-      e.returnValue = 'Closing this tab will stop full desktop screen capture.';
-    }
-  });
-
-  // ── When tab is closed/navigated away: clear the granted flag ─────────────
-  window.addEventListener('unload', () => {
-    // Stop the tracks so OS releases the camera-indicator light
+  // ── When tab/window is closed: clear the granted flag and stop stream ─────
+  window.addEventListener('beforeunload', () => {
     if (desktopStream) desktopStream.getTracks().forEach(t => t.stop());
     try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch (_) {}
   });
 
-  // ── Button / auto-start ───────────────────────────────────────────────────
   startBtn.addEventListener('click', requestCapture);
-  // Auto-open the picker when the tab first loads (user must click Share)
-  requestCapture();
 
   async function requestCapture() {
     startBtn.disabled = true;
     startBtn.textContent = 'Waiting for screen selection…';
     instructionText.textContent =
-      'A system picker will open — select "Entire Screen" (or "Screen 1") and click Share.';
+      'Select "Entire Screen" (or "Screen 1") in the picker — NOT a tab or window — then click Share.';
 
-    // Stop any existing stream first
     if (desktopStream) {
       desktopStream.getTracks().forEach(t => t.stop());
       desktopStream = null;
     }
 
     try {
-      // getDisplayMedia is the correct modern API. It:
-      //  • Works on Windows, Mac, and Chrome OS.
-      //  • Shows the OS-level screen picker (not Chrome's internal one).
-      //  • Reliably captures the ENTIRE monitor when the user picks "Screen" / "Entire Screen".
-      //  • Does NOT capture the picker UI itself.
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          displaySurface: 'monitor',   // hint: prefer full-monitor over window/tab
-          frameRate: { ideal: 5, max: 10 }, // low fps is enough for screenshots
+          displaySurface: 'monitor',
+          frameRate: { ideal: 5, max: 10 },
           width:  { ideal: 1920 },
           height: { ideal: 1080 },
         },
         audio: false,
-        // Chrome 107+: suppress the "tab" option in the picker so only
-        // "Entire Screen" and "Window" are offered.
         preferCurrentTab: false,
         selfBrowserSurface: 'exclude',
         systemAudio: 'exclude',
       });
-
       activateStream(stream);
     } catch (err) {
-      // User hit Cancel or OS denied permission
-      showIdle(err.name === 'NotAllowedError'
-        ? 'Screen selection was cancelled or denied. Click the button to try again.'
-        : `Error: ${err.message || err}`);
+      showIdle(
+        err.name === 'NotAllowedError'
+          ? 'Screen selection was cancelled. Click the button to try again.'
+          : `Error: ${err.message || err}`
+      );
     }
   }
 
   function activateStream(stream) {
     desktopStream = stream;
 
-    // React to the user clicking Chrome's floating "Stop sharing" banner
     const track = stream.getVideoTracks()[0];
     if (track) {
       track.addEventListener('ended', () => {
@@ -97,37 +75,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('screenVideo');
     video.muted = true;
     video.srcObject = stream;
+
     video.onloadedmetadata = async () => {
-      try {
-        await video.play();
-      } catch (_) { /* autoplay — muted, should always succeed */ }
+      try { await video.play(); } catch (_) {}
 
       const w = video.videoWidth  || 1920;
       const h = video.videoHeight || 1080;
       const res = `${w}×${h}`;
+      const surface = track?.getSettings?.()?.displaySurface ?? 'monitor';
 
-      // Confirm the surface type so we can show the user what was captured
-      const surface = track?.getSettings?.()?.displaySurface ?? 'unknown';
-      console.log(`[Capture] Stream active — surface: ${surface}, resolution: ${res}`);
+      console.log(`[Capture] Stream active — surface: ${surface}, res: ${res}`);
 
+      // Reject if the user picked a tab or single window instead of the full screen
       if (surface === 'browser' || surface === 'window') {
-        // User picked a tab or individual window — warn and let them retry
         stream.getTracks().forEach(t => t.stop());
         showIdle(
-          `You selected a ${surface === 'browser' ? 'tab' : 'window'} instead of the entire screen. ` +
-          'Please click the button and choose "Entire Screen" (or "Screen 1") in the picker.'
+          `You selected a ${surface === 'browser' ? 'browser tab' : 'window'} — ` +
+          'please click the button and choose "Entire Screen" (or "Screen 1") in the picker.'
         );
         return;
       }
 
-      // ✅ Whole-screen selected — save state and update UI
+      // ✅ Full screen selected — update UI
       chrome.storage.local.set({ desktopStreamGranted: true, desktopResolution: res });
 
-      startBtn.style.display       = 'none';
+      startBtn.style.display        = 'none';
       instructionText.style.display = 'none';
-      activeBadge.style.display    = 'inline-flex';
-      keepOpenBox.style.display    = 'block';
-      resText.textContent          = `Full Desktop Monitor Active (${res})`;
+      activeBadge.style.display     = 'inline-flex';
+      keepOpenBox.style.display     = 'block';
+      resText.textContent           = `Full Desktop Monitor Active (${res})`;
+
+      // ── KEY FIX: auto-minimize this popup window so the captured stream
+      // shows the employee's actual work apps, not this UI.
+      // We wait 2 s so the user can read the confirmation first.
+      setTimeout(() => {
+        try {
+          chrome.windows.getCurrent((win) => {
+            if (win && win.id) {
+              chrome.windows.update(win.id, { state: 'minimized' });
+            }
+          });
+        } catch (_) {}
+      }, 2000);
     };
   }
 
@@ -135,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (desktopStream) { desktopStream.getTracks().forEach(t => t.stop()); desktopStream = null; }
     startBtn.disabled             = false;
     startBtn.style.display        = 'block';
-    startBtn.textContent          = 'Select Entire Screen';
+    startBtn.textContent          = '🖥️ Select Entire Screen';
     instructionText.style.display = 'block';
     instructionText.textContent   = msg;
     activeBadge.style.display     = 'none';
