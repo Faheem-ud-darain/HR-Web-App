@@ -312,7 +312,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   // page) so the badge disappears promptly rather than waiting out the
   // staleness window.
   useEffect(() => {
-    if (role !== 'hr' || !selectedTicket || selectedTicket.status === 'closed') return;
+    if (!isPrivileged || !selectedTicket || selectedTicket.status === 'closed') return;
     const ticketId = selectedTicket.id;
     const email = currentEmail;
     const beat = () => hrActions.touchTicketPresence(ticketId, email, role);
@@ -812,7 +812,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                         )}
                       </h3>
                       <div className="flex items-center gap-2 shrink-0">
-                        {isHR && !isClosed && (
+                        {isPrivileged && !isClosed && (
                           <button
                             onClick={() => handleCloseTicket(selectedTicket.id)}
                             disabled={updatingTicketStatusId === selectedTicket.id}
@@ -823,7 +823,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                             <span className="hidden lg:inline">Close Ticket</span>
                           </button>
                         )}
-                        {isHR && isClosed && (
+                        {isPrivileged && isClosed && (
                           <button
                             onClick={() => handleReopenTicket(selectedTicket.id)}
                             disabled={updatingTicketStatusId === selectedTicket.id}
@@ -834,9 +834,9 @@ export function TicketsView({ role }: TicketsViewProps) {
                             <span className="hidden lg:inline">Re-open Ticket</span>
                           </button>
                         )}
-                        {isClosed && !isHR && (
+                        {isClosed && !isPrivileged && (
                           <span className="text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                            <Lock className="h-3 w-3" /> Closed by HR
+                            <Lock className="h-3 w-3" /> Closed
                           </span>
                         )}
                       </div>
