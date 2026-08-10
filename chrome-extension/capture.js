@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const instructionText = document.getElementById('instructionText');
   const activeBadge = document.getElementById('activeBadge');
   const resText = document.getElementById('resText');
-  const subtext = document.getElementById('subtext');
+  const keepOpenBox = document.getElementById('keepOpenBox');
 
   // Register Message Listener for Frame Requests from Background Worker
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -15,6 +15,20 @@ document.addEventListener('DOMContentLoaded', () => {
       captureDesktopFrame().then(res => sendResponse(res));
       return true;
     }
+  });
+
+  // Warn user if closing tab while stream is active
+  window.addEventListener('beforeunload', (e) => {
+    if (desktopStream && desktopStream.active) {
+      e.preventDefault();
+      e.returnValue = 'Closing this tab will stop full desktop screen tracking.';
+      return e.returnValue;
+    }
+  });
+
+  // Mark desktopStreamGranted as false when tab unloads
+  window.addEventListener('unload', () => {
+    chrome.storage.local.set({ desktopStreamGranted: false });
   });
 
   startBtn.addEventListener('click', promptDesktopCapture);
@@ -68,6 +82,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       desktopStream = stream;
 
+      // Handle user clicking Chrome's "Stop sharing" floating banner
+      const videoTrack = desktopStream.getVideoTracks()?.[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          chrome.storage.local.set({ desktopStreamGranted: false });
+          showError('Screen sharing was stopped. Click button below to restart full desktop tracking.');
+        };
+      }
+
       const video = document.getElementById('screenVideo');
       video.muted = true;
       video.srcObject = desktopStream;
@@ -81,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startBtn.style.display = 'none';
         instructionText.style.display = 'none';
         activeBadge.style.display = 'inline-flex';
-        subtext.style.display = 'block';
+        keepOpenBox.style.display = 'block';
         resText.textContent = `Full Desktop Monitor Active (${resStr})`;
 
         chrome.storage.local.set({
@@ -101,6 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
     startBtn.textContent = 'Select Entire Screen';
     instructionText.style.display = 'block';
     instructionText.textContent = msg;
+    activeBadge.style.display = 'none';
+    keepOpenBox.style.display = 'none';
   }
 
   async function captureDesktopFrame() {

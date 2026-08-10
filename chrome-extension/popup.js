@@ -51,16 +51,20 @@ document.addEventListener('DOMContentLoaded', () => {
         mainView.style.display = 'block';
         displayEmail.textContent = res.employeeEmail;
 
-        if (res.desktopStreamGranted) {
-          grantScreenBtn.style.display = 'none';
-          screenCaptureBadge.style.display = 'flex';
-          if (res.desktopResolution) {
-            screenDesc.textContent = `Entire monitor display active (${res.desktopResolution})`;
+        // Test if desktop stream capture tab is currently active and live
+        chrome.runtime.sendMessage({ type: 'CAPTURE_DESKTOP_FRAME' }, (frameRes) => {
+          if (frameRes && frameRes.success) {
+            grantScreenBtn.style.display = 'none';
+            screenCaptureBadge.style.display = 'flex';
+            const resStr = frameRes.width ? `${frameRes.width}x${frameRes.height}` : (res.desktopResolution || 'Active');
+            screenDesc.textContent = `Entire monitor display active (${resStr})`;
+          } else {
+            // Stream tab was closed or stopped — restore button so user can re-open!
+            grantScreenBtn.style.display = 'flex';
+            grantScreenBtn.textContent = '🖥️ Select Entire Desktop Screen';
+            screenCaptureBadge.style.display = 'none';
           }
-        } else {
-          grantScreenBtn.style.display = 'flex';
-          screenCaptureBadge.style.display = 'none';
-        }
+        });
 
         if (res.shiftActive && res.shiftStartTime) {
           isShiftActive = true;
@@ -83,8 +87,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loadState();
   setInterval(loadState, 3000);
 
-  // ── Grant Full Desktop Screen Capture ──────────────────────────────────
+  // ── Grant / Re-select Full Desktop Screen Capture ─────────────────────
   grantScreenBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'capture.html' });
+  });
+
+  screenCaptureBadge.addEventListener('click', () => {
     chrome.tabs.create({ url: 'capture.html' });
   });
 
