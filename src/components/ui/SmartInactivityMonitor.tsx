@@ -12,9 +12,7 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
   const { data: allProfiles = [] } = useProfiles();
 
   useEffect(() => {
-    // Only HR and Admin need real-time tracker inactivity alerts
-    if (!['hr', 'admin'].includes(userRole)) return;
-    if (!timesheets.length || !heartbeatRows.length) return;
+    if (!timesheets.length || !heartbeatRows.length || !userEmail) return;
 
     const interval = setInterval(async () => {
       const now = Date.now();
@@ -22,9 +20,11 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
 
       heartbeatRows.forEach(row => {
         const hb = row.value;
-        if (hb && hb.employeeEmail && hb.lastHeartbeat) {
-          const emailKey = hb.employeeEmail.toLowerCase();
-          const time = new Date(hb.lastHeartbeat).getTime();
+        const hbEmail = hb?.employeeEmail || hb?.email;
+        const hbTime = hb?.lastHeartbeat || hb?.lastSeenAt;
+        if (hbEmail && hbTime) {
+          const emailKey = hbEmail.toLowerCase();
+          const time = new Date(hbTime).getTime();
           const existing = heartbeatsMap.get(emailKey) || 0;
           if (time > existing) heartbeatsMap.set(emailKey, time);
         }
@@ -45,27 +45,35 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
         const isStale = !lastHb || (now - lastHb > HEARTBEAT_STALE_MS);
 
         if (isStale) {
-          const emp = allProfiles.find(p => p.email.toLowerCase() === empEmail);
-          const empName = emp ? emp.fullName : empEmail;
-
-          // Check alert cooldown key in session storage to avoid spam
           const alertKey = `inactivity_alert_${empEmail}`;
           const lastAlertTime = parseInt(sessionStorage.getItem(alertKey) || '0', 10);
 
           if (now - lastAlertTime > ALERT_COOLDOWN_MS) {
             sessionStorage.setItem(alertKey, now.toString());
 
+            const emp = allProfiles.find(p => p.email.toLowerCase() === empEmail);
+            const empName = emp ? emp.fullName : empEmail;
             const minsInactive = lastHb ? Math.floor((now - lastHb) / 60000) : '5+';
-            const alertMsg = `⚠️ Tracker Alert: ${empName} is currently clocked in but screen tracking has been inactive for ${minsInactive} min(s).`;
 
-            // Broadcast notification to HR/Admin & send Push Notification
+            // 1. Direct Alert to the Employee
             await hrActions.addNotification(
-              'all',
-              userRole as 'hr' | 'admin',
-              alertMsg,
+              empEmail,
+              'employee',
+              `⚠️ Tracker Warning: You are clocked in, but your desktop agent is OFF or inactive (${minsInactive}m). Please launch your desktop tracker agent to avoid absence auto-flagging.`,
               'shift',
-              `Tracker Inactivity Alert: ${empName}`
+              `⚠️ Desktop Tracker Agent Inactive`
             );
+
+            // 2. Alert HR/Admin (if manager is running the monitor)
+            if (['hr', 'admin'].includes(userRole)) {
+              await hrActions.addNotification(
+                'all',
+                userRole as 'hr' | 'admin',
+                `⚠️ Tracker Alert: ${empName} is currently clocked in but screen tracking has been inactive for ${minsInactive} min(s).`,
+                'shift',
+                `Tracker Inactivity Alert: ${empName}`
+              );
+            }
           }
         }
       }
