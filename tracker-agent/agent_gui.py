@@ -96,7 +96,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "6"
+APP_VERSION = "7"
 GITHUB_REPO = "SPARXzeux/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -1565,11 +1565,23 @@ class TrackerApp:
                 # _unused_key params on get_heartbeat/upsert_heartbeat/etc.
                 hb = get_heartbeat(cfg["url"], None, cfg["employee_email"])
                 if hb and hb.get("deviceId") and hb.get("deviceId") != cfg.get("device_id"):
-                    with self.state_lock:
-                        self.state["connection_status"] = "superseded"
-                        self.state["superseded_device"] = hb.get("deviceLabel") or "another computer"
-                        self.state["heartbeat_error"] = None
-                    return False
+                    # The heartbeat belongs to another device. Check if that device is actually alive.
+                    last_seen_iso = hb.get("lastSeenAt")
+                    is_stale = False
+                    if last_seen_iso:
+                        try:
+                            last_seen_dt = datetime.fromisoformat(last_seen_iso.replace("Z", "+00:00"))
+                            if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() > 180:
+                                is_stale = True
+                        except Exception:
+                            pass
+                    
+                    if not is_stale:
+                        with self.state_lock:
+                            self.state["connection_status"] = "superseded"
+                            self.state["superseded_device"] = hb.get("deviceLabel") or "another computer"
+                            self.state["heartbeat_error"] = None
+                        return False
                 preserved_connected_at = (hb or {}).get("connectedAt")
             else:
                 preserved_connected_at = None
