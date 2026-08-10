@@ -26,6 +26,7 @@ import { AbsentPopup } from '@/components/ui/AbsentPopup';
 import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
+import { SmartInactivityMonitor } from '@/components/ui/SmartInactivityMonitor';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { useAnyModalOpen } from '@/lib/modalStack';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload, LogOut } from 'lucide-react';
@@ -1231,6 +1232,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </Modal>
       )}
+
+      {/* Smart Background Monitor for Inactive Screen Trackers */}
+      <SmartInactivityMonitor userRole={role} userEmail={email || ''} />
     </div>
   );
 }
