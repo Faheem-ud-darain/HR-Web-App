@@ -8,7 +8,7 @@ const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isN
 // security checks app-wide just to allow this one insecure connection,
 // which is why it's gone now — see capacitor.config.ts,
 // AndroidManifest.xml, and Info.plist.
-const PB_URL = isNative ? 'https://pb.delcargo.us' : '/api/pb';
+const PB_URL = 'https://pb.delcargo.us';
 
 export const pb = new PocketBase(PB_URL);
 

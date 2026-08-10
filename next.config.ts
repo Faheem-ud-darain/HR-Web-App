@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     // so it was never a browser security issue, but pointing it at the
     // domain too means it keeps working even if the droplet's IP ever
     // changes — no redeploy needed, just a DNS update.
-    NEXT_PUBLIC_PB_URL: isCapacitor ? 'https://pb.delcargo.us' : '',
+    NEXT_PUBLIC_PB_URL: 'https://pb.delcargo.us',
   },
   async rewrites() {
     if (isCapacitor) return [];
