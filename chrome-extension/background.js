@@ -446,6 +446,34 @@ async function handleScreenshotTick() {
   }
 }
 
+// ── Automatic Extension Update Check & Listener ────────────────────────────
+chrome.runtime.onUpdateAvailable.addListener((details) => {
+  console.log('[Delcargo Tracker] Extension update available:', details.version);
+  chrome.runtime.reload();
+});
+
+function checkForUpdates() {
+  if (chrome.runtime.requestUpdateCheck) {
+    chrome.runtime.requestUpdateCheck((status) => {
+      console.log('[Delcargo Tracker] Update check status:', status);
+      if (status === 'update_available') {
+        chrome.runtime.reload();
+      }
+    });
+  }
+}
+
+try {
+  chrome.alarms.create('checkUpdatesAlarm', { periodInMinutes: 60 });
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'checkUpdatesAlarm') {
+      checkForUpdates();
+    }
+  });
+} catch (e) {
+  console.warn('[Delcargo Tracker] Alarms setup exception:', e);
+}
+
 // ── Start Heartbeat Loop Immediately on Worker Evaluation ─────────────────
 handleHeartbeatTick();
 setInterval(() => {
