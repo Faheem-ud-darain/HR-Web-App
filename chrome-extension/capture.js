@@ -107,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // ── KEY FIX: auto-minimize this popup window so the captured stream
       // shows the employee's actual work apps, not this UI.
-      // We wait 2 s so the user can read the confirmation first.
       setTimeout(() => {
         try {
           chrome.windows.getCurrent((win) => {
@@ -117,10 +116,25 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         } catch (_) {}
       }, 2000);
+
+      // ── MANIFEST V3 KEEPALIVE ──
+      // Service workers suspend after 30s. `chrome.alarms` can be heavily throttled
+      // by Chrome OS / Windows when on battery. Since this capture window stays open
+      // (minimized) during the whole shift, we use its DOM interval to ping the
+      // background script. This guarantees the service worker stays awake and the
+      // server gets heartbeats on time, preventing false "Tracker Off" warnings.
+      if (window.keepAliveInterval) clearInterval(window.keepAliveInterval);
+      window.keepAliveInterval = setInterval(() => {
+        chrome.runtime.sendMessage({ type: 'HEARTBEAT_NOW' }).catch(() => {});
+      }, 25000);
     };
   }
 
   function showIdle(msg) {
+    if (window.keepAliveInterval) {
+      clearInterval(window.keepAliveInterval);
+      window.keepAliveInterval = null;
+    }
     if (desktopStream) { desktopStream.getTracks().forEach(t => t.stop()); desktopStream = null; }
     startBtn.disabled             = false;
     startBtn.style.display        = 'block';
