@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useKVByPrefix, useTimesheets, useProfiles, hrActions } from '@/lib/hrData';
 
 const HEARTBEAT_STALE_MS = 3 * 60 * 1000; // 3 minutes without heartbeat = inactive
@@ -11,14 +11,30 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
   const { data: heartbeatRows = [] } = useKVByPrefix('tracker_heartbeat_');
   const { data: allProfiles = [] } = useProfiles();
 
+  const timesheetsRef = useRef(timesheets);
+  const heartbeatRowsRef = useRef(heartbeatRows);
+  const allProfilesRef = useRef(allProfiles);
+
   useEffect(() => {
-    if (!timesheets.length || !heartbeatRows.length || !userEmail) return;
+    timesheetsRef.current = timesheets;
+    heartbeatRowsRef.current = heartbeatRows;
+    allProfilesRef.current = allProfiles;
+  }, [timesheets, heartbeatRows, allProfiles]);
+
+  useEffect(() => {
+    if (!userEmail) return;
 
     const interval = setInterval(async () => {
+      const currentTimesheets = timesheetsRef.current;
+      const currentHeartbeats = heartbeatRowsRef.current;
+      const currentProfiles = allProfilesRef.current;
+
+      if (!currentTimesheets.length || !currentHeartbeats.length) return;
+
       const now = Date.now();
       const heartbeatsMap = new Map<string, number>();
 
-      heartbeatRows.forEach(row => {
+      currentHeartbeats.forEach(row => {
         const hb = row.value;
         const hbEmail = hb?.employeeEmail || hb?.email;
         const hbTime = hb?.lastHeartbeat || hb?.lastSeenAt;
@@ -31,7 +47,7 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
       });
 
       // Find all currently clocked-in (open) shifts
-      const openShifts = timesheets.filter(t => !t.clockOut);
+      const openShifts = currentTimesheets.filter(t => !t.clockOut);
 
       for (const shift of openShifts) {
         const empEmail = shift.employeeEmail.toLowerCase();
@@ -51,7 +67,7 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
           if (now - lastAlertTime > ALERT_COOLDOWN_MS) {
             sessionStorage.setItem(alertKey, now.toString());
 
-            const emp = allProfiles.find(p => p.email.toLowerCase() === empEmail);
+            const emp = currentProfiles.find(p => p.email.toLowerCase() === empEmail);
             const empName = emp ? emp.fullName : empEmail;
             const minsInactive = lastHb ? Math.floor((now - lastHb) / 60000) : '5+';
 
@@ -80,7 +96,7 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
     }, 60000); // Check every 60 seconds
 
     return () => clearInterval(interval);
-  }, [userRole, userEmail, timesheets, heartbeatRows, allProfiles]);
+  }, [userRole, userEmail]);
 
   return null;
 }
