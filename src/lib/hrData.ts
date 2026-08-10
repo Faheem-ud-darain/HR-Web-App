@@ -2100,7 +2100,12 @@ export const hrActions = {
       form.append('attachment_name', file.name);
       form.append('attachment_size', String(file.size));
       if (isAnnouncement) form.append('is_announcement', 'true');
-      await pb.collection('hr_messages').create(form);
+      // Bypass Vercel proxy for large file uploads (same as uploadTeamDocument)
+      const res = await fetch('https://pb.delcargo.us/api/collections/hr_messages/records', {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
     } else {
       await pbCreate('hr_messages', {
         team_id: teamId, sender_email: senderEmail, sender_name: senderName, text: text.trim(),
@@ -2152,7 +2157,16 @@ export const hrActions = {
     form.append('uploaded_by_email', uploaderEmail);
     form.append('uploaded_by_name', uploaderName);
     form.append('uploaded_by_role', uploaderRole);
-    await pb.collection('hr_team_documents').create(form);
+    // Bypass the Vercel proxy (/api/pb) for large file uploads to avoid Vercel's
+    // strict 4.5MB Serverless Function payload limit, which would block videos.
+    const res = await fetch('https://pb.delcargo.us/api/collections/hr_team_documents/records', {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Upload failed: ${res.status} ${errText}`);
+    }
   },
 
   deleteTeamDocument: async (id: string): Promise<void> => {
