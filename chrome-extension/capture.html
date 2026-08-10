@@ -2,125 +2,145 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Delcargo HR — Desktop Monitor Tracker</title>
+  <title>Delcargo HR — Desktop Screen Capture</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: #0b0f1a;
+      background: #070d1a;
       color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      height: 100vh;
-      margin: 0;
-      padding: 20px;
-      box-sizing: border-box;
+      padding: 24px;
     }
     .card {
-      background-color: #1e293b;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
-      padding: 32px;
+      background: #111827;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 36px 32px;
       max-width: 480px;
+      width: 100%;
       text-align: center;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
     }
-    .icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-    }
-    h1 {
-      font-size: 20px;
-      font-weight: 800;
-      margin: 0 0 8px 0;
-      color: #ffffff;
-    }
-    p {
+    .icon { font-size: 52px; margin-bottom: 18px; }
+    h1 { font-size: 21px; font-weight: 800; color: #fff; margin-bottom: 10px; }
+
+    .instruction {
       font-size: 13px;
       color: #94a3b8;
-      line-height: 1.5;
-      margin: 0 0 20px 0;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      min-height: 40px;
     }
+
+    .step-list {
+      text-align: left;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 22px;
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.8;
+    }
+    .step-list strong { color: #e2e8f0; }
+
     .btn {
-      background-color: #ea580c;
-      color: #ffffff;
+      display: block;
+      width: 100%;
+      background: #ea580c;
+      color: #fff;
       font-weight: 800;
       font-size: 14px;
-      padding: 14px 24px;
+      padding: 15px 24px;
       border-radius: 12px;
       border: none;
       cursor: pointer;
-      width: 100%;
-      box-shadow: 0 4px 14px rgba(234, 88, 12, 0.4);
-      transition: all 0.2s;
+      box-shadow: 0 4px 18px rgba(234,88,12,0.45);
+      transition: background 0.2s, transform 0.1s;
     }
-    .btn:hover {
-      background-color: #c2410c;
-    }
+    .btn:hover  { background: #c2410c; }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
     .active-badge {
-      display: inline-flex;
+      display: none;
       align-items: center;
-      gap: 8px;
-      background-color: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #34d399;
-      font-size: 13px;
-      font-weight: 800;
-      padding: 12px 18px;
-      border-radius: 12px;
-      margin-top: 12px;
-      width: 100%;
-      box-sizing: border-box;
       justify-content: center;
-    }
-    .keep-open-box {
-      background-color: rgba(245, 158, 11, 0.12);
-      border: 1px solid rgba(245, 158, 11, 0.3);
+      gap: 10px;
+      background: rgba(16,185,129,0.12);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #34d399;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 14px 20px;
       border-radius: 12px;
-      padding: 14px;
+      margin-top: 16px;
+    }
+
+    .warning-box {
+      display: none;
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: 12px;
+      padding: 14px 18px;
       margin-top: 16px;
       text-align: left;
     }
-    .keep-open-title {
+    .warning-title {
       color: #fbbf24;
       font-size: 12px;
       font-weight: 800;
+      margin-bottom: 5px;
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 4px;
     }
-    .keep-open-desc {
+    .warning-desc {
       color: #cbd5e1;
       font-size: 11px;
-      line-height: 1.4;
-      margin: 0;
+      line-height: 1.5;
     }
+    .warning-desc strong { color: #fde68a; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="icon">🖥️</div>
-    <h1>Full Desktop Screen Tracker</h1>
-    <p id="instructionText">Select <strong>Entire Screen</strong> when prompted to enable activity tracking across all desktop applications and windows.</p>
-    
-    <button id="startBtn" class="btn">Select Entire Screen</button>
+    <h1>Full Desktop Screen Capture</h1>
+    <p class="instruction" id="instructionText">
+      Click the button below, then select <strong>Entire Screen</strong> (or <strong>Screen 1</strong>) in the system picker — NOT a tab or window.
+    </p>
 
-    <div id="activeBadge" class="active-badge" style="display: none;">
-      <span>🟢</span>
-      <span id="resText">Full Desktop Monitor Tracking Active</span>
+    <div class="step-list">
+      <strong>How to pick the full screen:</strong><br>
+      1. Click the button below<br>
+      2. In the picker, click the <strong>"Entire Screen"</strong> or <strong>"Screen"</strong> tab<br>
+      3. Select your monitor and click <strong>Share</strong>
     </div>
-    
-    <div id="keepOpenBox" class="keep-open-box" style="display: none;">
-      <div class="keep-open-title">📌 Important Notice</div>
-      <p class="keep-open-desc">Please <strong>keep this tab open or minimized</strong> in Chrome while working on shift. Closing this tab stops full desktop monitor capture.</p>
+
+    <button id="startBtn" class="btn">🖥️ Select Entire Screen</button>
+
+    <div id="activeBadge" class="active-badge">
+      <span>🟢</span>
+      <span id="resText">Full Desktop Monitor Active</span>
+    </div>
+
+    <div id="keepOpenBox" class="warning-box">
+      <div class="warning-title">📌 Keep this tab open</div>
+      <p class="warning-desc">
+        <strong>Do not close this tab</strong> while on shift — it is what captures your full screen.
+        Minimise it instead. Closing it stops full-screen capture and falls back to tab-only screenshots.
+      </p>
     </div>
   </div>
 
-  <video id="screenVideo" autoplay muted playsinline style="display:none;"></video>
+  <video  id="screenVideo"  autoplay muted playsinline style="display:none;"></video>
   <canvas id="screenCanvas" style="display:none;"></canvas>
-
   <script src="capture.js"></script>
 </body>
 </html>

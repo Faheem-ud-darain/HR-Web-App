@@ -1,150 +1,165 @@
-// Delcargo HR Tracker — Dedicated Full Desktop Monitor Stream Handler
+// Delcargo HR Tracker — Full Desktop Screen Capture Tab
+// Uses getDisplayMedia() — the correct modern API for true full-screen capture.
+// The old chooseDesktopMedia + getUserMedia(streamId) path has been removed
+// because it frequently captures the picker UI or the wrong window on Windows/Mac.
 
 let desktopStream = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-  const startBtn = document.getElementById('startBtn');
+  const startBtn      = document.getElementById('startBtn');
   const instructionText = document.getElementById('instructionText');
-  const activeBadge = document.getElementById('activeBadge');
-  const resText = document.getElementById('resText');
-  const keepOpenBox = document.getElementById('keepOpenBox');
+  const activeBadge   = document.getElementById('activeBadge');
+  const resText       = document.getElementById('resText');
+  const keepOpenBox   = document.getElementById('keepOpenBox');
 
-  // Register Message Listener for Frame Requests from Background Worker
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.type === 'CAPTURE_DESKTOP_FRAME') {
-      captureDesktopFrame().then(res => sendResponse(res));
-      return true;
+  // ── Answer frame-capture requests from the background service worker ──────
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg && msg.type === 'CAPTURE_DESKTOP_FRAME') {
+      captureDesktopFrame().then(sendResponse);
+      return true; // keep channel open for async response
     }
   });
 
-  // Warn user if closing tab while stream is active
+  // ── Warn before the tab is closed ────────────────────────────────────────
   window.addEventListener('beforeunload', (e) => {
     if (desktopStream && desktopStream.active) {
       e.preventDefault();
-      e.returnValue = 'Closing this tab will stop full desktop screen tracking.';
-      return e.returnValue;
+      e.returnValue = 'Closing this tab will stop full desktop screen capture.';
     }
   });
 
-  // Mark desktopStreamGranted as false when tab unloads
+  // ── When tab is closed/navigated away: clear the granted flag ─────────────
   window.addEventListener('unload', () => {
-    chrome.storage.local.set({ desktopStreamGranted: false });
+    // Stop the tracks so OS releases the camera-indicator light
+    if (desktopStream) desktopStream.getTracks().forEach(t => t.stop());
+    try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch (_) {}
   });
 
-  startBtn.addEventListener('click', promptDesktopCapture);
-  promptDesktopCapture();
+  // ── Button / auto-start ───────────────────────────────────────────────────
+  startBtn.addEventListener('click', requestCapture);
+  // Auto-open the picker when the tab first loads (user must click Share)
+  requestCapture();
 
-  function promptDesktopCapture() {
+  async function requestCapture() {
     startBtn.disabled = true;
-    startBtn.textContent = 'Awaiting Screen Selection...';
+    startBtn.textContent = 'Waiting for screen selection…';
+    instructionText.textContent =
+      'A system picker will open — select "Entire Screen" (or "Screen 1") and click Share.';
 
-    if (chrome.desktopCapture && chrome.desktopCapture.chooseDesktopMedia) {
-      chrome.desktopCapture.chooseDesktopMedia(['screen'], async (streamId) => {
-        if (!streamId) {
-          showError('Screen selection was cancelled. Click button below to try again.');
-          return;
-        }
-        await initStream(streamId);
-      });
-    } else {
-      navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'monitor' },
-        audio: false
-      }).then(async (stream) => {
-        await activateStream(stream);
-      }).catch(err => {
-        showError(err.message || 'Screen selection failed.');
-      });
+    // Stop any existing stream first
+    if (desktopStream) {
+      desktopStream.getTracks().forEach(t => t.stop());
+      desktopStream = null;
     }
-  }
 
-  async function initStream(streamId) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
+      // getDisplayMedia is the correct modern API. It:
+      //  • Works on Windows, Mac, and Chrome OS.
+      //  • Shows the OS-level screen picker (not Chrome's internal one).
+      //  • Reliably captures the ENTIRE monitor when the user picks "Screen" / "Entire Screen".
+      //  • Does NOT capture the picker UI itself.
+      const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: streamId
-          }
-        }
+          displaySurface: 'monitor',   // hint: prefer full-monitor over window/tab
+          frameRate: { ideal: 5, max: 10 }, // low fps is enough for screenshots
+          width:  { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+        // Chrome 107+: suppress the "tab" option in the picker so only
+        // "Entire Screen" and "Window" are offered.
+        preferCurrentTab: false,
+        selfBrowserSurface: 'exclude',
+        systemAudio: 'exclude',
       });
-      await activateStream(stream);
+
+      activateStream(stream);
     } catch (err) {
-      showError(err.message || 'Stream initialization error.');
+      // User hit Cancel or OS denied permission
+      showIdle(err.name === 'NotAllowedError'
+        ? 'Screen selection was cancelled or denied. Click the button to try again.'
+        : `Error: ${err.message || err}`);
     }
   }
 
-  async function activateStream(stream) {
-    try {
-      if (desktopStream) {
-        desktopStream.getTracks().forEach(t => t.stop());
-      }
-      desktopStream = stream;
+  function activateStream(stream) {
+    desktopStream = stream;
 
-      // Handle user clicking Chrome's "Stop sharing" floating banner
-      const videoTrack = desktopStream.getVideoTracks()?.[0];
-      if (videoTrack) {
-        videoTrack.onended = () => {
-          chrome.storage.local.set({ desktopStreamGranted: false });
-          showError('Screen sharing was stopped. Click button below to restart full desktop tracking.');
-        };
-      }
+    // React to the user clicking Chrome's floating "Stop sharing" banner
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      track.addEventListener('ended', () => {
+        try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch (_) {}
+        showIdle('Screen sharing was stopped. Click the button to restart full desktop capture.');
+      });
+    }
 
-      const video = document.getElementById('screenVideo');
-      video.muted = true;
-      video.srcObject = desktopStream;
-
-      video.onloadedmetadata = async () => {
+    const video = document.getElementById('screenVideo');
+    video.muted = true;
+    video.srcObject = stream;
+    video.onloadedmetadata = async () => {
+      try {
         await video.play();
-        const w = video.videoWidth || 1920;
-        const h = video.videoHeight || 1080;
-        const resStr = `${w}x${h}`;
+      } catch (_) { /* autoplay — muted, should always succeed */ }
 
-        startBtn.style.display = 'none';
-        instructionText.style.display = 'none';
-        activeBadge.style.display = 'inline-flex';
-        keepOpenBox.style.display = 'block';
-        resText.textContent = `Full Desktop Monitor Active (${resStr})`;
+      const w = video.videoWidth  || 1920;
+      const h = video.videoHeight || 1080;
+      const res = `${w}×${h}`;
 
-        chrome.storage.local.set({
-          desktopStreamGranted: true,
-          desktopResolution: resStr
-        });
-        console.log(`[Capture Page] Full Desktop Stream active: ${resStr}`);
-      };
-    } catch (err) {
-      showError(err.message || 'Video stream setup error.');
-    }
-  }
+      // Confirm the surface type so we can show the user what was captured
+      const surface = track?.getSettings?.()?.displaySurface ?? 'unknown';
+      console.log(`[Capture] Stream active — surface: ${surface}, resolution: ${res}`);
 
-  function showError(msg) {
-    startBtn.disabled = false;
-    startBtn.style.display = 'block';
-    startBtn.textContent = 'Select Entire Screen';
-    instructionText.style.display = 'block';
-    instructionText.textContent = msg;
-    activeBadge.style.display = 'none';
-    keepOpenBox.style.display = 'none';
-  }
-
-  async function captureDesktopFrame() {
-    try {
-      const video = document.getElementById('screenVideo');
-      if (!video || !video.videoWidth || !desktopStream || !desktopStream.active) {
-        return { success: false, error: 'Desktop stream not active' };
+      if (surface === 'browser' || surface === 'window') {
+        // User picked a tab or individual window — warn and let them retry
+        stream.getTracks().forEach(t => t.stop());
+        showIdle(
+          `You selected a ${surface === 'browser' ? 'tab' : 'window'} instead of the entire screen. ` +
+          'Please click the button and choose "Entire Screen" (or "Screen 1") in the picker.'
+        );
+        return;
       }
 
-      const canvas = document.getElementById('screenCanvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // ✅ Whole-screen selected — save state and update UI
+      chrome.storage.local.set({ desktopStreamGranted: true, desktopResolution: res });
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-      return { success: true, dataUrl, width: canvas.width, height: canvas.height };
+      startBtn.style.display       = 'none';
+      instructionText.style.display = 'none';
+      activeBadge.style.display    = 'inline-flex';
+      keepOpenBox.style.display    = 'block';
+      resText.textContent          = `Full Desktop Monitor Active (${res})`;
+    };
+  }
+
+  function showIdle(msg) {
+    if (desktopStream) { desktopStream.getTracks().forEach(t => t.stop()); desktopStream = null; }
+    startBtn.disabled             = false;
+    startBtn.style.display        = 'block';
+    startBtn.textContent          = 'Select Entire Screen';
+    instructionText.style.display = 'block';
+    instructionText.textContent   = msg;
+    activeBadge.style.display     = 'none';
+    keepOpenBox.style.display     = 'none';
+  }
+
+  // ── Frame capture: called by background.js on each screenshot tick ────────
+  async function captureDesktopFrame() {
+    const video = document.getElementById('screenVideo');
+    if (!desktopStream?.active || !video?.videoWidth) {
+      return { success: false, error: 'Desktop stream not active' };
+    }
+    try {
+      const canvas = document.getElementById('screenCanvas');
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      return {
+        success: true,
+        dataUrl: canvas.toDataURL('image/jpeg', 0.7),
+        width:   canvas.width,
+        height:  canvas.height,
+      };
     } catch (e) {
-      console.error('[Capture Page] Frame capture error:', e);
       return { success: false, error: e.message };
     }
   }
