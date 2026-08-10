@@ -21,6 +21,7 @@ export const TRACKER_RELEASES_URL = 'https://github.com/SPARXzeux/HR-Web-App/rel
 export const TRACKER_DOWNLOAD_WINDOWS_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.exe';
 export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.dmg';
 export const TRACKER_DOWNLOAD_MAC_ZIP_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
+export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 
 // The minimum agent build employees must be running. When an employee's
 // tracker heartbeat reports an agentVersion older than this, the web portal
@@ -52,10 +53,11 @@ export function needsTrackerUpdate(agentVersion: string | undefined): boolean {
 }
 
 /** Best-effort OS guess from the browser, used only to default which
- * download button we highlight — both are always shown regardless. */
-export function detectOS(): 'windows' | 'mac' | 'other' {
+ * download button we highlight — all are always shown regardless. */
+export function detectOS(): 'windows' | 'mac' | 'cros' | 'other' {
   if (typeof navigator === 'undefined') return 'other';
   const ua = (navigator.userAgent || '').toLowerCase();
+  if (ua.includes('cros')) return 'cros';
   if (ua.includes('win')) return 'windows';
   if (ua.includes('mac')) return 'mac';
   return 'other';

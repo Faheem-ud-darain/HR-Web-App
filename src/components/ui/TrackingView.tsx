@@ -20,7 +20,7 @@ import {
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
-import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
+import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle } from 'lucide-react';
 
@@ -730,6 +730,13 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform"
                   >
                     <Download className="h-3.5 w-3.5" /> Download for Mac
+                  </a>
+                  <a
+                    href={TRACKER_DOWNLOAD_CHROMEOS_URL}
+                    download="Delcargo_Chromebook_Tracker.zip"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Chrome OS Extension (.zip)
                   </a>
                 </div>
               </div>

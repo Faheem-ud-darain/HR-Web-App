@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, TrackingSettings, TrackerHeartbeat, localShiftDate } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
+import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
 import { getSessionEmail } from '@/lib/session';
 import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
@@ -22,7 +22,7 @@ export default function TrackerPage() {
   const [heartbeat, setHeartbeat] = useState<TrackerHeartbeat | null>(null);
   const [heartbeatChecking, setHeartbeatChecking] = useState(false);
   const [heartbeatCheckedOnce, setHeartbeatCheckedOnce] = useState(false);
-  const [detectedOS, setDetectedOS] = useState<'windows' | 'mac' | 'other'>('other');
+  const [detectedOS, setDetectedOS] = useState<'windows' | 'mac' | 'cros' | 'other'>('other');
 
   useEffect(() => {
     setDetectedOS(detectOS());
@@ -284,6 +284,13 @@ export default function TrackerPage() {
                       className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex-1 justify-center ${detectedOS === 'mac' ? 'text-white bg-orange-600 hover:bg-orange-700' : 'text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
                     >
                       <Download className="h-3.5 w-3.5" /> Download for Mac
+                    </a>
+                    <a
+                      href={TRACKER_DOWNLOAD_CHROMEOS_URL}
+                      download="Delcargo_Chromebook_Tracker.zip"
+                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex-1 justify-center ${detectedOS === 'cros' ? 'text-white bg-orange-600 hover:bg-orange-700' : 'text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
+                    >
+                      <Download className="h-3.5 w-3.5" /> Chrome OS Extension (.zip)
                     </a>
                   </div>
 
