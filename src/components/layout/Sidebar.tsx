@@ -348,32 +348,6 @@ export function Sidebar({ role }: SidebarProps) {
             {!isCollapsed && 'Policy Handbook'}
           </Link>
           
-          {/* Download App (only shown on web, handled via CSS hiding on native if needed, or just always show) */}
-          <a
-            href="#"
-            onClick={async (e) => {
-              e.preventDefault();
-              const { appReleaseActions } = await import('@/lib/appReleases');
-              const latest = await appReleaseActions.getLatestRelease();
-              if (latest) {
-                const url = appReleaseActions.getApkUrl(latest);
-                if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
-                  window.open(url, '_system');
-                } else {
-                  window.location.href = url;
-                }
-              } else {
-                alert('No app release available yet.');
-              }
-            }}
-            title={isCollapsed ? 'Download App' : undefined}
-            className={`flex w-full items-center py-2.5 rounded-lg text-sm font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors duration-200 mb-2 ${
-              isCollapsed ? 'justify-center px-0' : 'px-3'
-            }`}
-          >
-            <Smartphone className={`h-[18px] w-[18px] text-emerald-500 ${isCollapsed ? '' : 'mr-3'}`} />
-            {!isCollapsed && 'Download App'}
-          </a>
 
           <button
             onClick={handleSignOut}
