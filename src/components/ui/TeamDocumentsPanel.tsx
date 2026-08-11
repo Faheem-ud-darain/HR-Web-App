@@ -21,7 +21,7 @@ interface TeamDocumentsPanelProps {
 // Generous cap matching the collection's maxSize (see
 // create_team_documents_collection.py) — large enough for short
 // instructional videos, unlike the 15MB chat-attachment cap.
-const MAX_DOCUMENT_BYTES = 100 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 200 * 1024 * 1024;
 
 function formatBytes(bytes?: number): string {
   if (!bytes && bytes !== 0) return '';
@@ -75,7 +75,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
     setError('');
     if (!file) return;
     if (file.size > MAX_DOCUMENT_BYTES) {
-      setError('File is too large — 100MB max.');
+      setError('File is too large — 200MB max.');
       return;
     }
     setPendingFile(file);

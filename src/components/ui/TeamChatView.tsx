@@ -131,7 +131,7 @@ interface TeamChatViewProps {
   mobileSelectorStyle?: 'horizontal' | 'dropdown';
 }
 
-const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024; // matches the collection's maxSize
+const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024; // matches the collection's new maxSize
 
 function formatTimestamp(iso: string): string {
   try {
@@ -487,7 +487,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     setSendError('');
     if (!file) return;
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      setSendError('File is too large — 15MB max.');
+      setSendError('File is too large — 100MB max.');
       return;
     }
     setPendingFile(file);
