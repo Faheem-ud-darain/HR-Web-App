@@ -143,11 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const email = matchedSetting.employeeEmail.toLowerCase();
 
+      const deviceId = self.crypto.randomUUID ? self.crypto.randomUUID() : 'ext_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+
       chrome.storage.local.set({
         employeeEmail: email,
         serverUrl: serverUrl,
         agentToken: token,
-        shiftActive: false
+        shiftActive: false,
+        deviceId: deviceId
       }, () => {
         chrome.runtime.sendMessage({ type: 'HEARTBEAT_NOW' });
         setupCodeInput.value = '';

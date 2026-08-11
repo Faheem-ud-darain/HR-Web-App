@@ -1497,6 +1497,26 @@ class TrackerApp:
         self.cfg["close_to_tray"] = self.close_to_tray_var.get()
         save_config(self.cfg)
 
+    def _auto_disconnect_superseded(self):
+        superseded_device = self.state.get("superseded_device", "another device")
+        self.stop_event.set()
+        clear_config()
+        if self.cfg and self.cfg.get("autostart"):
+            set_autostart(False)
+        self.cfg = None
+        self.state = {
+            "connected": False, "enabled": False, "employee_email": "", "interval": None,
+            "last_capture": None, "last_error": None, "connection_status": "unknown",
+            "superseded_device": None, "heartbeat_error": None,
+        }
+        self.force_claim_next = False
+        self.stop_event = threading.Event()
+        self._build_setup_screen()
+        messagebox.showinfo(
+            APP_NAME, 
+            f"Your profile was logged into {superseded_device}. This tracker has been automatically disconnected."
+        )
+
     def _handle_disconnect(self):
         if not messagebox.askyesno(APP_NAME, "Disconnect this computer from screen tracking? You'll need a new setup code from HR/Admin to reconnect."):
             return
@@ -1649,12 +1669,9 @@ class TrackerApp:
                 superseded = (self.state.get("connection_status") == "superseded")
             
             if superseded:
-                # Superseded by another device — don't poll tracking
-                # settings or capture anything until reconnected.
-                with self.state_lock:
-                    self.state["enabled"] = False
-                stop_event.wait(SETTINGS_POLL_SECONDS)
-                continue
+                # Superseded by another device — automatically disconnect
+                self.root.after(0, self._auto_disconnect_superseded)
+                break
 
             try:
                 settings = get_tracking_settings(cfg["url"], None, cfg["token"])

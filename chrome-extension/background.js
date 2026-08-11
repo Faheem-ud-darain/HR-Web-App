@@ -200,11 +200,27 @@ async function handleHeartbeatTick() {
   const email = data.employeeEmail.trim().toLowerCase();
   const nowIso = new Date().toISOString();
   const heartbeatKey = getHeartbeatKey(email);
-  const deviceId = 'chromebook_' + email.replace(/[^a-z0-9]/g, '_');
+  const deviceId = data.deviceId || ('chromebook_' + email.replace(/[^a-z0-9]/g, '_'));
 
   // 1. ALWAYS upload live tracker heartbeat while extension is connected
   try {
     const existingHb = await pbGetKV(serverUrl, heartbeatKey);
+    
+    // Check if superseded by another device
+    if (existingHb && existingHb.deviceId && existingHb.deviceId !== deviceId) {
+      console.warn(`[Delcargo Tracker] Superseded by device: ${existingHb.deviceId}. Disconnecting...`);
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Tracker Disconnected',
+        message: 'Your profile was logged into another tracker. This extension has been disconnected.'
+      });
+      chrome.storage.local.clear(() => {
+        chrome.runtime.reload();
+      });
+      return;
+    }
+
     const connectedAt = existingHb?.connectedAt || nowIso;
 
     const hbValue = {
