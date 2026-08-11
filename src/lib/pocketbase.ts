@@ -1,14 +1,10 @@
 import PocketBase from 'pocketbase';
 
-const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.();
-// The native app has no server of its own to proxy through, so it must talk
-// to PocketBase directly — now over HTTPS via pb.delcargo.us (Caddy reverse
-// proxy in front of PocketBase on the droplet), instead of the old bare HTTP
-// IP. That old setup required disabling Android/iOS's built-in HTTPS
-// security checks app-wide just to allow this one insecure connection,
-// which is why it's gone now — see capacitor.config.ts,
-// AndroidManifest.xml, and Info.plist.
-const PB_URL = isNative ? 'https://pb.delcargo.us' : '/api/pb';
+// The web app and native app now both talk to PocketBase directly over HTTPS
+// via pb.delcargo.us (Caddy reverse proxy in front of PocketBase on the droplet).
+// Bypassing Vercel's Edge API route proxy avoids massive Vercel compute usage 
+// (especially for long-lived realtime SSE connections).
+const PB_URL = 'https://pb.delcargo.us';
 
 export const pb = new PocketBase(PB_URL);
 

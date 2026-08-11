@@ -208,7 +208,19 @@ export default function EmployeeDashboard() {
     let cancelled = false;
     const check = async () => {
       const hb = await hrActions.getTrackerHeartbeat(userProfile.email);
-      if (!cancelled) setTrackerHeartbeat(hb);
+      if (!cancelled) {
+        setTrackerHeartbeat(hb);
+        if (shiftActiveRef.current && isTrackingLiveFor(userProfile) && !hrActions.isHeartbeatLive(hb)) {
+          // Tracker heartbeat died while shift was active — auto clock out
+          setShiftActive(false);
+          setGeofenceStatus('Shift Ended');
+          openShiftRef.current = null;
+          await hrActions.clockOut(userProfile.email);
+          await refetchTimesheets();
+          setShiftStopReason('tracker_closed');
+          setShiftStopModal(true);
+        }
+      }
     };
     check();
     const interval = setInterval(check, 30000);
@@ -602,7 +614,12 @@ export default function EmployeeDashboard() {
                       await hrActions.addNotification('all', 'admin', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
                     }
                   }}
-                  disabled={shiftActive || checkingTracker || (!!userProfile && isTrackingLiveFor(userProfile) && isMobileApp)}
+                  disabled={
+                    shiftActive || 
+                    checkingTracker || 
+                    (!!userProfile && isTrackingLiveFor(userProfile) && isMobileApp) ||
+                    (!!userProfile && isTrackingLiveFor(userProfile) && !isMobileApp && !hrActions.isHeartbeatLive(trackerHeartbeat))
+                  }
                   className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97 shadow-sm"
                 >
                   {checkingTracker ? 'Checking tracker…' : 'Start Shift'}

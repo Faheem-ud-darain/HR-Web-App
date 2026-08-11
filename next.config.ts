@@ -14,15 +14,7 @@ const nextConfig: NextConfig = {
     // changes — no redeploy needed, just a DNS update.
     NEXT_PUBLIC_PB_URL: 'https://pb.delcargo.us',
   },
-  async rewrites() {
-    if (isCapacitor) return [];
-    return [
-      {
-        source: '/api/pb/:path*',
-        destination: 'https://pb.delcargo.us/:path*',
-      },
-    ];
-  },
+
   images: {
     unoptimized: isCapacitor,
     remotePatterns: [

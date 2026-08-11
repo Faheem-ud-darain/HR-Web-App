@@ -517,28 +517,6 @@ export default function AuthPage() {
         </div>
       </Card>
 
-      <a
-        href="#"
-        onClick={async (e) => {
-          e.preventDefault();
-          const { appReleaseActions } = await import('@/lib/appReleases');
-          const latest = await appReleaseActions.getLatestRelease();
-          if (latest) {
-            const url = appReleaseActions.getApkUrl(latest);
-            if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()) {
-              window.open(url, '_system');
-            } else {
-              window.location.href = url;
-            }
-          } else {
-            alert('No app release available yet.');
-          }
-        }}
-        className="mt-6 flex items-center justify-center gap-2 w-full max-w-[320px] bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg active:scale-95"
-      >
-        <Smartphone className="h-5 w-5" />
-        Download Android App
-      </a>
 
       <Link
         href="/privacy"
