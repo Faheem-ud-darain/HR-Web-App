@@ -229,7 +229,7 @@ async function handleHeartbeatTick() {
       deviceLabel: 'Chromebook / Chrome OS',
       connectedAt: connectedAt,
       lastSeenAt: nowIso,
-      agentVersion: '6'
+      agentVersion: '8'
     };
 
     await pbSetKV(serverUrl, heartbeatKey, hbValue);
