@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { findProfileByEmail, createAndStoreOtp } from '@/lib/passwordResetOtp';
 import { sendOtpEmail } from '@/lib/serverEmail';
 
-// Needs a real Node.js runtime (nodemailer, SMTP sockets) — the default
-// Edge runtime can't do this.
-export const runtime = 'nodejs';
+// Enabled Edge runtime for Cloudflare Pages support (uses fetch-based Resend API).
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 // Step 1 of Forgot Password: given an email, if a matching hr_profiles

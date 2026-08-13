@@ -1996,16 +1996,26 @@ class TrackerApp:
 
                     elif event_name == "hr_delcargo_store":
                         # Filter KV store events for keys relevant to this employee.
-                        record = data.get("record") or {}
-                        kv_key = record.get("key") or ""
-                        kv_value = record.get("value") or {}
+                        try:
+                            record = data.get("record") or {}
+                            kv_key = record.get("key") or ""
+                            kv_value = record.get("value") or {}
+                            
+                            # PocketBase sometimes sends JSON fields as strings over SSE
+                            if isinstance(kv_value, str):
+                                try:
+                                    kv_value = json.loads(kv_value)
+                                except Exception:
+                                    kv_value = {}
 
-                        if kv_key == ping_key_for(employee_email):
-                            # Portal wants to confirm we're alive — respond with a pong (Signal 4)
-                            self._handle_ping(kv_value)
-                        elif kv_key == stop_cmd_key_for(employee_email):
-                            # Portal ended the shift — stop capturing immediately (Signal 5)
-                            self._handle_stop_cmd(kv_value)
+                            if kv_key == ping_key_for(employee_email):
+                                # Portal wants to confirm we're alive — respond with a pong (Signal 4)
+                                self._handle_ping(kv_value)
+                            elif kv_key == stop_cmd_key_for(employee_email):
+                                # Portal ended the shift — stop capturing immediately (Signal 5)
+                                self._handle_stop_cmd(kv_value)
+                        except Exception as inner_e:
+                            print(f"[warn] Failed to process hr_delcargo_store event: {inner_e}")
             except Exception as e:
                 print(f"[info] Realtime connection unavailable ({e}); relying on regular polling.")
             finally:

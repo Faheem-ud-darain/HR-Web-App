@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findProfileByEmail, verifyOtp, consumeOtp, setProfilePassword } from '@/lib/passwordResetOtp';
 
-export const runtime = 'nodejs';
+// Enabled Edge runtime for Cloudflare Pages compatibility.
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 // Step 2 of Forgot Password: given {email, otp, newPassword}, verify the
