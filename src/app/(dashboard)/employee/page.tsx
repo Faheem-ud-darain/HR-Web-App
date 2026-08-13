@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useTasks, usePayroll, useTeams,
   useKVByPrefix, hrActions, calculatePTOAccrued, getPTOAccrualDate, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
-  TrackingSettings, TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile,
+  TrackingSettings, TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS,
 } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -90,6 +90,13 @@ export default function EmployeeDashboard() {
   const [showTrackerRequiredModal, setShowTrackerRequiredModal] = useState(false);
   const [showMobileBlockedModal, setShowMobileBlockedModal] = useState(false);
   const [checkingTracker, setCheckingTracker] = useState(false);
+  // Grace-period tracking for heartbeat-based auto-clock-out. Only clock out
+  // if heartbeat has been dead > TRACKER_HEARTBEAT_GRACE_MS AND no quit intent
+  // signal exists. Timestamp (ms) of when the heartbeat first went dead, or
+  // null while the heartbeat is live.
+  const [heartbeatFirstDeadAt, setHeartbeatFirstDeadAt] = useState<number | null>(null);
+  // True while the ping/pong pre-flight handshake for Start Shift is running.
+  const [pingingTracker, setPingingTracker] = useState(false);
   // The desktop tracker agent (screenshots/activity monitoring) can only
   // ever run on a Windows/Mac desktop — never inside the Capacitor-wrapped
   // native mobile app. So if HR/Admin has screen tracking enabled for this
@@ -199,33 +206,65 @@ export default function EmployeeDashboard() {
   useEffect(() => { warehousesRef.current = warehouses; }, [warehouses]);
   useEffect(() => { shiftActiveRef.current = shiftActive; }, [shiftActive]);
 
-  // Poll the desktop tracker app's connection heartbeat for this employee —
-  // same live "is the agent actually running" signal used on the Tracker
-  // page — so the manual Start Shift gate below always reflects whether the
-  // agent is really connected right now, not just whether it was at page load.
+  // Poll the desktop tracker app's connection heartbeat. Uses a 15-minute
+  // grace period before auto-clocking out — a dead heartbeat alone is NOT
+  // enough to end a shift, because PocketBase timeouts (slow server, large
+  // screenshot uploads) can make the heartbeat go stale without the tracker
+  // actually closing. Only clock out when EITHER:
+  //   (a) A deliberate quit intent signal (Signal 2) is present, OR
+  //   (b) The heartbeat has been continuously dead for > 15 minutes (crash)
   useEffect(() => {
     if (!userProfile?.email) return;
     let cancelled = false;
     const check = async () => {
       const hb = await hrActions.getTrackerHeartbeat(userProfile.email);
-      if (!cancelled) {
-        setTrackerHeartbeat(hb);
-        if (shiftActiveRef.current && isTrackingLiveFor(userProfile) && !hrActions.isHeartbeatLive(hb)) {
-          // Tracker heartbeat died while shift was active — auto clock out
-          setShiftActive(false);
-          setGeofenceStatus('Shift Ended');
-          openShiftRef.current = null;
-          await hrActions.clockOut(userProfile.email);
-          await refetchTimesheets();
-          setShiftStopReason('tracker_closed');
-          setShiftStopModal(true);
-        }
+      if (cancelled) return;
+      setTrackerHeartbeat(hb);
+
+      const trackingEnabled = isTrackingLiveFor(userProfile);
+      const heartbeatDead = trackingEnabled && !hrActions.isHeartbeatLive(hb);
+
+      if (!heartbeatDead) {
+        // Heartbeat is live — reset the dead-since timer
+        setHeartbeatFirstDeadAt(null);
+        return;
       }
+
+      // Heartbeat is dead — record the first time we saw it dead
+      setHeartbeatFirstDeadAt(prev => prev ?? Date.now());
+
+      if (!shiftActiveRef.current) return; // shift already ended
+
+      // Check Signal 2: deliberate quit intent
+      const quitIntent = await hrActions.getTrackerQuitIntent(userProfile.email);
+      const quitIntentRecent = !!quitIntent?.timestamp &&
+        (Date.now() - new Date(quitIntent.timestamp).getTime()) < TRACKER_HEARTBEAT_GRACE_MS;
+
+      // Check grace period: has heartbeat been dead for > 15 min?
+      const gracePeriodExpired = heartbeatFirstDeadAt !== null &&
+        (Date.now() - heartbeatFirstDeadAt) > TRACKER_HEARTBEAT_GRACE_MS;
+
+      if (!quitIntentRecent && !gracePeriodExpired) {
+        // Server blip — do NOT clock out. Wait out the grace period.
+        return;
+      }
+
+      // Deliberate quit confirmed OR grace period expired — clock out
+      setShiftActive(false);
+      setGeofenceStatus('Shift Ended');
+      openShiftRef.current = null;
+      await hrActions.clockOut(userProfile.email);
+      await refetchTimesheets();
+      // Clean up quit intent so it doesn't re-trigger on the next poll
+      try { await hrActions.clearTrackerQuitIntent(userProfile.email); } catch { /* best-effort */ }
+      setShiftStopReason('tracker_closed');
+      setShiftStopModal(true);
+      setHeartbeatFirstDeadAt(null);
     };
     check();
     const interval = setInterval(check, 30000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [userProfile?.email]);
+  }, [userProfile?.email, heartbeatFirstDeadAt]);
 
   // Poll for a "tracker was just closed mid-shift" signal from the desktop
   // agent. Polls faster than the heartbeat check above (10s) since the
@@ -587,20 +626,69 @@ export default function EmployeeDashboard() {
                 <button
                   onClick={async () => {
                     if (!userProfile?.email) return;
+
+                    // Mobile block — tracker can't run on mobile at all
                     if (isTrackingLiveFor(userProfile) && isMobileApp) {
                       setShowMobileBlockedModal(true);
                       return;
                     }
+
                     if (isTrackingLiveFor(userProfile)) {
-                      setCheckingTracker(true);
-                      const freshHeartbeat = await hrActions.getTrackerHeartbeat(userProfile.email);
-                      setTrackerHeartbeat(freshHeartbeat);
-                      setCheckingTracker(false);
-                      if (!hrActions.isHeartbeatLive(freshHeartbeat)) {
+                      // ── Ping/Pong Handshake (Signals 3 + 4) ───────────────
+                      // Write a ping to PocketBase; the tracker agent detects
+                      // it via realtime SSE and writes back a pong within ~1s.
+                      // This is more reliable than reading cached heartbeat,
+                      // which can be stale due to server timeouts.
+                      setPingingTracker(true);
+                      const requestId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+                      try {
+                        // Clean up any stale pong from a previous attempt
+                        await hrActions.clearTrackerPong(userProfile.email);
+                        await hrActions.writeTrackerPing(userProfile.email, requestId);
+                      } catch {
+                        // Can't write ping — server issue, fall back to heartbeat
+                        const freshHb = await hrActions.getTrackerHeartbeat(userProfile.email).catch(() => null);
+                        setTrackerHeartbeat(freshHb ?? null);
+                        setPingingTracker(false);
+                        hrActions.clearTrackerPing(userProfile.email).catch(() => {});
+                        if (!hrActions.isHeartbeatLive(freshHb)) {
+                          setShowTrackerRequiredModal(true);
+                        }
+                        return;
+                      }
+
+                      // Poll for pong every 500ms, give up after 8 seconds
+                      const POLL_MS = 500;
+                      const TIMEOUT_MS = 8000;
+                      let elapsed = 0;
+                      let pongReceived = false;
+                      while (elapsed < TIMEOUT_MS) {
+                        await new Promise(r => setTimeout(r, POLL_MS));
+                        elapsed += POLL_MS;
+                        try {
+                          const pong = await hrActions.getTrackerPong(userProfile.email);
+                          if (pong?.requestId === requestId) {
+                            pongReceived = true;
+                            break;
+                          }
+                        } catch { /* ignore poll errors, keep trying */ }
+                      }
+
+                      // Clean up ping and pong keys regardless of outcome
+                      hrActions.clearTrackerPing(userProfile.email).catch(() => {});
+                      hrActions.clearTrackerPong(userProfile.email).catch(() => {});
+                      setPingingTracker(false);
+
+                      if (!pongReceived) {
+                        // No response — tracker is not running
                         setShowTrackerRequiredModal(true);
                         return;
                       }
+                      // Tracker confirmed live — proceed
                     }
+
+                    // ── Clock In ────────────────────────────────────────────
                     setShiftActive(true);
                     setGeofenceStatus('Shift Active');
                     const started = await hrActions.clockIn(userProfile.email);
@@ -615,14 +703,16 @@ export default function EmployeeDashboard() {
                     }
                   }}
                   disabled={
-                    shiftActive || 
-                    checkingTracker || 
-                    (!!userProfile && isTrackingLiveFor(userProfile) && isMobileApp) ||
-                    (!!userProfile && isTrackingLiveFor(userProfile) && !isMobileApp && !hrActions.isHeartbeatLive(trackerHeartbeat))
+                    shiftActive ||
+                    checkingTracker ||
+                    pingingTracker ||
+                    (!!userProfile && isTrackingLiveFor(userProfile) && isMobileApp)
+                    // Heartbeat-dead no longer disables the button — the ping/pong
+                    // handshake in onClick is the authoritative live check now.
                   }
                   className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97 shadow-sm"
                 >
-                  {checkingTracker ? 'Checking tracker…' : 'Start Shift'}
+                  {pingingTracker ? 'Connecting to tracker…' : checkingTracker ? 'Checking tracker…' : 'Start Shift'}
                 </button>
                 <button
                   onClick={async () => {
@@ -720,7 +810,7 @@ export default function EmployeeDashboard() {
                   {hrActions.isHeartbeatLive(trackerHeartbeat) ? <Wifi className="h-3 w-3 shrink-0" /> : <WifiOff className="h-3 w-3 shrink-0" />}
                   {hrActions.isHeartbeatLive(trackerHeartbeat)
                     ? 'Tracker app connected — you can start your shift.'
-                    : 'Tracker app not connected. Open the DelCargo Tracker app before starting your shift.'}
+                    : 'Tracker app not detected in recent check. Make sure it\'s running — we\'ll verify live before starting your shift.'}
                 </div>
               )}
               <p className="text-[9px] text-slate-400 leading-relaxed">

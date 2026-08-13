@@ -96,7 +96,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "8"
+APP_VERSION = "9"
 GITHUB_REPO = "SPARXzeux/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -675,6 +675,84 @@ def clear_heartbeat(base_url, employee_email):
     resp = requests.delete(url, timeout=15)
     resp.raise_for_status()
 
+
+# ── 5-Signal Tracker Reliability System ──────────────────────────────────────
+# KV key helpers — slug pattern matches _slugify() in hrData.ts
+# (email lowercased, non-alphanumeric chars replaced with '_').
+
+def quit_intent_key_for(email):
+    """Signal 2 key: written by tracker on deliberate quit, read by portal."""
+    return "tracker_quit_intent_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
+
+
+def ping_key_for(email):
+    """Signal 3 key: written by portal before Start Shift, read by tracker."""
+    return "tracker_ping_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
+
+
+def pong_key_for(email):
+    """Signal 4 key: written by tracker in response to a ping, read by portal."""
+    return "tracker_pong_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
+
+
+def stop_cmd_key_for(email):
+    """Signal 5 key: written by portal on End Shift, read by tracker agent."""
+    return "tracker_stop_cmd_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
+
+
+def write_quit_intent(base_url, employee_email):
+    """Signal 2: Writes an explicit 'I am deliberately quitting' signal to
+    PocketBase. The web portal checks this key to distinguish a deliberate
+    quit (clock out immediately) from a server blip (wait grace period).
+    Retried up to 3 times with 3s spacing because the server may be slow
+    or timing out right at the moment the employee quits the app."""
+    key = quit_intent_key_for(employee_email)
+    payload = {
+        "employeeEmail": employee_email,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    for attempt in range(3):
+        try:
+            pb_set_kv(base_url, key, payload)
+            return True
+        except Exception as e:
+            if attempt < 2:
+                print(f"[info] write_quit_intent attempt {attempt + 1} failed, retrying: {e}")
+                time.sleep(3)
+            else:
+                print(f"[warn] write_quit_intent failed after 3 attempts: {e}")
+    return False
+
+
+def write_pong(base_url, employee_email, request_id):
+    """Signal 4: Writes the pong response to a portal ping.
+    Called when the realtime SSE loop detects a ping key in hr_delcargo_store.
+    The requestId from the ping is echoed back so the portal can validate it."""
+    key = pong_key_for(employee_email)
+    payload = {
+        "employeeEmail": employee_email,
+        "requestId": request_id,
+        "respondedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        pb_set_kv(base_url, key, payload)
+    except Exception as e:
+        print(f"[warn] write_pong failed: {e}")
+
+
+def clear_stop_cmd(base_url, employee_email):
+    """Signal 5 cleanup: Deletes the stop command key after the tracker has
+    acted on it, so it does not re-trigger on the next poll cycle."""
+    key = stop_cmd_key_for(employee_email)
+    try:
+        record_id, _ = pb_get_kv(base_url, key)
+        if record_id:
+            url = f"{base_url}/api/collections/{PB_COLLECTION}/records/{record_id}"
+            requests.delete(url, timeout=10)
+    except Exception as e:
+        print(f"[warn] clear_stop_cmd failed: {e}")
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 def capture_and_encode():
     """Captures a screenshot, resizes/compresses it, and returns raw WebP
@@ -1652,9 +1730,93 @@ class TrackerApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _handle_ping(self, ping_data):
+        """Signal 3/4 handler: called from _realtime_loop when a
+        tracker_ping_<email> key is created/updated in hr_delcargo_store.
+        Validates the ping is recent and intended for this employee, then
+        writes a pong (Signal 4) so the portal can confirm the tracker is live
+        before starting a shift."""
+        if not self.cfg:
+            return
+        employee_email = self.cfg.get("employee_email", "").strip().lower()
+        ping_email = (ping_data.get("employeeEmail") or "").strip().lower()
+        if ping_email != employee_email:
+            return  # not for this employee
+
+        request_id = ping_data.get("requestId")
+        requested_at_iso = ping_data.get("requestedAt", "")
+        if not request_id:
+            return
+
+        # Ignore stale pings (> 30 seconds old) to avoid responding to
+        # a leftover ping from a previous failed start-shift attempt.
+        try:
+            requested_at = datetime.fromisoformat(requested_at_iso.replace("Z", "+00:00"))
+            age_seconds = (datetime.now(timezone.utc) - requested_at).total_seconds()
+            if age_seconds > 30:
+                print(f"[info] Ignoring stale ping (age={age_seconds:.0f}s)")
+                return
+        except Exception:
+            return
+
+        # Write pong in a background thread so the SSE loop isn't blocked
+        threading.Thread(
+            target=write_pong,
+            args=(self.cfg["url"], employee_email, request_id),
+            daemon=True,
+        ).start()
+
+    def _handle_stop_cmd(self, stop_cmd_data):
+        """Signal 5 handler: called from _realtime_loop when a
+        tracker_stop_cmd_<email> key is created/updated in hr_delcargo_store.
+        Validates the command is recent and intended for this employee, then
+        immediately wakes the worker loop so it re-checks shift status and
+        stops screenshot capturing without waiting for the next poll interval."""
+        if not self.cfg:
+            return
+        employee_email = self.cfg.get("employee_email", "").strip().lower()
+        cmd_email = (stop_cmd_data.get("employeeEmail") or "").strip().lower()
+        if cmd_email != employee_email:
+            return  # not for this employee
+
+        issued_at_iso = stop_cmd_data.get("issuedAt", "")
+        # Ignore stale stop commands (> 60 seconds old)
+        try:
+            issued_at = datetime.fromisoformat(issued_at_iso.replace("Z", "+00:00"))
+            age_seconds = (datetime.now(timezone.utc) - issued_at).total_seconds()
+            if age_seconds > 60:
+                print(f"[info] Ignoring stale stop command (age={age_seconds:.0f}s)")
+                return
+        except Exception:
+            return
+
+        print("[info] Stop command received from portal — waking worker loop to stop capturing")
+        # Wake the worker loop immediately so it calls check_active_shift()
+        # and notices the shift has ended, stopping captures right away.
+        self.wake_event.set()
+        # Clean up the stop command key in background (best-effort)
+        threading.Thread(
+            target=clear_stop_cmd,
+            args=(self.cfg["url"], employee_email),
+            daemon=True,
+        ).start()
+
     def _heartbeat_loop(self, cfg, stop_event):
         while not stop_event.is_set():
-            self._checkin(cfg)
+            # Retry heartbeat up to 3 times on network/timeout error.
+            # PocketBase screenshot uploads can block the server for 30s+,
+            # making a single heartbeat attempt time out. Retrying with a
+            # short pause keeps lastSeenAt fresh even under server load.
+            for attempt in range(3):
+                try:
+                    self._checkin(cfg)
+                    break  # success — no more retries needed
+                except Exception as e:
+                    if attempt < 2:
+                        print(f"[info] Heartbeat attempt {attempt + 1} failed, retrying in 5s: {e}")
+                        stop_event.wait(5.0)
+                    else:
+                        print(f"[warn] Heartbeat failed after 3 attempts: {e}")
             stop_event.wait(60.0)
 
     def _worker_loop(self, cfg, stop_event):
@@ -1810,7 +1972,12 @@ class TrackerApp:
                                 sub_resp = requests.post(
                                     f"{base_url}/api/realtime",
                                     headers=JSON_HEADERS,
-                                    data=json.dumps({"clientId": client_id, "subscriptions": ["hr_timesheets"]}),
+                                    data=json.dumps({
+                                        "clientId": client_id,
+                                        # Subscribe to both hr_timesheets (shift start/stop)
+                                        # and hr_delcargo_store (ping/pong + stop commands)
+                                        "subscriptions": ["hr_timesheets", "hr_delcargo_store"],
+                                    }),
                                     timeout=15,
                                 )
                                 sub_resp.raise_for_status()
@@ -1826,6 +1993,19 @@ class TrackerApp:
                         record_email = (record.get("employee_id") or "").strip().lower()
                         if record_email and record_email == employee_email:
                             self.wake_event.set()
+
+                    elif event_name == "hr_delcargo_store":
+                        # Filter KV store events for keys relevant to this employee.
+                        record = data.get("record") or {}
+                        kv_key = record.get("key") or ""
+                        kv_value = record.get("value") or {}
+
+                        if kv_key == ping_key_for(employee_email):
+                            # Portal wants to confirm we're alive — respond with a pong (Signal 4)
+                            self._handle_ping(kv_value)
+                        elif kv_key == stop_cmd_key_for(employee_email):
+                            # Portal ended the shift — stop capturing immediately (Signal 5)
+                            self._handle_stop_cmd(kv_value)
             except Exception as e:
                 print(f"[info] Realtime connection unavailable ({e}); relying on regular polling.")
             finally:
@@ -2069,6 +2249,10 @@ class TrackerApp:
             )
             if not proceed:
                 return
+            # Signal 2: Write quit intent FIRST (with retry) so the portal
+            # immediately knows this was a deliberate quit, even if the
+            # auto_clock_out call below fails due to server timeouts.
+            write_quit_intent(self.cfg["url"], employee_email)
             try:
                 if auto_clock_out(self.cfg["url"], employee_email):
                     notify_shift_auto_stopped(self.cfg["url"], employee_email, reason="tracker_closed")

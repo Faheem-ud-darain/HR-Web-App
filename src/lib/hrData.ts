@@ -362,6 +362,56 @@ export interface ShiftStopSignal {
 }
 const shiftStopSignalKeyFor = (email: string) => `shift_stop_signal_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
+// ── 5-Signal Tracker Reliability System ─────────────────────────────────────
+// All signals use hr_delcargo_store KV as the message bus. Key slug pattern
+// matches heartbeat_key_for() in tracker-agent/agent_gui.py (email lowercased,
+// non-alphanumeric chars replaced with '_').
+const _slugify = (email: string) => (email || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+// Signal 2: Written by tracker agent (with retry) on deliberate quit.
+// Portal checks this to distinguish deliberate quit (clock out immediately)
+// from a server blip (wait TRACKER_HEARTBEAT_GRACE_MS before acting).
+export interface TrackerQuitIntent {
+  employeeEmail: string;
+  timestamp: string; // ISO — portal ignores signals older than 15 min
+}
+const trackerQuitIntentKeyFor = (email: string) => `tracker_quit_intent_${_slugify(email)}`;
+
+// Signal 3: Written by portal when employee clicks "Start Shift". The tracker
+// agent reads this via realtime SSE on hr_delcargo_store and responds with Signal 4.
+export interface TrackerPing {
+  employeeEmail: string;
+  requestId: string;   // random uuid — must match pong's requestId to be valid
+  requestedAt: string; // ISO — agent ignores pings older than 30s
+}
+const trackerPingKeyFor = (email: string) => `tracker_ping_${_slugify(email)}`;
+
+// Signal 4: Written by tracker agent in response to Signal 3.
+// Portal polls for this with matching requestId, then proceeds with clock-in.
+export interface TrackerPong {
+  employeeEmail: string;
+  requestId: string;   // echoed from the ping — portal validates this matches
+  respondedAt: string; // ISO
+}
+const trackerPongKeyFor = (email: string) => `tracker_pong_${_slugify(email)}`;
+
+// Signal 5: Written by portal when employee clicks "End Shift" (via clockOut).
+// Tracker agent reads this via realtime SSE and immediately stops capturing.
+// Agent deletes this key after acting on it.
+export interface TrackerStopCommand {
+  employeeEmail: string;
+  commandId: string;  // random id — agent deletes key after acting on it
+  issuedAt: string;   // ISO — agent ignores commands older than 60s
+}
+const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(email)}`;
+
+// Grace period before auto-clock-out when heartbeat dies but no quit intent
+// signal is present. Protects active shifts from transient server timeouts
+// (screenshot uploads blocking heartbeat writes). After 15 min continuously
+// dead with no quit signal, the shift is treated as a crash and ended.
+export const TRACKER_HEARTBEAT_GRACE_MS = 15 * 60 * 1000;
+// ────────────────────────────────────────────────────────────────────────────
+
 // Multi-device session enforcement for Employee (and Team Lead, who shares
 // the Employee dashboard) accounts only — Admin/HR are exempt and may be
 // signed in from as many places as they like (see auth/page.tsx). Per
@@ -2331,9 +2381,56 @@ export const hrActions = {
     pbGetKV(shiftStopSignalKeyFor(email)),
   isHeartbeatLive: (hb: TrackerHeartbeat | null, intervalMinutes: number = 3): boolean => {
     if (!hb?.lastSeenAt) return false;
-    const toleranceMs = (Math.max(3, intervalMinutes) + 2) * 60 * 1000;
+    // Extended from (interval+2) to (interval+10) minutes. The extra 8 min
+    // buffer absorbs transient PocketBase timeouts (screenshot uploads blocking
+    // heartbeat writes) so a slow server never falsely appears as "tracker gone".
+    const toleranceMs = (Math.max(3, intervalMinutes) + 10) * 60 * 1000;
     return (Date.now() - new Date(hb.lastSeenAt).getTime()) < toleranceMs;
   },
+
+  // ── 5-Signal System — new hrActions (Signals 2–5) ────────────────────────
+
+  // Signal 2: Quit intent — written by tracker agent on deliberate quit.
+  // Portal reads this to distinguish "deliberate quit" (clock out immediately)
+  // from "server blip" (wait TRACKER_HEARTBEAT_GRACE_MS grace period).
+  getTrackerQuitIntent: (email: string): Promise<TrackerQuitIntent | null> =>
+    pbGetKV(trackerQuitIntentKeyFor(email)),
+  clearTrackerQuitIntent: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([trackerQuitIntentKeyFor(email)]);
+  },
+
+  // Signal 3: Ping — portal writes this before allowing shift start.
+  // Tracker agent reads via realtime SSE and responds with Signal 4 (pong).
+  writeTrackerPing: async (email: string, requestId: string): Promise<void> => {
+    await pbSetKV(trackerPingKeyFor(email), {
+      employeeEmail: email,
+      requestId,
+      requestedAt: new Date().toISOString(),
+    } as TrackerPing);
+  },
+  clearTrackerPing: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([trackerPingKeyFor(email)]);
+  },
+
+  // Signal 4: Pong — tracker agent writes this in response to a ping.
+  // Portal polls for this with matching requestId (500ms interval, 8s timeout).
+  getTrackerPong: (email: string): Promise<TrackerPong | null> =>
+    pbGetKV(trackerPongKeyFor(email)),
+  clearTrackerPong: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([trackerPongKeyFor(email)]);
+  },
+
+  // Signal 5: Stop command — portal writes this when shift ends (via clockOut).
+  // Tracker agent reads via realtime SSE, stops capturing immediately, then
+  // deletes this key. Also written by clockOut() directly — see below.
+  writeTrackerStopCmd: async (email: string): Promise<void> => {
+    await pbSetKV(trackerStopCmdKeyFor(email), {
+      employeeEmail: email,
+      commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
+      issuedAt: new Date().toISOString(),
+    } as TrackerStopCommand);
+  },
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Manual-shift tab heartbeat + abandoned-tab safety net ───────────────
   touchShiftTabHeartbeat: async (email: string): Promise<void> => {
@@ -2901,7 +2998,11 @@ export const hrActions = {
     if (!open) return null;
     const nowIso = new Date().toISOString();
     const updated = await pbUpdate('hr_timesheets', open.id, { clock_out: nowIso, duration: formatDurationBetween(open.clockIn, nowIso) });
-    try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(employeeEmail)]); } catch { /* best-effort cleanup */ }
+    // Clean up tab heartbeat (existing) and write Signal 5 stop command so the
+    // tracker agent stops capturing immediately via realtime SSE — both are
+    // best-effort: a failure here must never block the clock-out itself.
+    try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(employeeEmail)]); } catch { /* best-effort */ }
+    try { await hrActions.writeTrackerStopCmd(employeeEmail); } catch { /* best-effort */ }
     return toTimesheet(updated);
   },
 
