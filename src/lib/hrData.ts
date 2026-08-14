@@ -874,7 +874,7 @@ export function useNotifications() {
     queryKey: ['hr_notifications'],
     queryFn: async () => {
       try {
-        const res = await pb.collection('hr_notifications').getList(1, 100, { sort: '-created', requestKey: null });
+        const res = await pb.collection('hr_notifications').getList(1, 50, { sort: '-created', requestKey: null });
         return res.items.map(toNotification);
       } catch (err) {
         console.error('[hrData] getList error in hr_notifications:', err);
@@ -910,12 +910,12 @@ export function useCareers() {
 export function useCareerApplications() {
   return useQuery({ queryKey: ['hr_career_applications'], queryFn: async () => (await pbList('hr_career_applications', { sort: '-created' })).map(toCareerApplication) });
 }
-export function useTickets() {
+export function useTickets(limit: number = 50) {
   return useQuery({
-    queryKey: ['hr_tickets'],
+    queryKey: ['hr_tickets', limit],
     queryFn: async () => {
       try {
-        const res = await pb.collection('hr_tickets').getList(1, 200, { sort: '-created', requestKey: null });
+        const res = await pb.collection('hr_tickets').getList(1, limit, { sort: '-created', requestKey: null });
         return res.items.map(toTicket);
       } catch (err) {
         console.error('[hrData] getList error in hr_tickets:', err);

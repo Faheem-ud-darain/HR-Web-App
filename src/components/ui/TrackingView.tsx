@@ -60,7 +60,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   // Screenshot viewer modal
   const [viewerEmp, setViewerEmp] = useState<Profile | null>(null);
-  const [viewerRange, setViewerRange] = useState<'day' | 'week' | 'month'>('day');
+  const [viewerRange, setViewerRange] = useState<'2days' | 'day' | 'week' | 'month'>('2days');
   // Which calendar day to show when viewerRange === 'day' — defaults to
   // today, but HR/Admin can pick any past day to see that shift's activity.
   const [viewerDay, setViewerDay] = useState<string>(() => localDateString());
@@ -220,19 +220,25 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   const handleOpenViewer = async (emp: Profile) => {
     setViewerEmp(emp);
-    setViewerRange('day');
+    setViewerRange('2days');
     const today = localDateString();
     setViewerDay(today);
-    await loadViewerData(emp.email, 'day', today);
+    await loadViewerData(emp.email, '2days', today);
   };
 
   // Computes the [since, until) window for the current range/day selection.
-  // 'day' is a single calendar day in America/New_York time (matches a single
-  // shift window), 'week'/'month' are the existing rolling windows.
-  const computeWindow = (range: 'day' | 'week' | 'month', day: string): { since: Date; until: Date } => {
+  // '2days' loads the last 2 days of activity by default (saves bandwidth & prevents server strain),
+  // 'day' is a single calendar day, 'week'/'month' are 7-day and 30-day extended windows.
+  const computeWindow = (range: '2days' | 'day' | 'week' | 'month', day: string): { since: Date; until: Date } => {
     if (range === 'day') {
       const since = getNYMidnight(day);
       const until = new Date(since.getTime() + 24 * 60 * 60 * 1000);
+      return { since, until };
+    }
+    if (range === '2days') {
+      const midnightToday = getNYMidnight(day);
+      const until = new Date(midnightToday.getTime() + 24 * 60 * 60 * 1000);
+      const since = new Date(until.getTime() - 2 * 24 * 60 * 60 * 1000);
       return { since, until };
     }
     const now = new Date();
@@ -242,7 +248,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     return { since, until: now };
   };
 
-  const loadViewerData = async (email: string, range: 'day' | 'week' | 'month', day: string) => {
+  const loadViewerData = async (email: string, range: '2days' | 'day' | 'week' | 'month', day: string) => {
     setViewerLoading(true);
     try {
       const { since, until } = computeWindow(range, day);
@@ -257,7 +263,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     }
   };
 
-  const handleRangeChange = (range: 'day' | 'week' | 'month') => {
+  const handleRangeChange = (range: '2days' | 'day' | 'week' | 'month') => {
     setViewerRange(range);
     if (viewerEmp) loadViewerData(viewerEmp.email, range, viewerDay);
   };
@@ -808,6 +814,12 @@ AGENT_TOKEN=${settings.agentToken}`}
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                   <button
+                    onClick={() => handleRangeChange('2days')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === '2days' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  >
+                    Last 2 Days
+                  </button>
+                  <button
                     onClick={() => handleRangeChange('day')}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
                   >
@@ -817,13 +829,13 @@ AGENT_TOKEN=${settings.agentToken}`}
                     onClick={() => handleRangeChange('week')}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
                   >
-                    Weekly
+                    7 Days
                   </button>
                   <button
                     onClick={() => handleRangeChange('month')}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === 'month' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
                   >
-                    Monthly
+                    30 Days
                   </button>
                 </div>
                 {viewerRange === 'day' && (

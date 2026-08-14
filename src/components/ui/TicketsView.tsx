@@ -155,15 +155,13 @@ export function TicketsView({ role }: TicketsViewProps) {
   // all before this.
   const profileFor = (name: string): Profile | undefined => employees.find(e => e.fullName === name);
 
-  // Ticket list filters — status pill + free-text search (title, employee
-  // name/alias, description). Kept separate from `tickets` itself (the
-  // role-scoped set from applyTickets) so switching a filter never needs a
-  // refetch, and so the "no tickets match your filters" empty state can be
-  // told apart from "there are genuinely zero tickets".
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
+  // Ticket list filters — default to 'open' tickets for active queue view
+  const isPrivilegedOrTech = role === 'hr' || role === 'admin' || isTechnicalTeam;
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>(isPrivilegedOrTech ? 'open' : 'all');
   const [deptFilter, setDeptFilter] = useState<'all' | 'hr' | 'technical'>('all');
   const [viewTab, setViewTab] = useState<'assigned' | 'my_tickets'>('assigned');
   const [searchQuery, setSearchQuery] = useState('');
+  const [ticketLimit, setTicketLimit] = useState<number>(50);
 
   const visibleTickets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -216,15 +214,6 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const lastTypingTouchRef = useRef<number>(0);
 
-  // Deep-linking from a notification click (?ticketId=...) — see the effect
-  // below applyTickets. Applied at most once per page load: after the first
-  // successful auto-select, the ref flips so a later poll refresh (or the
-  // user picking a different ticket) doesn't keep forcing this one back
-  // open. Deliberately reads window.location.search directly with
-  // URLSearchParams instead of next/navigation's useSearchParams — that
-  // hook requires a Suspense boundary under this app's static export build
-  // (see auth/page.tsx's comment for the same tradeoff made there), which
-  // isn't worth adding just for a one-shot read on mount.
   const appliedDeepLinkRef = useRef(false);
 
   const applyTickets = (all: Ticket[], email: string, profile: Profile | null) => {
@@ -256,9 +245,6 @@ export function TicketsView({ role }: TicketsViewProps) {
         if (target) {
           appliedDeepLinkRef.current = true;
           setSelectedTicket(target);
-          // Strip the query param so it doesn't re-apply on a manual
-          // refresh after the user has since switched to a different
-          // ticket, and so the URL doesn't stay pinned to this one ticket.
           window.history.replaceState(null, '', window.location.pathname);
         }
       }
@@ -266,7 +252,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   };
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
-  const { data: allTickets, refetch: refetchTickets } = useTickets();
+  const { data: allTickets, refetch: refetchTickets, isFetching: isFetchingTickets } = useTickets(ticketLimit);
 
   useEffect(() => {
     const email = getSessionEmail() || '';
@@ -742,6 +728,23 @@ export function TicketsView({ role }: TicketsViewProps) {
                   className="text-orange-600 hover:text-orange-700 font-bold underline not-italic"
                 >
                   Clear filters
+                </button>
+              </div>
+            )}
+
+            {allTickets && allTickets.length >= ticketLimit && (
+              <div className="pt-2 pb-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => setTicketLimit(prev => prev + 50)}
+                  disabled={isFetchingTickets}
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 active:scale-98"
+                >
+                  {isFetchingTickets ? (
+                    <span>Loading more tickets…</span>
+                  ) : (
+                    <span>Load More Tickets (+50)</span>
+                  )}
                 </button>
               </div>
             )}
