@@ -872,14 +872,15 @@ export function useLeaves() {
 export function useNotifications() {
   return useQuery({
     queryKey: ['hr_notifications'],
-    queryFn: async () => (await pbList('hr_notifications', { sort: '-created' })).map(toNotification),
-    // The bell lives in the persistent dashboard layout (TopNav), which
-    // never remounts on client-side navigation — without polling it only
-    // ever fetched once per session, so new notifications (e.g. a leave
-    // request) silently never appeared until a hard page reload. The
-    // realtime subscription in ToastNotification.tsx invalidates this query
-    // immediately when a new row comes in; this interval is just a backstop
-    // in case that subscription drops.
+    queryFn: async () => {
+      try {
+        const res = await pb.collection('hr_notifications').getList(1, 100, { sort: '-created', requestKey: null });
+        return res.items.map(toNotification);
+      } catch (err) {
+        console.error('[hrData] getList error in hr_notifications:', err);
+        return [];
+      }
+    },
     refetchInterval: 15000,
   });
 }
@@ -893,16 +894,9 @@ export function useAnnouncements() {
   return useQuery({
     queryKey: ['hr_announcements'],
     queryFn: async () => (await pbList('hr_announcements', { sort: '-created' })).map(toAnnouncement),
-    // Same staleness issue as notifications — dashboard Overview pages only
-    // fetched this once; poll so a newly-posted announcement shows up
-    // without requiring a hard reload.
     refetchInterval: 30000,
   });
 }
-// Polls fairly quickly (15s, faster than useAnnouncements' 30s) — the whole
-// point of a maintenance notice is that it should reach everyone with as
-// little delay as possible once posted, including anyone already sitting
-// on a dashboard page at the time.
 export function useMaintenanceNotices() {
   return useQuery({
     queryKey: ['hr_maintenance_notices'],
@@ -919,17 +913,16 @@ export function useCareerApplications() {
 export function useTickets() {
   return useQuery({
     queryKey: ['hr_tickets'],
-    queryFn: async () => (await pbList('hr_tickets', { sort: '-created' })).map(toTicket),
-    // Was 15000ms — too slow for a screen someone is actively watching a
-    // live conversation on (HR/employee could sit staring at an open ticket
-    // for up to 15s after a reply lands before it appeared). Matches
-    // useMessages()'s 4000ms chat cadence instead, same "polling instead of
-    // SSE" tradeoff explained there (this app's web deploy proxies
-    // PocketBase through a Next.js rewrite that doesn't reliably keep a
-    // long-lived EventSource open, so pb.collection(...).subscribe() isn't
-    // used here — see ToastNotification.tsx for the one place it IS used,
-    // defensively, with a .catch() for exactly this reason).
-    refetchInterval: 4000,
+    queryFn: async () => {
+      try {
+        const res = await pb.collection('hr_tickets').getList(1, 200, { sort: '-created', requestKey: null });
+        return res.items.map(toTicket);
+      } catch (err) {
+        console.error('[hrData] getList error in hr_tickets:', err);
+        return [];
+      }
+    },
+    refetchInterval: 8000,
   });
 }
 export function usePayroll() {
@@ -988,21 +981,21 @@ export function useMessages(teamId: string | null | undefined, limit: number = 5
     staleTime: 4000,
   });
 }
-// Every message across every team, unscoped — used only for the sidebar's
-// unseen-activity dot (see computeMessageActivitySignature), which needs
-// to know about new messages in channels the user isn't currently looking
-// at. Polls less aggressively than useMessages since a dot lighting up a
-// few seconds late is a non-issue.
 export function useAllMessages() {
   return useQuery({
     queryKey: ['hr_messages_all'],
-    queryFn: async () => (await pbList('hr_messages', { sort: '-created' })).map(toMessage),
-    refetchInterval: 15000,
+    queryFn: async () => {
+      try {
+        const res = await pb.collection('hr_messages').getList(1, 100, { sort: '-created', requestKey: null });
+        return res.items.map(toMessage);
+      } catch (err) {
+        console.error('[hrData] getList error in hr_messages:', err);
+        return [];
+      }
+    },
+    refetchInterval: 20000,
   });
 }
-// Team Documents — one library per team (see hr_team_documents /
-// create_team_documents_collection.py). Polled like useMessages rather than
-// realtime-subscribed, same proxy-through-Next.js reasoning.
 export function useTeamDocuments(teamId: string | null | undefined) {
   return useQuery({
     queryKey: ['hr_team_documents', teamId],
@@ -1016,7 +1009,18 @@ export function useTeamDocuments(teamId: string | null | undefined) {
   });
 }
 export function useTimesheets() {
-  return useQuery({ queryKey: ['hr_timesheets'], queryFn: async () => (await pbList('hr_timesheets', { sort: '-created' })).map(toTimesheet) });
+  return useQuery({
+    queryKey: ['hr_timesheets'],
+    queryFn: async () => {
+      try {
+        const res = await pb.collection('hr_timesheets').getList(1, 500, { sort: '-created', requestKey: null });
+        return res.items.map(toTimesheet);
+      } catch (err) {
+        console.error('[hrData] getList error in hr_timesheets:', err);
+        return [];
+      }
+    },
+  });
 }
 
 // Fetches every KV row whose key matches a prefix - used for tracking
