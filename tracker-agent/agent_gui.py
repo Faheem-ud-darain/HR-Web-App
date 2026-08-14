@@ -957,14 +957,6 @@ def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
     deduction_text = f"${deduction_amount}" if deduction_amount else "a 2-day pay penalty"
     reason_text = (
         f"{full_name} was inactive for over {inactivity_minutes} minutes during their shift and was "
-        f"automatically marked absent — {deduction_text} deducted (2 days' pay)."
-    )
-    try:
-        create_notification(base_url, "all", "hr", reason_text)
-        create_notification(base_url, "all", "admin", reason_text)
-    except Exception as e:
-        print(f"[warn] absence notifications failed: {e}")
-
     try:
         notify_shift_auto_stopped(base_url, employee_email, reason="inactivity_absence")
     except Exception as e:
