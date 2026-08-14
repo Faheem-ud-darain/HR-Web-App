@@ -18,6 +18,7 @@ OutputDir=dist
 OutputBaseFilename=DelCargo_Tracker_Setup
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
+CloseApplications=force
 ; Shown as a mandatory "I accept the agreement" step before Next is enabled —
 ; this is the installer-level license/consent acceptance step (screen
 ; monitoring consent + standard EULA terms).
@@ -52,7 +53,7 @@ Name: "taskbaricon"; Description: "Pin DelCargo Tracker to the &taskbar"; GroupD
 Name: "startupicon"; Description: "Start DelCargo Tracker automatically when I log in"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\DelCargo Tracker.exe"; Description: "Launch DelCargo Tracker"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\DelCargo Tracker.exe"; Description: "Launch DelCargo Tracker"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; Leaves the employee's saved setup code/config alone on uninstall by

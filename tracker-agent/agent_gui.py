@@ -1158,14 +1158,8 @@ def _perform_update(root, latest_version):
     progress_win.destroy()
 
     if system == "Windows":
-        messagebox.showinfo(
-            APP_NAME,
-            "Update downloaded. The installer will now open — finish the setup "
-            "wizard, and this app will close automatically so it can be replaced.",
-            parent=root,
-        )
         try:
-            subprocess.Popen([dest_path], close_fds=True)
+            subprocess.Popen([dest_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], close_fds=True)
         except Exception as e:
             messagebox.showerror(
                 APP_NAME,
