@@ -2663,7 +2663,7 @@ export const hrActions = {
 
       const today = new Date();
       const lookbackStart = new Date(today);
-      lookbackStart.setDate(today.getDate() - 35);
+      lookbackStart.setDate(today.getDate() - 5); // Check at most past 5 days
       for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
         const dateStr = cursor.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
         if (dateStr >= pktTodayStr) break;

@@ -84,7 +84,9 @@ export default function AdminDashboard() {
   // both pages is a no-op the second time).
   useEffect(() => {
     if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
-    hrActions.getInactivityLogs({ sinceISO: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString() })
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() })
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
   }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
