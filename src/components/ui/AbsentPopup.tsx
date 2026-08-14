@@ -57,6 +57,8 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
 
   const reasonText = current.reason === 'inactivity'
     ? `Our tracker recorded ${current.inactivityMinutes} minute(s) of continuous mouse inactivity during your shift that day, which crosses the 35-minute limit.`
+    : current.reason === 'under_4_hours'
+    ? `Your total shift time was under the required 4-hour minimum (${Math.floor((current.workedMinutes || 0) / 60)}h ${(current.workedMinutes || 0) % 60}m recorded) on this day.`
     : `You did not start a shift on this day and there was no approved leave covering it.`;
 
   return (

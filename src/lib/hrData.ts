@@ -301,8 +301,9 @@ export interface AbsenceRecord {
   employeeEmail: string;
   employeeName: string;
   date: string; // "YYYY-MM-DD", America/New_York calendar day
-  reason: 'no_clock_in' | 'inactivity';
+  reason: 'no_clock_in' | 'inactivity' | 'under_4_hours';
   inactivityMinutes?: number; // only set when reason === 'inactivity'
+  workedMinutes?: number; // set when reason === 'under_4_hours'
   deductionAmount: number;
   createdAt: string; // ISO instant this record was created
   acknowledged: boolean; // employee has seen/dismissed the explanatory popup
@@ -2610,6 +2611,7 @@ export const hrActions = {
       }
 
       const shiftDatesWithShift = new Set<string>();
+      const shiftDatesWithTotalMinutes = new Map<string, number>();
       const shiftDatesWithMaxSingleInactivity = new Map<string, number>();
 
       for (const t of empTimesheets) {
@@ -2622,10 +2624,13 @@ export const hrActions = {
         const shiftDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
         shiftDatesWithShift.add(shiftDate);
         
-        let maxSingleInactiveSecs = 0;
+        let shiftMins = 0;
         if (t.clockOut) {
           const inTime = d.getTime();
           const outTime = new Date(t.clockOut).getTime();
+          if (!isNaN(outTime) && outTime > inTime) {
+            shiftMins = Math.floor((outTime - inTime) / 60000);
+          }
           
           // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
           // not by summing up multiple smaller inactive periods across the shift.
@@ -2633,16 +2638,23 @@ export const hrActions = {
             const lt = new Date(l.startAt).getTime();
             return lt >= inTime && lt <= outTime;
           });
+          let maxSingleInactiveSecs = 0;
           for (const l of logsForShift) {
             const duration = l.durationSeconds || 0;
             if (duration > maxSingleInactiveSecs) {
               maxSingleInactiveSecs = duration;
             }
           }
+          const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
+          shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
+        } else {
+          // Active or unclosed shift
+          const inTime = d.getTime();
+          shiftMins = Math.max(0, Math.floor((Date.now() - inTime) / 60000));
         }
-        
-        const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
-        shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
+
+        const existingTotal = shiftDatesWithTotalMinutes.get(shiftDate) || 0;
+        shiftDatesWithTotalMinutes.set(shiftDate, existingTotal + shiftMins);
       }
 
       const today = new Date();
@@ -2660,13 +2672,25 @@ export const hrActions = {
         // records to keep coming back).
         if (ignoredIds.has(recordId) || ignoredIds.has(recordId.toLowerCase())) continue;
 
-        const hadShift = shiftDatesWithShift.has(dateStr);
+        const totalWorkedMins = shiftDatesWithTotalMinutes.get(dateStr) || 0;
         const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
 
         let reason: AbsenceRecord['reason'] | null = null;
         let inactivityMinutes: number | undefined;
-        if (!hadShift) {
-          if (!onLeave) reason = 'no_clock_in';
+        let workedMinutes: number | undefined;
+
+        // Requirement: Total on shift time < 4 hours (240 minutes) = Absent, >= 4 hours = Present
+        const MIN_REQUIRED_WORK_MINUTES = 4 * 60; // 240 minutes
+
+        if (totalWorkedMins < MIN_REQUIRED_WORK_MINUTES) {
+          if (!onLeave) {
+            if (totalWorkedMins === 0) {
+              reason = 'no_clock_in';
+            } else {
+              reason = 'under_4_hours';
+              workedMinutes = totalWorkedMins;
+            }
+          }
         } else {
           const maxSingleInactiveSecs = shiftDatesWithMaxSingleInactivity.get(dateStr) || 0;
           if (maxSingleInactiveSecs >= INACTIVITY_THRESHOLD_SECONDS) {
@@ -2674,7 +2698,7 @@ export const hrActions = {
             inactivityMinutes = Math.round(maxSingleInactiveSecs / 60);
           }
         }
-        if (!reason) continue; // present and accounted for — nothing to record
+        if (!reason) continue; // present and accounted for (worked >= 4h without excessive inactivity)
 
         const dailyRate = emp.baseSalary / WORKING_DAYS_PER_MONTH;
         const deductionAmount = Math.round(2 * dailyRate);
@@ -2682,15 +2706,22 @@ export const hrActions = {
 
         newRecords.push({
           id: recordId, employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
-          reason, inactivityMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
+          reason, inactivityMinutes, workedMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
         });
 
         const reasonText = reason === 'inactivity'
           ? `was inactive for ${inactivityMinutes} minutes during their shift on ${dateStr}`
+          : reason === 'under_4_hours'
+          ? `worked less than 4 hours (${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m) on ${dateStr}`
           : `did not start a shift on ${dateStr}`;
         await hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
         await hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
-        await hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${reason === 'inactivity' ? `${inactivityMinutes} min inactivity during your shift` : 'not starting a shift'}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task');
+        const empReasonDetail = reason === 'inactivity'
+          ? `${inactivityMinutes} min inactivity during shift`
+          : reason === 'under_4_hours'
+          ? `worked only ${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m (under 4 hours minimum)`
+          : 'not starting a shift';
+        await hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${empReasonDetail}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task');
       }
     }
 

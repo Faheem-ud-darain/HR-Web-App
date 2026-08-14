@@ -300,10 +300,10 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           <td className="px-5 py-3 text-center">
                             {row.hasActiveShift ? (
                               <Badge variant="warning">On Shift</Badge>
-                            ) : row.totalMinutes >= 480 ? (
-                              <Badge variant="success">Present (Full Day)</Badge>
+                            ) : row.totalMinutes >= 240 ? (
+                              <Badge variant="success">Present ({formattedDuration})</Badge>
                             ) : (
-                              <Badge variant="default">Present ({formattedDuration})</Badge>
+                              <Badge variant="danger">Absent (&lt; 4h worked)</Badge>
                             )}
                           </td>
                           <td className="px-5 py-3 text-center">
@@ -334,10 +334,10 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         <p className="font-mono text-xs font-bold text-slate-800">{row.date}</p>
                         {row.hasActiveShift ? (
                           <Badge variant="warning">On Shift</Badge>
-                        ) : row.totalMinutes >= 480 ? (
-                          <Badge variant="success">Present (Full Day)</Badge>
+                        ) : row.totalMinutes >= 240 ? (
+                          <Badge variant="success">Present ({formattedDuration})</Badge>
                         ) : (
-                          <Badge variant="default">Present ({formattedDuration})</Badge>
+                          <Badge variant="danger">Absent (&lt; 4h worked)</Badge>
                         )}
                       </div>
                       {role !== 'employee' && <p className="text-xs font-bold text-slate-900">{row.employeeName}</p>}
@@ -549,8 +549,22 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           {role !== 'employee' && <td className="px-5 py-3 font-semibold text-slate-800">{r.employeeName}</td>}
                           <td className="px-5 py-3">
                             <span className="inline-flex items-center gap-1.5 text-slate-700">
-                              {r.reason === 'inactivity' ? <Clock className="h-3.5 w-3.5 text-amber-500" /> : <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />}
-                              {r.reason === 'inactivity' ? `Inactive ${r.inactivityMinutes} min during shift` : 'Did not start a shift'}
+                              {r.reason === 'inactivity' ? (
+                                <>
+                                  <Clock className="h-3.5 w-3.5 text-amber-500" />
+                                  <span>Inactive {r.inactivityMinutes} min during shift</span>
+                                </>
+                              ) : r.reason === 'under_4_hours' ? (
+                                <>
+                                  <Clock className="h-3.5 w-3.5 text-rose-500" />
+                                  <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
+                                  <span>Did not start a shift</span>
+                                </>
+                              )}
                             </span>
                           </td>
                           <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')}</td>
@@ -608,8 +622,22 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                       </div>
                       {role !== 'employee' && <p className="text-sm font-bold text-slate-900">{r.employeeName}</p>}
                       <p className="text-xs text-slate-600 inline-flex items-center gap-1.5">
-                        {r.reason === 'inactivity' ? <Clock className="h-3.5 w-3.5 text-amber-500" /> : <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />}
-                        {r.reason === 'inactivity' ? `Inactive ${r.inactivityMinutes} min during shift` : 'Did not start a shift'}
+                        {r.reason === 'inactivity' ? (
+                          <>
+                            <Clock className="h-3.5 w-3.5 text-amber-500" />
+                            <span>Inactive {r.inactivityMinutes} min during shift</span>
+                          </>
+                        ) : r.reason === 'under_4_hours' ? (
+                          <>
+                            <Clock className="h-3.5 w-3.5 text-rose-500" />
+                            <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
+                          </>
+                        ) : (
+                          <>
+                            <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
+                            <span>Did not start a shift</span>
+                          </>
+                        )}
                       </p>
                       <p className="text-xs font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')} deducted</p>
                     </div>
