@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useKVByPrefix, useTimesheets, useProfiles, hrActions } from '@/lib/hrData';
+import { useKVByPrefix, useTimesheets, useProfiles, hrActions, localShiftDate } from '@/lib/hrData';
 
 const HEARTBEAT_STALE_MS = 3 * 60 * 1000; // 3 minutes without heartbeat = inactive
-const ALERT_COOLDOWN_MS = 15 * 60 * 1000; // Only alert once every 15 minutes per inactive shift
 
 export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: string; userEmail: string }) {
   const { data: timesheets = [] } = useTimesheets();
@@ -32,6 +31,7 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
       if (!currentTimesheets.length || !currentHeartbeats.length) return;
 
       const now = Date.now();
+      const todayDate = localShiftDate();
       const heartbeatsMap = new Map<string, number>();
 
       currentHeartbeats.forEach(row => {
@@ -61,17 +61,17 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
         const isStale = !lastHb || (now - lastHb > HEARTBEAT_STALE_MS);
 
         if (isStale) {
-          const alertKey = `inactivity_alert_${empEmail}`;
-          const lastAlertTime = parseInt(sessionStorage.getItem(alertKey) || '0', 10);
+          // Employee gets inactivity warning at most ONCE per calendar day
+          const dailyAlertKey = `inactivity_alert_${empEmail}_${todayDate}`;
+          const alreadyAlertedToday = localStorage.getItem(dailyAlertKey) || sessionStorage.getItem(dailyAlertKey);
 
-          if (now - lastAlertTime > ALERT_COOLDOWN_MS) {
-            sessionStorage.setItem(alertKey, now.toString());
+          if (!alreadyAlertedToday) {
+            localStorage.setItem(dailyAlertKey, '1');
+            sessionStorage.setItem(dailyAlertKey, '1');
 
-            const emp = currentProfiles.find(p => p.email.toLowerCase() === empEmail);
-            const empName = emp ? emp.fullName : empEmail;
             const minsInactive = lastHb ? Math.floor((now - lastHb) / 60000) : '5+';
 
-            // 1. Direct Alert to the Employee
+            // Direct Alert ONLY to the Employee (at most once per day)
             await hrActions.addNotification(
               empEmail,
               'employee',
@@ -79,17 +79,6 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
               'shift',
               `⚠️ Desktop Tracker Agent Inactive`
             );
-
-            // 2. Alert HR/Admin (if manager is running the monitor)
-            if (['hr', 'admin'].includes(userRole)) {
-              await hrActions.addNotification(
-                'all',
-                userRole as 'hr' | 'admin',
-                `⚠️ Tracker Alert: ${empName} is currently clocked in but screen tracking has been inactive for ${minsInactive} min(s).`,
-                'shift',
-                `Tracker Inactivity Alert: ${empName}`
-              );
-            }
           }
         }
       }
