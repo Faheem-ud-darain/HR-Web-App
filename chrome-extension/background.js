@@ -10,6 +10,22 @@ function getHeartbeatKey(email) {
   return 'tracker_heartbeat_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
 }
 
+function pingKeyFor(email) {
+  return 'tracker_ping_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
+function pongKeyFor(email) {
+  return 'tracker_pong_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
+function stopCmdKeyFor(email) {
+  return 'tracker_stop_cmd_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
+function quitIntentKeyFor(email) {
+  return 'tracker_quit_intent_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
 // Initial Alarm Setup (Default: 1 minute screenshot interval)
 try {
   chrome.idle.setDetectionInterval(180);
@@ -74,6 +90,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (data.employeeEmail) {
         const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
         const email = data.employeeEmail.trim().toLowerCase();
+        // Signal 2: Write explicit quit intent before deleting heartbeat
+        try {
+          await pbSetKV(serverUrl, quitIntentKeyFor(email), {
+            employeeEmail: email,
+            timestamp: new Date().toISOString()
+          });
+        } catch {}
         await pbDeleteKV(serverUrl, getHeartbeatKey(email));
       }
       sendResponse({ success: true });
@@ -98,6 +121,7 @@ async function getStorageData() {
       [
         'employeeEmail',
         'serverUrl',
+        'deviceId',
         'agentToken',
         'shiftActive',
         'shiftStartTime',
@@ -106,67 +130,74 @@ async function getStorageData() {
         'lastScreenshotTime',
         'screenshotIntervalMinutes'
       ],
-      (res) => resolve(res)
+      (res) => resolve(res || {})
     );
   });
 }
 
-// ── PocketBase REST Helpers ────────────────────────────────────────────────
+// ── PocketBase KV Store Helpers ─────────────────────────────────────────────
+async function pbGetKV(serverUrl, key) {
+  try {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    const res = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.items?.[0]?.value ?? null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function pbSetKV(serverUrl, key, value) {
   const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const filter = encodeURIComponent(`key = "${key}"`);
-  const getUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`;
+  const filterUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`;
+  
+  let existingRecord = null;
+  try {
+    const res = await fetch(filterUrl, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      existingRecord = data?.items?.[0] || null;
+    }
+  } catch (e) {}
 
-  const listRes = await fetch(getUrl, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  }).catch(() => null);
-
-  if (!listRes || !listRes.ok) return;
-
-  const listData = await listRes.json().catch(() => null);
-  const existingRecord = listData?.items?.[0];
-
-  const body = JSON.stringify({ key, value });
   if (existingRecord?.id) {
     await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body
-    }).catch(() => null);
+      body: JSON.stringify({ value })
+    });
   } else {
     await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body
-    }).catch(() => null);
+      body: JSON.stringify({ key, value })
+    });
   }
-}
-
-async function pbGetKV(serverUrl, key) {
-  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const filter = encodeURIComponent(`key = "${key}"`);
-  const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  }).catch(() => null);
-
-  if (!listRes || !listRes.ok) return null;
-  const listData = await listRes.json().catch(() => null);
-  return listData?.items?.[0]?.value || null;
 }
 
 async function pbDeleteKV(serverUrl, key) {
   const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const filter = encodeURIComponent(`key = "${key}"`);
-  const listRes = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${filter}`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  }).catch(() => null);
+  const filterUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`;
+  
+  let existingRecord = null;
+  try {
+    const res = await fetch(filterUrl, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      existingRecord = data?.items?.[0] || null;
+    }
+  } catch (e) {}
 
-  if (!listRes || !listRes.ok) return;
-  const listData = await listRes.json().catch(() => null);
-  const existingRecord = listData?.items?.[0];
   if (existingRecord?.id) {
     await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
       method: 'DELETE'
@@ -202,7 +233,7 @@ async function handleHeartbeatTick() {
   const heartbeatKey = getHeartbeatKey(email);
   const deviceId = data.deviceId || ('chromebook_' + email.replace(/[^a-z0-9]/g, '_'));
 
-  // 1. ALWAYS upload live tracker heartbeat while extension is connected
+  // 1. ALWAYS upload live tracker heartbeat while extension is connected (v11)
   try {
     const existingHb = await pbGetKV(serverUrl, heartbeatKey);
     
@@ -229,13 +260,43 @@ async function handleHeartbeatTick() {
       deviceLabel: 'Chromebook / Chrome OS',
       connectedAt: connectedAt,
       lastSeenAt: nowIso,
-      agentVersion: '8'
+      agentVersion: '11'
     };
 
     await pbSetKV(serverUrl, heartbeatKey, hbValue);
     console.log(`[Delcargo Tracker] Heartbeat sent for ${email} (${nowIso})`);
   } catch (e) {
     console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
+  }
+
+  // 1b. Signal 3 & 4: Ping / Pong Handshake (Respond immediately to portal pings)
+  try {
+    const pingData = await pbGetKV(serverUrl, pingKeyFor(email));
+    if (pingData && pingData.requestId) {
+      console.log('[Delcargo Tracker] Portal ping detected, responding with pong:', pingData.requestId);
+      await pbSetKV(serverUrl, pongKeyFor(email), {
+        employeeEmail: email,
+        requestId: pingData.requestId,
+        respondedAt: new Date().toISOString()
+      });
+      await pbDeleteKV(serverUrl, pingKeyFor(email));
+    }
+  } catch (e) {
+    console.warn('[Delcargo Tracker] Ping/pong check error:', e);
+  }
+
+  // 1c. Signal 5: Realtime Stop Command from web portal
+  try {
+    const stopCmd = await pbGetKV(serverUrl, stopCmdKeyFor(email));
+    if (stopCmd) {
+      console.log('[Delcargo Tracker] Stop command received from portal.');
+      await pbDeleteKV(serverUrl, stopCmdKeyFor(email));
+      if (data.shiftActive) {
+        await autoClockOut(serverUrl, email, 'portal_stop_cmd');
+      }
+    }
+  } catch (e) {
+    console.warn('[Delcargo Tracker] Stop cmd check error:', e);
   }
 
   // 2. Query real shift status on PocketBase (matches desktop tracker)
