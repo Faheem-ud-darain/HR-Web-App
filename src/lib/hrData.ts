@@ -3,7 +3,8 @@ import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from './pocketbase';
 import { getNYDateString, formatTimeNY, formatDateNY } from './timezone';
-import { getOrCreateDeviceId } from './session';
+import { getOrCreateDeviceId, getAuthToken } from './session';
+import { API_BASE } from './apiBase';
 
 // ─────────────────────────────────────────────────────────────────────────
 // SINGLE SOURCE OF TRUTH for all PocketBase access in this app.
@@ -910,12 +911,24 @@ export function useCareers() {
 export function useCareerApplications() {
   return useQuery({ queryKey: ['hr_career_applications'], queryFn: async () => (await pbList('hr_career_applications', { sort: '-created' })).map(toCareerApplication) });
 }
-export function useTickets(limit: number = 50) {
+// status is applied server-side (PocketBase filter), not just client-side —
+// without this, "50 open tickets" actually meant "the 50 most-recently-
+// created tickets of any status, filtered to open afterward," which could
+// under-fill (or entirely miss) an older still-open ticket once enough
+// newer closed tickets existed. Passing status through to getList's filter
+// means the 50/Load-More count is always 50 real matches of whichever tab
+// is active. queryKey includes status so switching Open <-> Closed doesn't
+// serve stale cached results from the other tab.
+export function useTickets(limit: number = 50, status?: 'open' | 'closed') {
   return useQuery({
-    queryKey: ['hr_tickets', limit],
+    queryKey: ['hr_tickets', limit, status || 'all'],
     queryFn: async () => {
       try {
-        const res = await pb.collection('hr_tickets').getList(1, limit, { sort: '-created', requestKey: null });
+        const res = await pb.collection('hr_tickets').getList(1, limit, {
+          sort: '-created',
+          requestKey: null,
+          ...(status ? { filter: `status = "${status}"` } : {}),
+        });
         return res.items.map(toTicket);
       } catch (err) {
         console.error('[hrData] getList error in hr_tickets:', err);
@@ -928,6 +941,249 @@ export function useTickets(limit: number = 50) {
 export function usePayroll() {
   return useQuery({ queryKey: ['hr_payroll'], queryFn: async () => (await pbList('hr_payroll')).map(toPayroll) });
 }
+
+export interface PayrollSelf {
+  id: string;
+  fullName: string;
+  teams: string[];
+  baseSalary: number;
+  salaryStartDate?: string;
+  joinedDate: string;
+  lastIncrementProcessedYear?: number;
+  region?: 'USA' | 'Pakistan';
+  pendingIncrement: number;
+  payrollRecord: { bonus: number; deductions: number; processed: boolean } | null;
+}
+
+// Employee/HR/Admin's OWN salary data, via the new server-side
+// /api/payroll/me route (see that route's comment) — replaces the old
+// pattern of usePayroll() + useProfiles() fetching EVERY employee's salary
+// and base pay into the browser just to filter down to one person's own
+// numbers. Requires a valid session JWT (src/lib/session.ts's
+// getAuthToken()) from the new server-side login — see src/app/auth/page.tsx.
+export function usePayrollSelf() {
+  return useQuery({
+    queryKey: ['payroll_self'],
+    queryFn: async (): Promise<PayrollSelf | null> => {
+      const token = getAuthToken();
+      if (!token) return null;
+      const res = await fetch(`${API_BASE}/api/payroll/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      // Route responds as { profile: {...}, pendingIncrement, payrollRecord }
+      // — flattened here into one PayrollSelf object for callers.
+      const data = await res.json();
+      if (!data?.profile) return null;
+      return { ...data.profile, pendingIncrement: data.pendingIncrement || 0, payrollRecord: data.payrollRecord || null };
+    },
+  });
+}
+export interface ProfileSelf {
+  id: string;
+  bankName: string;
+  accountNumber: string;
+  iban: string;
+  personalPhone: string;
+  companyPhone: string;
+  cvFileName: string;
+  identityDocs: { name: string; data: string }[];
+  passportFileName: string;
+}
+
+// Own bank details / contact numbers / document filenames / password, via
+// the new server-side /api/profile/me route — replaces
+// employee/profile/page.tsx's old pattern of reading these straight off
+// the fully-public useProfiles() list (which included everyone's plaintext
+// password and bank details) and writing them via the equally-public
+// hrActions.updateProfileDetails. Requires a valid session JWT (see
+// src/lib/session.ts's getAuthToken()).
+export function useProfileSelf() {
+  return useQuery({
+    queryKey: ['profile_self'],
+    queryFn: async (): Promise<ProfileSelf | null> => {
+      const token = getAuthToken();
+      if (!token) return null;
+      const res = await fetch(`${API_BASE}/api/profile/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+}
+
+// Update any subset of the caller's own bank/phone/document/picture fields
+// — see /api/profile/me's PATCH handler for the exact field list. Throws on
+// failure (mirrors pbUpdate/pbCreate's existing throw-on-!res.ok pattern
+// elsewhere in this file) — callers already wrap these calls in try/catch.
+export async function updateProfileSelf(fields: Partial<{
+  bankName: string; accountNumber: string; iban: string;
+  personalPhone: string; companyPhone: string;
+  cvFileName: string; cvFileData: string;
+  identityDocs: { name: string; data: string }[];
+  passportFileName: string; passportFileData: string;
+  profilePicture: string;
+  onboardingCompleted: boolean;
+  approvalStatus: string;
+}>): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/profile/me`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Update failed: ${res.status}`);
+  }
+}
+
+// Self-service password change — verifies currentPassword server-side and
+// never exposes the real stored value to the client. Replaces the old
+// client-side `profile.password !== currentPass` comparison in
+// employee/profile/page.tsx, which relied on the plaintext password field
+// being present in the (fully-public) useProfiles() response.
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/profile/me`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || 'Current password is incorrect.');
+  }
+}
+
+// ── HR/Admin-privileged writes to OTHER employees' profiles ────────────────
+// Server-side counterparts to hrActions.updateProfileDetails/addEmployee/
+// approveOnboarding/rejectOnboarding/resetPassword/applyAnniversaryIncrement,
+// routed through /api/admin/profile (gated to session.role hr/admin, see
+// that route for the exact field-splitting logic) instead of the fully
+// public hr_profiles/hr_delcargo_store collections. These are additive —
+// the hrActions.* versions above are left in place for now (still used by
+// hrActions.deleteEmployee/exportEmployeeArchive and a couple of other
+// still-public call sites not yet migrated) — but every caller that edits
+// ANOTHER employee's profile should prefer these going forward.
+
+async function adminProfileRequest(
+  method: 'POST' | 'PUT' | 'PATCH',
+  body: Record<string, any>
+): Promise<any> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/admin/profile`, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Request failed: ${res.status}`);
+  }
+  return res.json().catch(() => ({}));
+}
+
+// General-purpose field update on ANY profileId — role/teams/leadTeams/
+// warehouses/baseSalary/offboarding/alias/etc. Mirrors
+// hrActions.updateProfileDetails' real/overlay/docs split (done server-side
+// via src/lib/profileFields.ts) and additionally routes a `password` field
+// through a hashed write instead of ever writing it in plaintext (see the
+// route's comment on this — the old client path silently rewrote the
+// plaintext password on every profile save, whether or not it changed).
+export async function updateProfileAdmin(profileId: string, updates: Record<string, any>): Promise<void> {
+  await adminProfileRequest('POST', { profileId, updates });
+}
+
+export async function approveOnboardingServer(profile: Profile, _reviewerEmail?: string): Promise<void> {
+  await adminProfileRequest('PUT', { action: 'approveOnboarding', profileId: profile.id });
+  // Notification-send is unrelated to hr_profiles/hr_payroll access control
+  // (hr_notifications isn't part of this migration) — kept on the existing
+  // public path via hrActions, same as before.
+  await hrActions.addNotification(profile.email, 'employee', 'Your onboarding documents were approved — your dashboard is now unlocked!');
+}
+
+export async function rejectOnboardingServer(profile: Profile, _reviewerEmail: string, reason: string): Promise<void> {
+  await adminProfileRequest('PUT', { action: 'rejectOnboarding', profileId: profile.id, rejectionReason: reason });
+  await hrActions.addNotification(profile.email, 'employee', `Your onboarding documents need another look: ${reason}`);
+}
+
+// Admin-triggered reset of ANOTHER employee's password — always stores a
+// bcrypt hash server-side (unlike hrActions.resetPassword, which still
+// writes plaintext via the public client and is being phased out in favor
+// of this).
+export async function resetPasswordServer(profileId: string, newPassword: string): Promise<void> {
+  await adminProfileRequest('PUT', { action: 'resetPassword', profileId, newPassword });
+}
+
+// Same processedThroughYear computation as hrActions.applyAnniversaryIncrement
+// (kept identical so the two don't drift), just posted to the admin route
+// instead of writing hr_profiles directly from the browser.
+export async function applyIncrementServer(profile: Profile, currentBaseSalary: number, incrementAmount: number): Promise<void> {
+  if (incrementAmount <= 0) return;
+  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
+  const anniversaryDate = anniversarySource ? new Date(anniversarySource) : null;
+  const now = new Date();
+  let processedThroughYear = now.getFullYear();
+  if (anniversaryDate && !isNaN(anniversaryDate.getTime())) {
+    let eventsElapsed = now.getFullYear() - anniversaryDate.getFullYear();
+    const thisYearAnniversary = new Date(now.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
+    if (thisYearAnniversary > now) eventsElapsed -= 1;
+    processedThroughYear = anniversaryDate.getFullYear() + Math.max(0, eventsElapsed);
+  }
+  await adminProfileRequest('PUT', {
+    action: 'applyIncrement',
+    profileId: profile.id,
+    newBaseSalary: currentBaseSalary + incrementAmount,
+    processedYear: processedThroughYear,
+  });
+}
+
+// Creates a new employee via the admin-gated route — server hashes the
+// initial/temp password instead of writing it in plaintext (addEmployee's
+// old client path did fromProfileFields(emp).password = plaintext).
+export async function addEmployeeServer(emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<{ id: string }> {
+  return adminProfileRequest('PATCH', { action: 'addEmployee', profile: emp });
+}
+
+// Thin admin-gated equivalents of hrActions.updateEmployeeTeams/setTeamLead
+// — same field mapping (teams / is_team_lead+lead_teams), just written
+// through /api/admin/profile instead of the public client. hr_teams itself
+// (the separate collection tracking each team's member-list/lead) is
+// unaffected and stays on the existing hrActions.updateTeamMembers/
+// updateTeamLead path — out of scope for this hr_profiles/hr_payroll pass.
+export async function updateEmployeeTeamsAdmin(profileId: string, newTeams: string[]): Promise<void> {
+  await updateProfileAdmin(profileId, { teams: newTeams });
+}
+
+export async function setTeamLeadAdmin(profileId: string, leadTeams: string[]): Promise<void> {
+  await updateProfileAdmin(profileId, { isTeamLead: leadTeams.length > 0, leadTeams });
+}
+
+// HR/Admin-gated write for a single hr_payroll record — see
+// /api/admin/payroll's comment for what this does and doesn't cover yet
+// (the "Process Payroll" / "Release Monthly Funds" write is authenticated;
+// the payroll LIST view itself is still fed by the public useProfiles()/
+// usePayroll()/useLeaves()/useTimesheets() hooks via computePayrollView,
+// pending its own larger migration pass).
+export async function upsertPayrollRecordAdmin(record: PayrollRecord): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/admin/payroll`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ record }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Request failed: ${res.status}`);
+  }
+}
+
 export function useTeams() {
   return useQuery({ queryKey: ['hr_teams'], queryFn: async () => (await pbList('hr_teams', { sort: 'name' })).map(toTeam) });
 }
@@ -1185,79 +1441,17 @@ export function getPTOAccrualDate(profile: Pick<Profile, 'joinedDate' | 'account
 // salaryStartDate correctly backfills every increment that should already
 // have happened, rather than only ever firing one at a time going forward.
 //
-// Event numbering: event #1 falls on the first anniversary (start year + 1),
-// event #2 on start year + 2, etc. lastIncrementProcessedYear stores the
-// calendar year of the last event actually applied, so "events processed" =
-// lastIncrementProcessedYear - startYear (0 if never processed).
-export function getMissedIncrementEvents(profile: Profile): number {
-  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
-  if (!anniversarySource) return 0;
-  const anniversaryDate = new Date(anniversarySource);
-  if (isNaN(anniversaryDate.getTime())) return 0;
-  const now = new Date();
-  if (anniversaryDate > now) return 0;
-
-  const startYear = anniversaryDate.getFullYear();
-  let eventsElapsed = now.getFullYear() - startYear;
-  const thisYearAnniversary = new Date(now.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-  if (thisYearAnniversary > now) eventsElapsed -= 1; // this year's anniversary hasn't happened yet
-  if (eventsElapsed < 1) return 0;
-
-  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - startYear) : 0;
-  return Math.max(0, eventsElapsed - eventsProcessed);
-}
-
-// Total pending increment amount, including any back-filled/missed years —
-// flat per-event amount (region-dependent), non-compounding, multiplied by
-// however many anniversary events haven't been processed yet.
-export function getPendingIncrement(profile: Profile): number {
-  const missedEvents = getMissedIncrementEvents(profile);
-  if (missedEvents <= 0) return 0;
-  const perEvent = profile.region === 'USA' ? 100 : 10000;
-  return missedEvents * perEvent;
-}
-
-export interface IncrementEvent {
-  /** Calendar year this anniversary event falls in. */
-  year: number;
-  amount: number;
-  applied: boolean;
-}
-
-// Reconstructs a year-by-year increment timeline for display purposes
-// (e.g. the Salary Ledger's Base Salary breakdown modal). IMPORTANT: the
-// system only ever stores a single flat per-event amount and a
-// "processed through" year — it does not keep a real historical ledger of
-// exactly what was applied and when. So "original starting base salary" and
-// each past year's amount are *reconstructed* by working backwards from
-// the current base_salary using today's flat rate, which is only accurate
-// if the per-event amount and region never changed and base_salary was
-// never manually edited outside the increment system in between. Treat
-// this as a best-effort breakdown, not an audited ledger.
-export function getIncrementHistory(profile: Profile): { originalBaseSalary: number; events: IncrementEvent[] } {
-  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
-  const perEvent = profile.region === 'USA' ? 100 : 10000;
-  if (!anniversarySource) return { originalBaseSalary: profile.baseSalary, events: [] };
-  const anniversaryDate = new Date(anniversarySource);
-  if (isNaN(anniversaryDate.getTime())) return { originalBaseSalary: profile.baseSalary, events: [] };
-
-  const now = new Date();
-  const startYear = anniversaryDate.getFullYear();
-  let eventsElapsedToToday = now.getFullYear() - startYear;
-  const thisYearAnniversary = new Date(now.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-  if (thisYearAnniversary > now) eventsElapsedToToday -= 1;
-  if (anniversaryDate > now) eventsElapsedToToday = 0;
-
-  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - startYear) : 0;
-  const totalEvents = Math.max(eventsElapsedToToday, eventsProcessed);
-  const originalBaseSalary = profile.baseSalary - eventsProcessed * perEvent;
-
-  const events: IncrementEvent[] = [];
-  for (let n = 1; n <= totalEvents; n++) {
-    events.push({ year: startYear + n, amount: perEvent, applied: n <= eventsProcessed });
-  }
-  return { originalBaseSalary, events };
-}
+// These 3 functions now just delegate to src/lib/incrementMath.ts, which
+// holds the actual (identical, unchanged) implementation — pulled out into
+// its own file with no client-only imports so the new server-side
+// /api/payroll/me route (see that route + Notes on the auth refactor) can
+// reuse the exact same math without dragging hrData.ts's React/React-Query/
+// browser-`pb`-instance imports into the Edge runtime bundle. Re-exported
+// here under their original names so no existing call site anywhere in the
+// app needs to change.
+import { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory } from './incrementMath';
+export { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory };
+export type { IncrementEvent } from './incrementMath';
 
 export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[]): number {
   const remainingDays = getRemainingPTO(leaves, profile.fullName, getPTOAccrualDate(profile));
@@ -1804,12 +1998,18 @@ export const hrActions = {
   // ── Warehouses ────────────────────────────────────────────────────────
   addWarehouse: (wh: Omit<Warehouse, 'id'>) => pbCreate('hr_warehouses', wh),
   updateWarehouse: (id: string, updates: Partial<Warehouse>) => pbUpdate('hr_warehouses', id, updates),
+  // hr_warehouses itself is out of scope for the hr_profiles/hr_payroll
+  // access-control migration (still a public collection) — but this
+  // function's cleanup pass DOES write hr_profiles.assigned_warehouses for
+  // every affected employee, so that half is routed through the admin-gated
+  // /api/admin/profile route (see updateProfileAdmin) instead of the public
+  // client, same as the rest of this migration.
   deleteWarehouse: async (id: string, allProfiles: Profile[]): Promise<void> => {
     await pbDelete('hr_warehouses', id);
     await Promise.all(
       allProfiles
         .filter(p => p.assignedWarehouses?.includes(id))
-        .map(p => pbUpdate('hr_profiles', p.id, { assigned_warehouses: (p.assignedWarehouses || []).filter(w => w !== id) }))
+        .map(p => updateProfileAdmin(p.id, { assignedWarehouses: (p.assignedWarehouses || []).filter(w => w !== id) }))
     );
   },
 
@@ -2003,7 +2203,14 @@ export const hrActions = {
         await hrActions.addNotification(email, 'employee', `New technical support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', created.id));
       }
     }
-    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
+    // Admin gets the same dashboard notification (Admin's Tickets queue
+    // still shows it), but no push here — whichever department actually
+    // owns the ticket (HR or Technical Support) already got pushed above,
+    // so a duplicate phone buzz to every Admin for every single ticket
+    // event company-wide was pure noise. Dropping the category makes this
+    // a dashboard-only row (push_notifications.pb.js exits before the
+    // hr_profiles role lookup + OneSignal send for non-pushable categories).
+    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, undefined, undefined, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
@@ -2025,7 +2232,9 @@ export const hrActions = {
           await hrActions.addNotification(email, 'employee', `New support message from ${ticket.employeeName} on technical ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', ticket.id));
         }
       }
-      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', ticket.id));
+      // Dashboard-only for Admin (see createTicket's admin notification
+      // comment above) — HR or Technical already got the pushable copy.
+      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, undefined, undefined, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', ticket.id));
     }
   },
   updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
@@ -2043,7 +2252,8 @@ export const hrActions = {
         await hrActions.addNotification(email, 'employee', `Technical ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
       }
     }
-    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
+    // Dashboard-only for Admin — same reasoning as the create/reply notifications above.
+    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, undefined, undefined, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
     // Starts/clears the 15-day attachment-deletion timer (see
     // checkTicketAttachmentRetention below) — hr_tickets has no closedAt
     // column of its own, so this is tracked in the KV store the same way
@@ -2435,6 +2645,27 @@ export const hrActions = {
       issuedAt: new Date().toISOString(),
     } as TrackerStopCommand);
   },
+
+  // Employee/HR self-service escape hatch for the "another device is
+  // active" / stuck-superseded state: when a still-running tracker's own
+  // heartbeat row is stale-but-not-yet-expired, a brand new device can get
+  // permanently blocked from claiming the account otherwise. This clears
+  // every tracker session/signal key for this email in one shot so the
+  // employee can reconnect immediately, without waiting out any staleness
+  // window. Also fires Signal 5 (stop command) first in case some tracker
+  // instance is actually still alive somewhere and just hasn't reported a
+  // fresh heartbeat — that way a genuinely-live old device stops capturing
+  // rather than being left to write over the freshly-cleared heartbeat.
+  // Safe/idempotent to call even when nothing is actually stuck.
+  forceDisconnectAllTrackers: async (email: string): Promise<void> => {
+    await hrActions.writeTrackerStopCmd(email).catch(() => { /* best-effort */ });
+    await pbDeleteKVByKeys([
+      `tracker_heartbeat_${_slugify(email)}`,
+      trackerPingKeyFor(email),
+      trackerPongKeyFor(email),
+      trackerQuitIntentKeyFor(email),
+    ]);
+  },
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Manual-shift tab heartbeat + abandoned-tab safety net ───────────────
@@ -2504,11 +2735,79 @@ export const hrActions = {
     // notifications below.
     const shiftEndedName = displayName(profile, 'hr');
     await hrActions.addNotification('all', 'hr', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, 'shift', shiftEndedName, profile.email);
-    await hrActions.addNotification('all', 'admin', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, 'shift', shiftEndedName, profile.email);
+    // Admin gets the same dashboard row but no push — HR already got
+    // pushed for this exact event, and Admin doesn't need a phone buzz for
+    // every single auto-ended shift company-wide on top of that.
+    await hrActions.addNotification('all', 'admin', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, undefined, undefined, profile.email);
     if (typeof window !== 'undefined') {
       try { window.localStorage.setItem(`shift_auto_stopped_${profile.email.toLowerCase()}`, '1'); } catch { /* ignore */ }
     }
     return true;
+  },
+
+  // Safety net for a tracker-governed shift left open because the employee
+  // shut down/killed their tracked device outright (PC shutdown, tracker
+  // force-quit, killed process, dead battery) — quit_app()'s own
+  // auto-clock-out in tracker-agent/agent_gui.py never gets a chance to run
+  // in any of those cases, so the shift is left open (clock_out: '') with a
+  // dead heartbeat, sometimes for hours or overnight. Left alone, "still
+  // open" gets misread elsewhere as "still being worked" (or, once finally
+  // closed by hand, produces an absurd multi-hundred-minute inactivity
+  // interval — the "1000+ minute" false absences reported by Windows
+  // employees). Called alongside runAbsenceCheck (see hr/page.tsx,
+  // admin/page.tsx) so it runs on every HR/Admin dashboard load. Closes the
+  // shift at the employee's LAST REAL HEARTBEAT timestamp — i.e. when they
+  // were actually last known to be there — never at "now", so a shift
+  // discovered the next morning isn't credited (or blamed) for the entire
+  // overnight gap. Deliberately scoped to only employees with screen
+  // tracking enabled (TrackingSettings.enabled) AND an actual heartbeat on
+  // record — GPS/manual-shift employees who've never run a tracker at all
+  // have "no heartbeat ever" by default, which isn't evidence of anything,
+  // so they're left to the existing closeStaleManualShiftIfAbandoned safety
+  // net instead.
+  autoCloseOrphanTrackedShifts: async (timesheets: TimesheetEntry[]): Promise<void> => {
+    const ORPHAN_SHIFT_GRACE_MS = 30 * 60 * 1000; // 30 minutes with no heartbeat = orphaned
+    const MIN_SHIFT_AGE_MS = 45 * 60 * 1000; // don't touch a shift this fresh — first heartbeat may not have posted yet
+    const now = Date.now();
+    const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
+
+    for (const shift of openShifts) {
+      const clockInMs = new Date(shift.clockIn).getTime();
+      if (isNaN(clockInMs) || now - clockInMs < MIN_SHIFT_AGE_MS) continue;
+
+      try {
+        const settings = await hrActions.getTrackingSettingsFor(shift.employeeEmail);
+        if (!settings.enabled) continue; // not a tracker-governed shift — leave to other safety nets
+
+        const hb = await hrActions.getTrackerHeartbeat(shift.employeeEmail);
+        if (!hb?.lastSeenAt) continue; // never connected at all — ambiguous, don't guess
+
+        const lastSeenMs = new Date(hb.lastSeenAt).getTime();
+        if (isNaN(lastSeenMs) || now - lastSeenMs < ORPHAN_SHIFT_GRACE_MS) continue; // recent enough — genuinely active
+
+        // Close at the last real heartbeat time, clamped to never be
+        // earlier than clock-in (a corrupt/stale-from-before-this-shift
+        // heartbeat shouldn't produce a negative-duration shift).
+        const closeAtIso = new Date(Math.max(lastSeenMs, clockInMs)).toISOString();
+
+        await pbUpdate('hr_timesheets', shift.id, {
+          clock_out: closeAtIso,
+          duration: formatDurationBetween(shift.clockIn, closeAtIso),
+          status: 'completed',
+        });
+        try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(shift.employeeEmail)]); } catch { /* best-effort */ }
+        const name = displayName({ fullName: shift.employeeEmail }, 'hr');
+        await hrActions.addNotification(
+          shift.employeeEmail, 'employee',
+          "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR."
+        ).catch(() => {});
+        await hrActions.addNotification('all', 'hr', `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`, 'shift', name, shift.employeeEmail).catch(() => {});
+        // Dashboard-only for Admin — HR already got the pushable copy above.
+        await hrActions.addNotification('all', 'admin', `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`, undefined, undefined, shift.employeeEmail).catch(() => {});
+      } catch {
+        // Best-effort per-shift — one bad lookup/write shouldn't stop the rest.
+      }
+    }
   },
 
   // ── Absence records (hr_delcargo_store key "hr_absence_records_v1") ────
@@ -2719,7 +3018,9 @@ export const hrActions = {
           ? `worked less than 4 hours (${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m) on ${dateStr}`
           : `did not start a shift on ${dateStr}`;
         await hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
-        await hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
+        // Dashboard-only for Admin — HR already got the pushable copy above,
+        // and payroll deductions are an HR-owned workflow day-to-day.
+        await hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, undefined, undefined, emp.email);
         const empReasonDetail = reason === 'inactivity'
           ? `${inactivityMinutes} min inactivity during shift`
           : reason === 'under_4_hours'
@@ -2871,7 +3172,8 @@ export const hrActions = {
             // raw email, same as before this fetch existed.
           }
           await hrActions.addNotification('all', 'hr', `${actorLabel} logged out while on shift — their shift was ended automatically.`, 'shift', actorLabel, actorEmailForPush);
-          await hrActions.addNotification('all', 'admin', `${actorLabel} logged out while on shift — their shift was ended automatically.`, 'shift', actorLabel, actorEmailForPush);
+          // Dashboard-only for Admin — HR already got the pushable copy above.
+          await hrActions.addNotification('all', 'admin', `${actorLabel} logged out while on shift — their shift was ended automatically.`, undefined, undefined, actorEmailForPush);
           // Durable (localStorage, not the per-tab session storage used for
           // the "signed in elsewhere" notice) flag read by auth/page.tsx the
           // next time this exact email logs back in — even if that's after

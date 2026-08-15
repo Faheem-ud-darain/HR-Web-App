@@ -3,6 +3,12 @@ pyautogui>=0.9.54
 Pillow>=10.0.0
 pystray>=0.19.5
 pyinstaller>=6.3.0
+# Preferred screenshot engine (see _grab_with_mss/capture_and_encode in
+# agent_gui.py) — fixes solid-black screenshots on Windows machines where
+# DWM/hardware-accelerated content (Chrome, Slack, video calls) made
+# pyautogui's PIL ImageGrab path come back black. pyautogui/Pillow above
+# remain as the automatic fallback if mss ever fails.
+mss>=9.0.1
 # Windows has no system IANA timezone database, so Python's built-in
 # zoneinfo can't resolve "America/New_York" there without this — needed for
 # _get_ny_date_string() in agent_gui.py (inactivity auto-absence feature)

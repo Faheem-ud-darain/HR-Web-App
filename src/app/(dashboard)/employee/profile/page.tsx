@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useProfiles, useProfileDocuments, hrActions, Profile, formatMoney } from '@/lib/hrData';
+import { useProfiles, useProfileSelf, updateProfileSelf, changeOwnPassword, hrActions, Profile, formatMoney } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -22,10 +22,12 @@ export default function EmployeeProfilePage() {
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  // CV/passport/identity scans are fetched separately from the main
-  // profile — this is the one page where the signed-in employee actually
-  // needs to see their own documents, so it's fine to fetch them here.
-  const { data: myDocs, refetch: refetchDocs } = useProfileDocuments(profile?.id);
+  // Bank details / phone / documents / password all come from the
+  // server-side self-service route now (see useProfileSelf in hrData.ts),
+  // not the fully-public useProfiles() list `profile` above still supplies
+  // display-only fields from (name, role, joined date, etc. — not sensitive
+  // on their own, left as-is for this pass).
+  const { data: myDocs, refetch: refetchDocs } = useProfileSelf();
 
   // Profile picture upload
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +91,7 @@ export default function EmployeeProfilePage() {
   const handlePhotoSave = async (webpDataUrl: string) => {
     if (!profile?.id) return;
     try {
-      await hrActions.updateProfileDetails(profile.id, { profilePicture: webpDataUrl });
+      await updateProfileSelf({ profilePicture: webpDataUrl });
       const { data: refreshed } = await refetchProfiles();
       const updatedProfile = refreshed?.find(p => p.id === profile.id);
       if (updatedProfile) setProfile(updatedProfile);
@@ -128,7 +130,7 @@ export default function EmployeeProfilePage() {
     try {
       const { data, error } = await fileToStoredData(file);
       if (error) { setDocError(error); return; }
-      await hrActions.updateProfileDetails(profile.id, { cvFileName: file.name, cvFileData: data });
+      await updateProfileSelf({ cvFileName: file.name, cvFileData: data });
       await refetchDocs();
       setDocSuccess('CV / Resume uploaded successfully!');
       setTimeout(() => setDocSuccess(''), 2500);
@@ -150,7 +152,7 @@ export default function EmployeeProfilePage() {
       const { data, error } = await fileToStoredData(file);
       if (error) { setDocError(error); return; }
       const existing = myDocs?.identityDocs || [];
-      await hrActions.updateProfileDetails(profile.id, { identityDocs: [...existing, { name: file.name, data }] });
+      await updateProfileSelf({ identityDocs: [...existing, { name: file.name, data }] });
       await refetchDocs();
       setDocSuccess('Identity document uploaded successfully!');
       setTimeout(() => setDocSuccess(''), 2500);
@@ -171,7 +173,7 @@ export default function EmployeeProfilePage() {
     try {
       const { data, error } = await fileToStoredData(file);
       if (error) { setDocError(error); return; }
-      await hrActions.updateProfileDetails(profile.id, { passportFileName: file.name, passportFileData: data });
+      await updateProfileSelf({ passportFileName: file.name, passportFileData: data });
       await refetchDocs();
       setDocSuccess('Passport uploaded successfully!');
       setTimeout(() => setDocSuccess(''), 2500);
@@ -185,9 +187,11 @@ export default function EmployeeProfilePage() {
 
   const openBankEdit = () => {
     if (!profile) return;
-    setBankNameInput(profile.bankName || '');
-    setAccountNumberInput(profile.accountNumber || '');
-    setIbanInput(profile.iban || '');
+    // Bank details now come from myDocs (useProfileSelf), not the public
+    // `profile` object — see the comment on useProfileSelf above.
+    setBankNameInput(myDocs?.bankName || '');
+    setAccountNumberInput(myDocs?.accountNumber || '');
+    setIbanInput(myDocs?.iban || '');
     setBankError('');
     setBankSuccess('');
     setIsBankEditOpen(true);
@@ -209,14 +213,12 @@ export default function EmployeeProfilePage() {
 
     setIsSavingBank(true);
     try {
-      await hrActions.updateProfileDetails(profile.id, {
+      await updateProfileSelf({
         bankName: bankNameInput.trim(),
         accountNumber: accountNumberInput.trim(),
         iban: ibanInput.trim(),
       });
-      const { data: refreshed } = await refetchProfiles();
-      const updatedProfile = refreshed?.find(p => p.id === profile.id);
-      if (updatedProfile) setProfile(updatedProfile);
+      await refetchDocs();
       setBankSuccess('Bank details updated successfully!');
       setTimeout(() => { setIsBankEditOpen(false); setBankSuccess(''); }, 1000);
     } catch (err) {
@@ -229,8 +231,8 @@ export default function EmployeeProfilePage() {
 
   const openPhoneEdit = () => {
     if (!profile) return;
-    setPersonalPhoneInput(profile.personalPhone || '');
-    setCompanyPhoneInput(profile.companyPhone || '');
+    setPersonalPhoneInput(myDocs?.personalPhone || '');
+    setCompanyPhoneInput(myDocs?.companyPhone || '');
     setPhoneError('');
     setPhoneSuccess('');
     setIsPhoneEditOpen(true);
@@ -251,13 +253,11 @@ export default function EmployeeProfilePage() {
 
     setIsSavingPhone(true);
     try {
-      await hrActions.updateProfileDetails(profile.id, {
+      await updateProfileSelf({
         personalPhone: personalPhoneInput.trim(),
         companyPhone: companyPhoneInput.trim(),
       });
-      const { data: refreshed } = await refetchProfiles();
-      const updatedProfile = refreshed?.find(p => p.id === profile.id);
-      if (updatedProfile) setProfile(updatedProfile);
+      await refetchDocs();
       setPhoneSuccess('Contact numbers updated successfully!');
       setTimeout(() => { setIsPhoneEditOpen(false); setPhoneSuccess(''); }, 1000);
     } catch (err) {
@@ -278,10 +278,12 @@ export default function EmployeeProfilePage() {
       setResetError('Please fill in all fields.');
       return;
     }
-    if (profile?.password && profile.password !== currentPass) {
-      setResetError('Current password is incorrect.');
-      return;
-    }
+    // Current-password check now happens server-side (see
+    // changeOwnPassword in hrData.ts / /api/profile/me's PATCH handler) —
+    // the real stored value is never sent to the browser anymore, so it
+    // can't be checked here client-side the way `profile.password !==
+    // currentPass` used to (which only "worked" because the fully-public
+    // useProfiles() list included everyone's plaintext password).
     if (newPass.length < 6) {
       setResetError('New password must be at least 6 characters.');
       return;
@@ -297,13 +299,11 @@ export default function EmployeeProfilePage() {
 
     if (profile?.id) {
       setIsResetting(true);
-      // hr_profiles is a base (non-auth) collection. The password field is
-      // a plain text column, updated via hrActions.resetPassword.
-      hrActions.resetPassword(profile.id, newPass)
-        .then(async () => {
-          const { data: refreshed } = await refetchProfiles();
-          const updatedProfile = refreshed?.find(p => p.id === profile.id);
-          if (updatedProfile) setProfile(updatedProfile);
+      // Server-side now — verifies currentPass against the real stored
+      // value (bcrypt-hash-aware) and stores the new one hashed. See
+      // changeOwnPassword in hrData.ts.
+      changeOwnPassword(currentPass, newPass)
+        .then(() => {
           setResetSuccess('Password updated successfully!');
           setTimeout(() => {
             setIsResetOpen(false);
@@ -315,7 +315,7 @@ export default function EmployeeProfilePage() {
         })
         .catch(err => {
           console.error('[Profile] Password update error:', err);
-          setResetError('Failed to change password. Please try again.');
+          setResetError(err?.message || 'Failed to change password. Please try again.');
         })
         .finally(() => setIsResetting(false));
     }
@@ -468,7 +468,7 @@ export default function EmployeeProfilePage() {
                 <Pencil className="h-3.5 w-3.5" /> Edit
               </button>
             </div>
-            {profile.bankName ? (
+            {myDocs?.bankName ? (
               <div className="divide-y divide-slate-100">
                 <div className="flex items-center gap-4 px-6 py-4">
                   <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -476,7 +476,7 @@ export default function EmployeeProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Name</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.bankName}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.bankName}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 px-6 py-4">
@@ -485,7 +485,7 @@ export default function EmployeeProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account Number</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{profile.accountNumber || '—'}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{myDocs?.accountNumber || '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 px-6 py-4">
@@ -494,7 +494,7 @@ export default function EmployeeProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Routing Number' : 'IBAN'}</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{profile.iban || '—'}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{myDocs?.iban || '—'}</p>
                   </div>
                 </div>
               </div>
@@ -516,7 +516,7 @@ export default function EmployeeProfilePage() {
                 <Pencil className="h-3.5 w-3.5" /> Edit
               </button>
             </div>
-            {profile.personalPhone || profile.companyPhone ? (
+            {myDocs?.personalPhone || myDocs?.companyPhone ? (
               <div className="divide-y divide-slate-100">
                 <div className="flex items-center gap-4 px-6 py-4">
                   <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -524,7 +524,7 @@ export default function EmployeeProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Own Number</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.personalPhone || '—'}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.personalPhone || '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 px-6 py-4">
@@ -533,7 +533,7 @@ export default function EmployeeProfilePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Allocated Number</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{profile.companyPhone || 'Not applicable'}</p>
+                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.companyPhone || 'Not applicable'}</p>
                   </div>
                 </div>
               </div>
@@ -605,7 +605,7 @@ export default function EmployeeProfilePage() {
                   disabled={docBusy === 'cv'}
                   className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
                 >
-                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'cv' ? 'Uploading…' : myDocs?.cvFileData ? 'Replace' : 'Upload'}
+                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'cv' ? 'Uploading…' : myDocs?.cvFileName ? 'Replace' : 'Upload'}
                 </button>
                 <input ref={cvInputRef} type="file" accept="image/*,application/pdf" onChange={handleCvUpload} className="hidden" />
               </div>
@@ -649,7 +649,7 @@ export default function EmployeeProfilePage() {
                   disabled={docBusy === 'passport'}
                   className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
                 >
-                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'passport' ? 'Uploading…' : myDocs?.passportFileData ? 'Replace' : 'Upload'}
+                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'passport' ? 'Uploading…' : myDocs?.passportFileName ? 'Replace' : 'Upload'}
                 </button>
                 <input ref={passportInputRef} type="file" accept="image/*,application/pdf" onChange={handlePassportUpload} className="hidden" />
               </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { hrActions, Profile, Team, useProfiles, useTeams, useWarehouses, displayName } from '@/lib/hrData';
+import { hrActions, Profile, Team, useProfiles, useTeams, useWarehouses, displayName, updateEmployeeTeamsAdmin, setTeamLeadAdmin, updateProfileAdmin } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Edit, Trash, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
 import { UserProfileModal } from '@/components/ui/UserProfileModal';
@@ -125,7 +125,7 @@ export default function HRTeamsPage() {
         await Promise.all(
           employees
             .filter((e: Profile) => e.teams.includes(teamName))
-            .map((e: Profile) => hrActions.updateEmployeeTeams(e.id, e.teams.filter(t => t !== teamName)))
+            .map((e: Profile) => updateEmployeeTeamsAdmin(e.id, e.teams.filter(t => t !== teamName)))
         );
       }
       refetchTeams();
@@ -188,7 +188,7 @@ export default function HRTeamsPage() {
         }
       })
     );
-    await hrActions.updateEmployeeTeams(employee.id, finalTeamNames);
+    await updateEmployeeTeamsAdmin(employee.id, finalTeamNames);
     refetchTeams();
     refetchProfiles();
     setDraggedEmployee(null);
@@ -214,11 +214,11 @@ export default function HRTeamsPage() {
   const handleToggleTeamLead = async (emp: Profile) => {
     const alreadyLead = emp.isTeamLead && (emp.leadTeams?.length ?? 0) > 0;
     if (alreadyLead) {
-      await hrActions.setTeamLead(emp.id, []);
+      await setTeamLeadAdmin(emp.id, []);
       setSaveSuccess(`${displayName(emp, 'hr')} is no longer a team lead.`);
     } else {
       const leadTeams = emp.teams.length > 0 ? emp.teams : [];
-      await hrActions.setTeamLead(emp.id, leadTeams);
+      await setTeamLeadAdmin(emp.id, leadTeams);
       setSaveSuccess(`${displayName(emp, 'hr')} is now Team Lead of: ${leadTeams.join(', ') || '(no teams yet)'}`);
     }
     refetchProfiles();
@@ -236,7 +236,7 @@ export default function HRTeamsPage() {
     setIsSavingTeamLead(true);
     try {
       const emp = allProfiles.find(e => e.id === leadEmployeeId);
-      await hrActions.setTeamLead(leadEmployeeId, leadTeamSelections);
+      await setTeamLeadAdmin(leadEmployeeId, leadTeamSelections);
       // Best-effort mirror onto hr_teams.leadEmail (one lead per team in the
       // real schema): set it for newly-selected teams, clear it for teams
       // this employee previously led but is no longer selected for.
@@ -275,7 +275,7 @@ export default function HRTeamsPage() {
     setIsSavingWhLead(true);
     try {
       const isNowLead = whLeadSelections.length > 0;
-      await hrActions.updateProfileDetails(emp.id, {
+      await updateProfileAdmin(emp.id, {
         isWarehouseLead: isNowLead,
         managedWarehouses: whLeadSelections,
         jobTitle: isNowLead ? 'Warehouse Manager' : emp.jobTitle
@@ -377,7 +377,7 @@ export default function HRTeamsPage() {
       current = current.filter(id => id !== whId);
     }
 
-    await hrActions.updateProfileDetails(emp.id, { assignedWarehouses: current });
+    await updateProfileAdmin(emp.id, { assignedWarehouses: current });
     refetchProfiles();
     setWhSuccess(`Warehouse assignment updated for ${displayName(emp, 'hr')}`);
     setTimeout(() => setWhSuccess(''), 1500);
@@ -411,7 +411,7 @@ export default function HRTeamsPage() {
     setCleaningWarehouses(true);
     try {
       await Promise.all(staleProfiles.map(emp =>
-        hrActions.updateProfileDetails(emp.id, {
+        updateProfileAdmin(emp.id, {
           assignedWarehouses: (emp.assignedWarehouses || []).filter(id => liveIds.has(id)),
           managedWarehouses: (emp.managedWarehouses || []).filter(id => liveIds.has(id)),
         })
@@ -438,7 +438,7 @@ export default function HRTeamsPage() {
     await Promise.all(membersOfTeam.map(async (emp: Profile) => {
       const current = emp.assignedWarehouses || [];
       if (!current.includes(whId)) {
-        await hrActions.updateProfileDetails(emp.id, { assignedWarehouses: [...current, whId] });
+        await updateProfileAdmin(emp.id, { assignedWarehouses: [...current, whId] });
       }
     }));
     if (team) await hrActions.updateTeamWarehouse(team.id, whId);

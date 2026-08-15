@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
-import { Profile, useProfiles, hrActions } from '@/lib/hrData';
+import { Profile, useProfiles, hrActions, updateProfileSelf, changeOwnPassword } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
 import { PasswordInput } from '@/components/ui/PasswordInput';
@@ -56,7 +56,7 @@ export default function HRProfilePage() {
   const handlePhotoSave = async (webpDataUrl: string) => {
     if (!profile?.id) return;
     try {
-      await hrActions.updateProfileDetails(profile.id, { profilePicture: webpDataUrl });
+      await updateProfileSelf({ profilePicture: webpDataUrl });
       await refetchProfiles();
       setPendingPhotoFile(null);
       setPhotoSuccess('Profile picture updated!');
@@ -78,10 +78,10 @@ export default function HRProfilePage() {
       setResetError('Please fill in all fields.');
       return;
     }
-    if (profile?.password && profile.password !== currentPass) {
-      setResetError('Current password is incorrect.');
-      return;
-    }
+    // Current-password check now happens server-side inside
+    // changeOwnPassword — it never trusts a plaintext profile.password
+    // field from the client (that field isn't even returned by the
+    // fully-public list anymore for accounts migrated to a bcrypt hash).
     if (newPass.length < 6) {
       setResetError('New password must be at least 6 characters.');
       return;
@@ -95,14 +95,14 @@ export default function HRProfilePage() {
     if (email && profile?.id) {
       setIsResetting(true);
       try {
-        await hrActions.resetPassword(profile.id, newPass);
+        await changeOwnPassword(currentPass, newPass);
         refetchProfiles();
         setResetSuccess('Password updated successfully!');
         setCurrentPass(''); setNewPass(''); setConfirmPass('');
         setTimeout(() => { setIsResetOpen(false); setResetSuccess(''); }, 1400);
-      } catch (err) {
+      } catch (err: any) {
         console.error('[HR Profile] Password update error:', err);
-        setResetError('Failed to update password. Please try again.');
+        setResetError(err?.message || 'Failed to update password. Please try again.');
       } finally {
         setIsResetting(false);
       }

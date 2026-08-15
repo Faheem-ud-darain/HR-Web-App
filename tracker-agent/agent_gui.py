@@ -52,6 +52,7 @@ import io
 import json
 import os
 import platform
+import random
 import re
 import socket
 import subprocess
@@ -78,6 +79,14 @@ except ImportError:
     print("Missing dependency 'pyautogui'. Run: pip install -r requirements.txt")
     sys.exit(1)
 
+try:
+    # Preferred screenshot engine — see capture_and_encode() below. Not a
+    # hard dependency: an agent built before requirements.txt added this
+    # just falls back to pyautogui/PIL ImageGrab everywhere.
+    import mss
+except ImportError:
+    mss = None
+
 from PIL import Image, ImageDraw
 
 try:
@@ -96,7 +105,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "10"
+APP_VERSION = "11"
 GITHUB_REPO = "SPARXzeux/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -754,13 +763,67 @@ def clear_stop_cmd(base_url, employee_email):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _grab_with_mss():
+    """Captures the full virtual desktop (every monitor, correctly offset)
+    via mss's native per-OS APIs (Windows Desktop Duplication / GDI,
+    depending on mss version) rather than pyautogui.screenshot()'s PIL
+    ImageGrab path. Returns a Pillow Image, or None if mss isn't installed
+    or the capture fails for any reason — callers fall back to pyautogui.
+    """
+    if mss is None:
+        return None
+    try:
+        with mss.mss() as sct:
+            # monitors[0] is the union of every monitor (the whole virtual
+            # desktop) — monitors[1:] would be individual screens.
+            raw = sct.grab(sct.monitors[0])
+            return Image.frombytes("RGB", raw.size, raw.bgra, "raw", "BGRX")
+    except Exception as e:
+        print(f"[warn] mss capture failed, falling back to pyautogui: {e}")
+        return None
+
+
+def _is_black_frame(img, grid=8) -> bool:
+    """Cheap black-frame detector: samples an 8x8 grid of pixels rather than
+    scanning every pixel of a possibly-4K image on every single capture
+    tick. Windows can hand back a solid #000000 frame from either capture
+    path when DWM/hardware-accelerated content (Chrome, Slack, video calls)
+    is on screen and the OS momentarily refuses to composite it for
+    capture — this catches that so the tick re-tries with the other engine
+    instead of silently uploading a useless black screenshot."""
+    try:
+        w, h = img.size
+        if w == 0 or h == 0:
+            return True
+        step_x, step_y = max(1, w // grid), max(1, h // grid)
+        px = img.convert("RGB").load()
+        for y in range(0, h, step_y):
+            for x in range(0, w, step_x):
+                if any(c > 8 for c in px[x, y]):
+                    return False
+        return True
+    except Exception:
+        return False  # can't tell — don't discard a possibly-fine frame
+
+
 def capture_and_encode():
     """Captures a screenshot, resizes/compresses it, and returns raw WebP
     bytes plus its final width/height (no base64 — uploaded as a real file,
     see upload_screenshot). WebP at this quality/method settings is
     noticeably smaller than JPEG at a visually equivalent quality — cuts
-    storage/bandwidth per screenshot without a visible quality loss."""
-    img = pyautogui.screenshot()
+    storage/bandwidth per screenshot without a visible quality loss.
+
+    Tries mss first (see _grab_with_mss), then falls back to
+    pyautogui.screenshot() (PIL's legacy GDI BitBlt path) if mss isn't
+    available or came back solid black — and vice versa: if mss's frame
+    itself comes back black, the pyautogui fallback is tried before giving
+    up, since the two engines fail on different content for different
+    reasons and rarely fail on the same frame at the same time."""
+    img = _grab_with_mss()
+    if img is None or _is_black_frame(img):
+        fallback = pyautogui.screenshot()
+        if img is None or not _is_black_frame(fallback):
+            img = fallback
     w, h = img.size
     if w > MAX_WIDTH:
         new_h = int(h * (MAX_WIDTH / w))
@@ -796,6 +859,37 @@ def upload_screenshot(base_url, employee_email, webp_bytes, width, height, devic
     resp = requests.post(url, data=data, files=files, timeout=30)
     resp.raise_for_status()
     return timestamp
+
+
+def upload_screenshot_with_retry(base_url, employee_email, webp_bytes, width, height,
+                                  device_id=None, device_label=None, agent_token=None,
+                                  max_attempts=3, stop_event=None):
+    """Wraps upload_screenshot() with a small bounded retry for transient
+    network failures (timeouts, momentary connection resets) — a single
+    dropped upload previously meant losing that entire capture until the
+    next full interval, sometimes minutes away. Deliberately capped at
+    max_attempts (not unbounded) and jittered per staggered_screenshot_plan
+    (2s + 0.5–2.0s per retry) so a batch of employees all hitting a slow
+    moment on the server retry at slightly different times instead of
+    re-synchronizing into a second thundering herd. Bails out early (no
+    further retries) if stop_event is set, so a quit/reconnect isn't held
+    up waiting out a retry that no longer matters."""
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            return upload_screenshot(
+                base_url, employee_email, webp_bytes, width, height,
+                device_id=device_id, device_label=device_label, agent_token=agent_token,
+            )
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts - 1 and not (stop_event and stop_event.is_set()):
+                delay = 2.0 + random.uniform(0.5, 2.0)
+                if stop_event:
+                    stop_event.wait(delay)
+                else:
+                    time.sleep(delay)
+    raise last_error
 
 
 def upload_inactivity(base_url, employee_email, start_dt, end_dt, device_id=None, device_label=None, agent_token=None):
@@ -954,9 +1048,6 @@ def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
     except Exception as e:
         print(f"[warn] create_inactivity_absence_record failed: {e}")
 
-    deduction_text = f"${deduction_amount}" if deduction_amount else "a 2-day pay penalty"
-    reason_text = (
-        f"{full_name} was inactive for over {inactivity_minutes} minutes during their shift and was "
     try:
         notify_shift_auto_stopped(base_url, employee_email, reason="inactivity_absence")
     except Exception as e:
@@ -1655,7 +1746,15 @@ class TrackerApp:
                     if last_seen_iso:
                         try:
                             last_seen_dt = datetime.fromisoformat(last_seen_iso.replace("Z", "+00:00"))
-                            if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() > 180:
+                            # Lowered from 180s to 60s (just above the 60s
+                            # heartbeat write cadence in _heartbeat_loop) —
+                            # 180s meant a restart/reconnect on the SAME
+                            # computer (which briefly still sees its own
+                            # last-written-but-now-3-minutes-old heartbeat
+                            # before the loop below claims it fresh) could sit
+                            # in a false "superseded" state for up to 2 extra
+                            # minutes it never needed to.
+                            if (datetime.now(timezone.utc) - last_seen_dt).total_seconds() > 60:
                                 is_stale = True
                         except Exception:
                             pass
@@ -1812,6 +1911,19 @@ class TrackerApp:
         # _start_worker() stops this exact stop_event and spawns a brand
         # new thread with the new cfg, so there's never any ambiguity about
         # which credentials an old, lingering thread might still be using.
+        #
+        # ── Staggered screenshot uploads (see staggered_screenshot_plan.md)
+        # Without this, every employee whose tracking/shift turns on at
+        # (near) the same moment — e.g. GPS geofence auto clock-in for a
+        # whole warehouse shift, or everyone starting a manual shift right
+        # at 9:00 — captures and uploads their very first screenshot within
+        # the same second, and then repeats that same synchronized instant
+        # every interval_minutes afterward, since nothing here previously
+        # varied the timing at all. was_capture_enabled tracks the
+        # False→True transition so a random 0–45s initial_jitter delay only
+        # applies once, to that first capture after tracking turns on — not
+        # to every loop iteration.
+        was_capture_enabled = False
         while not stop_event.is_set():
             with self.state_lock:
                 superseded = (self.state.get("connection_status") == "superseded")
@@ -1859,13 +1971,38 @@ class TrackerApp:
                 self.state["interval"] = interval_minutes
                 self.state["last_error"] = None
 
-            if enabled:
+            skip_capture_this_pass = False
+            if enabled and not was_capture_enabled:
+                # Just turned on — stagger the FIRST capture by a random
+                # 0–45s offset instead of firing it the instant tracking
+                # starts, which is exactly the moment many employees'
+                # trackers are most likely to all turn on together. Still
+                # interruptible in ~1s increments so a stop/disable arriving
+                # mid-jitter (or the app quitting) doesn't block on it.
+                initial_jitter = random.uniform(0, 45)
+                jitter_waited = 0.0
+                while jitter_waited < initial_jitter and not stop_event.is_set():
+                    if self.wake_event.is_set():
+                        # Something changed (e.g. shift already ended again)
+                        # — clear it and re-evaluate from the top rather than
+                        # capturing into a stale "enabled" state.
+                        self.wake_event.clear()
+                        skip_capture_this_pass = True
+                        break
+                    chunk = min(1.0, initial_jitter - jitter_waited)
+                    stop_event.wait(chunk)
+                    jitter_waited += chunk
+                if stop_event.is_set():
+                    break
+            was_capture_enabled = enabled
+
+            if enabled and not skip_capture_this_pass:
                 try:
                     webp_bytes, w, h = capture_and_encode()
-                    ts = upload_screenshot(
+                    ts = upload_screenshot_with_retry(
                         cfg["url"], settings.get("employeeEmail"), webp_bytes, w, h,
                         device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                        agent_token=cfg.get("token"),
+                        agent_token=cfg.get("token"), stop_event=stop_event,
                     )
                     with self.state_lock:
                         self.state["last_capture"] = ts
@@ -1873,7 +2010,11 @@ class TrackerApp:
                     with self.state_lock:
                         self.state["last_error"] = _short_error(f"Capture/upload failed: {e}")
 
-            remaining = interval_minutes * 60 if enabled else SETTINGS_POLL_SECONDS
+            # +/-5s jitter on the steady-state interval too, so repeated
+            # captures don't resettle into lockstep with any other device
+            # even when everyone's configured intervalMinutes is identical.
+            remaining = (interval_minutes * 60 + random.uniform(-5, 5)) if enabled else SETTINGS_POLL_SECONDS
+            remaining = max(1.0, remaining)
             waited = 0
             while waited < remaining and not stop_event.is_set():
                 # Ticks in short (1s) increments — rather than one big
@@ -1922,7 +2063,13 @@ class TrackerApp:
                     f"{base_url}/api/realtime",
                     headers={"Accept": "text/event-stream"},
                     stream=True,
-                    timeout=(10, 90),
+                    # Shortened from (10, 90): a hung/half-open socket (common
+                    # after sleep/wake or a flaky network) used to take up to
+                    # 90s to notice and reconnect, during which Start Shift's
+                    # ping/pong handshake had no working channel to respond
+                    # on. (5, 30) reconnects far faster while still tolerating
+                    # PocketBase's own keep-alive comment cadence.
+                    timeout=(5, 30),
                 )
                 resp.raise_for_status()
 
@@ -2033,6 +2180,7 @@ class TrackerApp:
         """
         last_pos = None
         last_move_time = time.monotonic()
+        last_tick = last_move_time
         was_enabled = False
         # Guards handle_inactivity_auto_absence() from firing more than once
         # for the same continuous idle stretch — reset to False whenever the
@@ -2053,6 +2201,27 @@ class TrackerApp:
                 employee_email = self.state.get("employee_email") or cfg.get("employee_email")
 
             now = time.monotonic()
+
+            # ── Sleep/wake guard ──────────────────────────────────────────
+            # On Windows, time.monotonic() keeps advancing across sleep/
+            # hibernate (unlike on macOS/Linux, where it typically pauses),
+            # so a laptop that sleeps for 8 hours wakes up to find "now" has
+            # jumped 8 hours ahead of the last poll. Read naively, that one
+            # tick alone reports 8 hours of continuous mouse inactivity —
+            # instantly crossing AUTO_ABSENT_INACTIVITY_SECONDS (37 min) and
+            # firing an auto-absence with a "1000+ minutes inactive" reading,
+            # even though the mouse was never actually idle during a shift —
+            # the machine was simply asleep. If the gap since the last tick
+            # is much larger than one MOUSE_POLL_SECONDS interval should
+            # ever be, treat it as a suspend/resume (or a debugger pause, or
+            # the process being frozen by the OS) and restart the idle clock
+            # fresh from now, rather than counting the gap as idle time.
+            SLEEP_GAP_THRESHOLD_SECONDS = MOUSE_POLL_SECONDS * 4
+            if now - last_tick > SLEEP_GAP_THRESHOLD_SECONDS:
+                last_pos = None
+                last_move_time = now
+                auto_absent_fired = False
+            last_tick = now
 
             if not enabled:
                 # Tracking just turned off (or shift ended) — don't let a gap
@@ -2214,14 +2383,74 @@ class TrackerApp:
         self.root.focus_force()
 
     def on_close(self):
-        # Respects the "Closing the window minimizes to tray" setting (see
-        # _toggle_close_to_tray) — previously this always hid to tray
-        # whenever a tray icon existed, with no opt-out.
+        with self.state_lock:
+            shift_active = bool(self.state.get("shift_active"))
+            enabled_by_hr = bool(self.state.get("enabled_by_hr"))
+
+        # When a shift is actually active and tracked, clicking the ✕ is
+        # ambiguous enough to cause real harm either way it's guessed wrong:
+        # silently minimizing left people thinking they'd ended their shift
+        # when they hadn't, and silently quitting could end a shift someone
+        # only meant to minimize. Ask explicitly instead of guessing. When
+        # nothing is at stake (no active tracked shift), keep the simple,
+        # non-interruptive behavior from the "Closing the window minimizes to
+        # tray" setting (see _toggle_close_to_tray) — prompting on every
+        # close with nothing to decide would just be annoying.
+        if self.cfg and shift_active and enabled_by_hr and pystray and self.tray_icon:
+            self._show_close_choice_dialog()
+            return
+
         close_to_tray = bool((self.cfg or {}).get("close_to_tray", True))
         if pystray and self.tray_icon and close_to_tray:
             self.hide_window()
         else:
             self.quit_app()
+
+    def _show_close_choice_dialog(self):
+        """The explicit 3-way prompt shown from on_close() while a shift is
+        active and tracked: Minimize to Tray / End Shift and Quit / Cancel —
+        see on_close() for why this only appears in that specific case."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title(APP_NAME)
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        tk.Label(
+            dlg, text="Your shift is currently active and being tracked.",
+            bg=BG, fg=INK, font=(FONT, 11, "bold"), wraplength=340, justify="left",
+        ).pack(padx=20, pady=(20, 4), anchor="w")
+        tk.Label(
+            dlg, text="What would you like to do?",
+            bg=BG, fg=MUTED, font=(FONT, 9), wraplength=340, justify="left",
+        ).pack(padx=20, pady=(0, 16), anchor="w")
+
+        def choose_minimize():
+            dlg.destroy()
+            self.hide_window()
+
+        def choose_end_shift():
+            dlg.destroy()
+            self.quit_app()
+
+        def choose_cancel():
+            dlg.destroy()
+
+        btns = tk.Frame(dlg, bg=BG)
+        btns.pack(fill="x", padx=20, pady=(0, 20))
+        PillButton(btns, "Minimize to System Tray", command=choose_minimize, variant="primary").pack(fill="x", pady=(0, 8))
+        PillButton(btns, "End Shift and Quit", command=choose_end_shift, variant="danger").pack(fill="x", pady=(0, 8))
+        PillButton(btns, "Cancel", command=choose_cancel, variant="secondary").pack(fill="x")
+
+        dlg.protocol("WM_DELETE_WINDOW", choose_cancel)
+        dlg.update_idletasks()
+        # Center on the main window rather than the screen — a small dialog
+        # popping up in a screen corner while the app window is elsewhere
+        # reads as a glitch, not a deliberate prompt.
+        x = self.root.winfo_x() + (self.root.winfo_width() - dlg.winfo_width()) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dlg.winfo_height()) // 2
+        dlg.geometry(f"+{max(0, x)}+{max(0, y)}")
 
     def quit_app(self):
         # If a shift is currently active and being tracked, quitting the app
@@ -2270,7 +2499,21 @@ class TrackerApp:
                 self.tray_icon.stop()
             except Exception:
                 pass
-        self.root.after(100, self.root.destroy)
+        # os._exit(0) rather than root.destroy(): the four daemon worker
+        # threads (_worker_loop, _inactivity_loop, _realtime_loop,
+        # _heartbeat_loop) are daemon=True so the process *should* exit once
+        # the Tk mainloop stops, but a thread blocked inside a slow
+        # requests call (e.g. mid-upload, or an SSE socket that hasn't
+        # noticed stop_event yet) can keep the interpreter — and the
+        # installed .exe's process/file handle — alive in the background for
+        # its own timeout's duration. That's what showed up as "DelCargo
+        # Tracker.exe still in Task Manager after closing the window" and
+        # blocked the installer from overwriting it on reinstall/update
+        # ("file in use"). Every network write that matters (heartbeat
+        # clear, auto-clock-out, quit-intent) has already been sent above,
+        # so it's safe to terminate immediately rather than wait out
+        # whatever those background threads are doing.
+        self.root.after(100, lambda: os._exit(0))
 
     def _start_tray(self):
         def on_show(icon, item):

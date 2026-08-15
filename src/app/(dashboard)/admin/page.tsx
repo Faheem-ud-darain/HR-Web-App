@@ -86,7 +86,11 @@ export default function AdminDashboard() {
     if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
     const fiveDaysAgo = new Date();
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-    hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() })
+    // Orphan-shift cleanup runs first — see the matching comment in
+    // hr/page.tsx and autoCloseOrphanTrackedShifts in hrData.ts.
+    hrActions.autoCloseOrphanTrackedShifts(timesheets)
+      .catch(() => { /* best-effort */ })
+      .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
   }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);

@@ -2,19 +2,21 @@
 // flow. Deliberately NOT part of hrData.ts — hrData.ts is a 'use client'
 // module built around the browser's `pb` instance (which talks to
 // PocketBase through the '/api/pb' Next.js rewrite, i.e. relative URLs that
-// only resolve inside a browser). API routes run server-side, so this talks
-// to PocketBase directly over plain fetch(), the same pattern already used
-// by src/app/api/pb/api/realtime/route.ts.
+// only resolve inside a browser). API routes run server-side.
 //
-// No admin/superuser auth is used or needed here: pb_schema.json confirms
-// both hr_profiles and hr_delcargo_store have fully open rules (listRule/
-// viewRule/createRule/updateRule/deleteRule all `""`, i.e. public), matching
-// this app's existing model where login is a plain client-side password
-// string comparison rather than PocketBase's own auth system. That's an
-// existing, deliberate characteristic of this app — not something
-// introduced by this feature.
+// Originally this talked to PocketBase directly over an unauthenticated
+// fetch() (pb_schema.json's hr_profiles/hr_delcargo_store rules were fully
+// public, so no admin auth was needed). Now that hr_profiles/hr_payroll are
+// being migrated off "open to anyone with the URL" (see pbAdmin.ts), this
+// flow is rewritten to go through the same server-only admin client so it
+// keeps working once those collections' PocketBase rules actually get
+// locked down — and so the new password it sets is hashed rather than
+// written in plaintext, matching every other password-write path in the
+// app (see serverAuth.ts's hashPassword).
 
-const PB_URL = 'https://pb.delcargo.us';
+import { pbAdminFetch } from './pbAdmin';
+import { hashPassword } from './serverAuth';
+
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ATTEMPTS = 5;
 
@@ -47,23 +49,9 @@ function rateLimitKey(email: string): string {
   return `otp_ratelimit_${email.toLowerCase().trim()}`;
 }
 
-async function pbFetch(path: string, init?: RequestInit): Promise<any> {
-  const res = await fetch(`${PB_URL}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`PocketBase ${path} failed: ${res.status} ${body}`);
-  }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
-
 async function getKvRecord(key: string): Promise<{ id: string; value: any } | null> {
   const encoded = encodeURIComponent(`key = "${key}"`);
-  const list = await pbFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=1`);
+  const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, value: item.value } : null;
 }
@@ -71,12 +59,12 @@ async function getKvRecord(key: string): Promise<{ id: string; value: any } | nu
 async function setKvRecord(key: string, value: any): Promise<void> {
   const existing = await getKvRecord(key);
   if (existing) {
-    await pbFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, {
+    await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ value }),
     });
   } else {
-    await pbFetch(`/api/collections/hr_delcargo_store/records`, {
+    await pbAdminFetch(`/api/collections/hr_delcargo_store/records`, {
       method: 'POST',
       body: JSON.stringify({ key, value }),
     });
@@ -86,14 +74,14 @@ async function setKvRecord(key: string, value: any): Promise<void> {
 async function deleteKvRecord(key: string): Promise<void> {
   const existing = await getKvRecord(key);
   if (existing) {
-    await pbFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, { method: 'DELETE' });
+    await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, { method: 'DELETE' });
   }
 }
 
 export async function findProfileByEmail(email: string): Promise<{ id: string; email: string; fullName: string } | null> {
   const clean = email.toLowerCase().trim();
   const encoded = encodeURIComponent(`email = "${clean}"`);
-  const list = await pbFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=1`);
+  const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, email: item.email, fullName: item.full_name } : null;
 }
@@ -187,8 +175,9 @@ export async function consumeOtp(email: string): Promise<void> {
 }
 
 export async function setProfilePassword(profileId: string, newPassword: string): Promise<void> {
-  await pbFetch(`/api/collections/hr_profiles/records/${profileId}`, {
+  const hashed = await hashPassword(newPassword);
+  await pbAdminFetch(`/api/collections/hr_profiles/records/${profileId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ password: newPassword }),
+    body: JSON.stringify({ password: hashed }),
   });
 }

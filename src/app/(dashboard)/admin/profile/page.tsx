@@ -10,7 +10,7 @@ import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Edit2, Camera
 } from 'lucide-react';
-import { useProfiles, hrActions } from '@/lib/hrData';
+import { useProfiles, hrActions, updateProfileSelf, changeOwnPassword, updateProfileAdmin } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
 
@@ -74,7 +74,7 @@ export default function AdminProfilePage() {
   const handlePhotoSave = async (webpDataUrl: string) => {
     if (!profile?.id) return;
     try {
-      await hrActions.updateProfileDetails(profile.id, { profilePicture: webpDataUrl });
+      await updateProfileSelf({ profilePicture: webpDataUrl });
       await refetchProfiles();
       setPendingPhotoFile(null);
       setPhotoSuccess('Profile picture updated!');
@@ -96,10 +96,8 @@ export default function AdminProfilePage() {
       setResetError('Please fill in all fields.');
       return;
     }
-    if (profile?.password && profile.password !== currentPass) {
-      setResetError('Current password is incorrect.');
-      return;
-    }
+    // Current-password check now happens server-side inside
+    // changeOwnPassword — see the equivalent note in hr/profile/page.tsx.
     if (newPass.length < 6) {
       setResetError('New password must be at least 6 characters.');
       return;
@@ -112,14 +110,14 @@ export default function AdminProfilePage() {
     if (profile) {
       setIsResetting(true);
       try {
-        await hrActions.resetPassword(profile.id, newPass);
+        await changeOwnPassword(currentPass, newPass);
         refetchProfiles();
         setResetSuccess('Password updated successfully!');
         setCurrentPass(''); setNewPass(''); setConfirmPass('');
         setTimeout(() => { setIsResetOpen(false); setResetSuccess(''); }, 1400);
-      } catch (err) {
+      } catch (err: any) {
         console.error('[Admin Profile] Password update error:', err);
-        setResetError('Failed to update password. Please try again.');
+        setResetError(err?.message || 'Failed to update password. Please try again.');
       } finally {
         setIsResetting(false);
       }
@@ -134,7 +132,11 @@ export default function AdminProfilePage() {
     try {
       const target = targetEmail === 'admin@delcargo.us' ? profile : hrProfile;
       if (target) {
-        await hrActions.updateProfileDetails(target.id, {
+        // targetEmail can point at either the admin's own account or the
+        // separate hr@ system account, so this can't always be "self" —
+        // routed through the HR/Admin-gated route rather than
+        // updateProfileSelf, same as any other admin-edits-a-profile call.
+        await updateProfileAdmin(target.id, {
           fullName: editName,
           gender: editGender,
           jobTitle: editTitle

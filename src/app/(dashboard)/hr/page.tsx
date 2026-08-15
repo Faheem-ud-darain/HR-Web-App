@@ -9,7 +9,7 @@ import { OrgCalendar } from '@/components/ui/OrgCalendar';
 import { TaskModal } from '@/components/ui/TaskModal';
 import { Users, Clock, CheckCircle2, ClipboardList, PlusCircle, Loader2, Trash2, Eye, AlertTriangle, Video } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName } from '@/lib/hrData';
+import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName, addEmployeeServer, setTeamLeadAdmin } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
@@ -109,7 +109,14 @@ export default function HRDashboard() {
     if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
     const fiveDaysAgo = new Date();
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-    hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() })
+    // Orphan-shift cleanup runs first — closing any tracked shift whose
+    // desktop agent stopped reporting in (PC shutdown, killed process,
+    // etc.) before runAbsenceCheck sees it, so a still-open overnight shift
+    // never gets misread as either "still worked" or a multi-hour false
+    // inactivity absence (see autoCloseOrphanTrackedShifts in hrData.ts).
+    hrActions.autoCloseOrphanTrackedShifts(timesheets)
+      .catch(() => { /* best-effort */ })
+      .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
   }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
@@ -161,7 +168,7 @@ export default function HRDashboard() {
     if (!fullName || !email || !salary) { setOnboardError('Please fill in all required fields.'); return; }
     if (isNaN(Number(salary)) || Number(salary) <= 0) { setOnboardError('Please enter a valid base salary.'); return; }
 
-    await hrActions.addEmployee({ fullName, email, role: role as Profile['role'], joinedDate: new Date().toISOString().split('T')[0], baseSalary: Number(salary), teams: [team], password: tempPassword || 'employee123' });
+    await addEmployeeServer({ fullName, email, role: role as Profile['role'], joinedDate: new Date().toISOString().split('T')[0], baseSalary: Number(salary), teams: [team], password: tempPassword || 'employee123' });
     await hrActions.addNotification('all', 'hr', `New employee ${fullName} (${role}) registered.`);
     await hrActions.addNotification('all', 'admin', `New employee ${fullName} (${role}) registered.`);
     setOnboardSuccess('Employee registered!');
@@ -177,7 +184,7 @@ export default function HRDashboard() {
 
   const handleSaveTeamLead = async () => {
     if (!leadEmployeeId) return;
-    await hrActions.setTeamLead(leadEmployeeId, leadTeamSelections);
+    await setTeamLeadAdmin(leadEmployeeId, leadTeamSelections);
     refetchProfiles();
     const emp = employees.find((e: Profile) => e.id === leadEmployeeId);
     setLeadSuccess(`${emp?.fullName} is now team lead of: ${leadTeamSelections.join(', ') || '(none)'}`);

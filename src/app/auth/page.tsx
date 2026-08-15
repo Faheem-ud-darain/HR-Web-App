@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useRouter } from 'next/navigation';
-import { hrActions, useProfiles } from '@/lib/hrData';
+import { hrActions } from '@/lib/hrData';
 import {
   setSession,
+  setAuthToken,
   generateSessionToken,
   getDeviceLabel,
   getRememberedEmail,
@@ -196,7 +197,6 @@ export default function AuthPage() {
   const [shiftStoppedNotice, setShiftStoppedNotice] = useState(false);
   const [pendingDashRoute, setPendingDashRoute] = useState<string | null>(null);
   const router = useRouter();
-  const { refetch: refetchProfiles } = useProfiles();
 
   // Boot-time session check (see the comment on `checkingSession` above).
   useEffect(() => {
@@ -256,36 +256,31 @@ export default function AuthPage() {
 
     try {
       let role: 'admin' | 'hr' | 'employee' | 'team_lead' | null = null;
-
       let cleanEmail = email.trim().toLowerCase();
-      // Admin override — the login credential (studiozsparx@gmail.com) is a
-      // separate super-admin login and does NOT match any hr_profiles row,
-      // so the actual admin record's email (admin@delcargo.us) must be
-      // stored as the session identity. Otherwise every page that looks up
-      // the current user's profile by email (e.g. /admin/profile) finds
-      // nothing and gets stuck on "Loading profile…" forever.
-      if (cleanEmail === 'studiozsparx@gmail.com' && password === 'Fah123@123') {
-        role = 'admin';
-        cleanEmail = 'admin@delcargo.us';
-      } else if (cleanEmail === 'hr@delcargo.us' && password === 'HR@123') {
-        role = 'hr';
-      } else {
-        // Fetch a fresh employee list on every login attempt (never rely on
-        // a stale in-memory cache for a security-sensitive check).
-        const { data: employees } = await refetchProfiles();
-        const profile = (employees || []).find(emp => emp.email.toLowerCase() === cleanEmail);
-        if (profile && (profile.password === password || (!profile.password && password === '123'))) {
-          // `offboarded` isn't a real hr_profiles column — useProfiles()
-          // already merges the per-profile KV overlay into each Profile, so
-          // profile.offboarded is available directly here.
-          if (profile.offboarded) {
-            setError('This account has been deactivated / offboarded.');
-            setLoading(false);
-            return;
-          }
-          role = profile.role as any;
-        }
+      let authToken: string | null = null;
+
+      // Credential check now happens entirely server-side (see
+      // src/app/api/auth/login/route.ts) — this used to be a client-side
+      // comparison against every employee's plaintext password (fetched, in
+      // full, into the browser via refetchProfiles()) plus two hardcoded
+      // super-admin/HR credentials sitting in this file's own shipped JS.
+      // Neither of those things happens here anymore: the browser only ever
+      // sends the attempted email/password and gets back a role + a signed
+      // session token, never anyone's actual password.
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || 'Invalid email or password.');
+        setLoading(false);
+        return;
       }
+      role = data.role;
+      cleanEmail = data.email; // server resolves the real session identity (e.g. the super-admin alias -> admin@delcargo.us)
+      authToken = data.token;
 
       if (role) {
         // Multi-device session enforcement — Employee/Team Lead accounts
@@ -313,10 +308,12 @@ export default function AuthPage() {
           // claim.ok already persisted the slot — no separate claim call
           // needed below, unlike the old single-session flow.
           await setSession(cleanEmail, role, rememberMe, sessionToken);
+          if (authToken) setAuthToken(authToken, rememberMe);
           if (rememberMe) setRememberedEmail(cleanEmail);
           else clearRememberedEmail();
         } else {
           await setSession(cleanEmail, role, rememberMe, sessionToken);
+          if (authToken) setAuthToken(authToken, rememberMe);
           if (rememberMe) setRememberedEmail(cleanEmail);
           else clearRememberedEmail();
           if (role !== 'admin' && role !== 'hr') {

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { DollarSign, CheckCircle2, TrendingUp } from 'lucide-react';
-import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord } from '@/lib/hrData';
+import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin } from '@/lib/hrData';
 
 interface PayrollSummary {
   department: string;
@@ -98,7 +98,7 @@ export default function AdminPayrollPage() {
       if (record.incrementAmount > 0) {
         const emp = employees.find(e => e.id === record.employeeId);
         if (emp) {
-          await hrActions.applyAnniversaryIncrement(emp, emp.baseSalary, record.incrementAmount);
+          await applyIncrementServer(emp, emp.baseSalary, record.incrementAmount);
         }
       }
     }
@@ -106,7 +106,7 @@ export default function AdminPayrollPage() {
     // Process all payroll records (persist the current computed view now
     // that the admin has explicitly clicked Release).
     for (const record of payroll) {
-      await hrActions.upsertPayrollRecord({ ...record, processed: true });
+      await upsertPayrollRecordAdmin({ ...record, processed: true });
     }
 
     refetchProfiles();

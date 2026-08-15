@@ -29,7 +29,11 @@ export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 // HR/Admin sees an outdated-build badge in TrackingView. Bump this string
 // whenever a new mandatory build ships (keep in sync with APP_VERSION in
 // tracker-agent/agent_gui.py AND the git tag pushed to trigger the release).
-export const TRACKER_MIN_VERSION = '6';
+// Bumped 6 -> 11: v10 and earlier shipped with the reason_text/deduction_text
+// SyntaxError (fixed alongside the Start Shift/black-screenshot/orphan-shift/
+// lingering-process fixes), and v11 adds the upload/capture jitter from
+// staggered_screenshot_plan.md — both are worth pushing everyone onto.
+export const TRACKER_MIN_VERSION = '11';
 
 /**
  * Returns true when the connected tracker agent needs an update.

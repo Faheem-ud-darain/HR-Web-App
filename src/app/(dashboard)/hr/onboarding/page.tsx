@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { hrActions, Profile, useProfiles, useProfileDocuments, useTeams, displayName } from '@/lib/hrData';
+import { hrActions, Profile, useProfiles, useProfileDocuments, useTeams, displayName, approveOnboardingServer, rejectOnboardingServer, addEmployeeServer } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { UserPlus, CheckCircle2, AlertCircle, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
 import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
@@ -43,7 +43,7 @@ export default function HROnboardingPage() {
     setReviewError('');
     try {
       const reviewer = getSessionEmail() || '';
-      await hrActions.approveOnboarding(emp, reviewer);
+      await approveOnboardingServer(emp, reviewer);
       await refetchProfiles();
       setReviewingEmp(null);
     } catch (err) {
@@ -63,7 +63,7 @@ export default function HROnboardingPage() {
     setReviewError('');
     try {
       const reviewer = getSessionEmail() || '';
-      await hrActions.rejectOnboarding(emp, reviewer, rejectReason.trim());
+      await rejectOnboardingServer(emp, reviewer, rejectReason.trim());
       await refetchProfiles();
       setReviewingEmp(null);
       setShowRejectForm(false);
@@ -111,7 +111,7 @@ export default function HROnboardingPage() {
 
     setIsOnboarding(true);
     try {
-      await hrActions.addEmployee({
+      await addEmployeeServer({
         fullName,
         email,
         role: role as 'employee' | 'hr' | 'admin' | 'team_lead',

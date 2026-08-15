@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useKVByPrefix, useTimesheets, useProfiles, hrActions, localShiftDate } from '@/lib/hrData';
+import { useKVByPrefix, useTimesheets, useProfiles, hrActions } from '@/lib/hrData';
+import { getNYDateString } from '@/lib/timezone';
 
 const HEARTBEAT_STALE_MS = 3 * 60 * 1000; // 3 minutes without heartbeat = inactive
 
@@ -31,7 +32,13 @@ export function SmartInactivityMonitor({ userRole, userEmail }: { userRole: stri
       if (!currentTimesheets.length || !currentHeartbeats.length) return;
 
       const now = Date.now();
-      const todayDate = localShiftDate();
+      // localShiftDate() requires a clockIn timestamp (it computes which
+      // shift-day a specific punch belongs to) — this just needs "today's
+      // date" as a bare key, which is what getNYDateString() is for. The
+      // previous localShiftDate() call (0 args) was a TS2554 type error —
+      // "Expected 1-2 arguments, but got 0" — which next.config.ts doesn't
+      // suppress, so this was very likely failing the production build.
+      const todayDate = getNYDateString();
       const heartbeatsMap = new Map<string, number>();
 
       currentHeartbeats.forEach(row => {

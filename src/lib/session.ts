@@ -245,6 +245,38 @@ export function clearRememberedEmail(): void {
   window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
 }
 
+// Separate from the TOKEN_KEY/`session_token` above — that one is a plain
+// random string used only for the multi-device-slot claim comparison (see
+// claimUserSessionSlot in hrData.ts), not a real credential. This one is
+// the signed JWT issued by src/app/api/auth/login (see
+// src/lib/serverAuth.ts) — the actual bearer credential the new protected
+// API routes (currently /api/payroll/me) check via `Authorization: Bearer
+// <token>`. Kept in a separate key so the two concerns (device-limit
+// bookkeeping vs. real auth) can't get tangled with each other.
+const AUTH_TOKEN_KEY = 'auth_jwt';
+
+export function setAuthToken(token: string, remember: boolean): void {
+  if (typeof window === 'undefined') return;
+  if (remember) {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  } else {
+    window.sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(AUTH_TOKEN_KEY) || window.sessionStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function clearAuthToken(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
 export function clearSession(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(EMAIL_KEY);
@@ -253,5 +285,6 @@ export function clearSession(): void {
   window.sessionStorage.removeItem(EMAIL_KEY);
   window.sessionStorage.removeItem(ROLE_KEY);
   window.sessionStorage.removeItem(TOKEN_KEY);
+  clearAuthToken();
   mirrorToNativePreferences(null, null, null);
 }

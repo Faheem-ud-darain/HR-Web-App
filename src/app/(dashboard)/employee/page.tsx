@@ -627,79 +627,95 @@ export default function EmployeeDashboard() {
                   onClick={async () => {
                     if (!userProfile?.email) return;
 
-                    // Mobile block — tracker can't run on mobile at all
-                    if (isTrackingLiveFor(userProfile) && isMobileApp) {
-                      setShowMobileBlockedModal(true);
-                      return;
-                    }
-
-                    if (isTrackingLiveFor(userProfile)) {
-                      // ── Ping/Pong Handshake (Signals 3 + 4) ───────────────
-                      // Write a ping to PocketBase; the tracker agent detects
-                      // it via realtime SSE and writes back a pong within ~1s.
-                      // This is more reliable than reading cached heartbeat,
-                      // which can be stale due to server timeouts.
-                      setPingingTracker(true);
-                      const requestId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-                      try {
-                        // Clean up any stale pong from a previous attempt
-                        await hrActions.clearTrackerPong(userProfile.email);
-                        await hrActions.writeTrackerPing(userProfile.email, requestId);
-                      } catch {
-                        // Can't write ping — server issue, fall back to heartbeat
-                        const freshHb = await hrActions.getTrackerHeartbeat(userProfile.email).catch(() => null);
-                        setTrackerHeartbeat(freshHb ?? null);
-                        setPingingTracker(false);
-                        hrActions.clearTrackerPing(userProfile.email).catch(() => {});
-                        if (!hrActions.isHeartbeatLive(freshHb)) {
-                          setShowTrackerRequiredModal(true);
-                        }
+                    // Wrapped in try/finally so pingingTracker/checkingTracker
+                    // can never get stuck showing "Connecting to tracker…" /
+                    // "Checking tracker…" forever if anything below throws
+                    // unexpectedly (network blip, a rejected promise, etc.) —
+                    // previously an uncaught error here left the button
+                    // permanently disabled until the page was reloaded.
+                    try {
+                      // Mobile block — tracker can't run on mobile at all
+                      if (isTrackingLiveFor(userProfile) && isMobileApp) {
+                        setShowMobileBlockedModal(true);
                         return;
                       }
 
-                      // Poll for pong every 500ms, give up after 8 seconds
-                      const POLL_MS = 500;
-                      const TIMEOUT_MS = 8000;
-                      let elapsed = 0;
-                      let pongReceived = false;
-                      while (elapsed < TIMEOUT_MS) {
-                        await new Promise(r => setTimeout(r, POLL_MS));
-                        elapsed += POLL_MS;
+                      if (isTrackingLiveFor(userProfile)) {
+                        // ── Ping/Pong Handshake (Signals 3 + 4) ───────────────
+                        // Write a ping to PocketBase; the tracker agent detects
+                        // it via realtime SSE and writes back a pong within ~1s.
+                        // This is more reliable than reading cached heartbeat,
+                        // which can be stale due to server timeouts.
+                        setPingingTracker(true);
+                        const requestId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+                        let pongReceived = false;
+
                         try {
-                          const pong = await hrActions.getTrackerPong(userProfile.email);
-                          if (pong?.requestId === requestId) {
-                            pongReceived = true;
-                            break;
+                          // Clean up any stale pong from a previous attempt
+                          await hrActions.clearTrackerPong(userProfile.email);
+                          await hrActions.writeTrackerPing(userProfile.email, requestId);
+
+                          // Poll for pong every 500ms, give up after 8 seconds
+                          const POLL_MS = 500;
+                          const TIMEOUT_MS = 8000;
+                          let elapsed = 0;
+                          while (elapsed < TIMEOUT_MS) {
+                            await new Promise(r => setTimeout(r, POLL_MS));
+                            elapsed += POLL_MS;
+                            try {
+                              const pong = await hrActions.getTrackerPong(userProfile.email);
+                              if (pong?.requestId === requestId) {
+                                pongReceived = true;
+                                break;
+                              }
+                            } catch { /* ignore poll errors, keep trying */ }
                           }
-                        } catch { /* ignore poll errors, keep trying */ }
+                        } catch {
+                          // Couldn't even write the ping (server issue) — fall
+                          // through to the heartbeat fallback below instead of
+                          // blocking outright.
+                        } finally {
+                          // Clean up ping and pong keys regardless of outcome
+                          hrActions.clearTrackerPing(userProfile.email).catch(() => {});
+                          hrActions.clearTrackerPong(userProfile.email).catch(() => {});
+                        }
+
+                        if (!pongReceived) {
+                          // Dual-Validation Rule: the ping/pong handshake
+                          // failed or timed out (SSE not connected — e.g. a
+                          // corporate firewall blocking it, or PocketBase
+                          // momentarily busy uploading a screenshot). Rather
+                          // than blocking Start Shift outright, fall back to
+                          // checking whether the tracker has sent a live
+                          // heartbeat recently — if so, it's plainly still
+                          // running and this employee shouldn't be stuck.
+                          const freshHb = await hrActions.getTrackerHeartbeat(userProfile.email).catch(() => null);
+                          setTrackerHeartbeat(freshHb ?? null);
+                          if (!hrActions.isHeartbeatLive(freshHb)) {
+                            setShowTrackerRequiredModal(true);
+                            return;
+                          }
+                          // Heartbeat is live — proceed even without a pong.
+                        }
+                        // Tracker confirmed live — proceed
                       }
 
-                      // Clean up ping and pong keys regardless of outcome
-                      hrActions.clearTrackerPing(userProfile.email).catch(() => {});
-                      hrActions.clearTrackerPong(userProfile.email).catch(() => {});
+                      // ── Clock In ────────────────────────────────────────────
+                      setShiftActive(true);
+                      setGeofenceStatus('Shift Active');
+                      const started = await hrActions.clockIn(userProfile.email);
+                      openShiftRef.current = { id: started.id, clockIn: started.clockIn };
+                      await hrActions.touchShiftTabHeartbeat(userProfile.email);
+                      await refetchTimesheets();
+                      await hrActions.addNotification(userProfile.email, 'employee', 'Shift started manually. Screen tracking is now active for this shift.');
+                      {
+                        const shiftActorName = displayName(userProfile, 'hr');
+                        await hrActions.addNotification('all', 'hr', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
+                        await hrActions.addNotification('all', 'admin', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
+                      }
+                    } finally {
                       setPingingTracker(false);
-
-                      if (!pongReceived) {
-                        // No response — tracker is not running
-                        setShowTrackerRequiredModal(true);
-                        return;
-                      }
-                      // Tracker confirmed live — proceed
-                    }
-
-                    // ── Clock In ────────────────────────────────────────────
-                    setShiftActive(true);
-                    setGeofenceStatus('Shift Active');
-                    const started = await hrActions.clockIn(userProfile.email);
-                    openShiftRef.current = { id: started.id, clockIn: started.clockIn };
-                    await hrActions.touchShiftTabHeartbeat(userProfile.email);
-                    await refetchTimesheets();
-                    await hrActions.addNotification(userProfile.email, 'employee', 'Shift started manually. Screen tracking is now active for this shift.');
-                    {
-                      const shiftActorName = displayName(userProfile, 'hr');
-                      await hrActions.addNotification('all', 'hr', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
-                      await hrActions.addNotification('all', 'admin', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
+                      setCheckingTracker(false);
                     }
                   }}
                   disabled={

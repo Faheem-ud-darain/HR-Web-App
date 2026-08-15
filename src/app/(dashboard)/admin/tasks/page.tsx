@@ -5,7 +5,7 @@ import { TaskBoard } from '@/components/ui/TaskBoard';
 import { TaskModal } from '@/components/ui/TaskModal';
 import { Modal } from '@/components/ui/Modal';
 import { ClipboardList, Star, CheckCircle2, UserCog, Loader2 } from 'lucide-react';
-import { useTasks, useProfiles, useTeams, hrActions, displayName } from '@/lib/hrData';
+import { useTasks, useProfiles, useTeams, hrActions, displayName, setTeamLeadAdmin } from '@/lib/hrData';
 
 export default function AdminTasksPage() {
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
@@ -24,7 +24,7 @@ export default function AdminTasksPage() {
     if (!leadEmpId || isSavingLead) return;
     setIsSavingLead(true);
     try {
-      await hrActions.setTeamLead(leadEmpId, leadTeams);
+      await setTeamLeadAdmin(leadEmpId, leadTeams);
       refetchProfiles();
       const emp = employees.find(e => e.id === leadEmpId);
       setLeadSuccess(`${emp ? displayName(emp, 'admin') : ''} — team lead updated!`);

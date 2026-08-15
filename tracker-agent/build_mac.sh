@@ -16,6 +16,11 @@ set -e
 python3 -m pip install --upgrade pip
 pip3 install -r requirements.txt
 
+# Sanity check: fail loudly here instead of PyInstaller silently packaging a
+# build that crashes on launch with a SyntaxError (this happened once — see
+# the "reason_text" bug fixed in agent_gui.py).
+python3 -m py_compile agent_gui.py
+
 # Regenerates icon.icns / icon.png from "Tracker Icon.png" if present —
 # safe to skip (build still works, just without a custom icon) if you
 # haven't added a brand icon file yet.

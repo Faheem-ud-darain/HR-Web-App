@@ -16,6 +16,8 @@ import {
   useLeaves,
   hrActions,
   displayName,
+  updateProfileAdmin,
+  applyIncrementServer,
 } from '@/lib/hrData';
 import { Badge } from './Badge';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -202,7 +204,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
     setIsSavingProfile(true);
     try {
-      await hrActions.updateProfileDetails(profile.id, {
+      await updateProfileAdmin(profile.id, {
         fullName,
         email,
         password,
@@ -351,7 +353,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
     if (!confirmed) return;
     setIsApplyingIncrement(true);
     try {
-      await hrActions.applyAnniversaryIncrement(profile, profile.baseSalary, pending);
+      await applyIncrementServer(profile, profile.baseSalary, pending);
       await refetchProfiles();
       onUpdate?.();
     } finally {
@@ -492,7 +494,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                     type="button"
                     onClick={async () => {
                       const cleaned = (profile.assignedWarehouses || []).filter(wId => warehouses.find(w => w.id === wId));
-                      await hrActions.updateProfileDetails(profile.id, { assignedWarehouses: cleaned });
+                      await updateProfileAdmin(profile.id, { assignedWarehouses: cleaned });
                       refetchProfiles();
                       onUpdate?.();
                     }}

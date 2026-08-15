@@ -59,3 +59,19 @@ Filename: "{app}\DelCargo Tracker.exe"; Description: "Launch DelCargo Tracker"; 
 ; Leaves the employee's saved setup code/config alone on uninstall by
 ; default (so a reinstall reconnects automatically) — nothing to add here
 ; unless a full wipe is wanted; documented for whoever revisits this.
+
+[Code]
+// CloseApplications=force above (Restart Manager) usually handles a
+// normally-running instance, but a copy left with a background thread
+// stuck mid-network-call (see the os._exit(0) fix in quit_app(),
+// agent_gui.py) can outlive that and keep "DelCargo Tracker.exe" locked,
+// making reinstall/update fail with "file in use". A hard taskkill before
+// any files are touched guarantees a clean install every time regardless
+// of what state the previous instance was left in.
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM "DelCargo Tracker.exe" /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;

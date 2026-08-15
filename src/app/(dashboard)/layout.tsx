@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
-import { Profile, hrActions, useProfiles } from '@/lib/hrData';
+import { Profile, hrActions, useProfiles, updateProfileSelf } from '@/lib/hrData';
 import {
   getSessionEmail,
   getSessionRole,
@@ -29,7 +29,7 @@ import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHan
 import { SmartInactivityMonitor } from '@/components/ui/SmartInactivityMonitor';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { useAnyModalOpen } from '@/lib/modalStack';
-import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload, LogOut } from 'lucide-react';
+import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload, LogOut, X } from 'lucide-react';
 
 // Wraps each page's content for the tab-switch fade+rise animation. Split
 // out into its own component (rather than inlining a `page-enter` class
@@ -318,6 +318,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  // Remove-and-reupload handlers for the onboarding document stepper — before
+  // this, a wrong photo/CV/ID scan/passport picked by mistake was stuck once
+  // uploaded (there was no way to clear it before hitting "Complete
+  // Onboarding" — the profile picture's "Change" link could only replace it
+  // by immediately picking a new file, not just remove the wrong one). These
+  // just clear local component state; nothing has been submitted to
+  // PocketBase yet at this point in the stepper (that only happens in
+  // handleCompleteOnboarding), so there's nothing server-side to undo.
+  const handleRemoveProfilePicture = () => {
+    setProfilePicture(null);
+    setPendingPhotoFile(null);
+    setUploadError('');
+  };
+  const handleRemoveCv = () => {
+    setCvFile(null);
+    setCvFileData(null);
+    setUploadError('');
+  };
+  const handleRemoveCnicFile = (idx: number) => {
+    setCnicFiles(prev => prev.filter((_, i) => i !== idx));
+    setCnicFilesData(prev => prev.filter((_, i) => i !== idx));
+    setUploadError('');
+  };
+  const handleRemovePassport = () => {
+    setPassportFile(null);
+    setPassportFileData(null);
+    setUploadError('');
+  };
+
   const handleNextStep = () => {
     setStepperError('');
     if (onboardStep === 1) {
@@ -373,11 +402,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       try {
         const isUsaEmployee = profile?.region === 'USA';
 
-        // hrActions.updateProfileDetails automatically routes real
-        // hr_profiles columns (bank/account/iban/profilePicture/
-        // onboardingCompleted) vs the KV overlay fields (cv/identity/
-        // passport docs) to the right place.
-        await hrActions.updateProfileDetails(profile.id, {
+        // updateProfileSelf (server-side, scoped to the caller's own
+        // session) automatically routes real hr_profiles columns
+        // (bank/account/iban/profilePicture/onboardingCompleted) vs the KV
+        // overlay fields (cv/identity/passport docs/approvalStatus) to the
+        // right place — see /api/profile/me/route.ts.
+        await updateProfileSelf({
           bankName,
           accountNumber,
           iban,
@@ -613,6 +643,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 }}
                               />
                             </label>
+                            <button
+                              type="button"
+                              onClick={handleRemoveProfilePicture}
+                              title="Remove photo"
+                              className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
                           </div>
                         ) : uploadingPic ? (
                           <span className="text-slate-400 text-xs animate-pulse">Uploading photo...</span>
@@ -658,8 +696,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         )}
                       </div>
                       {cvFile && (
-                        <div className="text-xs font-semibold text-slate-600 mt-3 flex items-center gap-1 bg-white p-2 rounded border border-slate-200">
-                          <FileText className="h-4 w-4 text-orange-600" /> {cvFile}
+                        <div className="text-xs font-semibold text-slate-600 mt-3 flex items-center justify-between gap-2 bg-white p-2 rounded border border-slate-200">
+                          <span className="flex items-center gap-1 truncate"><FileText className="h-4 w-4 text-orange-600 shrink-0" /> {cvFile}</span>
+                          <button
+                            type="button"
+                            onClick={handleRemoveCv}
+                            title="Remove and re-upload"
+                            className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -701,8 +747,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       {cnicFiles.length > 0 && (
                         <div className="space-y-1.5 mt-3">
                           {cnicFiles.map((file, idx) => (
-                            <div key={idx} className="text-xs font-semibold text-slate-600 flex items-center gap-1 bg-white p-2 rounded border border-slate-200">
-                              <FileText className="h-4 w-4 text-orange-600" /> {file}
+                            <div key={idx} className="text-xs font-semibold text-slate-600 flex items-center justify-between gap-2 bg-white p-2 rounded border border-slate-200">
+                              <span className="flex items-center gap-1 truncate"><FileText className="h-4 w-4 text-orange-600 shrink-0" /> {file}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCnicFile(idx)}
+                                title="Remove and re-upload"
+                                className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -740,8 +794,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         )}
                       </div>
                       {passportFile && (
-                        <div className="text-xs font-semibold text-slate-600 mt-3 flex items-center gap-1 bg-white p-2 rounded border border-slate-200">
-                          <FileText className="h-4 w-4 text-orange-600" /> {passportFile}
+                        <div className="text-xs font-semibold text-slate-600 mt-3 flex items-center justify-between gap-2 bg-white p-2 rounded border border-slate-200">
+                          <span className="flex items-center gap-1 truncate"><FileText className="h-4 w-4 text-orange-600 shrink-0" /> {passportFile}</span>
+                          <button
+                            type="button"
+                            onClick={handleRemovePassport}
+                            title="Remove and re-upload"
+                            className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1040,7 +1102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button
                 onClick={async () => {
                   if (profile?.id) {
-                    await hrActions.updateProfileDetails(profile.id, {
+                    await updateProfileSelf({
                       onboardingCompleted: false,
                     });
                     window.location.reload();

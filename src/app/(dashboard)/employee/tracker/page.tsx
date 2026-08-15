@@ -23,6 +23,7 @@ export default function TrackerPage() {
   const [heartbeatChecking, setHeartbeatChecking] = useState(false);
   const [heartbeatCheckedOnce, setHeartbeatCheckedOnce] = useState(false);
   const [detectedOS, setDetectedOS] = useState<'windows' | 'mac' | 'cros' | 'other'>('other');
+  const [forceDisconnecting, setForceDisconnecting] = useState(false);
 
   useEffect(() => {
     setDetectedOS(detectOS());
@@ -63,6 +64,27 @@ export default function TrackerPage() {
   const handleReconnectCheck = () => {
     if (!profile) return;
     refreshHeartbeat(profile.email);
+  };
+
+  // Escape hatch for "another device is active" / a stuck superseded state
+  // blocking a new computer from claiming this account's tracker. Clears
+  // every tracker session key server-side (see forceDisconnectAllTrackers)
+  // then resets this page's own connection state so it reflects "not
+  // connected" immediately, instead of waiting out any staleness window.
+  const handleForceDisconnectAll = async () => {
+    if (!profile) return;
+    const confirmed = window.confirm(
+      "This disconnects ALL trackers (desktop app or Chrome extension) currently linked to your account, including one that's genuinely still running elsewhere. Use this only if you're switching computers or stuck behind a \"device already connected\" error. Continue?"
+    );
+    if (!confirmed) return;
+    setForceDisconnecting(true);
+    try {
+      await hrActions.forceDisconnectAllTrackers(profile.email);
+      setHeartbeat(null);
+      setHeartbeatCheckedOnce(true);
+    } finally {
+      setForceDisconnecting(false);
+    }
   };
 
   // Employee self-service: fetch (and if needed, create) this employee's own
@@ -243,9 +265,21 @@ export default function TrackerPage() {
                 </button>
               </div>
               {heartbeatCheckedOnce && !hrActions.isHeartbeatLive(heartbeat) && (
-                <p className="text-[9px] text-slate-400 leading-relaxed -mt-1">
-                  If you&apos;ve installed the app, make sure it&apos;s running (check your system tray / menu bar), then click Reconnect. If you haven&apos;t installed it yet, use the button below.
-                </p>
+                <>
+                  <p className="text-[9px] text-slate-400 leading-relaxed -mt-1">
+                    If you&apos;ve installed the app, make sure it&apos;s running (check your system tray / menu bar), then click Reconnect. If you haven&apos;t installed it yet, use the button below.
+                  </p>
+                  <p className="text-[9px] text-slate-400 leading-relaxed -mt-1">
+                    Switching to a new computer and blocked by a &quot;device already connected&quot; error?{' '}
+                    <button
+                      onClick={handleForceDisconnectAll}
+                      disabled={forceDisconnecting}
+                      className="font-bold text-rose-600 hover:text-rose-700 disabled:opacity-50 underline underline-offset-2"
+                    >
+                      {forceDisconnecting ? 'Disconnecting…' : 'Force Disconnect All Trackers'}
+                    </button>
+                  </p>
+                </>
               )}
 
               {trackingSettings?.agentToken ? (

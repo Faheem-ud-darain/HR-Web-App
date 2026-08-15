@@ -163,6 +163,14 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [ticketLimit, setTicketLimit] = useState<number>(50);
 
+  // Each status tab (All/Open/Closed) gets its own fresh 50 + Load More
+  // count — otherwise clicking "Load More" a few times on Open and then
+  // switching to Closed would carry over an inflated limit (e.g. 200) into
+  // a tab that never asked for that many, fetching far more than needed.
+  useEffect(() => {
+    setTicketLimit(50);
+  }, [statusFilter]);
+
   const visibleTickets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const myEmailLower = (currentEmail || '').toLowerCase();
@@ -252,7 +260,10 @@ export function TicketsView({ role }: TicketsViewProps) {
   };
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
-  const { data: allTickets, refetch: refetchTickets, isFetching: isFetchingTickets } = useTickets(ticketLimit);
+  const { data: allTickets, refetch: refetchTickets, isFetching: isFetchingTickets } = useTickets(
+    ticketLimit,
+    statusFilter === 'all' ? undefined : statusFilter,
+  );
 
   useEffect(() => {
     const email = getSessionEmail() || '';
@@ -560,6 +571,14 @@ export function TicketsView({ role }: TicketsViewProps) {
   const isAdmin = role === 'admin';
   const isHR = role === 'hr';
   const isEmp = role === 'employee' || role === 'team_lead';
+  // An employee can close (but not re-open) a ticket they filed themselves —
+  // e.g. once their issue is resolved, without waiting on HR/Technical to
+  // do it. Re-opening stays privileged-only: if it turns out not actually
+  // resolved, replying (which flips a closed ticket's unread state for
+  // HR/Technical the same as any other message) is the expected path,
+  // rather than letting anyone silently reopen their own closed cases.
+  const isOwnTicket = !!selectedTicket && !!currentEmail && selectedTicket.employeeEmail.toLowerCase() === currentEmail.toLowerCase();
+  const canCloseOwnTicket = isEmp && isOwnTicket && !isPrivileged;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -815,7 +834,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                         )}
                       </h3>
                       <div className="flex items-center gap-2 shrink-0">
-                        {isPrivileged && !isClosed && (
+                        {(isPrivileged || canCloseOwnTicket) && !isClosed && (
                           <button
                             onClick={() => handleCloseTicket(selectedTicket.id)}
                             disabled={updatingTicketStatusId === selectedTicket.id}

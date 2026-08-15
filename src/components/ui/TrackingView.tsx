@@ -17,6 +17,7 @@ import {
   useTimesheets,
   hrActions,
   displayName,
+  updateProfileAdmin,
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
@@ -111,7 +112,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // Heartbeats are one KV row per device: tracker_heartbeat_<slug>. React
   // Query's own refetchInterval/staleness handles freshness here; no manual
   // refetch trigger is needed since this view doesn't mutate heartbeats.
-  const { data: heartbeatRows } = useKVByPrefix('tracker_heartbeat_');
+  const { data: heartbeatRows, refetch: refetchHeartbeats } = useKVByPrefix('tracker_heartbeat_');
   // Needed to compute "Shift Time" / "Active Time" (shift minus inactivity)
   // in the Mouse Activity modal below.
   const { data: allTimesheets } = useTimesheets();
@@ -169,7 +170,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     // find the download link at all, even though tracking was "on" behind
     // the scenes.
     const emp = employees.find(e => e.email.toLowerCase() === email.toLowerCase());
-    if (emp) await hrActions.updateProfileDetails(emp.id, { trackingEnabled: enabled });
+    if (emp) await updateProfileAdmin(emp.id, { trackingEnabled: enabled });
     refetchSettings();
   };
 
@@ -201,6 +202,19 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     if (!confirmed) return;
     await hrActions.regenerateAgentToken(email);
     refetchSettings();
+  };
+
+  // HR/Admin-facing escape hatch for the same "another device is active"
+  // stuck-superseded state employees can hit themselves from the Tracker
+  // page — useful when an employee reports being blocked and can't wait for
+  // a stale heartbeat to expire on its own. Does not change the agent
+  // token (unlike Regenerate Token above), so a reconnect works immediately
+  // with the same setup code once the new device's tracker is opened again.
+  const handleForceDisconnect = async (email: string) => {
+    const confirmed = window.confirm(`Force-disconnect every tracker (desktop app or Chrome extension) currently linked to ${email}'s account, including one that may genuinely still be running? Use this only to unblock a stuck "device already connected" report.`);
+    if (!confirmed) return;
+    await hrActions.forceDisconnectAllTrackers(email);
+    refetchHeartbeats();
   };
 
   const copyConfig = (settings: TrackingSettings) => {
@@ -766,6 +780,13 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
                   >
                     <RefreshCw className="h-3.5 w-3.5" /> Regenerate Token
+                  </button>
+                  <button
+                    onClick={() => handleForceDisconnect(setupEmp.email)}
+                    className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                    title="Unblock a stuck &quot;device already connected&quot; report without changing their setup code"
+                  >
+                    <WifiOff className="h-3.5 w-3.5" /> Force Disconnect All Trackers
                   </button>
                 </div>
               </div>

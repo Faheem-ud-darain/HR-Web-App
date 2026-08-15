@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Profile, formatMoney, TimesheetEntry, hrActions, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName } from '@/lib/hrData';
+import { Profile, formatMoney, TimesheetEntry, hrActions, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { FileText, Search, Filter, ShieldCheck, Download, MapPin, Edit2, Monitor, Landmark, Loader2 } from 'lucide-react';
 import { UserProfileModal } from '@/components/ui/UserProfileModal';
@@ -107,7 +107,7 @@ export default function ReportsPage() {
     try {
       const assignedWh = selectedRegion === 'Pakistan' ? [] : selectedWarehouses;
 
-      await hrActions.updateProfileDetails(selectedEmp.id, {
+      await updateProfileAdmin(selectedEmp.id, {
         region: selectedRegion,
         assignedWarehouses: assignedWh,
         trackingEnabled: trackingEnabled,

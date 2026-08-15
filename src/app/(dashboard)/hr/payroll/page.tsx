@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin } from '@/lib/hrData';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
@@ -53,9 +53,9 @@ export default function HRPayrollPage() {
       // already paid.
       if (record.incrementAmount > 0) {
         const emp = employees.find(e => e.id === employeeId);
-        if (emp) await hrActions.applyAnniversaryIncrement(emp, emp.baseSalary, record.incrementAmount);
+        if (emp) await applyIncrementServer(emp, emp.baseSalary, record.incrementAmount);
       }
-      await hrActions.upsertPayrollRecord({ ...record, processed: true });
+      await upsertPayrollRecordAdmin({ ...record, processed: true });
       setLocalEdits(prev => { const next = { ...prev }; delete next[employeeId]; return next; });
       await refetchProfiles();
       refetchPayroll();
@@ -69,7 +69,7 @@ export default function HRPayrollPage() {
     setLocalEdits(prev => ({ ...prev, [employeeId]: { ...prev[employeeId], [field]: numericValue } }));
     const record = compiledPayrollData.find(r => r.employeeId === employeeId);
     if (!record) return;
-    await hrActions.upsertPayrollRecord({ ...record, [field]: numericValue });
+    await upsertPayrollRecordAdmin({ ...record, [field]: numericValue });
     refetchPayroll();
   };
 

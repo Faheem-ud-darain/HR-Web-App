@@ -236,20 +236,34 @@ async function handleHeartbeatTick() {
   // 1. ALWAYS upload live tracker heartbeat while extension is connected (v11)
   try {
     const existingHb = await pbGetKV(serverUrl, heartbeatKey);
-    
-    // Check if superseded by another device
+
+    // Check if superseded by another device — but only act on it if that
+    // other device's heartbeat is actually recent. Without a staleness
+    // check here, this extension would immediately disconnect itself the
+    // instant it saw ANY competing deviceId, including one that's long
+    // dead (e.g. an old Chromebook that was never properly signed out) or
+    // a benign write-order race against its own last check-in. 60s matches
+    // the equivalent guard in tracker-agent/agent_gui.py's _checkin().
+    const HEARTBEAT_SUPERSEDE_STALE_MS = 60 * 1000;
     if (existingHb && existingHb.deviceId && existingHb.deviceId !== deviceId) {
-      console.warn(`[Delcargo Tracker] Superseded by device: ${existingHb.deviceId}. Disconnecting...`);
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon128.png',
-        title: 'Tracker Disconnected',
-        message: 'Your profile was logged into another tracker. This extension has been disconnected.'
-      });
-      chrome.storage.local.clear(() => {
-        chrome.runtime.reload();
-      });
-      return;
+      const lastSeenMs = existingHb.lastSeenAt ? new Date(existingHb.lastSeenAt).getTime() : 0;
+      const isOtherDeviceStale = !lastSeenMs || (Date.now() - lastSeenMs > HEARTBEAT_SUPERSEDE_STALE_MS);
+      if (!isOtherDeviceStale) {
+        console.warn(`[Delcargo Tracker] Superseded by device: ${existingHb.deviceId}. Disconnecting...`);
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icons/icon128.png',
+          title: 'Tracker Disconnected',
+          message: 'Your profile was logged into another tracker. This extension has been disconnected.'
+        });
+        chrome.storage.local.clear(() => {
+          chrome.runtime.reload();
+        });
+        return;
+      }
+      // The other device's heartbeat is stale — it's not actually live.
+      // Fall through and claim the slot for this device instead of
+      // disconnecting ourselves over a dead record.
     }
 
     const connectedAt = existingHb?.connectedAt || nowIso;
@@ -327,10 +341,39 @@ async function handleHeartbeatTick() {
 
     chrome.storage.local.set({ screenshotIntervalMinutes: intervalMinutes });
 
-    // Check if screenshot is due
+    // ── Staggered screenshot uploads (see staggered_screenshot_plan.md) ──
+    // Without this, lastScreenshotTime starts at 0, so the very first
+    // "is it due" check after a shift opens is always true — meaning every
+    // Chromebook whose shift starts at (near) the same moment captures its
+    // first screenshot in the same instant, and then repeats that same
+    // synchronized timing every interval afterward. screenshotJitterMs is a
+    // small persistent per-device offset (0–45s, matching the desktop
+    // agent's initial_jitter) generated once and reused — NOT regenerated
+    // every tick, which would just be noise instead of a stable phase
+    // offset — so this device's captures settle into their own consistent,
+    // randomized slot instead of everyone's boundary lining up.
+    let jitterMs = data.screenshotJitterMs;
+    if (typeof jitterMs !== 'number') {
+      jitterMs = Math.floor(Math.random() * 45000);
+      chrome.storage.local.set({ screenshotJitterMs: jitterMs });
+    }
+
     const lastShot = data.lastScreenshotTime || 0;
     const intervalMs = intervalMinutes * 60 * 1000;
-    if (Date.now() - lastShot >= intervalMs) {
+    let isDue;
+    if (lastShot === 0) {
+      // First capture since this shift opened — stagger from shift start
+      // by this device's jitter offset rather than firing instantly.
+      const shiftStartMs = new Date(clockInIso).getTime() || Date.now();
+      isDue = (Date.now() - shiftStartMs) >= jitterMs;
+    } else {
+      // Small +/-3s wobble each cycle on top of the base interval so
+      // repeated captures don't resettle into lockstep with any other
+      // device even when configured intervals match exactly.
+      const wobbleMs = Math.random() * 6000 - 3000;
+      isDue = (Date.now() - lastShot) >= (intervalMs + wobbleMs);
+    }
+    if (isDue) {
       chrome.storage.local.set({ lastScreenshotTime: Date.now() });
       console.log('[Delcargo Tracker] Screenshot due -> capturing screen now...');
       handleScreenshotTick();
@@ -552,7 +595,20 @@ try {
 }
 
 // ── Start Heartbeat Loop Immediately on Worker Evaluation ─────────────────
+// Previously this ALSO ran a raw setInterval(handleHeartbeatTick, 10000) on
+// top of the 'tracker_heartbeat' alarm (every 15s) above — two independent
+// schedulers both calling the same get-then-write function meant every
+// heartbeat/ping/stop-cmd check was being done roughly twice as often as
+// intended, doubling PocketBase load for every connected Chromebook and
+// creating a real (if rare) race where both ticks could see "no existing
+// KV record" at once and each create a duplicate row. chrome.alarms alone
+// is the correct MV3 pattern here — unlike setInterval, it survives the
+// service worker being suspended and restarted, so nothing is lost by
+// dropping the redundant interval. (Note: Chrome enforces a 1-minute floor
+// on alarm periods for a *packed*/published extension — the 15s period
+// above only fires that fast while loaded unpacked/in developer mode. If
+// this is published to a small number of managed Chromebooks unpacked,
+// no change needed; if it's ever pushed through the Chrome Web Store,
+// re-verify the actual fired interval and adjust SETTINGS_POLL_SECONDS-
+// equivalent expectations on the portal side accordingly.)
 handleHeartbeatTick();
-setInterval(() => {
-  handleHeartbeatTick();
-}, 10000); // Continuous 10-second polling & heartbeat tick
