@@ -78,11 +78,23 @@ async function deleteKvRecord(key: string): Promise<void> {
   }
 }
 
+// Same case-insensitivity fix as adminFindProfileByEmail in pbAdmin.ts: an
+// exact `email = "<lowercased>"` filter silently misses any profile whose
+// email was ever saved with mixed case (e.g. "Faheem@delcargo.us"), because
+// PocketBase's "=" filter is a plain case-sensitive SQLite comparison. That
+// silently broke the Forgot Password flow for any such account — the OTP
+// request would look up zero profiles and (correctly, to avoid leaking
+// which emails exist) respond as if it succeeded, so no code ever arrived
+// and there was no visible error to explain why. Fixed by fetching
+// candidates with "~" (case-insensitive contains) and resolving to the
+// exact address in JS.
 export async function findProfileByEmail(email: string): Promise<{ id: string; email: string; fullName: string } | null> {
   const clean = email.toLowerCase().trim();
-  const encoded = encodeURIComponent(`email = "${clean}"`);
-  const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=1`);
-  const item = list?.items?.[0];
+  const escaped = clean.replace(/"/g, '\\"');
+  const encoded = encodeURIComponent(`email ~ "${escaped}"`);
+  const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=20`);
+  const items: any[] = list?.items || [];
+  const item = items.find((p) => (p.email || '').toLowerCase().trim() === clean);
   return item ? { id: item.id, email: item.email, fullName: item.full_name } : null;
 }
 

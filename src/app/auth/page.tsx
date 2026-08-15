@@ -48,10 +48,19 @@ export default function AuthPage() {
   const [notice, setNotice] = useState('');
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   // Forgot Password / OTP self-service flow — see
-  // src/app/api/auth/forgot-password and src/app/api/auth/reset-password.
+  // src/app/api/auth/forgot-password, src/app/api/auth/verify-reset-otp,
+  // and src/app/api/auth/reset-password.
   // 'email' -> enter email, request a code; 'otp' -> enter the 6-digit code
-  // + new password; 'done' -> success confirmation.
-  const [forgotStep, setForgotStep] = useState<'email' | 'otp' | 'done'>('email');
+  // only (verified against verify-reset-otp before advancing); 'password'
+  // -> enter + confirm the new password, shown only after the code above
+  // was confirmed valid; 'done' -> success confirmation.
+  //
+  // This used to combine the code and the new-password fields into a
+  // single 'otp' step shown all at once — a wrong/expired code was only
+  // discovered after the user had already typed a new password too. Split
+  // into two steps so the code is checked (via the lightweight
+  // verify-reset-otp route) before the password fields even render.
+  const [forgotStep, setForgotStep] = useState<'email' | 'otp' | 'password' | 'done'>('email');
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotOtp, setForgotOtp] = useState('');
   const [forgotNewPassword, setForgotNewPassword] = useState('');
@@ -150,6 +159,38 @@ export default function AuthPage() {
       setForgotError('Could not reach the server. Check your connection and try again.');
     } finally {
       setResendLoading(false);
+    }
+  };
+
+  // Advances 'otp' -> 'password'. Checks the code via the lightweight
+  // verify-reset-otp route (doesn't consume it or touch the password — see
+  // that route's comment) so a wrong/expired code is caught right here,
+  // before the new-password fields even render, instead of only surfacing
+  // after the user has typed a new password on the old combined screen.
+  const handleVerifyOtp = async () => {
+    setForgotError('');
+    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
+      setForgotError('Enter the 6-digit code from your email.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/verify-reset-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase(), otp: forgotOtp.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setForgotError(data?.error || 'Invalid code.');
+        return;
+      }
+      setForgotError('');
+      setForgotStep('password');
+    } catch {
+      setForgotError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -598,6 +639,34 @@ export default function AuthPage() {
                   </button>
                 </div>
               </div>
+              {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setForgotStep('email')}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-700"
+                >
+                  Use a different email
+                </button>
+                <button
+                  onClick={handleVerifyOtp}
+                  disabled={forgotLoading}
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
+                >
+                  {forgotLoading ? 'Verifying…' : 'Continue'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {forgotStep === 'password' && (
+            <>
+              <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                <Mail className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                  Code verified. Choose a new password for {forgotEmail}.
+                </p>
+              </div>
               <div>
                 <label className="text-xs font-bold text-slate-700 mb-1 block">New password</label>
                 <div className="relative">
@@ -629,10 +698,10 @@ export default function AuthPage() {
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setForgotStep('email')}
+                  onClick={() => { setForgotStep('otp'); setForgotError(''); }}
                   className="text-xs font-bold text-slate-500 hover:text-slate-700"
                 >
-                  Use a different email
+                  Back
                 </button>
                 <button
                   onClick={handleSubmitReset}

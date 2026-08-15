@@ -8,14 +8,62 @@
 // this app uses Resend's REST API instead of nodemailer. `jose` is built on
 // Web Crypto (SubtleCrypto), which both Node and Edge/Workers support.
 //
-// Why `bcryptjs` and not `bcrypt`: `bcrypt` is a native addon (requires a
-// compiled binary) — doesn't work at all on the Edge runtime, and isn't
-// guaranteed to have a matching prebuilt binary on every host either.
-// `bcryptjs` is a pure-JS reimplementation, slower per-hash but runs
-// anywhere, and this app's login volume doesn't come close to needing
-// native-speed hashing.
+// Password hashing does NOT use `bcryptjs` here, despite it being listed as
+// a dependency in an earlier pass — testing against the real local dev
+// server surfaced that bcryptjs's module (both its ESM and CJS/UMD builds)
+// contains an unconditional top-level `import ... from "crypto"` /
+// `require("crypto")` for its random-byte fallback path. Node's `crypto`
+// module is not available under the Edge runtime, so importing bcryptjs at
+// all inside an `export const runtime = 'edge'` route throws immediately —
+// this silently broke both the password-change endpoints (every hash
+// attempt 500'd) and the login route's "migrate plaintext to a hash on
+// first login" step (silently swallowed the same error, so no account was
+// ever actually being migrated off plaintext, despite the code appearing
+// to do so). Confirmed by running bcryptjs directly under Next's edge
+// runtime sandbox locally — it worked under plain Node but not there.
+//
+// Replaced with a small PBKDF2 implementation built directly on Web
+// Crypto's SubtleCrypto — the same API `jose` already relies on above, and
+// genuinely supported on both Node and Edge/Workers with no Node built-in
+// imports at all. Stored format: `pbkdf2$<iterations>$<salt-b64>$<hash-b64>`.
 import { SignJWT, jwtVerify } from 'jose';
-import bcrypt from 'bcryptjs';
+
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_HASH_BYTES = 32;
+const PBKDF2_SALT_BYTES = 16;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function pbkdf2(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+  const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' },
+    keyMaterial,
+    PBKDF2_HASH_BYTES * 8
+  );
+  return new Uint8Array(bits);
+}
+
+// Constant-time-ish comparison — avoids a naive `===` short-circuiting on
+// the first mismatched byte. Not critical for this app's threat model, but
+// cheap insurance for a password-hash comparison.
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
 
 const encoder = new TextEncoder();
 
@@ -76,24 +124,35 @@ export async function requireSession(request: Request): Promise<SessionPayload |
   return verifySessionToken(auth.slice('Bearer '.length).trim());
 }
 
-const BCRYPT_HASH_RE = /^\$2[aby]?\$/;
+const PBKDF2_HASH_RE = /^pbkdf2\$(\d+)\$([A-Za-z0-9+/=]+)\$([A-Za-z0-9+/=]+)$/;
 
+// Named isBcryptHash for historical reasons (every call site imports it
+// under this name to mean "is this already a hashed value, not plaintext")
+// — the actual format is now pbkdf2$..., not bcrypt's $2a$/$2b$/$2y$, per
+// the module comment above on why bcryptjs was dropped.
 export function isBcryptHash(value: string | undefined | null): boolean {
-  return !!value && BCRYPT_HASH_RE.test(value);
+  return !!value && PBKDF2_HASH_RE.test(value);
 }
 
 export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, 10);
+  const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES));
+  const hash = await pbkdf2(plain, salt, PBKDF2_ITERATIONS);
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(hash)}`;
 }
 
 // Compares a submitted password against a stored value that may be either
-// a bcrypt hash (post-migration) or plain text (pre-migration, from before
-// this refactor — see the login route's transparent-migration comment for
-// why old plaintext rows aren't force-reset). Never throws on a malformed
-// hash — bcryptjs itself would throw on a non-bcrypt string, so plaintext
-// comparison is checked first via isBcryptHash rather than try/catching.
+// a pbkdf2$... hash (post-migration) or plain text (pre-migration, from
+// before this refactor — see the login route's transparent-migration
+// comment for why old plaintext rows aren't force-reset). Never throws on
+// a malformed hash — the format is checked via isBcryptHash first, so a
+// plaintext value never reaches the PBKDF2 parsing path.
 export async function verifyPassword(submitted: string, stored: string | undefined | null): Promise<boolean> {
   if (!stored) return false;
-  if (isBcryptHash(stored)) return bcrypt.compare(submitted, stored);
-  return submitted === stored;
+  const match = stored.match(PBKDF2_HASH_RE);
+  if (!match) return submitted === stored;
+  const [, iterationsStr, saltB64, hashB64] = match;
+  const salt = base64ToBytes(saltB64);
+  const expected = base64ToBytes(hashB64);
+  const actual = await pbkdf2(submitted, salt, parseInt(iterationsStr, 10));
+  return timingSafeEqual(actual, expected);
 }

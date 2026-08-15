@@ -91,11 +91,29 @@ export async function pbAdminFetch(path: string, init?: RequestInit): Promise<an
 // Fetch a single hr_profiles record by email (case-insensitive), including
 // every field — callers decide what's safe to forward to the client.
 // Returns null if no match.
+//
+// This used to filter with an exact `email = "<lowercased>"` match, which
+// silently failed for any profile whose email was ever saved with mixed
+// case (e.g. "Faheem@delcargo.us" — entered that way once through the HR
+// "Edit Employee" form, which doesn't normalize casing on save). PocketBase's
+// "=" filter is a plain SQLite comparison, which is case-sensitive, so a
+// lowercased login attempt against a mixed-case stored email silently
+// returned zero rows — profile ends up null, and the login route reports
+// the generic "Invalid email or password.", identical to a genuinely wrong
+// password. There was no way to tell the two apart from the login response.
+//
+// Fixed by using "~" (PocketBase's case-insensitive "contains" operator) to
+// fetch candidates, then resolving to the exact address in JS — this is
+// robust regardless of stored casing, and the JS-side equality check after
+// the fetch prevents a false match on some other profile whose email merely
+// contains this address as a substring.
 export async function adminFindProfileByEmail(email: string): Promise<any | null> {
-  const clean = email.toLowerCase().trim().replace(/"/g, '\\"');
-  const encoded = encodeURIComponent(`email = "${clean}"`);
-  const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=1`);
-  return list?.items?.[0] || null;
+  const clean = email.toLowerCase().trim();
+  const escaped = clean.replace(/"/g, '\\"');
+  const encoded = encodeURIComponent(`email ~ "${escaped}"`);
+  const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=20`);
+  const items: any[] = list?.items || [];
+  return items.find((p) => (p.email || '').toLowerCase().trim() === clean) || null;
 }
 
 export async function adminGetKV(key: string): Promise<{ id: string; value: any } | null> {

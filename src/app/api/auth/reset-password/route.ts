@@ -5,14 +5,23 @@ import { findProfileByEmail, verifyOtp, consumeOtp, setProfilePassword } from '@
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-// Step 2 of Forgot Password: given {email, otp, newPassword}, verify the
-// OTP (matches, not expired, under the attempt cap) and, if valid, write
-// the new plain-text password directly to hr_profiles — this app's login
-// is a raw client-side `profile.password === password` comparison (see
-// auth/page.tsx), not PocketBase's own auth system, so there's no hashing
-// step to do here; this matches how HR/Admin already reset passwords today
-// (hrActions.resetPassword in hrData.ts) — same underlying write, just
-// reachable without being logged in first, gated by a verified OTP instead.
+// Step 2 (final) of Forgot Password: given {email, otp, newPassword},
+// verify the OTP (matches, not expired, under the attempt cap) and, if
+// valid, hash and write the new password to hr_profiles via
+// setProfilePassword (see passwordResetOtp.ts — it calls hashPassword from
+// serverAuth.ts, the same PBKDF2/Web Crypto hashing every other
+// password-write path in the app uses). Login itself is verified
+// server-side too (see /api/auth/login), not a client-side plaintext
+// comparison — that description used to be accurate before this app's
+// security refactor moved password handling off the fully-public
+// PocketBase client, but isn't anymore.
+//
+// The UI now splits this into two visual steps (see auth/page.tsx): the
+// user enters the code first and it's checked via the lightweight
+// /api/auth/verify-reset-otp before the new-password fields even appear.
+// This route still independently re-verifies the OTP itself before writing
+// anything — never trust the client's word that a code was already
+// confirmed valid.
 export async function POST(req: NextRequest) {
   let email: string, otp: string, newPassword: string;
   try {
