@@ -463,6 +463,14 @@ export function TicketsView({ role }: TicketsViewProps) {
         setNewTicketFile(null);
         setSuccess('');
       }, 1200);
+    } catch (err) {
+      // fileToStoredAttachment can now throw (compressImageToWebP rejects
+      // instead of silently storing an unusable file — see
+      // imageCompressor.ts) — this previously had no catch at all, so a
+      // failed attachment would surface as an unhandled promise rejection
+      // with no message shown to the user.
+      console.error('[Tickets] Failed to open ticket:', err);
+      setNewTicketFileError(err instanceof Error ? err.message : 'Failed to attach this file. Please try again.');
     } finally {
       setIsOpeningTicket(false);
     }
@@ -504,6 +512,11 @@ export function TicketsView({ role }: TicketsViewProps) {
       setReplyFile(null);
       lastTypingTouchRef.current = 0;
       hrActions.clearTypingState('ticket', selectedTicket.id, currentEmail).catch(() => {});
+    } catch (err) {
+      // Same fix as handleOpenTicket above — fileToStoredAttachment can now
+      // throw instead of silently succeeding with unusable data.
+      console.error('[Tickets] Failed to send reply:', err);
+      setReplyFileError(err instanceof Error ? err.message : 'Failed to attach this file. Please try again.');
     } finally {
       setSendingReply(false);
     }

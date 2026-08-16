@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { compressImageToWebP, MAX_PROFILE_PICTURE_BYTES } from '@/lib/imageCompressor';
-import { RotateCcw, RotateCw, ZoomIn, ZoomOut, Check, X } from 'lucide-react';
+import { RotateCcw, RotateCw, ZoomIn, ZoomOut, Check, X, AlertTriangle } from 'lucide-react';
 
 interface AvatarCropperModalProps {
   file: File | null;
@@ -23,15 +23,35 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
   const [rotation, setRotation] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
+  // Bug fix: this used to have no img.onerror handler at all, so a file the
+  // browser can't decode as an image (most commonly a HEIC/HEIF photo — the
+  // default iPhone camera format, which only Safari can open in an <img>
+  // tag) left imgEl permanently null. Since the whole modal body (preview,
+  // controls, Cancel/Save buttons) only renders when imgEl is set, the
+  // result was a completely blank modal with zero explanation — the only
+  // way out was Escape or the header's X button, with no indication of
+  // what went wrong or what to do differently. loadError now surfaces a
+  // real, actionable message instead.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const dragState = useRef<{ dragging: boolean; startX: number; startY: number; panX: number; panY: number }>({
     dragging: false, startX: 0, startY: 0, panX: 0, panY: 0,
   });
 
   useEffect(() => {
-    if (!file) { setImgEl(null); return; }
+    if (!file) { setImgEl(null); setLoadError(null); return; }
+    setLoadError(null);
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => setImgEl(img);
+    img.onerror = () => {
+      setImgEl(null);
+      const looksHeic = /\.(heic|heif)$/i.test(file.name) || /heic|heif/i.test(file.type);
+      setLoadError(
+        looksHeic
+          ? "This looks like a HEIC/HEIF photo (the default iPhone format), which most browsers other than Safari can't open directly. Please choose a JPG or PNG instead."
+          : "This file couldn't be opened as an image. It may be corrupted or in an unsupported format — please choose a different photo (JPG or PNG work best).",
+      );
+    };
     img.src = url;
     setZoom(1);
     setRotation(0);
@@ -57,12 +77,13 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
   const handleSave = useCallback(async () => {
     if (!imgEl) return;
     setSaving(true);
+    setLoadError(null);
     try {
       const canvas = document.createElement('canvas');
       canvas.width = OUTPUT_SIZE;
       canvas.height = OUTPUT_SIZE;
       const ctx = canvas.getContext('2d');
-      if (!ctx) { setSaving(false); return; }
+      if (!ctx) { setLoadError("Couldn't process this image in your browser. Please try again."); return; }
 
       ctx.save();
       // Circular clip so the baked-in image itself is a perfect circle,
@@ -83,8 +104,16 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
       ctx.restore();
 
       const rawDataUrl = canvas.toDataURL('image/webp', 0.92);
+      // compressImageToWebP can now reject (see imageCompressor.ts) instead
+      // of silently falling back to unprocessed data — in practice this
+      // input is always a valid canvas-produced WebP, so this is
+      // essentially unreachable, but it's still an await inside a try, so
+      // it needs a catch rather than letting a rejection go unhandled.
       const finalDataUrl = await compressImageToWebP(rawDataUrl, 0.9, MAX_PROFILE_PICTURE_BYTES);
       onSave(finalDataUrl);
+    } catch (err) {
+      console.error('[AvatarCropperModal] Save failed:', err);
+      setLoadError(err instanceof Error ? err.message : 'Failed to save this photo. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -92,8 +121,34 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
 
   return (
     <Modal isOpen={!!file} onClose={onClose} title="Adjust Profile Picture">
+      {/* Shown when the browser couldn't decode the selected file (see the
+          img.onerror handler above) — previously the modal just rendered
+          nothing at all in this case, with no way to tell what went wrong.
+          Rendered independently of imgEl so it's visible even though the
+          rest of the modal body below is gated on imgEl being set. */}
+      {loadError && !imgEl && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 rounded-xl border bg-rose-50 border-rose-200">
+            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-700 font-semibold leading-relaxed">{loadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform"
+          >
+            <X className="h-3.5 w-3.5" /> Close
+          </button>
+        </div>
+      )}
       {imgEl && (
         <div className="space-y-5">
+          {loadError && (
+            <div className="flex items-start gap-3 p-3 rounded-xl border bg-rose-50 border-rose-200">
+              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-slate-700 font-semibold leading-relaxed">{loadError}</p>
+            </div>
+          )}
           <div
             className="relative mx-auto rounded-full overflow-hidden border-2 border-slate-200 bg-slate-900 cursor-grab active:cursor-grabbing touch-none select-none"
             style={{ width: PREVIEW_SIZE, height: PREVIEW_SIZE }}

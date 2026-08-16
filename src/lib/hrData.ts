@@ -1370,7 +1370,7 @@ function isWeekday(dateStr: string): boolean {
 // (parseLeaveDates) spans it — compared as NY calendar dates, not raw Date
 // object equality, since parseLeaveDates' Date objects don't carry the
 // fixed-timezone treatment the rest of the app's dates do.
-function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
+export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
   return leaves.some(l => {
     if (l.employeeName !== fullName || l.status !== 'approved') return false;
     const dates = parseLeaveDates(l.duration);
@@ -2994,7 +2994,7 @@ export const hrActions = {
               workedMinutes = totalWorkedMins;
             }
           }
-        } else {
+        } else if (!onLeave) {
           const maxSingleInactiveSecs = shiftDatesWithMaxSingleInactivity.get(dateStr) || 0;
           if (maxSingleInactiveSecs >= INACTIVITY_THRESHOLD_SECONDS) {
             reason = 'inactivity';

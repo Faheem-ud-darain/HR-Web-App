@@ -1,77 +1,26 @@
 /**
  * Utilities for client-side image optimization and WebP conversion.
+ *
+ * This file used to also export its own `compressImageToWebP` — a second,
+ * completely different function with the same name as the one in
+ * `imageCompressor.ts` (different signature, returned a Blob instead of a
+ * base64 string, no HEIC/decode-failure handling). It was never actually
+ * imported anywhere (every real upload path uses imageCompressor.ts's
+ * version), so it was dead code — but a duplicate export with an
+ * incompatible signature is exactly the kind of landmine that causes a
+ * future edit or import to silently pick up the wrong, unmaintained
+ * implementation. Removed rather than kept "just in case".
  */
-
-/**
- * Compresses an image file client-side by rendering it onto an offscreen canvas
- * and converting it to WebP format.
- */
-export async function compressImageToWebP(
-  file: File,
-  options: { maxWidth?: number; maxHeight?: number; quality?: number } = {}
-): Promise<Blob> {
-  const { maxWidth = 1920, maxHeight = 1080, quality = 0.8 } = options;
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      let width = img.width;
-      let height = img.height;
-
-      // Calculate aspect-ratio preserved bounds
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width);
-        width = maxWidth;
-      }
-      if (height > maxHeight) {
-        width = Math.round((width * maxHeight) / height);
-        height = maxHeight;
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Failed to get canvas 2D context'));
-        return;
-      }
-
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Canvas toBlob conversion failed'));
-          }
-        },
-        'image/webp',
-        quality
-      );
-    };
-
-    img.onerror = (err) => {
-      URL.revokeObjectURL(url);
-      reject(err);
-    };
-
-    img.src = url;
-  });
-}
 
 /**
  * Generate a tiny blurred base64 SVG data URI to use as a smooth loading placeholder.
  */
 export function getBlurPlaceholderSvg(width = 40, height = 40): string {
+  // Fixed a duplicate `id="b"` attribute on the <filter> element (invalid
+  // SVG markup — harmless in practice since browsers just use the first
+  // occurrence, but worth cleaning up while touching this file).
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
-    <filter id="b" filterUnits="userSpaceOnUse" id="b">
+    <filter id="b" filterUnits="userSpaceOnUse">
       <feGaussianBlur stdDeviation="12" />
     </filter>
     <rect width="100%" height="100%" fill="#cbd5e1" filter="url(#b)" />

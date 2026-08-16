@@ -35,21 +35,47 @@ export function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+// Returns a short, user-facing hint when a file's name/type suggests HEIC/
+// HEIF — the default photo format on iPhone cameras. Only Safari/WebKit can
+// decode HEIC in an <img> tag; Chrome, Firefox, and Edge (desktop AND
+// Android) cannot, so a HEIC photo silently fails to decode there. This is
+// used to make the resulting error message actually actionable instead of
+// a generic "something went wrong".
+function heicHint(base64OrFile: string | File): boolean {
+  if (typeof base64OrFile === 'string') return false;
+  return /\.(heic|heif)$/i.test(base64OrFile.name) || /heic|heif/i.test(base64OrFile.type);
+}
+
 export async function compressImageToWebP(
   base64OrFile: string | File,
   quality: number = 0.75,
   maxOutputBytes: number = MAX_PROFILE_PICTURE_BYTES,
 ): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
       resolve(typeof base64OrFile === 'string' ? base64OrFile : '');
       return;
     }
 
-    let fallbackDataUrl = '';
-    if (typeof base64OrFile === 'string') {
-      fallbackDataUrl = base64OrFile;
-    }
+    // Bug fix: this used to silently resolve with the ORIGINAL, uncompressed,
+    // un-decoded file/string whenever the browser couldn't actually open the
+    // image (most commonly a HEIC photo from an iPhone, which Chrome/Firefox/
+    // Edge can't decode in an <img> tag) — every caller then reported
+    // "uploaded successfully" even though nothing was ever validated or
+    // compressed, and if the raw bytes weren't a real displayable image,
+    // whoever viewed it later (HR/Admin reviewing an ID doc, an employee's
+    // own profile picture, a ticket attachment) would just see a broken
+    // image icon with no explanation of why. Every call site already wraps
+    // this in a try/catch, so rejecting here — instead of silently
+    // resolving with unusable data — makes those existing catch blocks show
+    // a real, actionable error instead of a false success.
+    const failWithHint = (fallbackMessage: string) => {
+      reject(new Error(
+        heicHint(base64OrFile)
+          ? "This looks like a HEIC/HEIF photo (the default iPhone format), which most browsers other than Safari can't open directly. Please choose a JPG or PNG instead."
+          : fallbackMessage,
+      ));
+    };
 
     const img = new Image();
     img.onload = () => {
@@ -78,8 +104,7 @@ export async function compressImageToWebP(
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          console.warn('[WebP Converter] Failed to get canvas context, falling back.');
-          resolve(fallbackDataUrl);
+          failWithHint("Couldn't process this image in your browser. Please try a different image or browser.");
           return;
         }
 
@@ -121,14 +146,14 @@ export async function compressImageToWebP(
         );
         resolve(compressedBase64);
       } catch (err) {
-        console.warn('[WebP Converter] Conversion threw error, falling back:', err);
-        resolve(fallbackDataUrl);
+        console.warn('[WebP Converter] Conversion threw error:', err);
+        failWithHint('Something went wrong processing this image. Please try again or choose a different file.');
       }
     };
 
     img.onerror = () => {
-      console.warn('[WebP Converter] Image rendering failed (possibly headless browser), using fallback data URL.');
-      resolve(fallbackDataUrl);
+      console.warn('[WebP Converter] Image could not be decoded by this browser.');
+      failWithHint("This file couldn't be opened as an image. It may be corrupted or in an unsupported format — please choose a different file (JPG or PNG work best).");
     };
 
     if (typeof base64OrFile === 'string') {
@@ -137,17 +162,12 @@ export async function compressImageToWebP(
       const reader = new FileReader();
       reader.onload = (e) => {
         if (e.target?.result && typeof e.target.result === 'string') {
-          fallbackDataUrl = e.target.result;
           img.src = e.target.result;
         } else {
-          console.warn('[WebP Converter] FileReader result empty, using fallback.');
-          resolve('');
+          reject(new Error('Failed to read the selected file. Please try again.'));
         }
       };
-      reader.onerror = () => {
-        console.warn('[WebP Converter] FileReader failed, using fallback.');
-        resolve('');
-      };
+      reader.onerror = () => reject(new Error('Failed to read the selected file. Please try again.'));
       reader.readAsDataURL(base64OrFile);
     }
   });

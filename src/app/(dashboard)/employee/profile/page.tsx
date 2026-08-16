@@ -136,7 +136,10 @@ export default function EmployeeProfilePage() {
       setTimeout(() => setDocSuccess(''), 2500);
     } catch (err) {
       console.error('[Profile] CV upload error:', err);
-      setDocError('Failed to upload CV. Please try again.');
+      // compressImageToWebP now rejects with a specific, actionable message
+      // (e.g. HEIC not supported) instead of silently storing an unusable
+      // raw file — surface that instead of a generic message when present.
+      setDocError(err instanceof Error ? err.message : 'Failed to upload CV. Please try again.');
     } finally {
       setDocBusy(null);
     }
@@ -158,7 +161,7 @@ export default function EmployeeProfilePage() {
       setTimeout(() => setDocSuccess(''), 2500);
     } catch (err) {
       console.error('[Profile] ID doc upload error:', err);
-      setDocError('Failed to upload document. Please try again.');
+      setDocError(err instanceof Error ? err.message : 'Failed to upload document. Please try again.');
     } finally {
       setDocBusy(null);
     }
@@ -179,7 +182,7 @@ export default function EmployeeProfilePage() {
       setTimeout(() => setDocSuccess(''), 2500);
     } catch (err) {
       console.error('[Profile] Passport upload error:', err);
-      setDocError('Failed to upload passport. Please try again.');
+      setDocError(err instanceof Error ? err.message : 'Failed to upload passport. Please try again.');
     } finally {
       setDocBusy(null);
     }

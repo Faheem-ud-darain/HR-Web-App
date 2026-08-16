@@ -6,10 +6,17 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
 import { getSessionEmail } from '@/lib/session';
-import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
+import { EmployeeActivityInsights } from '@/components/ui/EmployeeActivityInsights';
 
 export default function TrackerPage() {
+  // 'setup' is the existing tab (connection status + shift history) shown by
+  // default. 'activity' is new — its data (a 7-day inactivity-log fetch,
+  // see EmployeeActivityInsights) is only requested once the employee
+  // actually clicks that tab, never on page load/login, since
+  // EmployeeActivityInsights isn't mounted until activeTab === 'activity'.
+  const [activeTab, setActiveTab] = useState<'setup' | 'activity'>('setup');
   const { data: allProfiles = [] } = useProfiles();
   const { data: allTimesheets = [], refetch: refetchTimesheets } = useTimesheets();
 
@@ -160,13 +167,48 @@ export default function TrackerPage() {
 
   return (
     <div className="space-y-4 md:space-y-6 font-sans">
-      <div>
-        <h1 className="text-lg md:text-2xl font-bold text-slate-900">Shift Tracker</h1>
-        <p className="text-xs md:text-sm text-slate-500">
-          Real clock-in / clock-out history, sourced directly from your synced shift records — no simulated data.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-lg md:text-2xl font-bold text-slate-900">Shift Tracker</h1>
+          <p className="text-xs md:text-sm text-slate-500">
+            {activeTab === 'setup'
+              ? 'Real clock-in / clock-out history, sourced directly from your synced shift records — no simulated data.'
+              : 'Your own daily activity vs. inactivity, over the last week.'}
+          </p>
+        </div>
+
+        {/* Tab switcher */}
+        <div className="flex bg-slate-100 p-1 rounded-xl w-fit self-start md:self-auto border border-slate-200">
+          <button
+            onClick={() => setActiveTab('setup')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'setup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            <Settings2 className="h-4 w-4 text-orange-500" />
+            Setup &amp; History
+          </button>
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'activity' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            <Activity className="h-4 w-4 text-emerald-600" />
+            My Activity
+          </button>
+        </div>
       </div>
 
+      {activeTab === 'activity' ? (
+        profile ? (
+          <EmployeeActivityInsights employeeEmail={profile.email} timesheets={allTimesheets} />
+        ) : (
+          // profile resolves a beat after allProfiles loads — previously this
+          // rendered nothing at all in that gap, which looked like a broken/
+          // empty tab for a moment. A small loading state matches how the
+          // rest of this page already behaves before its own data is ready.
+          <Card className="border border-slate-200 bg-white">
+            <CardContent className="py-16 text-center text-xs font-semibold text-slate-400">Loading…</CardContent>
+          </Card>
+        )
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8">
 
         {/* Current shift status (left 5 cols) */}
@@ -248,7 +290,7 @@ export default function TrackerPage() {
                   <div>
                     <p className={`text-[10px] font-bold ${hrActions.isHeartbeatLive(heartbeat) ? 'text-emerald-700' : 'text-slate-500'}`}>
                       {hrActions.isHeartbeatLive(heartbeat)
-                        ? `App Connected${heartbeat?.deviceLabel ? ` — ${heartbeat.deviceLabel}` : ''}`
+                        ? `App Connected${heartbeat?.deviceLabel ? ` — ${heartbeat.deviceLabel}` : ''}${heartbeat?.agentVersion ? ` (v${heartbeat.agentVersion})` : ''}`
                         : heartbeatCheckedOnce ? 'App Not Connected' : 'Checking connection…'}
                     </p>
                     {heartbeat?.lastSeenAt && (
@@ -289,7 +331,7 @@ export default function TrackerPage() {
                       whose agent predates v6 (no agentVersion in heartbeat)
                       are silently ignored — the download buttons below always
                       point to /releases/latest so they'll get the right build. */}
-                  {hrActions.isHeartbeatLive(heartbeat) && needsTrackerUpdate(heartbeat?.agentVersion) && (
+                  {hrActions.isHeartbeatLive(heartbeat) && needsTrackerUpdate(heartbeat?.agentVersion, heartbeat?.deviceLabel) && (
                     <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3">
                       <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                       <div className="space-y-1">
@@ -438,6 +480,7 @@ export default function TrackerPage() {
         </div>
 
       </div>
+      )}
     </div>
   );
 }

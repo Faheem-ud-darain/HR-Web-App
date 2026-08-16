@@ -3,9 +3,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { hrActions, AbsenceRecord, useTimesheets, useProfiles, formatMoney, localShiftDate, displayName } from '@/lib/hrData';
-import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX } from 'lucide-react';
-import { formatTimeNY } from '@/lib/timezone';
+import { hrActions, AbsenceRecord, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName } from '@/lib/hrData';
+import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2 } from 'lucide-react';
+import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 
 
 interface AbsenceDetailsViewProps {
@@ -22,6 +22,8 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
   const { data: allTimesheets = [], isLoading: loadingTimesheets } = useTimesheets();
   const { data: allProfiles = [] } = useProfiles();
+  const { data: leaves = [] } = useLeaves();
+  const [leaveBlockedNotice, setLeaveBlockedNotice] = useState<{ employeeName: string; date: string } | null>(null);
 
   // Date Filter States (defaults to empty -> all dates)
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -34,6 +36,8 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     shifts: typeof allTimesheets;
     totalMinutes: number;
     hasActiveShift: boolean;
+    isLeave?: boolean;
+    leaveType?: LeaveApplication['type'];
   } | null>(null);
 
   const loadAbsenceRecords = () => {
@@ -51,6 +55,12 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   }, [role, filterEmail]);
 
   const handleDeleteAbsenceRecord = async (record: AbsenceRecord) => {
+    // Never allow deleting an absence record that is actually an approved leave day —
+    // show an explanatory popup instead of the normal delete confirmation.
+    if (isApprovedLeaveOnDate(leaves, record.employeeName, record.date)) {
+      setLeaveBlockedNotice({ employeeName: record.employeeName, date: record.date });
+      return;
+    }
     const confirmDelete = window.confirm(`Remove absence record for ${record.employeeName} on ${record.date}? This will remove the 2-days' pay deduction penalty.`);
     if (!confirmDelete) return;
     await hrActions.deleteAbsenceRecord(record.id);
@@ -60,7 +70,15 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    const total = filteredAbsences.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + r.deductionAmount, 0);
+    const selectedRecords = filteredAbsences.filter(r => selectedIds.has(r.id));
+    // If ANY selected record is actually an approved leave day, block the whole
+    // bulk action and explain — safer than silently skipping just that one record.
+    const leaveCovered = selectedRecords.find(r => isApprovedLeaveOnDate(leaves, r.employeeName, r.date));
+    if (leaveCovered) {
+      setLeaveBlockedNotice({ employeeName: leaveCovered.employeeName, date: leaveCovered.date });
+      return;
+    }
+    const total = selectedRecords.reduce((s, r) => s + r.deductionAmount, 0);
     const confirmed = window.confirm(
       `Remove ${selectedIds.size} absence record${selectedIds.size > 1 ? 's' : ''} and reverse ${formatMoney(total, 'Pakistan')} in deductions? This cannot be undone.`
     );
@@ -108,6 +126,8 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       shifts: typeof allTimesheets;
       totalMinutes: number;
       hasActiveShift: boolean;
+      isLeave?: boolean;
+      leaveType?: LeaveApplication['type'];
     }>();
 
     for (const t of list) {
@@ -153,8 +173,48 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       }
     }
 
+    // Synthesize "On Leave" rows for approved leave days that have no timesheet
+    // entry at all — otherwise an employee on approved leave with no clock-in
+    // would show up as an unexplained no-show instead of a leave day.
+    for (const l of leaves) {
+      if (l.status !== 'approved') continue;
+      const empProfile = allProfiles.find(p => p.fullName === l.employeeName);
+      const empEmail = (empProfile?.email || '').toLowerCase();
+      if (role === 'employee' && filterEmail && empEmail !== filterEmail.toLowerCase()) continue;
+
+      const dates = parseLeaveDates(l.duration);
+      if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
+      const endStr = getNYDateString(dates.end);
+
+      for (const cursor = new Date(dates.start); getNYDateString(cursor) <= endStr; cursor.setDate(cursor.getDate() + 1)) {
+        const dateKey = getNYDateString(cursor);
+        if (selectedDate && dateKey !== selectedDate) continue;
+
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          if (!l.employeeName.toLowerCase().includes(q) && !empEmail.includes(q)) continue;
+        }
+
+        const groupKey = `${empEmail}_${dateKey}`;
+        // Already has real shift data for this day (e.g. leave applied but they
+        // still clocked in) — leave the real attendance row as-is, don't override it.
+        if (groupedMap.has(groupKey)) continue;
+
+        groupedMap.set(groupKey, {
+          employeeEmail: empProfile?.email || '',
+          employeeName: l.employeeName,
+          date: dateKey,
+          shifts: [],
+          totalMinutes: 0,
+          hasActiveShift: false,
+          isLeave: true,
+          leaveType: l.type,
+        });
+      }
+    }
+
     return Array.from(groupedMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-  }, [allTimesheets, allProfiles, role, filterEmail, selectedDate, searchQuery]);
+  }, [allTimesheets, allProfiles, leaves, role, filterEmail, selectedDate, searchQuery]);
 
   // Filter absence records by date and query
   const filteredAbsences = useMemo(() => {
@@ -295,10 +355,23 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                               <p className="text-[10px] text-slate-400 font-mono">{row.employeeEmail}</p>
                             </td>
                           )}
-                          <td className="px-5 py-3 text-center font-semibold text-slate-700">{row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''}</td>
-                          <td className="px-5 py-3 text-right font-bold text-slate-900">{formattedDuration}</td>
+                          <td className="px-5 py-3 text-center font-semibold text-slate-700">
+                            {row.isLeave ? '—' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''}`}
+                          </td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900">{row.isLeave ? '—' : formattedDuration}</td>
                           <td className="px-5 py-3 text-center">
-                            {row.hasActiveShift ? (
+                            {row.isLeave ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <Badge variant="info">
+                                  <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3 w-3" /> On Leave ({row.leaveType})</span>
+                                </Badge>
+                                {row.leaveType === 'Urgent' ? (
+                                  <Badge variant="danger">2-day deduction</Badge>
+                                ) : (
+                                  <Badge variant="success">No deduction</Badge>
+                                )}
+                              </span>
+                            ) : row.hasActiveShift ? (
                               <Badge variant="warning">On Shift</Badge>
                             ) : row.totalMinutes >= 240 ? (
                               <Badge variant="success">Present ({formattedDuration})</Badge>
@@ -307,12 +380,16 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             )}
                           </td>
                           <td className="px-5 py-3 text-center">
-                            <button
-                              onClick={() => setSelectedAttendanceRow(row)}
-                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
-                            >
-                              View Breakdown
-                            </button>
+                            {row.isLeave ? (
+                              <span className="text-[11px] text-slate-400 font-semibold">Approved leave — no shift</span>
+                            ) : (
+                              <button
+                                onClick={() => setSelectedAttendanceRow(row)}
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
+                              >
+                                View Breakdown
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -332,7 +409,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     <div key={`${row.employeeEmail}_${row.date}`} className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="font-mono text-xs font-bold text-slate-800">{row.date}</p>
-                        {row.hasActiveShift ? (
+                        {row.isLeave ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Badge variant="info">
+                              <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3 w-3" /> On Leave ({row.leaveType})</span>
+                            </Badge>
+                          </span>
+                        ) : row.hasActiveShift ? (
                           <Badge variant="warning">On Shift</Badge>
                         ) : row.totalMinutes >= 240 ? (
                           <Badge variant="success">Present ({formattedDuration})</Badge>
@@ -341,18 +424,29 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         )}
                       </div>
                       {role !== 'employee' && <p className="text-xs font-bold text-slate-900">{row.employeeName}</p>}
-                      <div className="flex items-center justify-between pt-1 text-xs">
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
-                          <p className="font-bold text-slate-900">{formattedDuration}</p>
+                      {row.isLeave ? (
+                        <div className="pt-1 text-xs flex items-center justify-between">
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Approved leave — no shift</p>
+                          {row.leaveType === 'Urgent' ? (
+                            <Badge variant="danger">2-day deduction</Badge>
+                          ) : (
+                            <Badge variant="success">No deduction</Badge>
+                          )}
                         </div>
-                        <button
-                          onClick={() => setSelectedAttendanceRow(row)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors"
-                        >
-                          View Breakdown
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="flex items-center justify-between pt-1 text-xs">
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
+                            <p className="font-bold text-slate-900">{formattedDuration}</p>
+                          </div>
+                          <button
+                            onClick={() => setSelectedAttendanceRow(row)}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors"
+                          >
+                            View Breakdown
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -360,6 +454,34 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             </>
           )}
         </Card>
+      )}
+
+      {/* LEAVE-PROTECTED ABSENCE DELETE BLOCKED POPUP */}
+      {leaveBlockedNotice && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
+                <CalendarCheck2 className="h-5 w-5 text-sky-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">This absence is due to an approved leave</h3>
+                <p className="text-xs text-slate-500 font-mono">{leaveBlockedNotice.employeeName} • {leaveBlockedNotice.date}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600">
+              This record cannot be removed here because it falls on a day covered by an approved leave request. Leave-covered absence records are protected from deletion to keep the leave and attendance history consistent.
+            </p>
+            <div className="pt-1 flex justify-end">
+              <button
+                onClick={() => setLeaveBlockedNotice(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* SHIFT BREAKDOWN MODAL */}

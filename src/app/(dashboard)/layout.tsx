@@ -292,7 +292,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setCnicFiles(prev => [...prev, file.name].slice(0, 2));
     } catch (err) {
       console.error('Identity doc upload failed:', err);
-      setUploadError('Failed to process the image. Please try again.');
+      // compressImageToWebP now rejects with a specific, actionable message
+      // (e.g. "this looks like a HEIC photo") instead of silently storing
+      // the raw uncompressed file — show that message when available.
+      setUploadError(err instanceof Error ? err.message : 'Failed to process the image. Please try again.');
     } finally {
       setUploading(prev => ({ ...prev, cnic: false }));
     }
@@ -312,7 +315,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setPassportFile(file.name);
     } catch (err) {
       console.error('Passport upload failed:', err);
-      setUploadError('Failed to process the image. Please try again.');
+      setUploadError(err instanceof Error ? err.message : 'Failed to process the image. Please try again.');
     } finally {
       setUploadingPassport(false);
     }
