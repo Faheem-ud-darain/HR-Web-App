@@ -88,7 +88,11 @@ export default function AdminDashboard() {
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
     // Orphan-shift cleanup runs first — see the matching comment in
     // hr/page.tsx and autoCloseOrphanTrackedShifts in hrData.ts.
+    // autoCloseStaleOpenShifts is the catch-all hard cap that runs right
+    // after (see its comment in hrData.ts) — fixes the 3000+ minute shifts.
     hrActions.autoCloseOrphanTrackedShifts(timesheets)
+      .catch(() => { /* best-effort */ })
+      .then(() => hrActions.autoCloseStaleOpenShifts(timesheets, employees))
       .catch(() => { /* best-effort */ })
       .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))

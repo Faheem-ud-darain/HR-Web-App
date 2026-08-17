@@ -2810,6 +2810,66 @@ export const hrActions = {
     }
   },
 
+  // Last-resort catch-all for ANY open shift left running unreasonably long
+  // — regardless of category (GPS/USA, manual/Pakistan, or tracker-governed)
+  // — which is what was actually behind employees showing 3000+ minutes of
+  // "shift time" in a day. autoCloseOrphanTrackedShifts above only fires for
+  // employees with screen tracking enabled AND a heartbeat on record;
+  // closeStaleManualShiftIfAbandoned only fires if that specific employee
+  // reopens their own dashboard tab; and GPS/USA employees have no
+  // server-side safety net at all today — if their phone dies or the app is
+  // force-killed mid-shift, nothing ever clocks them out. Any of those gaps
+  // leaves a shift open indefinitely, and since runAbsenceCheck buckets all
+  // of an open shift's elapsed minutes onto its clock-in day alone, a
+  // multi-day-open shift doesn't just look absurd — every day after the
+  // first shows up with ZERO recorded minutes and gets falsely flagged as a
+  // no-clock-in absence, even though the (buggy) shift was technically still
+  // "open" through it. Run this after the more precise safety nets above —
+  // it only ever touches a shift once it's already far outside any
+  // legitimate single-shift length. Closes at the last known tracker
+  // heartbeat when one exists and falls within the cap window (most
+  // accurate), otherwise at the hard cap itself.
+  autoCloseStaleOpenShifts: async (timesheets: TimesheetEntry[], employees: Profile[]): Promise<void> => {
+    const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000; // no legitimate single shift runs longer than this
+    const now = Date.now();
+    const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
+
+    for (const shift of openShifts) {
+      const clockInMs = new Date(shift.clockIn).getTime();
+      if (isNaN(clockInMs) || now - clockInMs < MAX_SHIFT_DURATION_MS) continue; // still within a plausible single shift
+
+      try {
+        let closeAtMs = clockInMs + MAX_SHIFT_DURATION_MS;
+        const hb = await hrActions.getTrackerHeartbeat(shift.employeeEmail);
+        if (hb?.lastSeenAt) {
+          const lastSeenMs = new Date(hb.lastSeenAt).getTime();
+          if (!isNaN(lastSeenMs) && lastSeenMs > clockInMs && lastSeenMs < closeAtMs) closeAtMs = lastSeenMs;
+        }
+        const closeAtIso = new Date(closeAtMs).toISOString();
+
+        await pbUpdate('hr_timesheets', shift.id, {
+          clock_out: closeAtIso,
+          duration: formatDurationBetween(shift.clockIn, closeAtIso),
+          status: 'completed',
+        });
+        try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(shift.employeeEmail)]); } catch { /* best-effort */ }
+
+        const profile = employees.find(e => e.email.toLowerCase() === shift.employeeEmail.toLowerCase());
+        const name = displayName(profile || { fullName: shift.employeeEmail }, 'hr');
+        const capHours = Math.round(MAX_SHIFT_DURATION_MS / 3600000);
+        await hrActions.addNotification(
+          shift.employeeEmail, 'employee',
+          `Your shift starting ${formatDateNY(shift.clockIn)} was still open after ${capHours}+ hours and has been automatically ended. If this looks wrong, contact HR.`
+        ).catch(() => {});
+        await hrActions.addNotification('all', 'hr', `${name}'s shift from ${formatDateNY(shift.clockIn)} was still open after ${capHours}+ hours and was auto-closed.`, 'shift', name, shift.employeeEmail).catch(() => {});
+        // Dashboard-only for Admin — HR already got the pushable copy above.
+        await hrActions.addNotification('all', 'admin', `${name}'s shift from ${formatDateNY(shift.clockIn)} was still open after ${capHours}+ hours and was auto-closed.`, undefined, undefined, shift.employeeEmail).catch(() => {});
+      } catch {
+        // Best-effort per-shift — one bad lookup/write shouldn't stop the rest.
+      }
+    }
+  },
+
   // ── Absence records (hr_delcargo_store key "hr_absence_records_v1") ────
   // See AbsenceRecord's own comment for why this lives in the generic KV
   // store rather than a dedicated collection, and why it's persisted rather

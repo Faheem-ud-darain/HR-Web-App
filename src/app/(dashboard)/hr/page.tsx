@@ -114,7 +114,13 @@ export default function HRDashboard() {
     // etc.) before runAbsenceCheck sees it, so a still-open overnight shift
     // never gets misread as either "still worked" or a multi-hour false
     // inactivity absence (see autoCloseOrphanTrackedShifts in hrData.ts).
+    // autoCloseStaleOpenShifts runs right after as a catch-all for anything
+    // still open past a hard 16h cap regardless of category (GPS, manual,
+    // or untracked) — this is what was behind employees showing 3000+
+    // minutes of shift time in a day.
     hrActions.autoCloseOrphanTrackedShifts(timesheets)
+      .catch(() => { /* best-effort */ })
+      .then(() => hrActions.autoCloseStaleOpenShifts(timesheets, employees))
       .catch(() => { /* best-effort */ })
       .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
