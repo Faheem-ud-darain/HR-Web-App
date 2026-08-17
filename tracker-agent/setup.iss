@@ -1,7 +1,12 @@
 [Setup]
 AppId={{6C6F5E6E-2D6A-4C8E-9C7A-DELCARGOTRK01}
 AppName=DelCargo Tracker
-AppVersion=1.9
+; Kept in sync with APP_VERSION in agent_gui.py — this only affects what
+; Windows' Add/Remove Programs list shows, not the in-app update check
+; (that only ever reads APP_VERSION from the Python source), but a stale
+; number here used to confuse anyone checking there against what's
+; actually running.
+AppVersion=16
 AppPublisher=DelCargo
 AppPublisherURL=https://delcargo.example
 DefaultDirName={localappdata}\DelCargo Tracker

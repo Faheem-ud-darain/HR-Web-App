@@ -25,6 +25,23 @@ document.addEventListener('DOMContentLoaded', () => {
   let isShiftActive = false;
   let shiftStartMs = 0;
 
+  // ── Version footer ──────────────────────────────────────────────────────
+  // The footer used to show a hardcoded "v1.0.0" that never matched the
+  // extension's real installed build (manifest.json is at 1.0.12, and the
+  // heartbeat this extension sends to the HR/Admin dashboard reported yet a
+  // third, different hardcoded number). Reading it straight from
+  // chrome.runtime.getManifest() means it can never drift again — bumping
+  // manifest.json's "version" is the only thing anyone needs to remember.
+  try {
+    const versionLabel = document.getElementById('versionLabel');
+    const manifestVersion = chrome.runtime.getManifest().version;
+    if (versionLabel && manifestVersion) {
+      versionLabel.textContent = 'v' + manifestVersion;
+    }
+  } catch (e) {
+    // Leave the static fallback text in place if this ever fails.
+  }
+
   // ── Decode Setup Code ──────────────────────────────────────────────────
   function decodeSetupCode(codeStr) {
     try {

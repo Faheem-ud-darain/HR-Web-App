@@ -268,13 +268,23 @@ async function handleHeartbeatTick() {
 
     const connectedAt = existingHb?.connectedAt || nowIso;
 
+    // Previously hardcoded as the literal string '11' — permanently stale
+    // and already out of step with the popup footer's own hardcoded
+    // "v1.0.0" and manifest.json's real "1.0.12". Reading the manifest's
+    // actual version means HR/Admin (TrackingView.tsx) and the employee's
+    // own Tracker Setup page always see what's really installed. Note:
+    // this extension's version numbers (Chrome's required semver-style
+    // x.y.z) aren't comparable to the desktop agent's flat incrementing
+    // APP_VERSION integer, so needsTrackerUpdate() in trackerSetup.ts
+    // deliberately skips the update-required check for this device type —
+    // see the deviceLabel check there.
     const hbValue = {
       employeeEmail: email,
       deviceId: deviceId,
       deviceLabel: 'Chromebook / Chrome OS',
       connectedAt: connectedAt,
       lastSeenAt: nowIso,
-      agentVersion: '11'
+      agentVersion: chrome.runtime.getManifest().version
     };
 
     await pbSetKV(serverUrl, heartbeatKey, hbValue);
