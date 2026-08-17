@@ -318,6 +318,52 @@ export interface TrackerHeartbeat {
   employeeEmail: string; deviceId: string; deviceLabel?: string; connectedAt: string; lastSeenAt: string;
   /** Written by the desktop agent since v6 — used by the web portal to detect outdated builds. */
   agentVersion?: string;
+  // ── Capture-health fields, written by the desktop agent since v14 ──────
+  // Added because "Connected" (a live heartbeat) previously meant nothing
+  // about whether screenshots were actually being captured — an employee
+  // could sit at their lock screen (or have screen-recording permission
+  // revoked) for hours while the dashboard kept showing a green "Connected"
+  // badge, since the heartbeat loop and the capture loop were entirely
+  // independent. See getCaptureHealth below for how these are interpreted.
+  /** ISO timestamp of the most recent successful screenshot upload, or null/undefined if none yet this run. */
+  lastCaptureAt?: string | null;
+  /** Human-readable reason the most recent capture attempt didn't produce an uploaded screenshot (e.g. "Screen is locked", a network error) — null once a capture succeeds. */
+  lastCaptureError?: string | null;
+  /** True when the agent detected the OS session was locked on its most recent capture tick (Windows: secure-desktop check; macOS: CGSSessionScreenIsLocked). */
+  isLocked?: boolean;
+  /** How many consecutive capture attempts have failed or been skipped (lock, upload error) — resets to 0 on the next success. */
+  consecutiveCaptureFailures?: number;
+  /** Whether the agent currently believes it *should* be capturing (HR toggle on AND an active shift) — lets the dashboard avoid flagging "not capturing" when there's simply no shift running right now. */
+  captureEnabled?: boolean;
+}
+
+export type CaptureHealthStatus = 'ok' | 'locked' | 'failing' | 'idle' | 'unknown';
+
+/**
+ * Classifies whether a live tracker heartbeat is actually producing usable
+ * screenshots, distinct from isHeartbeatLive (which only proves the agent
+ * process is running and can reach the server). Call this ONLY when
+ * isHeartbeatLive(hb, ...) is already true and captureEnabled is expected
+ * (i.e. the employee has an active shift) — otherwise every offline/no-
+ * shift employee would show as "failing" for no reason.
+ *
+ * - 'idle'    — agent connected but not currently supposed to be capturing
+ *               (no active shift, or HR has tracking off for them).
+ * - 'locked'  — agent detected the OS session was locked on its last tick.
+ * - 'failing' — 3+ consecutive capture/upload failures (not lock-related —
+ *               e.g. permission revoked, disk full, persistent network error).
+ * - 'ok'      — capturing normally.
+ * - 'unknown' — pre-v14 agent build, no capture-health fields reported yet.
+ */
+export function getCaptureHealth(hb: TrackerHeartbeat | null): { status: CaptureHealthStatus; detail?: string } {
+  if (!hb) return { status: 'unknown' };
+  if (hb.isLocked) return { status: 'locked', detail: hb.lastCaptureError || 'Screen is locked' };
+  if (hb.captureEnabled === false) return { status: 'idle' };
+  if (hb.captureEnabled === undefined) return { status: 'unknown' };
+  if ((hb.consecutiveCaptureFailures ?? 0) >= 3) {
+    return { status: 'failing', detail: hb.lastCaptureError || 'Screenshot capture is failing' };
+  }
+  return { status: 'ok' };
 }
 export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 

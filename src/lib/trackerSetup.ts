@@ -8,7 +8,7 @@
 // "t": agentToken}. The old "k" (Supabase anon key) field has been removed;
 // PocketBase's public collections require no API key for reads/writes.
 
-export const TRACKER_RELEASES_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases';
+export const TRACKER_RELEASES_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases';
 
 // Direct-download links to the actual installer files, instead of sending
 // people to the GitHub Releases page and making them find/click the right
@@ -18,9 +18,9 @@ export const TRACKER_RELEASES_URL = 'https://github.com/SPARXzeux/HR-Web-App/rel
 // and serves the file with a Content-Disposition: attachment header, so the
 // browser starts downloading immediately instead of navigating to a page.
 // Filenames must stay in sync with that workflow's release asset names.
-export const TRACKER_DOWNLOAD_WINDOWS_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.exe';
-export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.dmg';
-export const TRACKER_DOWNLOAD_MAC_ZIP_URL = 'https://github.com/SPARXzeux/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
+export const TRACKER_DOWNLOAD_WINDOWS_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.exe';
+export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.dmg';
+export const TRACKER_DOWNLOAD_MAC_ZIP_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
 export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 
 // The minimum agent build employees must be running. When an employee's
@@ -33,7 +33,20 @@ export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 // SyntaxError (fixed alongside the Start Shift/black-screenshot/orphan-shift/
 // lingering-process fixes), and v11 adds the upload/capture jitter from
 // staggered_screenshot_plan.md — both are worth pushing everyone onto.
-export const TRACKER_MIN_VERSION = '11';
+// Bumped 11 -> 14: v14 adds lock-screen detection (skips capture instead of
+// silently uploading a lock-screen image) and reports capture-health fields
+// in every heartbeat (lastCaptureAt/lastCaptureError/isLocked/
+// consecutiveCaptureFailures/captureEnabled) so HR/Admin's TrackingView can
+// tell a genuinely-capturing tracker apart from one that's just "Connected"
+// but producing nothing — this closes the exact exploit where employees on
+// v11-v13 could sit at a lock screen for hours and still show as fully
+// tracked. Everyone must be pushed onto v14+.
+export const TRACKER_MIN_VERSION = '14';
+
+// Device label the Chromebook/Chrome extension reports in its heartbeat
+// (see chrome-extension/background.js's handleHeartbeatTick) — used below
+// to recognize it distinctly from the Windows/Mac desktop agent.
+const CHROMEBOOK_DEVICE_LABEL = 'Chromebook / Chrome OS';
 
 /**
  * Returns true when the connected tracker agent needs an update.
@@ -41,9 +54,19 @@ export const TRACKER_MIN_VERSION = '11';
  * Returns false (no update needed) when version info is unavailable —
  * we don't want to false-alarm employees whose agents predate the
  * agentVersion heartbeat field (they'll appear as "unknown").
+ *
+ * Pass deviceLabel when available so the Chromebook/Chrome extension is
+ * skipped entirely: it reports its own Chrome-extension manifest version
+ * (semver-style, e.g. "1.0.12"), which is not on the same numbering scheme
+ * as the desktop agent's flat incrementing APP_VERSION integer that
+ * TRACKER_MIN_VERSION is calibrated against. Comparing them component-by-
+ * component would misread "1.0.12" as older than "13" forever (1 < 13 on
+ * the very first component) and permanently show "Update Required" for
+ * every Chromebook, regardless of how current it actually is.
  */
-export function needsTrackerUpdate(agentVersion: string | undefined): boolean {
+export function needsTrackerUpdate(agentVersion: string | undefined, deviceLabel?: string): boolean {
   if (!agentVersion) return false; // pre-v6 agents don't send a version — don't alarm
+  if (deviceLabel === CHROMEBOOK_DEVICE_LABEL) return false;
   const parse = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
   const agent = parse(agentVersion);
   const min = parse(TRACKER_MIN_VERSION);

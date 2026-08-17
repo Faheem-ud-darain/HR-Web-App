@@ -18,12 +18,13 @@ import {
   hrActions,
   displayName,
   updateProfileAdmin,
+  getCaptureHealth,
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
-import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Lock, ImageOff } from 'lucide-react';
 
 interface TrackingViewProps {
   role: 'admin' | 'hr' | 'team_lead';
@@ -155,6 +156,31 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   const heartbeatFor = (email: string): TrackerHeartbeat | null =>
     heartbeats.find(h => h.employeeEmail?.toLowerCase() === email.toLowerCase()) || null;
+
+  // Shown alongside the green "Connected" badge (only while the heartbeat is
+  // live) to close the exploit where a tracker sits "Connected" for hours
+  // while producing zero usable screenshots — see getCaptureHealth in
+  // hrData.ts. Returns null for 'ok'/'idle'/'unknown' since those aren't
+  // actionable warnings (idle = no active shift right now; unknown = agent
+  // predates v14 and hasn't reported capture health at all yet).
+  const CaptureHealthBadge = ({ hb }: { hb: TrackerHeartbeat | null }) => {
+    const health = getCaptureHealth(hb);
+    if (health.status === 'locked') {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={health.detail}>
+          <Lock className="h-3 w-3" /> Screen Locked
+        </span>
+      );
+    }
+    if (health.status === 'failing') {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded-full" title={health.detail}>
+          <ImageOff className="h-3 w-3" /> No Screenshots
+        </span>
+      );
+    }
+    return null;
+  };
 
   const settingsFor = (email: string): TrackingSettings =>
     settingsList.find(s => s.employeeEmail.toLowerCase() === email.toLowerCase())
@@ -525,11 +551,12 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
                             <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
                           </span>
-                          {needsTrackerUpdate(hb?.agentVersion) && (
+                          {needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={`Must update to v${TRACKER_MIN_VERSION}`}>
                               <AlertTriangle className="h-3 w-3" /> Update Required
                             </span>
                           )}
+                          <CaptureHealthBadge hb={hb} />
                         </div>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
@@ -631,9 +658,17 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     <p className="text-[10px] text-slate-500">{emp.email}</p>
                   </div>
                   {isLive ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full shrink-0" title={hb?.deviceLabel || ''}>
-                      <Wifi className="h-3 w-3" /> Connected
-                    </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
+                        <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
+                      </span>
+                      {needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={`Must update to v${TRACKER_MIN_VERSION}`}>
+                          <AlertTriangle className="h-3 w-3" /> Update Required
+                        </span>
+                      )}
+                      <CaptureHealthBadge hb={hb} />
+                    </div>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full shrink-0">
                       <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : 'Not installed'}

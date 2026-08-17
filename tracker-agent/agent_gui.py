@@ -48,10 +48,12 @@ in this same folder — so employees never need to install Python themselves.
 
 import base64
 import binascii
+import ctypes
 import io
 import json
 import os
 import platform
+import plistlib
 import random
 import re
 import socket
@@ -105,8 +107,8 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "12"
-GITHUB_REPO = "SPARXzeux/HR-Web-App"
+APP_VERSION = "14"
+GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
 GITHUB_WINDOWS_INSTALLER_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/DelCargo_Tracker_Setup.exe"
@@ -650,8 +652,18 @@ def get_heartbeat(base_url, _unused_key, employee_email):
     return value
 
 
-def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_label, connected_at=None):
-    """Claims (or refreshes) this device's heartbeat row."""
+def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_label, connected_at=None, capture_health=None):
+    """Claims (or refreshes) this device's heartbeat row.
+
+    capture_health (optional dict) carries the anti-exploit fields added
+    alongside the lock-screen detector: lastCaptureAt, lastCaptureError,
+    isLocked, consecutiveCaptureFailures, captureEnabled. Without these,
+    "Connected" on the web dashboard only ever meant "the agent process is
+    running and can reach the server" — it said nothing about whether
+    screenshots were actually being captured, which is exactly what let a
+    locked/permission-revoked machine look identical to a genuinely working
+    one. See TrackingView.tsx / hrData.ts's getCaptureHealth for how the
+    dashboard now surfaces this."""
     key = heartbeat_key_for(employee_email)
     now = datetime.now(timezone.utc).isoformat()
     value = {
@@ -665,6 +677,8 @@ def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_la
         # (see trackerSetup.ts / employee/tracker/page.tsx).
         "agentVersion": APP_VERSION,
     }
+    if capture_health:
+        value.update(capture_health)
     pb_set_kv(base_url, key, value)
 
 
@@ -762,6 +776,54 @@ def clear_stop_cmd(base_url, employee_email):
         print(f"[warn] clear_stop_cmd failed: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _is_windows_locked() -> bool:
+    """Detects a locked Windows workstation (or any secure-desktop state —
+    UAC prompt, Ctrl+Alt+Del screen) with no new dependency: when the
+    session is locked, Winlogon switches the *input* desktop to a secure
+    desktop that a normal user-mode process cannot open. OpenInputDesktop
+    returns NULL in that case and only then — this is the standard,
+    documented Win32 technique for this check (no admin rights needed)."""
+    try:
+        user32 = ctypes.windll.user32
+        DESKTOP_SWITCHDESKTOP = 0x0100
+        h = user32.OpenInputDesktop(0, False, DESKTOP_SWITCHDESKTOP)
+        if not h:
+            return True
+        user32.CloseDesktop(h)
+        return False
+    except Exception:
+        return False  # can't tell — don't false-flag a fine session as locked
+
+
+def _is_macos_locked() -> bool:
+    """Detects a locked macOS session via `ioreg` + plistlib — both are
+    standard-library/OS-builtin, no pyobjc/Quartz dependency needed. The
+    CGSSessionScreenIsLocked key in the Root ioreg node is the same signal
+    the OS itself uses; it's 1/True while the lock screen is up."""
+    try:
+        raw = subprocess.check_output(
+            ["ioreg", "-n", "Root", "-d1", "-a"], timeout=5,
+        )
+        plist = plistlib.loads(raw)
+        return bool(plist.get("CGSSessionScreenIsLocked", 0))
+    except Exception:
+        return False  # can't tell — don't false-flag a fine session as locked
+
+
+def _is_session_locked() -> bool:
+    """True when the current desktop session is locked (Windows) or the
+    screen is locked (macOS) — used to skip screenshot capture instead of
+    silently uploading a lock-screen image and letting HR believe the
+    employee is actively working. Always False on platforms we don't have
+    a specific check for (rather than guessing)."""
+    system = platform.system()
+    if system == "Windows":
+        return _is_windows_locked()
+    if system == "Darwin":
+        return _is_macos_locked()
+    return False
+
 
 def _grab_with_mss():
     """Captures the full virtual desktop (every monitor, correctly offset)
@@ -1339,6 +1401,8 @@ class TrackerApp:
             "connection_status": "unknown",  # "connected" | "disconnected" | "superseded"
             "superseded_device": None,
             "heartbeat_error": None,
+            "is_locked": False,
+            "consecutive_capture_failures": 0,
         }
         self.stop_event = threading.Event()
         self.worker = None
@@ -1440,6 +1504,12 @@ class TrackerApp:
         row.pack(fill="x", anchor="w")
         tk.Label(row, text="DelCargo", font=(FONT, 17, "bold"), bg=BG, fg=INK).pack(side="left")
         tk.Label(row, text=" Tracker", font=(FONT, 17, "bold"), bg=BG, fg=ACCENT).pack(side="left")
+        # Always-visible build version, so an employee (or whoever's helping
+        # them troubleshoot over a call/screenshot) never has to go digging
+        # for it — there's no Help/About menu. HR/Admin and the employee can
+        # also see this same number on the web dashboard (it's the same
+        # APP_VERSION reported via the agentVersion heartbeat field).
+        tk.Label(row, text=f"v{APP_VERSION}", font=(FONT, 8, "bold"), bg=BG, fg=MUTED).pack(side="right")
         if subtitle:
             tk.Label(parent, text=subtitle, font=(FONT, 9), bg=BG, fg=MUTED,
                      wraplength=340, justify="left").pack(anchor="w", pady=(2, 0))
@@ -1663,6 +1733,7 @@ class TrackerApp:
             "connected": False, "enabled": False, "employee_email": "", "interval": None,
             "last_capture": None, "last_error": None, "connection_status": "unknown",
             "superseded_device": None, "heartbeat_error": None,
+            "is_locked": False, "consecutive_capture_failures": 0,
         }
         self.force_claim_next = False
         self.stop_event = threading.Event()
@@ -1693,6 +1764,7 @@ class TrackerApp:
             "connected": False, "enabled": False, "employee_email": "", "interval": None,
             "last_capture": None, "last_error": None, "connection_status": "unknown",
             "superseded_device": None, "heartbeat_error": None,
+            "is_locked": False, "consecutive_capture_failures": 0,
         }
         self.force_claim_next = False
         self.stop_event = threading.Event()
@@ -1769,10 +1841,20 @@ class TrackerApp:
             else:
                 preserved_connected_at = None
 
+            with self.state_lock:
+                capture_health = {
+                    "lastCaptureAt": self.state.get("last_capture"),
+                    "lastCaptureError": self.state.get("last_error"),
+                    "isLocked": bool(self.state.get("is_locked", False)),
+                    "consecutiveCaptureFailures": self.state.get("consecutive_capture_failures", 0),
+                    "captureEnabled": bool(self.state.get("enabled", False)),
+                }
+
             upsert_heartbeat(
                 cfg["url"], None, cfg["employee_email"],
                 cfg.get("device_id"), cfg.get("device_label", ""),
                 connected_at=preserved_connected_at,
+                capture_health=capture_health,
             )
             with self.state_lock:
                 self.state["connection_status"] = "connected"
@@ -1997,18 +2079,44 @@ class TrackerApp:
             was_capture_enabled = enabled
 
             if enabled and not skip_capture_this_pass:
-                try:
-                    webp_bytes, w, h = capture_and_encode()
-                    ts = upload_screenshot_with_retry(
-                        cfg["url"], settings.get("employeeEmail"), webp_bytes, w, h,
-                        device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                        agent_token=cfg.get("token"), stop_event=stop_event,
-                    )
+                # Check for a locked session BEFORE capturing — this is the
+                # exploit this block closes: previously a locked machine (or
+                # one just sitting at the lock screen for hours) captured
+                # and uploaded lock-screen images indistinguishably from
+                # real activity, and "Connected" on the dashboard gave HR
+                # no way to tell. Skipping the capture entirely (rather than
+                # uploading a flagged lock-screen image) also saves
+                # bandwidth/storage for a frame nobody needs to review.
+                locked = _is_session_locked()
+                with self.state_lock:
+                    self.state["is_locked"] = locked
+                if locked:
                     with self.state_lock:
-                        self.state["last_capture"] = ts
-                except Exception as e:
-                    with self.state_lock:
-                        self.state["last_error"] = _short_error(f"Capture/upload failed: {e}")
+                        self.state["last_error"] = "Screen is locked — screenshot capture skipped"
+                        self.state["consecutive_capture_failures"] = self.state.get("consecutive_capture_failures", 0) + 1
+                else:
+                    try:
+                        webp_bytes, w, h = capture_and_encode()
+                        ts = upload_screenshot_with_retry(
+                            cfg["url"], settings.get("employeeEmail"), webp_bytes, w, h,
+                            device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
+                            agent_token=cfg.get("token"), stop_event=stop_event,
+                        )
+                        with self.state_lock:
+                            self.state["last_capture"] = ts
+                            self.state["last_error"] = None
+                            self.state["consecutive_capture_failures"] = 0
+                    except Exception as e:
+                        with self.state_lock:
+                            self.state["last_error"] = _short_error(f"Capture/upload failed: {e}")
+                            self.state["consecutive_capture_failures"] = self.state.get("consecutive_capture_failures", 0) + 1
+            elif not enabled:
+                # Not currently supposed to be capturing (no active shift,
+                # or HR disabled tracking) — reset the lock flag so a stale
+                # "Locked" badge doesn't linger on the dashboard from a
+                # previous shift after the employee unlocks and clocks out.
+                with self.state_lock:
+                    self.state["is_locked"] = False
 
             # +/-5s jitter on the steady-state interval too, so repeated
             # captures don't resettle into lockstep with any other device
@@ -2535,7 +2643,61 @@ class TrackerApp:
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
 
+def _enable_windows_dpi_awareness():
+    """Marks this process as DPI-aware on Windows, before any Tk window is
+    created (including the hidden root _check_and_prompt_update() makes,
+    and the "already running" warning's root, both of which are created
+    before main()'s own root — DPI awareness can only be set once per
+    process and only before the first window appears, so this has to run
+    first, before anything else in main()).
+
+    Without this, an unaware Win32 app running on a HiDPI display — the
+    default on virtually every modern Windows laptop — gets bitmap-
+    stretched by Windows' compatibility shim instead of drawn at native
+    resolution: blurry text, chunky pixelated edges on the rounded
+    Card/PillButton corners, everything looking a couple of decades older
+    than it actually is, even though the underlying UI (brand colors,
+    Segoe UI, custom-drawn rounded widgets matching the web dashboard) is
+    already modern. This was almost certainly the actual cause of the app
+    "feeling like 1980" on Windows — Tk itself never opts into DPI
+    awareness on your behalf. No-op on macOS/Linux."""
+    if platform.system() != "Windows":
+        return
+    try:
+        import ctypes
+        try:
+            # PROCESS_PER_MONITOR_DPI_AWARE (2): stays crisp even if the
+            # window is dragged between two monitors with different scale
+            # factors. Falls back to the older, coarser "system DPI aware"
+            # call on Windows setups where shcore isn't available.
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass  # Never let a DPI-awareness failure block the app from starting.
+
+
+def _apply_tk_dpi_scaling(root):
+    """Companion to _enable_windows_dpi_awareness(): once the process is
+    marked DPI-aware, Tk still needs to be told the *actual* scale factor —
+    it doesn't infer it on its own on every Tk/Tcl build this app has
+    shipped with — or fonts/paddings render too small and cramped on a
+    high-DPI screen instead of matching the rest of Windows' UI. Deriving
+    it from the screen's real pixels-per-inch (winfo_fpixels("1i") / 72,
+    the standard Tk scaling formula) keeps this correct across whatever
+    monitor/scale combination the machine actually has, rather than
+    hardcoding a single guess. Harmless no-op if it ever fails."""
+    try:
+        root.tk.call('tk', 'scaling', root.winfo_fpixels('1i') / 72.0)
+    except Exception:
+        pass
+
+
 def main():
+    # Must run before the very first tk.Tk() anywhere in this process — see
+    # the docstring above for why.
+    _enable_windows_dpi_awareness()
+
     # Trigger macOS native permission prompt on launch if running on Darwin
     request_mac_permissions()
 
@@ -2552,6 +2714,7 @@ def main():
         # redundant capture/heartbeat loop and fight the first instance for
         # the device-connection slot).
         root = tk.Tk()
+        _apply_tk_dpi_scaling(root)
         root.withdraw()
         messagebox.showwarning(
             APP_NAME,
@@ -2561,6 +2724,7 @@ def main():
         sys.exit(0)
 
     root = tk.Tk()
+    _apply_tk_dpi_scaling(root)
     TrackerApp(root)
     root.mainloop()
 
