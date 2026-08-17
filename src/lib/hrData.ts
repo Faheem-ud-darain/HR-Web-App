@@ -1400,7 +1400,13 @@ export function countAbsentWeekdays(
   if (profile.region !== 'Pakistan') return 0;
 
   const todayStr = getNYDateString(today);
-  const joinedStr = profile.joinedDate ? getNYDateString(new Date(profile.joinedDate)) : '';
+  // joinedDate is a plain calendar date ("YYYY-MM-DD") — take it directly
+  // rather than round-tripping through new Date()+NY conversion, which reads
+  // a date-only string as UTC midnight and rolls it back a day once
+  // converted to NY time (see the matching fix/comment in runAbsenceCheck).
+  const joinedStr = profile.joinedDate && /^\d{4}-\d{2}-\d{2}/.test(profile.joinedDate)
+    ? profile.joinedDate.slice(0, 10)
+    : '';
 
   // Every calendar date this employee actually has a shift recorded for,
   // regardless of which device/timezone wrote it — localShiftDate always
@@ -2980,6 +2986,29 @@ export const hrActions = {
       existingRecords = await hrActions.getAbsenceRecords();
     }
 
+    // Self-healing cleanup #2: an absence record dated before the matching
+    // employee's own joinedDate is always wrong (can't be absent from a job
+    // you hadn't started yet) — e.g. an employee added on the 16th getting
+    // marked absent for the 14th. This can happen if the check ever ran
+    // while the profile's joinedDate was still unset/being saved, or from
+    // any other timing/config drift — reverse it the same way as the
+    // weekend cleanup above, whatever the original cause.
+    const preJoinRecords = existingRecords.filter(rec => {
+      const emp = employees.find(e => e.email.toLowerCase() === rec.employeeEmail.toLowerCase());
+      if (!emp?.joinedDate || !/^\d{4}-\d{2}-\d{2}/.test(emp.joinedDate)) return false;
+      return rec.date < emp.joinedDate.slice(0, 10);
+    });
+    for (const rec of preJoinRecords) {
+      await hrActions.deleteAbsenceRecord(rec.id);
+      const note = `${rec.employeeName}'s absence deduction for ${rec.date} was reversed — that date is before their joining date and they weren't employed yet.`;
+      await hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail);
+      await hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail);
+      await hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date is before your joining date.`);
+    }
+    if (preJoinRecords.length > 0) {
+      existingRecords = await hrActions.getAbsenceRecords();
+    }
+
     const deletedIds = await hrActions.getDeletedAbsenceIds();
     const ignoredIds = new Set([...existingRecords.map(r => r.id), ...deletedIds]);
     const newRecords: AbsenceRecord[] = [];
@@ -2993,11 +3022,16 @@ export const hrActions = {
       const empTimesheets = timesheets.filter(t => t.employeeEmail && t.employeeEmail.toLowerCase() === emp.email.toLowerCase() && t.clockIn);
       const empInactivity = inactivityLogs.filter(l => l.employeeEmail && l.employeeEmail.toLowerCase() === emp.email.toLowerCase());
       
-      let joinedStr = '';
-      if (emp.joinedDate) {
-        const jd = new Date(emp.joinedDate);
-        if (!isNaN(jd.getTime())) joinedStr = getNYDateString(jd);
-      }
+      // joinedDate is stored as a plain calendar date ("YYYY-MM-DD") — the
+      // actual day the employee joined, not a specific instant. Take the
+      // date portion directly instead of round-tripping through
+      // `new Date(...)` + NY-timezone conversion: a date-only string parses
+      // as UTC midnight, and converting THAT to NY time rolls it back to
+      // the previous evening — e.g. "2026-08-16" became "2026-08-15" —
+      // silently shifting the join-date cutoff.
+      const joinedStr = emp.joinedDate && /^\d{4}-\d{2}-\d{2}/.test(emp.joinedDate)
+        ? emp.joinedDate.slice(0, 10)
+        : '';
 
       const shiftDatesWithShift = new Set<string>();
       const shiftDatesWithTotalMinutes = new Map<string, number>();

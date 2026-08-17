@@ -3,8 +3,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { hrActions, AbsenceRecord, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName } from '@/lib/hrData';
-import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2 } from 'lucide-react';
+import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName } from '@/lib/hrData';
+import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
 import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 
 
@@ -12,6 +12,17 @@ interface AbsenceDetailsViewProps {
   role: 'employee' | 'hr' | 'admin';
   filterEmail?: string;
 }
+
+type AttendanceDayRow = {
+  employeeEmail: string;
+  employeeName: string;
+  date: string;
+  shifts: TimesheetEntry[];
+  totalMinutes: number;
+  hasActiveShift: boolean;
+  isLeave?: boolean;
+  leaveType?: LeaveApplication['type'];
+};
 
 export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProps) {
   const [activeTab, setActiveTab] = useState<'attendance' | 'absences'>('attendance');
@@ -29,16 +40,17 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const [selectedAttendanceRow, setSelectedAttendanceRow] = useState<{
-    employeeEmail: string;
-    employeeName: string;
-    date: string;
-    shifts: typeof allTimesheets;
-    totalMinutes: number;
-    hasActiveShift: boolean;
-    isLeave?: boolean;
-    leaveType?: LeaveApplication['type'];
-  } | null>(null);
+  const [selectedAttendanceRow, setSelectedAttendanceRow] = useState<AttendanceDayRow | null>(null);
+  // HR/Admin views aggregate to one row per employee — these hold which
+  // employee's detail modal is currently open (attendance days, or absence
+  // records). Employees viewing their own page skip aggregation entirely
+  // (see the render below) so these stay unused in that case.
+  // Store just the selected employee's email and look their entry up fresh
+  // from the (memoized) summaries below on every render — so the open modal
+  // always reflects the latest data instead of a snapshot taken the moment
+  // it was opened, without needing an effect to keep it in sync.
+  const [selectedEmployeeAttendanceEmail, setSelectedEmployeeAttendanceEmail] = useState<string | null>(null);
+  const [selectedEmployeeAbsencesEmail, setSelectedEmployeeAbsencesEmail] = useState<string | null>(null);
 
   const loadAbsenceRecords = () => {
     hrActions.getAbsenceRecords().then(all => {
@@ -93,12 +105,18 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     }
   };
 
-  const handleToggleAll = () => {
-    if (selectedIds.size === filteredAbsences.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredAbsences.map(r => r.id)));
-    }
+  // Select-all is scoped to whichever list is currently visible — the whole
+  // flat list for an employee's own (unaggregated) view, or just the one
+  // employee's records inside the per-employee absence modal for HR/Admin.
+  const handleToggleAllIn = (list: AbsenceRecord[]) => {
+    const ids = list.map(r => r.id);
+    const allSelected = ids.length > 0 && ids.every(id => selectedIds.has(id));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.add(id));
+      return next;
+    });
   };
 
   const handleToggleOne = (id: string) => {
@@ -119,16 +137,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       list = list.filter(t => localShiftDate(t.clockIn, t.date) === selectedDate);
     }
 
-    const groupedMap = new Map<string, {
-      employeeEmail: string;
-      employeeName: string;
-      date: string;
-      shifts: typeof allTimesheets;
-      totalMinutes: number;
-      hasActiveShift: boolean;
-      isLeave?: boolean;
-      leaveType?: LeaveApplication['type'];
-    }>();
+    const groupedMap = new Map<string, AttendanceDayRow>();
 
     for (const t of list) {
       const dateKey = localShiftDate(t.clockIn, t.date);
@@ -231,6 +240,96 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
   const totalDeducted = filteredAbsences.reduce((acc, r) => acc + r.deductionAmount, 0);
 
+  // HR/Admin views collapse the day-by-day rows down to one row per
+  // employee — clicking opens a detail modal with that employee's full
+  // history instead of scattering every day/record across the main table.
+  // An employee viewing their own page is already scoped to a single
+  // person, so their view skips this and stays a flat per-day/per-record
+  // list (see the render below).
+  const employeeAttendanceSummaries = useMemo(() => {
+    if (role === 'employee') return [];
+    const map = new Map<string, { employeeEmail: string; employeeName: string; days: AttendanceDayRow[] }>();
+    for (const row of cumulativeAttendanceRows) {
+      const key = row.employeeEmail.toLowerCase();
+      const existing = map.get(key);
+      if (existing) existing.days.push(row);
+      else map.set(key, { employeeEmail: row.employeeEmail, employeeName: row.employeeName, days: [row] });
+    }
+    return Array.from(map.values())
+      .map(e => ({ ...e, days: [...e.days].sort((a, b) => b.date.localeCompare(a.date)) }))
+      .sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  }, [cumulativeAttendanceRows, role]);
+
+  const employeeAbsenceSummaries = useMemo(() => {
+    if (role === 'employee') return [];
+    const map = new Map<string, { employeeEmail: string; employeeName: string; records: AbsenceRecord[] }>();
+    for (const r of filteredAbsences) {
+      const key = r.employeeEmail.toLowerCase();
+      const existing = map.get(key);
+      if (existing) existing.records.push(r);
+      else map.set(key, { employeeEmail: r.employeeEmail, employeeName: r.employeeName, records: [r] });
+    }
+    return Array.from(map.values())
+      .map(e => ({ ...e, records: [...e.records].sort((a, b) => b.date.localeCompare(a.date)) }))
+      .sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  }, [filteredAbsences, role]);
+
+  const selectedEmployeeAttendance = selectedEmployeeAttendanceEmail
+    ? employeeAttendanceSummaries.find(e => e.employeeEmail.toLowerCase() === selectedEmployeeAttendanceEmail.toLowerCase()) || null
+    : null;
+  const selectedEmployeeAbsences = selectedEmployeeAbsencesEmail
+    ? employeeAbsenceSummaries.find(e => e.employeeEmail.toLowerCase() === selectedEmployeeAbsencesEmail.toLowerCase()) || null
+    : null;
+
+  const formatDuration = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+  // Shared status-badge cluster for a single attendance day row — used in
+  // the employee's own flat log AND inside the HR/Admin per-employee modal,
+  // so the leave/on-shift/present/absent logic only lives in one place.
+  const AttendanceStatusBadges = ({ row }: { row: AttendanceDayRow }) => (
+    row.isLeave ? (
+      <span className="inline-flex items-center gap-1.5 flex-wrap">
+        <Badge variant="info">
+          <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3 w-3" /> On Leave ({row.leaveType})</span>
+        </Badge>
+        {row.leaveType === 'Urgent' ? (
+          <Badge variant="danger">2-day deduction</Badge>
+        ) : (
+          <Badge variant="success">No deduction</Badge>
+        )}
+      </span>
+    ) : row.hasActiveShift ? (
+      <Badge variant="warning">On Shift</Badge>
+    ) : row.totalMinutes >= 240 ? (
+      <Badge variant="success">Present ({formatDuration(row.totalMinutes)})</Badge>
+    ) : (
+      <Badge variant="danger">Absent (&lt; 4h worked)</Badge>
+    )
+  );
+
+  // Shared reason label for a single absence record — used in the
+  // employee's own flat list AND inside the HR/Admin per-employee modal.
+  const AbsenceReasonLabel = ({ r }: { r: AbsenceRecord }) => (
+    <span className="inline-flex items-center gap-1.5 text-slate-700">
+      {r.reason === 'inactivity' ? (
+        <>
+          <Clock className="h-3.5 w-3.5 text-amber-500" />
+          <span>Inactive {r.inactivityMinutes} min during shift</span>
+        </>
+      ) : r.reason === 'under_4_hours' ? (
+        <>
+          <Clock className="h-3.5 w-3.5 text-rose-500" />
+          <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
+        </>
+      ) : (
+        <>
+          <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
+          <span>Did not start a shift</span>
+        </>
+      )}
+    </span>
+  );
+
   return (
     <div className="space-y-4 md:space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -317,68 +416,38 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         <Card className="border border-slate-200 overflow-hidden p-0 bg-white">
           {loadingTimesheets ? (
             <div className="py-16 text-center text-xs font-semibold text-slate-400">Loading attendance records…</div>
-          ) : cumulativeAttendanceRows.length === 0 ? (
-            <div className="py-16 text-center space-y-2">
-              <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
-              <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
-              <p className="text-xs text-slate-400">
-                {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="text-left px-5 py-3 font-bold">Date</th>
-                      {role !== 'employee' && <th className="text-left px-5 py-3 font-bold">Employee</th>}
-                      <th className="text-center px-5 py-3 font-bold">Total Shifts</th>
-                      <th className="text-right px-5 py-3 font-bold">Total Worked Time</th>
-                      <th className="text-center px-5 py-3 font-bold">Attendance Status</th>
-                      <th className="text-center px-5 py-3 font-bold">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {cumulativeAttendanceRows.map(row => {
-                      const hours = Math.floor(row.totalMinutes / 60);
-                      const mins = row.totalMinutes % 60;
-                      const formattedDuration = `${hours}h ${mins}m`;
-
-                      return (
+          ) : role === 'employee' ? (
+            cumulativeAttendanceRows.length === 0 ? (
+              <div className="py-16 text-center space-y-2">
+                <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
+                <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
+                <p className="text-xs text-slate-400">
+                  {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table — employee's own flat day-by-day log */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="text-left px-5 py-3 font-bold">Date</th>
+                        <th className="text-center px-5 py-3 font-bold">Total Shifts</th>
+                        <th className="text-right px-5 py-3 font-bold">Total Worked Time</th>
+                        <th className="text-center px-5 py-3 font-bold">Attendance Status</th>
+                        <th className="text-center px-5 py-3 font-bold">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {cumulativeAttendanceRows.map(row => (
                         <tr key={`${row.employeeEmail}_${row.date}`} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-5 py-3 font-mono font-bold text-slate-700">{row.date}</td>
-                          {role !== 'employee' && (
-                            <td className="px-5 py-3">
-                              <p className="font-bold text-slate-900">{row.employeeName}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">{row.employeeEmail}</p>
-                            </td>
-                          )}
                           <td className="px-5 py-3 text-center font-semibold text-slate-700">
                             {row.isLeave ? '—' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''}`}
                           </td>
-                          <td className="px-5 py-3 text-right font-bold text-slate-900">{row.isLeave ? '—' : formattedDuration}</td>
-                          <td className="px-5 py-3 text-center">
-                            {row.isLeave ? (
-                              <span className="inline-flex items-center gap-1.5">
-                                <Badge variant="info">
-                                  <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3 w-3" /> On Leave ({row.leaveType})</span>
-                                </Badge>
-                                {row.leaveType === 'Urgent' ? (
-                                  <Badge variant="danger">2-day deduction</Badge>
-                                ) : (
-                                  <Badge variant="success">No deduction</Badge>
-                                )}
-                              </span>
-                            ) : row.hasActiveShift ? (
-                              <Badge variant="warning">On Shift</Badge>
-                            ) : row.totalMinutes >= 240 ? (
-                              <Badge variant="success">Present ({formattedDuration})</Badge>
-                            ) : (
-                              <Badge variant="danger">Absent (&lt; 4h worked)</Badge>
-                            )}
-                          </td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900">{row.isLeave ? '—' : formatDuration(row.totalMinutes)}</td>
+                          <td className="px-5 py-3 text-center"><AttendanceStatusBadges row={row} /></td>
                           <td className="px-5 py-3 text-center">
                             {row.isLeave ? (
                               <span className="text-[11px] text-slate-400 font-semibold">Approved leave — no shift</span>
@@ -392,52 +461,26 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             )}
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Mobile Cards Stack */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {cumulativeAttendanceRows.map(row => {
-                  const hours = Math.floor(row.totalMinutes / 60);
-                  const mins = row.totalMinutes % 60;
-                  const formattedDuration = `${hours}h ${mins}m`;
-
-                  return (
+                {/* Mobile Cards Stack */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {cumulativeAttendanceRows.map(row => (
                     <div key={`${row.employeeEmail}_${row.date}`} className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="font-mono text-xs font-bold text-slate-800">{row.date}</p>
-                        {row.isLeave ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Badge variant="info">
-                              <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3 w-3" /> On Leave ({row.leaveType})</span>
-                            </Badge>
-                          </span>
-                        ) : row.hasActiveShift ? (
-                          <Badge variant="warning">On Shift</Badge>
-                        ) : row.totalMinutes >= 240 ? (
-                          <Badge variant="success">Present ({formattedDuration})</Badge>
-                        ) : (
-                          <Badge variant="danger">Absent (&lt; 4h worked)</Badge>
-                        )}
+                        <AttendanceStatusBadges row={row} />
                       </div>
-                      {role !== 'employee' && <p className="text-xs font-bold text-slate-900">{row.employeeName}</p>}
                       {row.isLeave ? (
-                        <div className="pt-1 text-xs flex items-center justify-between">
-                          <p className="text-[10px] text-slate-400 font-semibold uppercase">Approved leave — no shift</p>
-                          {row.leaveType === 'Urgent' ? (
-                            <Badge variant="danger">2-day deduction</Badge>
-                          ) : (
-                            <Badge variant="success">No deduction</Badge>
-                          )}
-                        </div>
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Approved leave — no shift</p>
                       ) : (
                         <div className="flex items-center justify-between pt-1 text-xs">
                           <div>
                             <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
-                            <p className="font-bold text-slate-900">{formattedDuration}</p>
+                            <p className="font-bold text-slate-900">{formatDuration(row.totalMinutes)}</p>
                           </div>
                           <button
                             onClick={() => setSelectedAttendanceRow(row)}
@@ -448,12 +491,153 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         </div>
                       )}
                     </div>
+                  ))}
+                </div>
+              </>
+            )
+          ) : employeeAttendanceSummaries.length === 0 ? (
+            <div className="py-16 text-center space-y-2">
+              <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
+              <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
+              <p className="text-xs text-slate-400">
+                {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table — HR/Admin: one row per employee, click to open their full history */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="text-left px-5 py-3 font-bold">Employee</th>
+                      <th className="text-center px-5 py-3 font-bold">Days Logged</th>
+                      <th className="text-center px-5 py-3 font-bold">Present</th>
+                      <th className="text-center px-5 py-3 font-bold">On Leave</th>
+                      <th className="text-center px-5 py-3 font-bold">Flagged</th>
+                      <th className="text-right px-5 py-3 font-bold">Total Worked Time</th>
+                      <th className="text-center px-5 py-3 font-bold">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {employeeAttendanceSummaries.map(emp => {
+                      const presentDays = emp.days.filter(d => !d.isLeave && !d.hasActiveShift && d.totalMinutes >= 240).length;
+                      const leaveDays = emp.days.filter(d => d.isLeave).length;
+                      const flaggedDays = emp.days.filter(d => !d.isLeave && !d.hasActiveShift && d.totalMinutes < 240).length;
+                      const totalMinutes = emp.days.reduce((s, d) => s + d.totalMinutes, 0);
+                      return (
+                        <tr key={emp.employeeEmail} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-5 py-3">
+                            <p className="font-bold text-slate-900">{emp.employeeName}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                          </td>
+                          <td className="px-5 py-3 text-center font-semibold text-slate-700">{emp.days.length}</td>
+                          <td className="px-5 py-3 text-center"><Badge variant="success">{presentDays}</Badge></td>
+                          <td className="px-5 py-3 text-center">{leaveDays > 0 ? <Badge variant="info">{leaveDays}</Badge> : <span className="text-slate-400">0</span>}</td>
+                          <td className="px-5 py-3 text-center">{flaggedDays > 0 ? <Badge variant="danger">{flaggedDays}</Badge> : <span className="text-slate-400">0</span>}</td>
+                          <td className="px-5 py-3 text-right font-bold text-slate-900">{formatDuration(totalMinutes)}</td>
+                          <td className="px-5 py-3 text-center">
+                            <button
+                              onClick={() => setSelectedEmployeeAttendanceEmail(emp.employeeEmail)}
+                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
+                            >
+                              View Details <ChevronRight className="h-3 w-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards Stack */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {employeeAttendanceSummaries.map(emp => {
+                  const presentDays = emp.days.filter(d => !d.isLeave && !d.hasActiveShift && d.totalMinutes >= 240).length;
+                  const leaveDays = emp.days.filter(d => d.isLeave).length;
+                  const flaggedDays = emp.days.filter(d => !d.isLeave && !d.hasActiveShift && d.totalMinutes < 240).length;
+                  const totalMinutes = emp.days.reduce((s, d) => s + d.totalMinutes, 0);
+                  return (
+                    <button
+                      key={emp.employeeEmail}
+                      onClick={() => setSelectedEmployeeAttendanceEmail(emp.employeeEmail)}
+                      className="w-full text-left p-4 space-y-2 hover:bg-slate-50/50"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{emp.employeeName}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                        <span className="text-slate-500">{emp.days.length} days logged</span>
+                        <Badge variant="success">{presentDays} present</Badge>
+                        {leaveDays > 0 && <Badge variant="info">{leaveDays} leave</Badge>}
+                        {flaggedDays > 0 && <Badge variant="danger">{flaggedDays} flagged</Badge>}
+                      </div>
+                      <p className="text-xs font-bold text-slate-900">{formatDuration(totalMinutes)} total</p>
+                    </button>
                   );
                 })}
               </div>
             </>
           )}
         </Card>
+      )}
+
+      {/* EMPLOYEE ATTENDANCE DETAIL MODAL (HR/Admin) */}
+      {selectedEmployeeAttendance && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">{selectedEmployeeAttendance.employeeName}</h3>
+                <p className="text-xs text-slate-500 font-mono">{selectedEmployeeAttendance.employeeEmail} • {selectedEmployeeAttendance.days.length} day{selectedEmployeeAttendance.days.length > 1 ? 's' : ''} logged</p>
+              </div>
+              <button
+                onClick={() => setSelectedEmployeeAttendanceEmail(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {selectedEmployeeAttendance.days.map(row => (
+                <div key={row.date} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-xs font-mono font-bold text-slate-700">{row.date}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {row.isLeave ? 'Approved leave — no shift' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''} • ${formatDuration(row.totalMinutes)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <AttendanceStatusBadges row={row} />
+                    {!row.isLeave && (
+                      <button
+                        onClick={() => setSelectedAttendanceRow(row)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors"
+                      >
+                        Breakdown
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 flex justify-end border-t border-slate-100">
+              <button
+                onClick={() => setSelectedEmployeeAttendanceEmail(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* LEAVE-PROTECTED ABSENCE DELETE BLOCKED POPUP */}
@@ -582,45 +766,66 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             </Card>
           </div>
 
-          {/* Bulk Action Bar — visible whenever HR/Admin has selected ≥1 record */}
-          {role !== 'employee' && selectedIds.size > 0 && (
-            <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 mb-2">
-              <div className="flex items-center gap-2">
-                <ShieldX className="h-4 w-4 text-rose-600 shrink-0" />
-                <span className="text-xs font-bold text-rose-800">
-                  {selectedIds.size} record{selectedIds.size > 1 ? 's' : ''} selected
-                  {' '}—{' '}
-                  {formatMoney(
-                    filteredAbsences.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + r.deductionAmount, 0),
-                    'Pakistan'
-                  )}{' '}to reverse
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedIds(new Set())}
-                  className="text-xs font-bold text-rose-500 hover:text-rose-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleting}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {bulkDeleting ? 'Removing…' : `Remove ${selectedIds.size} Record${selectedIds.size > 1 ? 's' : ''}`}
-                </button>
-              </div>
-            </div>
-          )}
-
           <Card className="border border-slate-200 overflow-hidden p-0 bg-white">
             {loadingAbsences ? (
               <div className="py-16 text-center text-xs font-semibold text-slate-400">Loading absence records…</div>
-            ) : filteredAbsences.length === 0 ? (
+            ) : role === 'employee' ? (
+              filteredAbsences.length === 0 ? (
+                <div className="py-16 text-center space-y-2">
+                  <UserX className="h-8 w-8 text-slate-300 mx-auto" />
+                  <p className="text-sm font-bold text-slate-700">No absence records found</p>
+                  <p className="text-xs text-slate-400">
+                    {selectedDate ? `No absence records for ${selectedDate}.` : 'No employees have been marked absent.'}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Desktop table — employee's own flat list, read-only */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="text-left px-5 py-3 font-bold">Date</th>
+                          <th className="text-left px-5 py-3 font-bold">Reason</th>
+                          <th className="text-right px-5 py-3 font-bold">Deduction</th>
+                          <th className="text-center px-5 py-3 font-bold">Acknowledged</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredAbsences.map(r => (
+                          <tr key={r.id} className="hover:bg-slate-50/50">
+                            <td className="px-5 py-3 font-mono font-bold text-slate-700">{r.date}</td>
+                            <td className="px-5 py-3"><AbsenceReasonLabel r={r} /></td>
+                            <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')}</td>
+                            <td className="px-5 py-3 text-center">
+                              {r.acknowledged
+                                ? <Badge variant="success"><span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Seen</span></Badge>
+                                : <Badge variant="warning">Pending</Badge>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile cards */}
+                  <div className="md:hidden divide-y divide-slate-100">
+                    {filteredAbsences.map(r => (
+                      <div key={r.id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="font-mono text-xs font-bold text-slate-800">{r.date}</p>
+                          {r.acknowledged
+                            ? <Badge variant="success">Seen</Badge>
+                            : <Badge variant="warning">Pending</Badge>}
+                        </div>
+                        <p className="text-xs text-slate-600"><AbsenceReasonLabel r={r} /></p>
+                        <p className="text-xs font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')} deducted</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )
+            ) : employeeAbsenceSummaries.length === 0 ? (
               <div className="py-16 text-center space-y-2">
                 <UserX className="h-8 w-8 text-slate-300 mx-auto" />
                 <p className="text-sm font-bold text-slate-700">No absence records found</p>
@@ -630,144 +835,189 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
               </div>
             ) : (
               <>
-                {/* Desktop table */}
+                {/* Desktop table — HR/Admin: one row per employee, manage in a modal */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                       <tr>
-                        {role !== 'employee' && (
-                          <th className="px-5 py-3">
-                            <input
-                              type="checkbox"
-                              checked={filteredAbsences.length > 0 && selectedIds.size === filteredAbsences.length}
-                              onChange={handleToggleAll}
-                              className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
-                              title="Select all"
-                            />
-                          </th>
-                        )}
-                        <th className="text-left px-5 py-3 font-bold">Date</th>
-                        {role !== 'employee' && <th className="text-left px-5 py-3 font-bold">Employee</th>}
-                        <th className="text-left px-5 py-3 font-bold">Reason</th>
-                        <th className="text-right px-5 py-3 font-bold">Deduction</th>
-                        <th className="text-center px-5 py-3 font-bold">Acknowledged</th>
-                        {role !== 'employee' && <th className="text-center px-5 py-3 font-bold">Action</th>}
+                        <th className="text-left px-5 py-3 font-bold">Employee</th>
+                        <th className="text-center px-5 py-3 font-bold">Absences</th>
+                        <th className="text-right px-5 py-3 font-bold">Total Deducted</th>
+                        <th className="text-center px-5 py-3 font-bold">Pending</th>
+                        <th className="text-center px-5 py-3 font-bold">Manage</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredAbsences.map(r => (
-                        <tr key={r.id} className={`hover:bg-slate-50/50 ${selectedIds.has(r.id) ? 'bg-rose-50/50' : ''}`}>
-                          {role !== 'employee' && (
+                      {employeeAbsenceSummaries.map(emp => {
+                        const deducted = emp.records.reduce((s, r) => s + r.deductionAmount, 0);
+                        const pending = emp.records.filter(r => !r.acknowledged).length;
+                        return (
+                          <tr key={emp.employeeEmail} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-5 py-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(r.id)}
-                                onChange={() => handleToggleOne(r.id)}
-                                className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
-                              />
+                              <p className="font-bold text-slate-900">{emp.employeeName}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
                             </td>
-                          )}
-                          <td className="px-5 py-3 font-mono font-bold text-slate-700">{r.date}</td>
-                          {role !== 'employee' && <td className="px-5 py-3 font-semibold text-slate-800">{r.employeeName}</td>}
-                          <td className="px-5 py-3">
-                            <span className="inline-flex items-center gap-1.5 text-slate-700">
-                              {r.reason === 'inactivity' ? (
-                                <>
-                                  <Clock className="h-3.5 w-3.5 text-amber-500" />
-                                  <span>Inactive {r.inactivityMinutes} min during shift</span>
-                                </>
-                              ) : r.reason === 'under_4_hours' ? (
-                                <>
-                                  <Clock className="h-3.5 w-3.5 text-rose-500" />
-                                  <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
-                                  <span>Did not start a shift</span>
-                                </>
-                              )}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')}</td>
-                          <td className="px-5 py-3 text-center">
-                            {r.acknowledged
-                              ? <Badge variant="success"><span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Seen</span></Badge>
-                              : <Badge variant="warning">Pending</Badge>}
-                          </td>
-                          {role !== 'employee' && (
+                            <td className="px-5 py-3 text-center"><Badge variant="danger">{emp.records.length}</Badge></td>
+                            <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(deducted, 'Pakistan')}</td>
+                            <td className="px-5 py-3 text-center">{pending > 0 ? <Badge variant="warning">{pending}</Badge> : <span className="text-slate-400">0</span>}</td>
                             <td className="px-5 py-3 text-center">
                               <button
-                                onClick={() => handleDeleteAbsenceRecord(r)}
-                                title="Remove false absence record"
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                onClick={() => setSelectedEmployeeAbsencesEmail(emp.employeeEmail)}
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                Manage <ChevronRight className="h-3 w-3" />
                               </button>
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Mobile cards */}
                 <div className="md:hidden divide-y divide-slate-100">
-                  {filteredAbsences.map(r => (
-                    <div key={r.id} className={`p-4 space-y-2 ${selectedIds.has(r.id) ? 'bg-rose-50/40' : ''}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {role !== 'employee' && (
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(r.id)}
-                              onChange={() => handleToggleOne(r.id)}
-                              className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
-                            />
-                          )}
-                          <p className="font-mono text-xs font-bold text-slate-800">{r.date}</p>
+                  {employeeAbsenceSummaries.map(emp => {
+                    const deducted = emp.records.reduce((s, r) => s + r.deductionAmount, 0);
+                    const pending = emp.records.filter(r => !r.acknowledged).length;
+                    return (
+                      <button
+                        key={emp.employeeEmail}
+                        onClick={() => setSelectedEmployeeAbsencesEmail(emp.employeeEmail)}
+                        className="w-full text-left p-4 space-y-2 hover:bg-slate-50/50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{emp.employeeName}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
                         </div>
-                        <div className="flex items-center gap-2">
-                          {r.acknowledged
-                            ? <Badge variant="success">Seen</Badge>
-                            : <Badge variant="warning">Pending</Badge>}
-                          {role !== 'employee' && (
-                            <button
-                              onClick={() => handleDeleteAbsenceRecord(r)}
-                              className="p-1 text-slate-400 hover:text-rose-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
+                        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                          <Badge variant="danger">{emp.records.length} absences</Badge>
+                          {pending > 0 && <Badge variant="warning">{pending} pending</Badge>}
                         </div>
-                      </div>
-                      {role !== 'employee' && <p className="text-sm font-bold text-slate-900">{r.employeeName}</p>}
-                      <p className="text-xs text-slate-600 inline-flex items-center gap-1.5">
-                        {r.reason === 'inactivity' ? (
-                          <>
-                            <Clock className="h-3.5 w-3.5 text-amber-500" />
-                            <span>Inactive {r.inactivityMinutes} min during shift</span>
-                          </>
-                        ) : r.reason === 'under_4_hours' ? (
-                          <>
-                            <Clock className="h-3.5 w-3.5 text-rose-500" />
-                            <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
-                          </>
-                        ) : (
-                          <>
-                            <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
-                            <span>Did not start a shift</span>
-                          </>
-                        )}
-                      </p>
-                      <p className="text-xs font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')} deducted</p>
-                    </div>
-                  ))}
+                        <p className="text-xs font-bold text-rose-600">{formatMoney(deducted, 'Pakistan')} deducted</p>
+                      </button>
+                    );
+                  })}
                 </div>
               </>
             )}
           </Card>
+        </div>
+      )}
+
+      {/* EMPLOYEE ABSENCE DETAIL MODAL (HR/Admin) — manage/delete lives here */}
+      {selectedEmployeeAbsences && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">{selectedEmployeeAbsences.employeeName}</h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {selectedEmployeeAbsences.employeeEmail} • {selectedEmployeeAbsences.records.length} absence record{selectedEmployeeAbsences.records.length > 1 ? 's' : ''} •{' '}
+                  {formatMoney(selectedEmployeeAbsences.records.reduce((s, r) => s + r.deductionAmount, 0), 'Pakistan')} deducted
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedEmployeeAbsencesEmail(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Bulk action bar — scoped to this employee's records */}
+            {(() => {
+              const empIds = selectedEmployeeAbsences.records.map(r => r.id);
+              const empSelectedCount = empIds.filter(id => selectedIds.has(id)).length;
+              return empSelectedCount > 0 ? (
+                <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldX className="h-4 w-4 text-rose-600 shrink-0" />
+                    <span className="text-xs font-bold text-rose-800">
+                      {empSelectedCount} record{empSelectedCount > 1 ? 's' : ''} selected
+                      {' '}—{' '}
+                      {formatMoney(
+                        selectedEmployeeAbsences.records.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + r.deductionAmount, 0),
+                        'Pakistan'
+                      )}{' '}to reverse
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds(prev => { const next = new Set(prev); empIds.forEach(id => next.delete(id)); return next; })}
+                      className="text-xs font-bold text-rose-500 hover:text-rose-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleting}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {bulkDeleting ? 'Removing…' : `Remove ${empSelectedCount} Record${empSelectedCount > 1 ? 's' : ''}`}
+                    </button>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            <div className="flex items-center gap-2 pb-1">
+              <input
+                type="checkbox"
+                checked={selectedEmployeeAbsences.records.length > 0 && selectedEmployeeAbsences.records.every(r => selectedIds.has(r.id))}
+                onChange={() => handleToggleAllIn(selectedEmployeeAbsences.records)}
+                className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
+              />
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Select all</span>
+            </div>
+
+            <div className="space-y-2">
+              {selectedEmployeeAbsences.records.map(r => (
+                <div key={r.id} className={`border rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap ${selectedIds.has(r.id) ? 'bg-rose-50/50 border-rose-200' : 'border-slate-200'}`}>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(r.id)}
+                      onChange={() => handleToggleOne(r.id)}
+                      className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
+                    />
+                    <div>
+                      <p className="text-xs font-mono font-bold text-slate-700">{r.date}</p>
+                      <AbsenceReasonLabel r={r} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')}</span>
+                    {r.acknowledged
+                      ? <Badge variant="success">Seen</Badge>
+                      : <Badge variant="warning">Pending</Badge>}
+                    <button
+                      onClick={() => handleDeleteAbsenceRecord(r)}
+                      title="Remove false absence record"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 flex justify-end border-t border-slate-100">
+              <button
+                onClick={() => setSelectedEmployeeAbsencesEmail(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
