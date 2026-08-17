@@ -107,7 +107,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "14"
+APP_VERSION = "15"
 GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -823,6 +823,65 @@ def _is_session_locked() -> bool:
     if system == "Darwin":
         return _is_macos_locked()
     return False
+
+
+class _LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+
+
+def _get_windows_idle_seconds():
+    """Seconds since the last input of ANY kind (mouse move/click OR
+    keypress) system-wide, via the same Win32 API Windows itself uses to
+    decide when to trigger the screensaver/lock. This is what lets someone
+    typing for minutes at a stretch (no mouse movement at all) correctly
+    count as active — the previous mouse-position-only check would have
+    flagged that as idle. Returns None if the call fails (caller falls back
+    to mouse-position diffing)."""
+    try:
+        lii = _LASTINPUTINFO()
+        lii.cbSize = ctypes.sizeof(_LASTINPUTINFO)
+        if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+            return None
+        millis_since_boot = ctypes.windll.kernel32.GetTickCount()
+        idle_millis = millis_since_boot - lii.dwTime
+        if idle_millis < 0:
+            idle_millis += 2 ** 32  # GetTickCount wraps every ~49.7 days
+        return idle_millis / 1000.0
+    except Exception:
+        return None
+
+
+def _get_macos_idle_seconds():
+    """Seconds since the last HID (mouse OR keyboard) event, via `ioreg`'s
+    IOHIDSystem "HIDIdleTime" (nanoseconds) — the same system-wide idle
+    signal macOS itself uses for display sleep/screensaver timing. No
+    pyobjc/Quartz dependency needed, same approach as _is_macos_locked
+    above. Returns None if unavailable (caller falls back to mouse-position
+    diffing, same as before this existed)."""
+    try:
+        raw = subprocess.check_output(
+            ["ioreg", "-c", "IOHIDSystem"], timeout=5,
+        ).decode("utf-8", "ignore")
+        for line in raw.splitlines():
+            if "HIDIdleTime" in line:
+                ns_str = line.split("=")[-1].strip()
+                return int(ns_str) / 1e9
+        return None
+    except Exception:
+        return None
+
+
+def _get_system_idle_seconds():
+    """Dispatches to the platform-specific system-wide idle check above.
+    Returns None on platforms without one (or on failure) so callers know
+    to fall back to mouse-position diffing rather than silently treating
+    keyboard-only activity as idle."""
+    system = platform.system()
+    if system == "Windows":
+        return _get_windows_idle_seconds()
+    if system == "Darwin":
+        return _get_macos_idle_seconds()
+    return None
 
 
 def _grab_with_mss():
@@ -2272,11 +2331,21 @@ class TrackerApp:
             backoff = min(backoff * 2, 30)
 
     def _inactivity_loop(self, cfg, stop_event):
-        """Samples the cursor position every MOUSE_POLL_SECONDS. Whenever the
-        mouse hasn't moved for at least INACTIVITY_THRESHOLD_SECONDS and then
-        moves again, uploads that whole idle stretch as one completed
-        interval — matching how HR/Admin want to see "how long and when"
-        inactivity happened within a shift, not a running live counter.
+        """Samples system-wide idle time every MOUSE_POLL_SECONDS. Whenever
+        there's been no mouse OR keyboard input for at least
+        INACTIVITY_THRESHOLD_SECONDS and then activity resumes, uploads that
+        whole idle stretch as one completed interval — matching how
+        HR/Admin want to see "how long and when" inactivity happened within
+        a shift, not a running live counter.
+
+        Uses the OS's own system-wide idle-time API (Windows:
+        GetLastInputInfo; macOS: ioreg's IOHIDSystem HIDIdleTime) when
+        available — see _get_system_idle_seconds — so someone typing for
+        minutes at a stretch with the mouse untouched correctly counts as
+        active, instead of being flagged idle the way the old mouse-
+        position-only check would have. Falls back to the previous mouse-
+        position diffing (mouse movement only, no keyboard signal) on any
+        platform where that API isn't available.
 
         Only counts idle time while tracking is actually enabled AND the
         employee's shift is active (self.state['enabled'], kept up to date by
@@ -2286,17 +2355,19 @@ class TrackerApp:
         SETTINGS_POLL_SECONDS/capture-interval and would miss short idle
         windows entirely.
         """
-        last_pos = None
+        use_system_idle = _get_system_idle_seconds() is not None
+        last_idle_seconds = 0.0   # system-idle path
+        last_pos = None           # mouse-diff fallback path
         last_move_time = time.monotonic()
         last_tick = last_move_time
         was_enabled = False
         # Guards handle_inactivity_auto_absence() from firing more than once
-        # for the same continuous idle stretch — reset to False whenever the
-        # mouse actually moves (a new stretch begins) or tracking/shift
-        # toggles off. Deliberately separate from the >=INACTIVITY_
-        # THRESHOLD_SECONDS upload below, which is a completed-interval LOG
-        # (fires once the mouse moves again); this one fires live, while
-        # still idle, the moment AUTO_ABSENT_INACTIVITY_SECONDS is crossed.
+        # for the same continuous idle stretch — reset to False whenever
+        # activity resumes (a new stretch begins) or tracking/shift toggles
+        # off. Deliberately separate from the >=INACTIVITY_THRESHOLD_SECONDS
+        # upload below, which is a completed-interval LOG (fires once
+        # activity resumes); this one fires live, while still idle, the
+        # moment AUTO_ABSENT_INACTIVITY_SECONDS is crossed.
         auto_absent_fired = False
 
         while not stop_event.is_set():
@@ -2315,88 +2386,124 @@ class TrackerApp:
             # hibernate (unlike on macOS/Linux, where it typically pauses),
             # so a laptop that sleeps for 8 hours wakes up to find "now" has
             # jumped 8 hours ahead of the last poll. Read naively, that one
-            # tick alone reports 8 hours of continuous mouse inactivity —
-            # instantly crossing AUTO_ABSENT_INACTIVITY_SECONDS (37 min) and
-            # firing an auto-absence with a "1000+ minutes inactive" reading,
-            # even though the mouse was never actually idle during a shift —
+            # tick alone reports 8 hours of continuous inactivity — instantly
+            # crossing AUTO_ABSENT_INACTIVITY_SECONDS (37 min) and firing an
+            # auto-absence with a "1000+ minutes inactive" reading, even
+            # though the session was never actually idle during a shift —
             # the machine was simply asleep. If the gap since the last tick
             # is much larger than one MOUSE_POLL_SECONDS interval should
             # ever be, treat it as a suspend/resume (or a debugger pause, or
             # the process being frozen by the OS) and restart the idle clock
             # fresh from now, rather than counting the gap as idle time.
             SLEEP_GAP_THRESHOLD_SECONDS = MOUSE_POLL_SECONDS * 4
-            if now - last_tick > SLEEP_GAP_THRESHOLD_SECONDS:
-                last_pos = None
-                last_move_time = now
-                auto_absent_fired = False
+            gap = now - last_tick
             last_tick = now
 
             if not enabled:
                 # Tracking just turned off (or shift ended) — don't let a gap
                 # from before that moment get reported once it turns back on.
+                last_idle_seconds = 0.0
                 last_pos = None
                 last_move_time = now
                 was_enabled = False
                 auto_absent_fired = False
                 continue
 
-            if not was_enabled:
-                # Tracking/shift just started — begin the idle clock fresh
-                # rather than counting time from before we were watching.
+            if not was_enabled or gap > SLEEP_GAP_THRESHOLD_SECONDS:
+                # Tracking/shift just started, or we just resumed from a
+                # sleep/suspend gap — begin the idle clock fresh rather than
+                # counting time from before we were watching (or time the
+                # machine was asleep).
+                last_idle_seconds = 0.0
                 last_pos = None
                 last_move_time = now
                 was_enabled = True
                 auto_absent_fired = False
-
-            try:
-                pos = pyautogui.position()
-            except Exception:
-                # Position lookup can occasionally fail (e.g. display/session
-                # transitions) — skip this sample rather than crash the loop.
                 continue
 
-            if last_pos is None:
-                last_pos = pos
-                last_move_time = now
-                continue
+            if use_system_idle:
+                idle_seconds = _get_system_idle_seconds()
+                if idle_seconds is None:
+                    # Transient failure reading the API — hold steady rather
+                    # than treat it as either a reset or a jump.
+                    idle_seconds = last_idle_seconds
 
-            if pos != last_pos:
-                idle_seconds = now - last_move_time
-                if idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
-                    end_wall = datetime.now(timezone.utc)
-                    start_wall = end_wall - timedelta(seconds=idle_seconds)
-                    try:
-                        upload_inactivity(
-                            cfg["url"], employee_email, start_wall, end_wall,
-                            device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                            agent_token=cfg.get("token"),
-                        )
-                    except Exception as e:
-                        with self.state_lock:
-                            self.state["last_error"] = _short_error(f"Inactivity log upload failed: {e}")
-                last_pos = pos
-                last_move_time = now
-                auto_absent_fired = False  # mouse moved — a fresh idle stretch starts from here
+                if idle_seconds < last_idle_seconds:
+                    # Idle time dropped — mouse OR keyboard activity happened
+                    # since the last poll, ending whatever stretch had been
+                    # building.
+                    if last_idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
+                        end_wall = datetime.now(timezone.utc)
+                        start_wall = end_wall - timedelta(seconds=last_idle_seconds)
+                        try:
+                            upload_inactivity(
+                                cfg["url"], employee_email, start_wall, end_wall,
+                                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
+                                agent_token=cfg.get("token"),
+                            )
+                        except Exception as e:
+                            with self.state_lock:
+                                self.state["last_error"] = _short_error(f"Inactivity log upload failed: {e}")
+                    auto_absent_fired = False  # activity resumed — a fresh idle stretch starts from here
+
+                last_idle_seconds = idle_seconds
+                current_idle_seconds = idle_seconds
             else:
-                # Still idle. Checked on every poll (not just when the mouse
-                # eventually moves) so this can trigger DURING the idle
-                # stretch instead of waiting for it to end.
-                idle_seconds = now - last_move_time
-                if idle_seconds >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
-                    auto_absent_fired = True
-                    try:
-                        full_name, inactivity_minutes, deduction_amount = handle_inactivity_auto_absence(
-                            cfg["url"], employee_email, idle_seconds
-                        )
-                        # Tkinter widgets/dialogs must run on the main thread
-                        # — this loop runs on its own background thread, so
-                        # the actual popup call is marshaled via
-                        # self.root.after(0, ...), same pattern used
-                        # elsewhere in this file (see e.g. _connect_and_save).
-                        self.root.after(0, lambda m=inactivity_minutes, d=deduction_amount: self._show_inactivity_absence_popup(m, d))
-                    except Exception as e:
-                        with self.state_lock:
-                            self.state["last_error"] = _short_error(f"Inactivity auto-absence failed: {e}")
+                # Fallback: mouse-position diffing only (matches pre-v14
+                # behavior) — used on platforms without a system-wide idle
+                # API, so keyboard-only activity isn't detected here.
+                try:
+                    pos = pyautogui.position()
+                except Exception:
+                    # Position lookup can occasionally fail (e.g. display/
+                    # session transitions) — skip this sample rather than
+                    # crash the loop.
+                    continue
+
+                if last_pos is None:
+                    last_pos = pos
+                    last_move_time = now
+                    continue
+
+                if pos != last_pos:
+                    idle_seconds = now - last_move_time
+                    if idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
+                        end_wall = datetime.now(timezone.utc)
+                        start_wall = end_wall - timedelta(seconds=idle_seconds)
+                        try:
+                            upload_inactivity(
+                                cfg["url"], employee_email, start_wall, end_wall,
+                                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
+                                agent_token=cfg.get("token"),
+                            )
+                        except Exception as e:
+                            with self.state_lock:
+                                self.state["last_error"] = _short_error(f"Inactivity log upload failed: {e}")
+                    last_pos = pos
+                    last_move_time = now
+                    auto_absent_fired = False  # mouse moved — a fresh idle stretch starts from here
+                    current_idle_seconds = 0.0
+                else:
+                    current_idle_seconds = now - last_move_time
+
+            # Checked on every poll (not just when activity eventually
+            # resumes) so this can trigger DURING the idle stretch instead of
+            # waiting for it to end.
+            if current_idle_seconds >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
+                auto_absent_fired = True
+                try:
+                    full_name, inactivity_minutes, deduction_amount = handle_inactivity_auto_absence(
+                        cfg["url"], employee_email, current_idle_seconds
+                    )
+                    # Tkinter widgets/dialogs must run on the main thread —
+                    # this loop runs on its own background thread, so the
+                    # actual popup call is marshaled via self.root.after(0,
+                    # ...), same pattern used elsewhere in this file (see
+                    # e.g. _connect_and_save).
+                    self.root.after(0, lambda m=inactivity_minutes, d=deduction_amount: self._show_inactivity_absence_popup(m, d))
+                except Exception as e:
+                    with self.state_lock:
+                        self.state["last_error"] = _short_error(f"Inactivity auto-absence failed: {e}")
 
     # ---------- periodic UI refresh ----------
 

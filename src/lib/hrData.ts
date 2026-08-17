@@ -3199,7 +3199,28 @@ export const hrActions = {
     }
 
     if (newRecords.length > 0) {
-      await pbSetKV('hr_absence_records_v1', [...existingRecords, ...newRecords]);
+      // Re-fetch immediately before writing, rather than reusing the
+      // existingRecords snapshot captured at the top of this function. This
+      // function can run for several seconds (an awaited HR+Admin+employee
+      // notification triple for every new absence above) — if HR/Admin
+      // deletes an existing absence record while this run is still in
+      // flight (or a second dashboard mount's runAbsenceCheck runs
+      // concurrently), writing [...existingRecords, ...newRecords] against
+      // the stale snapshot would silently resurrect that deletion the next
+      // time the check runs, which is exactly the "deleted absence comes
+      // back" bug this closes. Re-reading fresh right before the write, and
+      // re-filtering newRecords against the CURRENT tombstone list, means a
+      // concurrent delete always wins over a stale in-flight check.
+      const freshExisting = await hrActions.getAbsenceRecords();
+      const freshDeletedIds = await hrActions.getDeletedAbsenceIds();
+      const freshIgnored = new Set([
+        ...freshExisting.map(r => r.id.toLowerCase()),
+        ...freshDeletedIds.map(d => d.toLowerCase()),
+      ]);
+      const safeNewRecords = newRecords.filter(r => !freshIgnored.has(r.id.toLowerCase()));
+      if (safeNewRecords.length > 0) {
+        await pbSetKV('hr_absence_records_v1', [...freshExisting, ...safeNewRecords]);
+      }
     }
   },
 
