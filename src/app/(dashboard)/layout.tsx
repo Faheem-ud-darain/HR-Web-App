@@ -26,7 +26,6 @@ import { AbsentPopup } from '@/components/ui/AbsentPopup';
 import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
-import { SmartInactivityMonitor } from '@/components/ui/SmartInactivityMonitor';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { useAnyModalOpen } from '@/lib/modalStack';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload, LogOut, X } from 'lucide-react';
@@ -1298,8 +1297,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Modal>
       )}
 
-      {/* Smart Background Monitor for Inactive Screen Trackers */}
-      <SmartInactivityMonitor userRole={role} userEmail={email || ''} />
+      {/*
+        Removed: SmartInactivityMonitor (the "desktop tracker agent
+        inactive" push warning). It was mounted here in every logged-in
+        dashboard — HR's, Admin's, and every employee's — each independently
+        polling every open shift every 60s. Because its once-per-day
+        de-dupe was keyed on that ONE browser's localStorage/sessionStorage,
+        not a server-side lock, every open dashboard tab across the company
+        would independently decide "I haven't alerted about this stale
+        employee today" the first time it noticed — so one stale tracker
+        could fan out into a push (and the hr_notifications write +
+        OneSignal call behind it) from every open tab, hammering the
+        PocketBase droplet. Deleted per explicit request rather than
+        reworking it into a server-side/single-writer check, since the
+        underlying "tracker agent is off" signal is already visible via
+        TrackerHeartbeat/getCaptureHealth on the Tracking page.
+      */}
     </div>
   );
 }
