@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useTasks, usePayroll, useTeams,
+  useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTeams,
   useKVByPrefix, hrActions, calculatePTOAccrued, getPTOAccrualDate, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
   TrackingSettings, TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS,
 } from '@/lib/hrData';
@@ -39,11 +39,13 @@ const STATUS_LABELS: Record<Task['status'], string> = {
 export default function EmployeeDashboard() {
   const { data: allProfiles } = useProfiles();
   const { data: allLeaves } = useLeaves();
-  const { data: allTasks, refetch: refetchTasks } = useTasks();
+  // Scoped to just this employee's own tasks server-side (see useMyTasks'
+  // comment in hrData.ts) instead of fetching every task assigned to
+  // everyone in the company and filtering to "mine" client-side.
+  const { data: allTasks, refetch: refetchTasks } = useMyTasks(getSessionEmail());
   const { data: allAnnouncements } = useAnnouncements();
   const { data: allWarehouses } = useWarehouses();
   const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets();
-  const { data: allPayroll } = usePayroll();
   const { data: allTeams } = useTeams();
   // Live tracking-enabled source of truth, same KV row Sidebar.tsx checks —
   // hr_profiles.trackingEnabled can lag behind this if tracking was toggled
@@ -190,6 +192,10 @@ export default function EmployeeDashboard() {
     setWarehouses(allWarehouses);
     if (profile) {
       setLeaves(allLeaves.filter(l => l.employeeName === profile.fullName) as any);
+      // allTasks is already server-scoped to this employee via useMyTasks
+      // above — this filter is now a harmless no-op kept as a defensive
+      // safety net rather than assuming the server-side email match is
+      // always exact.
       setMyTasks(allTasks.filter(t => t.assignedEmail === profile.email));
     }
 

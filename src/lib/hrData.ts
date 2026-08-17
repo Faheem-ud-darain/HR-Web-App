@@ -56,9 +56,25 @@ async function pbDelete(collection: string, id: string): Promise<void> {
 
 // hr_delcargo_store (KV) helpers — still real server storage, just not a
 // per-entity table. Always fetched fresh; never written to localStorage.
+// In-memory (per browser tab, per session — never persisted) cache of
+// hr_delcargo_store's key -> record id. A KV row's id never changes once
+// created, so once we've seen it (via a read OR a write) we can skip the
+// "look up the record id" round trip on every subsequent write/delete of
+// the same key — cutting the 2-round-trip pbSetKV/pbDeleteKVByKeys pattern
+// down to 1 in the common case. Safe to lose on refresh (just falls back
+// to a fresh lookup); safe to be stale (falls back to lookup-then-create
+// if an update-by-id 404s because the row was deleted elsewhere).
+const kvIdCache = new Map<string, string>();
+
+// See getScreenshots' legacy-source comment below — once a `screenshot_`
+// KV prefix scan comes back empty this session, there's no need to keep
+// re-checking; nothing writes new rows there anymore.
+let legacyScreenshotsConfirmedEmpty = false;
+
 async function pbGetKV(key: string): Promise<any | null> {
   try {
     const rec = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
+    kvIdCache.set(key, rec.id);
     return rec.value;
   } catch {
     return null;
@@ -66,11 +82,24 @@ async function pbGetKV(key: string): Promise<any | null> {
 }
 
 async function pbSetKV(key: string, value: any): Promise<void> {
+  const cachedId = kvIdCache.get(key);
+  if (cachedId) {
+    try {
+      await pb.collection('hr_delcargo_store').update(cachedId, { value });
+      return;
+    } catch {
+      // Cached id is stale (row deleted elsewhere, or never existed) —
+      // fall through to the full lookup-then-create/update path below.
+      kvIdCache.delete(key);
+    }
+  }
   try {
     const existing = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
+    kvIdCache.set(key, existing.id);
     await pb.collection('hr_delcargo_store').update(existing.id, { value });
   } catch {
-    await pb.collection('hr_delcargo_store').create({ key, value });
+    const created = await pb.collection('hr_delcargo_store').create({ key, value });
+    kvIdCache.set(key, created.id);
   }
 }
 
@@ -80,6 +109,7 @@ async function pbGetKVByPrefix(prefix: string): Promise<{ key: string; value: an
       filter: `key ~ "${prefix}"`,
       requestKey: null,
     });
+    for (const r of records as any[]) kvIdCache.set(r.key, r.id);
     return records.map((r: any) => ({ key: r.key, value: r.value, id: r.id }));
   } catch (err) {
     console.error(`[hrData] KV prefix fetch error (${prefix}):`, err);
@@ -88,14 +118,27 @@ async function pbGetKVByPrefix(prefix: string): Promise<{ key: string; value: an
 }
 
 async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
-  for (const key of keys) {
+  // Parallelized (was a sequential for-loop) — each key's lookup+delete is
+  // independent, so there's no reason to wait for one before starting the
+  // next. Uses the id cache first to skip the lookup entirely when possible.
+  await Promise.all(keys.map(async (key) => {
+    const cachedId = kvIdCache.get(key);
+    kvIdCache.delete(key);
+    if (cachedId) {
+      try {
+        await pb.collection('hr_delcargo_store').delete(cachedId);
+        return;
+      } catch {
+        // Stale cached id — fall through to a fresh lookup below.
+      }
+    }
     try {
       const rec = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
       await pb.collection('hr_delcargo_store').delete(rec.id);
     } catch {
       // already gone
     }
-  }
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -937,6 +980,27 @@ export function useWarehouses() {
 export function useTasks() {
   return useQuery({ queryKey: ['hr_tasks'], queryFn: async () => (await pbList('hr_tasks', { sort: '-created' })).map(toTask) });
 }
+// Scoped variant for an employee's OWN dashboard — useTasks() above fetches
+// every task assigned to everyone in the company, which the employee
+// dashboard then filtered down to "just mine" client-side (every
+// employee's browser was downloading every other employee's task rows on
+// every page load). Filters server-side by assigned_email instead, same
+// pattern useMyAbsenceRecords-style helpers elsewhere in this file already
+// use. HR/Admin task-management pages that legitimately need the whole
+// roster's tasks should keep using useTasks().
+export function useMyTasks(email: string | null | undefined) {
+  return useQuery({
+    queryKey: ['hr_tasks_mine', (email || '').toLowerCase()],
+    queryFn: async () => {
+      if (!email) return [];
+      return (await pbList('hr_tasks', {
+        sort: '-created',
+        filter: `assigned_email = "${email.replace(/"/g, '\\"')}"`,
+      })).map(toTask);
+    },
+    enabled: !!email,
+  });
+}
 export function useAnnouncements() {
   return useQuery({
     queryKey: ['hr_announcements'],
@@ -1315,8 +1379,23 @@ export function useTimesheets() {
     queryKey: ['hr_timesheets'],
     queryFn: async () => {
       try {
-        const res = await pb.collection('hr_timesheets').getList(1, 500, { sort: '-created', requestKey: null });
-        return res.items.map(toTimesheet);
+        // Was a flat getList(1, 500) with no date filter — once the company
+        // accumulates more than 500 recent rows (sorted by -created), OLDER
+        // still-open shifts silently fall outside that window. That matters
+        // a lot here: runAbsenceCheck/autoCloseStaleOpenShifts/
+        // autoCloseOrphanTrackedShifts all depend on seeing every currently
+        // open shift to work correctly, regardless of how old its clock-in
+        // was. The filter below keeps the same "recent history" scope
+        // (last 60 days) for closed shifts, but ALWAYS includes any shift
+        // that's still open (clock_out empty) no matter how old, so a
+        // busy roster can't silently lose track of a stuck-open shift.
+        const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 3600 * 1000);
+        const cutoff = sixtyDaysAgo.toISOString().replace('T', ' ').replace('Z', '');
+        const items = await pbList('hr_timesheets', {
+          sort: '-created',
+          filter: `clock_out = "" || date >= "${cutoff}"`,
+        });
+        return items.map(toTimesheet);
       } catch (err) {
         console.error('[hrData] getList error in hr_timesheets:', err);
         return [];
@@ -1331,7 +1410,19 @@ export function useKVByPrefix(prefix: string) {
   return useQuery({
     queryKey: ['hr_kv', prefix],
     queryFn: () => pbGetKVByPrefix(prefix),
-    refetchInterval: 5000,
+    // Was 5000ms — far tighter than this data (tracking settings, tracker
+    // heartbeats) actually needs, and this hook is used from EVERY
+    // employee's own dashboard (not just HR/Admin), each polling the
+    // entire company-wide blob every 5s. 30s keeps HR/Admin's "is this
+    // tracker connected" view reasonably fresh while cutting steady-state
+    // load ~6x; callers that need an immediate update after an action
+    // already have a manual refetch() available (see TrackingView's
+    // refetchSettings/refetchHeartbeats).
+    refetchInterval: 30000,
+    // Stop polling entirely while the tab is backgrounded/inactive — no
+    // reason to keep hitting PocketBase every 30s for a dashboard nobody
+    // is looking at right now. Resumes automatically on refocus.
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -2360,6 +2451,24 @@ export const hrActions = {
     pbDeleteKVByKeys([ticketPresenceKeyFor(ticketId)]),
   getAllTicketPresences: async (): Promise<TicketPresence[]> =>
     (await pbGetKVByPrefix('hr_ticket_presence_')).map(row => row.value as TicketPresence),
+  // Scoped variant — fetches presence rows only for the given ticket IDs
+  // (one server-side OR-filter, still a single request) instead of scanning
+  // the entire hr_ticket_presence_* prefix, which returns a row for every
+  // ticket in the company that has EVER had a presence heartbeat, not just
+  // the ones a given employee/team-lead actually has open. Pass the caller's
+  // own visible ticket list (already filtered to "my tickets" upstream).
+  getTicketPresencesForIds: async (ticketIds: string[]): Promise<TicketPresence[]> => {
+    if (ticketIds.length === 0) return [];
+    try {
+      const filter = ticketIds.map(id => `key = "${ticketPresenceKeyFor(id).replace(/"/g, '\\"')}"`).join(' || ');
+      const records = await pb.collection('hr_delcargo_store').getFullList({ filter, requestKey: null });
+      for (const r of records as any[]) kvIdCache.set(r.key, r.id);
+      return records.map((r: any) => r.value as TicketPresence);
+    } catch (err) {
+      console.error('[hrData] getTicketPresencesForIds error:', err);
+      return [];
+    }
+  },
   isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
     !!p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) < TICKET_PRESENCE_STALE_MS,
 
@@ -2823,12 +2932,24 @@ export const hrActions = {
     const now = Date.now();
     const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
 
+    // Fetched ONCE for the whole batch rather than once per open shift —
+    // hr_tracking_settings_prod_v1 is a single company-wide blob (every
+    // employee's settings in one array), so re-fetching it per shift inside
+    // the loop below was N identical full-blob reads for N open shifts.
+    // getTrackingSettingsFor still does its own fetch+find for any OTHER
+    // caller that just wants one employee's settings; this loop only needs
+    // the raw array once to look employees up locally.
+    const allTrackingSettings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
+    const settingsForEmail = (email: string): TrackingSettings =>
+      allTrackingSettings.find(t => t.employeeEmail.toLowerCase() === email.toLowerCase())
+        || { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
+
     for (const shift of openShifts) {
       const clockInMs = new Date(shift.clockIn).getTime();
       if (isNaN(clockInMs) || now - clockInMs < MIN_SHIFT_AGE_MS) continue;
 
       try {
-        const settings = await hrActions.getTrackingSettingsFor(shift.employeeEmail);
+        const settings = settingsForEmail(shift.employeeEmail);
         if (!settings.enabled) continue; // not a tracker-governed shift — leave to other safety nets
 
         const hb = await hrActions.getTrackerHeartbeat(shift.employeeEmail);
@@ -3021,14 +3142,21 @@ export const hrActions = {
     // any such record is always wrong — reverse it and notify everyone
     // involved rather than leaving a stale bad deduction on the books.
     const weekendRecords = existingRecords.filter(r => !isWeekday(r.date));
-    for (const rec of weekendRecords) {
-      await hrActions.deleteAbsenceRecord(rec.id);
-      const note = `${rec.employeeName}'s absence deduction for ${rec.date} (a weekend) was reversed — employees are never marked absent on Saturdays or Sundays.`;
-      await hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail);
-      await hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail);
-      await hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date was a weekend and should not have been marked absent.`);
-    }
     if (weekendRecords.length > 0) {
+      // One batched write for both the records array and the tombstone list
+      // (bulkDeleteAbsenceRecords) instead of deleteAbsenceRecord per
+      // record, which was 2 full read-modify-write round trips PER bad
+      // record found. Notifications still go out individually since each
+      // one names a specific employee/date.
+      await hrActions.bulkDeleteAbsenceRecords(weekendRecords.map(r => r.id));
+      await Promise.all(weekendRecords.map(rec => {
+        const note = `${rec.employeeName}'s absence deduction for ${rec.date} (a weekend) was reversed — employees are never marked absent on Saturdays or Sundays.`;
+        return Promise.all([
+          hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail),
+          hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail),
+          hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date was a weekend and should not have been marked absent.`),
+        ]);
+      }));
       existingRecords = await hrActions.getAbsenceRecords();
     }
 
@@ -3044,14 +3172,16 @@ export const hrActions = {
       if (!emp?.joinedDate || !/^\d{4}-\d{2}-\d{2}/.test(emp.joinedDate)) return false;
       return rec.date < emp.joinedDate.slice(0, 10);
     });
-    for (const rec of preJoinRecords) {
-      await hrActions.deleteAbsenceRecord(rec.id);
-      const note = `${rec.employeeName}'s absence deduction for ${rec.date} was reversed — that date is before their joining date and they weren't employed yet.`;
-      await hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail);
-      await hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail);
-      await hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date is before your joining date.`);
-    }
     if (preJoinRecords.length > 0) {
+      await hrActions.bulkDeleteAbsenceRecords(preJoinRecords.map(r => r.id));
+      await Promise.all(preJoinRecords.map(rec => {
+        const note = `${rec.employeeName}'s absence deduction for ${rec.date} was reversed — that date is before their joining date and they weren't employed yet.`;
+        return Promise.all([
+          hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail),
+          hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail),
+          hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date is before your joining date.`),
+        ]);
+      }));
       existingRecords = await hrActions.getAbsenceRecords();
     }
 
@@ -3185,16 +3315,23 @@ export const hrActions = {
           : reason === 'under_4_hours'
           ? `worked less than 4 hours (${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m) on ${dateStr}`
           : `did not start a shift on ${dateStr}`;
-        await hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email);
-        // Dashboard-only for Admin — HR already got the pushable copy above,
-        // and payroll deductions are an HR-owned workflow day-to-day.
-        await hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, undefined, undefined, emp.email);
         const empReasonDetail = reason === 'inactivity'
           ? `${inactivityMinutes} min inactivity during shift`
           : reason === 'under_4_hours'
           ? `worked only ${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m (under 4 hours minimum)`
           : 'not starting a shift';
-        await hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${empReasonDetail}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task');
+        // These 3 notification writes are independent of each other — no
+        // reason to await them one at a time. On a dashboard mount where
+        // several employees newly qualify as absent, that used to serialize
+        // 3x however-many round trips in a row (this function's own comment
+        // already acknowledges it "can run for several seconds").
+        await Promise.all([
+          hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email),
+          // Dashboard-only for Admin — HR already got the pushable copy above,
+          // and payroll deductions are an HR-owned workflow day-to-day.
+          hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, undefined, undefined, emp.email),
+          hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${empReasonDetail}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task'),
+        ]);
       }
     }
 
@@ -3413,14 +3550,28 @@ export const hrActions = {
 
     // Legacy source: base64 rows from before hr_screenshots existed. Kept
     // readable so old captures aren't silently lost; new agents no longer
-    // write here (see tracker-agent/agent_gui.py).
-    let legacyShots = (await pbGetKVByPrefix('screenshot_')).map(row => ({
-      id: row.value.id,
-      employeeEmail: row.value.employeeEmail,
-      timestamp: row.value.timestamp,
-      imageUrl: row.value.imageData,
-      legacy: true,
-    } as Screenshot));
+    // write here (see tracker-agent/agent_gui.py). Since nothing writes new
+    // rows here anymore, once a prefix scan comes back empty it will stay
+    // empty for the rest of this browser session — cache that so every
+    // subsequent getScreenshots() call (this runs on every dashboard mount
+    // via checkScreenshotRetention, plus every TrackingView open) skips the
+    // full-collection KV prefix scan entirely instead of re-fetching zero
+    // rows over and over.
+    let legacyShots: Screenshot[] = [];
+    if (!legacyScreenshotsConfirmedEmpty) {
+      const legacyRows = await pbGetKVByPrefix('screenshot_');
+      if (legacyRows.length === 0) {
+        legacyScreenshotsConfirmedEmpty = true;
+      } else {
+        legacyShots = legacyRows.map(row => ({
+          id: row.value.id,
+          employeeEmail: row.value.employeeEmail,
+          timestamp: row.value.timestamp,
+          imageUrl: row.value.imageData,
+          legacy: true,
+        } as Screenshot));
+      }
+    }
     if (filters?.employeeEmail) {
       const wanted = filters.employeeEmail.toLowerCase();
       legacyShots = legacyShots.filter(s => (s.employeeEmail || '').toLowerCase() === wanted);
@@ -3473,13 +3624,27 @@ export const hrActions = {
     const RETENTION_DAYS = 30, WARNING_GRACE_DAYS = 3;
     const state = ((await pbGetKV('hr_screenshot_retention_state_v1')) as ScreenshotRetentionState) || {};
     const now = new Date();
+    // Both branches below used to call getScreenshots() with NO filter —
+    // i.e. fetch the entire hr_screenshots collection (the fastest-growing
+    // collection in the app: one row per tracked employee per capture
+    // interval, every workday) — purely to compare each row's timestamp
+    // against a 30-day cutoff client-side. getScreenshots already supports
+    // a server-side `untilISO` filter (see its own comment), so pass the
+    // cutoff there instead: PocketBase only ever sends back the rows that
+    // are actually old enough to matter, which on a healthy roster (most
+    // screenshots are recent) is a small fraction of the full collection.
+    const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 3600 * 1000);
     if (state.warnedAt && state.pendingDeleteIds?.length) {
       const graceElapsed = (now.getTime() - new Date(state.warnedAt).getTime()) >= WARNING_GRACE_DAYS * 24 * 3600 * 1000;
       if (!graceElapsed) return;
       const settings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
       const excluded = new Set(settings.filter(s => s.excludeFromAutoDelete).map(s => s.employeeEmail.toLowerCase()));
-      const allShots = await hrActions.getScreenshots();
-      const stillDue = allShots.filter(s => state.pendingDeleteIds!.includes(s.id) && !excluded.has(s.employeeEmail.toLowerCase()));
+      // These rows were already confirmed older than an earlier (stricter)
+      // cutoff when they were first flagged, so they're certainly still
+      // at or before today's cutoff too — safe to reuse the same filtered
+      // fetch rather than pulling everything.
+      const oldShots = await hrActions.getScreenshots({ untilISO: cutoff.toISOString() });
+      const stillDue = oldShots.filter(s => state.pendingDeleteIds!.includes(s.id) && !excluded.has(s.employeeEmail.toLowerCase()));
       if (stillDue.length > 0) {
         await hrActions.deleteScreenshots(stillDue.map(s => s.id));
         await hrActions.addNotification('all', 'hr', `${stillDue.length} screenshot(s) older than ${RETENTION_DAYS} days were automatically deleted per the monthly retention policy.`);
@@ -3488,12 +3653,11 @@ export const hrActions = {
       await pbSetKV('hr_screenshot_retention_state_v1', {});
       return;
     }
-    const allShots = await hrActions.getScreenshots();
-    if (allShots.length === 0) return;
+    const oldShots = await hrActions.getScreenshots({ untilISO: cutoff.toISOString() });
+    if (oldShots.length === 0) return;
     const settings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
     const excluded = new Set(settings.filter(s => s.excludeFromAutoDelete).map(s => s.employeeEmail.toLowerCase()));
-    const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 3600 * 1000);
-    const toDelete = allShots.filter(s => new Date(s.timestamp) < cutoff && !excluded.has(s.employeeEmail.toLowerCase()));
+    const toDelete = oldShots.filter(s => !excluded.has(s.employeeEmail.toLowerCase()));
     if (toDelete.length === 0) return;
     await hrActions.addNotification('all', 'hr', `${toDelete.length} screenshot(s) older than ${RETENTION_DAYS} days are scheduled for automatic deletion in ${WARNING_GRACE_DAYS} days. Export or mark specific employees as excluded before then.`);
     await hrActions.addNotification('all', 'admin', `${toDelete.length} screenshot(s) older than ${RETENTION_DAYS} days are scheduled for automatic deletion in ${WARNING_GRACE_DAYS} days. Export or mark specific employees as excluded before then.`);

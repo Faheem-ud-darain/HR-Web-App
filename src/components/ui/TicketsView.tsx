@@ -328,15 +328,26 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [ticketPresences, setTicketPresences] = useState<TicketPresence[]>([]);
   useEffect(() => {
     if (role !== 'employee' && role !== 'team_lead') return;
+    // No early setState here when tickets.length is 0 (that would call
+    // setState synchronously in the effect body) — with nothing to poll
+    // for, the async poll below just resolves to [] on its own and the
+    // interval is skipped, so ticketPresences naturally has nothing to
+    // show without needing a synchronous reset.
+    if (tickets.length === 0) return;
     let cancelled = false;
+    // Scoped to just this employee/team-lead's own visible tickets (see
+    // getTicketPresencesForIds' comment in hrData.ts) instead of fetching
+    // presence for every ticket in the company on every 8s poll.
+    const ticketIds = tickets.map(t => t.id);
     const poll = async () => {
-      const all = await hrActions.getAllTicketPresences();
+      const all = await hrActions.getTicketPresencesForIds(ticketIds);
       if (!cancelled) setTicketPresences(all);
     };
     poll();
     const interval = setInterval(poll, 8000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [role]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, tickets.map(t => t.id).join(',')]);
 
   const isTicketLiveWithHR = (ticketId: string): boolean => {
     const presence = ticketPresences.find(entry => entry.ticketId === ticketId && entry.role === 'hr');
