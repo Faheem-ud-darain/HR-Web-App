@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTeams,
-  useKVByPrefix, hrActions, calculatePTOAccrued, getPTOAccrualDate, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
-  TrackingSettings, TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS,
+  useTrackingSettings, hrActions, calculatePTOAccrued, getPTOAccrualDate, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
+  TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS,
 } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -47,12 +47,12 @@ export default function EmployeeDashboard() {
   const { data: allWarehouses } = useWarehouses();
   const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets();
   const { data: allTeams } = useTeams();
-  // Live tracking-enabled source of truth, same KV row Sidebar.tsx checks —
-  // hr_profiles.trackingEnabled can lag behind this if tracking was toggled
-  // from the Tracking Monitor page, so the Team Lead widget below checks
-  // both instead of trusting the profile flag alone.
-  const { data: trackingSettingsRows } = useKVByPrefix('hr_tracking_settings_prod_v1');
-  const trackingSettingsList = ((trackingSettingsRows || []).find(r => r.key === 'hr_tracking_settings_prod_v1')?.value as TrackingSettings[]) || [];
+  // Live tracking-enabled source of truth, same hr_tracking_settings
+  // collection Sidebar.tsx checks — hr_profiles.trackingEnabled can lag
+  // behind this if tracking was toggled from the Tracking Monitor page, so
+  // the Team Lead widget below checks both instead of trusting the profile
+  // flag alone.
+  const { data: trackingSettingsList = [] } = useTrackingSettings();
   const isTrackingLiveFor = (emp: Profile) =>
     !!emp.trackingEnabled || !!trackingSettingsList.find(s => s.employeeEmail?.toLowerCase() === emp.email?.toLowerCase())?.enabled;
 

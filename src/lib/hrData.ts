@@ -54,6 +54,59 @@ async function pbDelete(collection: string, id: string): Promise<void> {
   await pb.collection(collection).delete(id);
 }
 
+// Per-(collection, field, value) cache of the matched row's id — same idea
+// as kvIdCache below, applied to the real one-row-per-entity collections
+// (hr_tracking_settings, hr_ticket_presence) that replaced the old
+// hr_tracking_settings_prod_v1 / hr_ticket_presence_* KV blobs. Lets a
+// repeat upsert for the same entity skip the lookup round trip.
+const upsertIdCache = new Map<string, string>();
+
+// Generic "find the one row where `field` = `value`, update it; otherwise
+// create a new row" — the same shape as pbSetKV's lookup-then-create/update
+// pattern, but against a real collection with a unique index on `field`
+// instead of the generic hr_delcargo_store KV table. Used for
+// hr_tracking_settings (keyed on employeeEmail) and hr_ticket_presence
+// (keyed on ticketId).
+async function pbUpsertByField(collection: string, field: string, value: string, data: Record<string, any>): Promise<any> {
+  const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
+  const cachedId = upsertIdCache.get(cacheKey);
+  if (cachedId) {
+    try {
+      return await pb.collection(collection).update(cachedId, data);
+    } catch {
+      upsertIdCache.delete(cacheKey);
+    }
+  }
+  // `~` (case-insensitive "like") narrows server-side; the exact
+  // case-insensitive check below guards against a substring false-match
+  // (same pattern getScreenshots uses for employee email lookups).
+  const escaped = value.replace(/"/g, '\\"');
+  try {
+    const matches = await pb.collection(collection).getFullList({ filter: `${field} ~ "${escaped}"`, requestKey: null });
+    const existing = (matches as any[]).find(r => (r[field] || '').toLowerCase() === value.toLowerCase());
+    if (existing) {
+      upsertIdCache.set(cacheKey, existing.id);
+      return await pb.collection(collection).update(existing.id, data);
+    }
+  } catch {
+    // fall through to create
+  }
+  const created = await pb.collection(collection).create({ [field]: value, ...data });
+  upsertIdCache.set(cacheKey, created.id);
+  return created;
+}
+
+// Finds one row by an exact field match (used for ticketId lookups, which
+// are opaque PocketBase ids with no case-sensitivity concern, unlike
+// employeeEmail above).
+async function pbFindByField(collection: string, field: string, value: string): Promise<any | null> {
+  try {
+    return await pb.collection(collection).getFirstListItem(`${field} = "${value.replace(/"/g, '\\"')}"`, { requestKey: null });
+  } catch {
+    return null;
+  }
+}
+
 // hr_delcargo_store (KV) helpers — still real server storage, just not a
 // per-entity table. Always fetched fresh; never written to localStorage.
 // In-memory (per browser tab, per session — never persisted) cache of
@@ -333,15 +386,16 @@ export interface PayrollRecord {
 }
 
 // A single day an employee was auto-marked absent, with a specific reason —
-// stored in hr_delcargo_store (no dedicated collection; see
-// hr_absence_records_v1 in runAbsenceCheck) since it's app-internal
-// bookkeeping, not a PocketBase-native concept. Persisted (rather than
-// recomputed live like countAbsentWeekdays) because: (1) the "Absent
-// Details" pages need real reasons to display, not just a count, and (2)
-// the deduction it causes is applied exactly once, at detection time, not
-// re-derived on every payroll page load.
+// stored in the dedicated hr_absence_records PocketBase collection.
+// Persisted (rather than recomputed live like countAbsentWeekdays) because:
+// (1) the "Absent Details" pages need real reasons to display, not just a
+// count, and (2) the deduction it causes is applied exactly once, at
+// detection time, not re-derived on every payroll page load.
+// Soft-deleted via `deleted`/`deletedAt` (rather than a real row delete) so
+// runAbsenceCheck can tell "never happened" apart from "happened, then HR
+// removed it" and never resurrect a removed record on its next pass.
 export interface AbsenceRecord {
-  id: string; // `${employeeEmail}_${date}` — naturally unique per employee per day
+  id: string; // opaque PocketBase record id
   employeeEmail: string;
   employeeName: string;
   date: string; // "YYYY-MM-DD", America/New_York calendar day
@@ -351,10 +405,12 @@ export interface AbsenceRecord {
   deductionAmount: number;
   createdAt: string; // ISO instant this record was created
   acknowledged: boolean; // employee has seen/dismissed the explanatory popup
+  deleted?: boolean;
+  deletedAt?: string;
 }
 
 export interface TrackingSettings {
-  employeeEmail: string; enabled: boolean; intervalMinutes: number; excludeFromAutoDelete: boolean; agentToken: string;
+  id?: string; employeeEmail: string; enabled: boolean; intervalMinutes: number; excludeFromAutoDelete: boolean; agentToken: string;
 }
 
 export interface TrackerHeartbeat {
@@ -657,14 +713,18 @@ export interface Ticket {
 // currently has their ticket open, same idea as TrackerHeartbeat above but
 // per-ticket instead of per-employee. HR's TicketsView heartbeats this
 // (see touchTicketPresence) while a ticket is selected; the employee's
-// TicketsView polls getAllTicketPresences and shows a "Live" badge for any
-// ticket whose presence hasn't gone stale. KV-backed like everything else
-// here — no real websocket/SSE presence channel in this app.
+// TicketsView polls getAllTicketPresences/getTicketPresencesForIds and
+// shows a "Live" badge for any ticket whose presence hasn't gone stale.
+// Backed by the dedicated hr_ticket_presence collection (one row per
+// ticket, unique index on ticketId) — migrated off the old
+// hr_ticket_presence_<id> KV-blob-per-ticket pattern, which was prone to
+// duplicate rows for the same ticket (a bug the migration surfaced: one
+// ticket had 41 duplicate KV rows) since a KV write there was a
+// lookup-then-update rather than a database-enforced single row.
 export interface TicketPresence {
-  ticketId: string; email: string; role: string; lastSeenAt: string;
+  id?: string; ticketId: string; email: string; role: string; lastSeenAt: string;
 }
 export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
-const ticketPresenceKeyFor = (ticketId: string) => `hr_ticket_presence_${ticketId}`;
 
 // Durable "the employee has read this ticket as of this time" marker — unlike
 // TicketPresence above (which only lasts ~20s and answers "is HR looking at
@@ -923,6 +983,15 @@ function toTimesheet(t: any): TimesheetEntry {
     duration: t.duration || undefined,
     status: clockOut ? 'completed' : 'in_progress',
     approvalStatus: t.status || 'pending',
+  };
+}
+
+function toAbsenceRecord(r: any): AbsenceRecord {
+  return {
+    id: r.id, employeeEmail: r.employeeEmail, employeeName: r.employeeName, date: r.date,
+    reason: r.reason, inactivityMinutes: r.inactivityMinutes || undefined, workedMinutes: r.workedMinutes || undefined,
+    deductionAmount: r.deductionAmount, createdAt: r.createdAt || r.created, acknowledged: !!r.acknowledged,
+    deleted: !!r.deleted, deletedAt: r.deletedAt || undefined,
   };
 }
 
@@ -1426,6 +1495,19 @@ export function useKVByPrefix(prefix: string) {
   });
 }
 
+// Replaces the old useKVByPrefix('hr_tracking_settings_prod_v1') pattern
+// now that tracking settings live in their own hr_tracking_settings
+// collection instead of a single KV blob — same polling cadence/gating as
+// useKVByPrefix above.
+export function useTrackingSettings() {
+  return useQuery({
+    queryKey: ['hr_tracking_settings'],
+    queryFn: () => hrActions.getAllTrackingSettings(),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+  });
+}
+
 // Convenience: call inside a component to get a function that invalidates
 // (and thus refetches) one or more query keys after a mutation.
 export function useInvalidate() {
@@ -1847,11 +1929,10 @@ export const hrActions = {
     // still-valid token and silently uploading screenshots after they're
     // gone. Also drop their heartbeat row.
     if (email) {
-      const allSettings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
-      const remaining = allSettings.filter(s => (s.employeeEmail || '').toLowerCase() !== lower);
-      if (remaining.length !== allSettings.length) {
-        await pbSetKV('hr_tracking_settings_prod_v1', remaining);
-      }
+      const settingsRow = await pbFindByField('hr_tracking_settings', 'employeeEmail', lower)
+        ?? (await pbList('hr_tracking_settings', { filter: `employeeEmail ~ "${lower.replace(/"/g, '\\"')}"` }))
+          .find((r: any) => (r.employeeEmail || '').toLowerCase() === lower);
+      if (settingsRow) await pbDelete('hr_tracking_settings', settingsRow.id);
       await pbDeleteKVByKeys([`tracker_heartbeat_${lower.replace(/[^a-z0-9]/g, '_')}`]);
     }
 
@@ -2445,29 +2526,25 @@ export const hrActions = {
   },
 
   // ── Ticket "live" presence (see TicketPresence above) ───────────────────
-  touchTicketPresence: (ticketId: string, email: string, role: string): Promise<void> =>
-    pbSetKV(ticketPresenceKeyFor(ticketId), { ticketId, email, role, lastSeenAt: new Date().toISOString() } as TicketPresence),
-  clearTicketPresence: (ticketId: string): Promise<void> =>
-    pbDeleteKVByKeys([ticketPresenceKeyFor(ticketId)]),
+  touchTicketPresence: async (ticketId: string, email: string, role: string): Promise<void> => {
+    await pbUpsertByField('hr_ticket_presence', 'ticketId', ticketId, { email, role, lastSeenAt: new Date().toISOString() });
+  },
+  clearTicketPresence: async (ticketId: string): Promise<void> => {
+    const row = await pbFindByField('hr_ticket_presence', 'ticketId', ticketId);
+    if (row) await pbDelete('hr_ticket_presence', row.id);
+  },
   getAllTicketPresences: async (): Promise<TicketPresence[]> =>
-    (await pbGetKVByPrefix('hr_ticket_presence_')).map(row => row.value as TicketPresence),
+    await pbList('hr_ticket_presence'),
   // Scoped variant — fetches presence rows only for the given ticket IDs
-  // (one server-side OR-filter, still a single request) instead of scanning
-  // the entire hr_ticket_presence_* prefix, which returns a row for every
-  // ticket in the company that has EVER had a presence heartbeat, not just
-  // the ones a given employee/team-lead actually has open. Pass the caller's
-  // own visible ticket list (already filtered to "my tickets" upstream).
+  // (one server-side OR-filter, still a single request) instead of fetching
+  // every row in hr_ticket_presence, which is one row per ticket in the
+  // company that has EVER had a presence heartbeat, not just the ones a
+  // given employee/team-lead actually has open. Pass the caller's own
+  // visible ticket list (already filtered to "my tickets" upstream).
   getTicketPresencesForIds: async (ticketIds: string[]): Promise<TicketPresence[]> => {
     if (ticketIds.length === 0) return [];
-    try {
-      const filter = ticketIds.map(id => `key = "${ticketPresenceKeyFor(id).replace(/"/g, '\\"')}"`).join(' || ');
-      const records = await pb.collection('hr_delcargo_store').getFullList({ filter, requestKey: null });
-      for (const r of records as any[]) kvIdCache.set(r.key, r.id);
-      return records.map((r: any) => r.value as TicketPresence);
-    } catch (err) {
-      console.error('[hrData] getTicketPresencesForIds error:', err);
-      return [];
-    }
+    const filter = ticketIds.map(id => `ticketId = "${id.replace(/"/g, '\\"')}"`).join(' || ');
+    return await pbList('hr_ticket_presence', { filter });
   },
   isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
     !!p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) < TICKET_PRESENCE_STALE_MS,
@@ -2723,20 +2800,33 @@ export const hrActions = {
     else await pbCreate('hr_payroll', fields);
   },
 
-  // ── Tracking settings / heartbeats / screenshots (KV) ───────────────────
+  // ── Tracking settings (hr_tracking_settings — one row per employee) ────
+  // Migrated off the old hr_tracking_settings_prod_v1 KV blob (a single
+  // JSON array holding every employee's settings) into a real collection
+  // with a unique index on employeeEmail — see hr_tracking_settings'
+  // migration notes. getAllTrackingSettings below is for callers that
+  // legitimately need everyone's settings at once (the dashboard-mount
+  // safety-net sweeps); this one is for a single employee's settings.
   getTrackingSettingsFor: async (email: string): Promise<TrackingSettings> => {
-    const all = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
-    return all.find(t => t.employeeEmail.toLowerCase() === email.toLowerCase())
-      || { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
+    const escaped = email.replace(/"/g, '\\"');
+    const matches = await pbList('hr_tracking_settings', { filter: `employeeEmail ~ "${escaped}"` });
+    const found = matches.find((t: any) => (t.employeeEmail || '').toLowerCase() === email.toLowerCase());
+    return found
+      ? { employeeEmail: found.employeeEmail, enabled: !!found.enabled, intervalMinutes: found.intervalMinutes, excludeFromAutoDelete: !!found.excludeFromAutoDelete, agentToken: found.agentToken, id: found.id }
+      : { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
   },
-  updateTrackingSettings: async (email: string, updates: Partial<TrackingSettings>): Promise<TrackingSettings[]> => {
-    const all = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
-    const idx = all.findIndex(t => t.employeeEmail.toLowerCase() === email.toLowerCase());
-    let updated: TrackingSettings[];
-    if (idx >= 0) updated = all.map((t, i) => i === idx ? { ...t, ...updates } : t);
-    else updated = [...all, { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`, ...updates }];
-    await pbSetKV('hr_tracking_settings_prod_v1', updated);
-    return updated;
+  getAllTrackingSettings: async (): Promise<TrackingSettings[]> =>
+    (await pbList('hr_tracking_settings')).map((t: any) => ({
+      employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
+      excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
+    })),
+  updateTrackingSettings: async (email: string, updates: Partial<TrackingSettings>): Promise<TrackingSettings> => {
+    const defaults = {
+      enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
+      agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
+    };
+    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...defaults, ...updates, employeeEmail: email });
+    return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
   regenerateAgentToken: async (email: string): Promise<string> => {
     const token = `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
@@ -2932,14 +3022,14 @@ export const hrActions = {
     const now = Date.now();
     const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
 
-    // Fetched ONCE for the whole batch rather than once per open shift —
-    // hr_tracking_settings_prod_v1 is a single company-wide blob (every
-    // employee's settings in one array), so re-fetching it per shift inside
-    // the loop below was N identical full-blob reads for N open shifts.
-    // getTrackingSettingsFor still does its own fetch+find for any OTHER
-    // caller that just wants one employee's settings; this loop only needs
-    // the raw array once to look employees up locally.
-    const allTrackingSettings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
+    // Fetched ONCE for the whole batch rather than once per open shift — the
+    // hr_tracking_settings collection holds every employee's settings, so
+    // re-fetching it per shift inside the loop below was N identical
+    // full-collection reads for N open shifts. getTrackingSettingsFor still
+    // does its own fetch+find for any OTHER caller that just wants one
+    // employee's settings; this loop only needs the full list once to look
+    // employees up locally.
+    const allTrackingSettings = await hrActions.getAllTrackingSettings();
     const settingsForEmail = (email: string): TrackingSettings =>
       allTrackingSettings.find(t => t.employeeEmail.toLowerCase() === email.toLowerCase())
         || { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
@@ -3043,64 +3133,36 @@ export const hrActions = {
     }
   },
 
-  // ── Absence records (hr_delcargo_store key "hr_absence_records_v1") ────
-  // See AbsenceRecord's own comment for why this lives in the generic KV
-  // store rather than a dedicated collection, and why it's persisted rather
-  // than purely recomputed like countAbsentWeekdays.
-  getAbsenceRecords: async (): Promise<AbsenceRecord[]> => {
-    try {
-      const raw = await pbGetKV('hr_absence_records_v1');
-      return Array.isArray(raw) ? raw : [];
-    } catch { return []; }
-  },
-  getDeletedAbsenceIds: async (): Promise<string[]> => {
-    try {
-      const raw = await pbGetKV('hr_absence_deleted_v1');
-      return Array.isArray(raw) ? raw : [];
-    } catch { return []; }
-  },
+  // ── Absence records (hr_absence_records — one row per employee per day) ──
+  // Migrated off the old hr_absence_records_v1 / hr_absence_deleted_v1 KV
+  // blobs (a growing array rewritten wholesale on every delete, plus a
+  // separate tombstone-id array) into a real collection with soft-delete
+  // (`deleted`/`deletedAt`) fields replacing the tombstone array, and a
+  // partial unique index on (employeeEmail, date) WHERE deleted = false —
+  // see AbsenceRecord's own comment. getAbsenceRecords below is
+  // active-only (what the UI should show); runAbsenceCheck separately
+  // fetches the FULL history including soft-deleted rows so it never
+  // resurrects a record HR already removed.
+  getAbsenceRecords: async (): Promise<AbsenceRecord[]> =>
+    (await pbList('hr_absence_records', { filter: 'deleted = false' })).map(toAbsenceRecord),
+  getAllAbsenceRecordsIncludingDeleted: async (): Promise<AbsenceRecord[]> =>
+    (await pbList('hr_absence_records')).map(toAbsenceRecord),
   deleteAbsenceRecord: async (recordId: string): Promise<void> => {
-    const all = await hrActions.getAbsenceRecords();
-    const next = all.filter(a => a.id !== recordId);
-    await pbSetKV('hr_absence_records_v1', next);
-    // Track deleted IDs so background runAbsenceCheck never re-marks them absent.
-    // Store both the raw recordId AND the canonical email_date key (lowercase)
-    // so the tombstone survives even if the email casing drifts between runs.
-    const deletedIds = await hrActions.getDeletedAbsenceIds();
-    const toAdd: string[] = [];
-    if (!deletedIds.includes(recordId)) toAdd.push(recordId);
-    const lower = recordId.toLowerCase();
-    if (!deletedIds.includes(lower)) toAdd.push(lower);
-    if (toAdd.length > 0) {
-      await pbSetKV('hr_absence_deleted_v1', [...deletedIds, ...toAdd]);
-    }
+    await pbUpdate('hr_absence_records', recordId, { deleted: true, deletedAt: new Date().toISOString() });
   },
-  // Bulk removal — removes many records in one write per store rather than
-  // N sequential reads/writes (avoids the race window where a parallel
-  // runAbsenceCheck could re-create a record that was mid-deletion).
+  // Bulk removal — one write PER record but all fired concurrently via
+  // Promise.all, rather than the old approach's full-array rewrite (which
+  // needed both stores rewritten wholesale for even a single record).
   bulkDeleteAbsenceRecords: async (recordIds: string[]): Promise<void> => {
     if (recordIds.length === 0) return;
-    const idSet = new Set(recordIds.map(id => id.toLowerCase()));
-    const all = await hrActions.getAbsenceRecords();
-    const next = all.filter(a => !idSet.has(a.id.toLowerCase()));
-    await pbSetKV('hr_absence_records_v1', next);
-    const deletedIds = await hrActions.getDeletedAbsenceIds();
-    const existing = new Set(deletedIds.map((d: string) => d.toLowerCase()));
-    const toAdd: string[] = [];
-    for (const id of recordIds) {
-      if (!existing.has(id.toLowerCase())) toAdd.push(id.toLowerCase());
-    }
-    if (toAdd.length > 0) {
-      await pbSetKV('hr_absence_deleted_v1', [...deletedIds, ...toAdd]);
-    }
+    const deletedAt = new Date().toISOString();
+    await Promise.all(recordIds.map(id => pbUpdate('hr_absence_records', id, { deleted: true, deletedAt })));
   },
   // Marks a record as seen so AbsentPopup stops showing it — called by the
   // employee dismissing the popup, never by HR/Admin (they can always see
   // every record on the Absent Details page regardless of acknowledgment).
   acknowledgeAbsence: async (recordId: string): Promise<void> => {
-    const all = await hrActions.getAbsenceRecords();
-    const next = all.map(a => a.id === recordId ? { ...a, acknowledged: true } : a);
-    await pbSetKV('hr_absence_records_v1', next);
+    await pbUpdate('hr_absence_records', recordId, { acknowledged: true });
   },
 
   // No-call-no-show / mouse-inactivity auto-absence check. Client-triggered
@@ -3185,9 +3247,16 @@ export const hrActions = {
       existingRecords = await hrActions.getAbsenceRecords();
     }
 
-    const deletedIds = await hrActions.getDeletedAbsenceIds();
-    const ignoredIds = new Set([...existingRecords.map(r => r.id), ...deletedIds]);
-    const newRecords: AbsenceRecord[] = [];
+    // Full history INCLUDING soft-deleted rows — the partial unique index on
+    // hr_absence_records only constrains non-deleted rows, so checking
+    // active-only records here would let this loop resurrect an absence HR
+    // already deleted the moment its date rolled back into the 5-day
+    // lookback window below. Keyed by employeeEmail_date (lowercase) rather
+    // than record id, since ids are now opaque PocketBase ids, not the old
+    // `${email}_${date}` composite string.
+    const fullHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted();
+    const ignoredKeys = new Set(fullHistory.map(r => `${r.employeeEmail.toLowerCase()}_${r.date}`));
+    const newRecords: Omit<AbsenceRecord, 'id'>[] = [];
 
     for (const emp of employees) {
       if (emp.region !== 'Pakistan') continue;
@@ -3267,11 +3336,8 @@ export const hrActions = {
         if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
         if (joinedStr && dateStr < joinedStr) continue;
         if (!isWeekday(dateStr)) continue; // Saturday/Sunday (by NY calendar) are never checked
-        const recordId = `${emp.email.toLowerCase()}_${dateStr}`;
-        // Check both the canonical lowercase key AND the raw stored form to
-        // prevent case-drift re-creation (the historic bug that caused deleted
-        // records to keep coming back).
-        if (ignoredIds.has(recordId) || ignoredIds.has(recordId.toLowerCase())) continue;
+        const ignoreKey = `${emp.email.toLowerCase()}_${dateStr}`;
+        if (ignoredKeys.has(ignoreKey)) continue;
 
         const totalWorkedMins = shiftDatesWithTotalMinutes.get(dateStr) || 0;
         const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
@@ -3306,7 +3372,7 @@ export const hrActions = {
         const name = displayName(emp, 'hr');
 
         newRecords.push({
-          id: recordId, employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
+          employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
           reason, inactivityMinutes, workedMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
         });
 
@@ -3336,28 +3402,27 @@ export const hrActions = {
     }
 
     if (newRecords.length > 0) {
-      // Re-fetch immediately before writing, rather than reusing the
-      // existingRecords snapshot captured at the top of this function. This
-      // function can run for several seconds (an awaited HR+Admin+employee
-      // notification triple for every new absence above) — if HR/Admin
-      // deletes an existing absence record while this run is still in
-      // flight (or a second dashboard mount's runAbsenceCheck runs
-      // concurrently), writing [...existingRecords, ...newRecords] against
-      // the stale snapshot would silently resurrect that deletion the next
-      // time the check runs, which is exactly the "deleted absence comes
-      // back" bug this closes. Re-reading fresh right before the write, and
-      // re-filtering newRecords against the CURRENT tombstone list, means a
-      // concurrent delete always wins over a stale in-flight check.
-      const freshExisting = await hrActions.getAbsenceRecords();
-      const freshDeletedIds = await hrActions.getDeletedAbsenceIds();
-      const freshIgnored = new Set([
-        ...freshExisting.map(r => r.id.toLowerCase()),
-        ...freshDeletedIds.map(d => d.toLowerCase()),
-      ]);
-      const safeNewRecords = newRecords.filter(r => !freshIgnored.has(r.id.toLowerCase()));
-      if (safeNewRecords.length > 0) {
-        await pbSetKV('hr_absence_records_v1', [...freshExisting, ...safeNewRecords]);
-      }
+      // Re-fetch the full history (including soft-deleted rows) immediately
+      // before creating, rather than reusing the fullHistory snapshot taken
+      // at the top of this function. This function can run for several
+      // seconds (an awaited HR+Admin+employee notification triple for every
+      // new absence above) — if HR/Admin deletes an existing absence record
+      // while this run is still in flight (or a second dashboard mount's
+      // runAbsenceCheck runs concurrently), creating against the stale
+      // snapshot would silently resurrect that deletion, which is exactly
+      // the "deleted absence comes back" bug this closes. Re-reading fresh
+      // right before creating means a concurrent delete always wins over a
+      // stale in-flight check.
+      const freshHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted();
+      const freshIgnoredKeys = new Set(freshHistory.map(r => `${r.employeeEmail.toLowerCase()}_${r.date}`));
+      const safeNewRecords = newRecords.filter(r => !freshIgnoredKeys.has(`${r.employeeEmail.toLowerCase()}_${r.date}`));
+      // Independent creates rather than one batched array write — the
+      // partial unique index on (employeeEmail, date) WHERE deleted = false
+      // is the database's own guarantee against a duplicate, so a rare
+      // concurrent create landing between the fresh-fetch above and this
+      // create (e.g. two dashboard mounts racing) is just a benign
+      // constraint violation to swallow, not a bug to prevent client-side.
+      await Promise.all(safeNewRecords.map(r => pbCreate('hr_absence_records', r).catch(() => {})));
     }
   },
 
@@ -3637,7 +3702,7 @@ export const hrActions = {
     if (state.warnedAt && state.pendingDeleteIds?.length) {
       const graceElapsed = (now.getTime() - new Date(state.warnedAt).getTime()) >= WARNING_GRACE_DAYS * 24 * 3600 * 1000;
       if (!graceElapsed) return;
-      const settings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
+      const settings = await hrActions.getAllTrackingSettings();
       const excluded = new Set(settings.filter(s => s.excludeFromAutoDelete).map(s => s.employeeEmail.toLowerCase()));
       // These rows were already confirmed older than an earlier (stricter)
       // cutoff when they were first flagged, so they're certainly still
@@ -3655,7 +3720,7 @@ export const hrActions = {
     }
     const oldShots = await hrActions.getScreenshots({ untilISO: cutoff.toISOString() });
     if (oldShots.length === 0) return;
-    const settings = ((await pbGetKV('hr_tracking_settings_prod_v1')) as TrackingSettings[]) || [];
+    const settings = await hrActions.getAllTrackingSettings();
     const excluded = new Set(settings.filter(s => s.excludeFromAutoDelete).map(s => s.employeeEmail.toLowerCase()));
     const toDelete = oldShots.filter(s => !excluded.has(s.employeeEmail.toLowerCase()));
     if (toDelete.length === 0) return;

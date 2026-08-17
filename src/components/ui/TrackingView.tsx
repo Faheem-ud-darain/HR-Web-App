@@ -13,6 +13,7 @@ import {
   InactivityLog,
   TimesheetEntry,
   useProfiles,
+  useTrackingSettings,
   useKVByPrefix,
   useTimesheets,
   hrActions,
@@ -107,9 +108,9 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   const [mouseLoading, setMouseLoading] = useState(false);
 
   const { data: allProfiles } = useProfiles();
-  // Tracking settings live in a single hr_delcargo_store KV row (key
-  // hr_tracking_settings_prod_v1); useKVByPrefix's "~" filter matches it.
-  const { data: settingsRows, refetch: refetchSettings } = useKVByPrefix('hr_tracking_settings_prod_v1');
+  // Tracking settings live in the dedicated hr_tracking_settings collection
+  // (one row per employee) — see useTrackingSettings in hrData.ts.
+  const { data: settingsList = [], refetch: refetchSettings } = useTrackingSettings();
   // Heartbeats are one KV row per device: tracker_heartbeat_<slug>. React
   // Query's own refetchInterval/staleness handles freshness here; no manual
   // refetch trigger is needed since this view doesn't mutate heartbeats.
@@ -130,7 +131,6 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     if (e.email.toLowerCase() === (viewerEmail || '').toLowerCase()) return false; // teammates only, not self
     return e.teams?.some(t => viewerProfile.leadTeams?.includes(t));
   });
-  const settingsList = ((settingsRows || []).find(r => r.key === 'hr_tracking_settings_prod_v1')?.value as TrackingSettings[]) || [];
   const heartbeats = (heartbeatRows || []).map(r => r.value as TrackerHeartbeat);
 
   useEffect(() => {

@@ -103,8 +103,7 @@ export default function TrackerPage() {
   const loadOwnTrackingSettings = async (email: string) => {
     let settings = await hrActions.getTrackingSettingsFor(email);
     if (!settings.agentToken) {
-      const updated = await hrActions.updateTrackingSettings(email, {});
-      settings = updated.find(s => s.employeeEmail.toLowerCase() === email.toLowerCase()) || settings;
+      settings = await hrActions.updateTrackingSettings(email, {});
     }
     setTrackingSettings(settings || null);
   };
