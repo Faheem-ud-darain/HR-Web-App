@@ -2,7 +2,7 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from './pocketbase';
-import { getNYDateString, formatTimeNY, formatDateNY } from './timezone';
+import { getNYDateString, getNYWorkDateString, formatTimeNY, formatDateNY } from './timezone';
 import { getOrCreateDeviceId, getAuthToken } from './session';
 import { API_BASE } from './apiBase';
 
@@ -2891,9 +2891,36 @@ export const hrActions = {
   // given employee+date combination has already been decided.
   runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
     const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
-    const pktTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+    // Per explicit product decision: absence "day" bucketing runs on the same
+    // America/New_York calendar used everywhere else in the app (shift dates,
+    // leave dates, attendance display) — not the employee's own device/region
+    // timezone — with the day boundary at 1am NY instead of midnight (see
+    // getNYWorkDateString). Using a different timezone basis here than the
+    // rest of the app was the root cause of employees getting marked absent
+    // on what was actually a Saturday/Sunday from this app's own point of
+    // view: an overnight shift or a day-boundary a few hours off could shift
+    // a date across the Mon-Fri/weekend line entirely.
+    const nyTodayStr = getNYWorkDateString(new Date());
     const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
-    const existingRecords = await hrActions.getAbsenceRecords();
+    let existingRecords = await hrActions.getAbsenceRecords();
+
+    // Self-healing cleanup: the old PKT-based day bucketing (fixed above)
+    // could occasionally land an absence record's date on an actual
+    // Saturday/Sunday by the NY calendar. Weekends are never a workday, so
+    // any such record is always wrong — reverse it and notify everyone
+    // involved rather than leaving a stale bad deduction on the books.
+    const weekendRecords = existingRecords.filter(r => !isWeekday(r.date));
+    for (const rec of weekendRecords) {
+      await hrActions.deleteAbsenceRecord(rec.id);
+      const note = `${rec.employeeName}'s absence deduction for ${rec.date} (a weekend) was reversed — employees are never marked absent on Saturdays or Sundays.`;
+      await hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail);
+      await hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail);
+      await hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date was a weekend and should not have been marked absent.`);
+    }
+    if (weekendRecords.length > 0) {
+      existingRecords = await hrActions.getAbsenceRecords();
+    }
+
     const deletedIds = await hrActions.getDeletedAbsenceIds();
     const ignoredIds = new Set([...existingRecords.map(r => r.id), ...deletedIds]);
     const newRecords: AbsenceRecord[] = [];
@@ -2910,7 +2937,7 @@ export const hrActions = {
       let joinedStr = '';
       if (emp.joinedDate) {
         const jd = new Date(emp.joinedDate);
-        if (!isNaN(jd.getTime())) joinedStr = jd.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+        if (!isNaN(jd.getTime())) joinedStr = getNYWorkDateString(jd);
       }
 
       const shiftDatesWithShift = new Set<string>();
@@ -2919,12 +2946,15 @@ export const hrActions = {
 
       for (const t of empTimesheets) {
         if (!t.clockIn) continue;
-        
-        // IMPORTANT: Ignore t.date because it is stamped in New York time by the frontend.
-        // We must rely purely on the absolute UTC clockIn timestamp converted to PKT.
+
+        // Bucket by the absolute UTC clockIn timestamp converted to the NY
+        // 1am-boundary work day (see getNYWorkDateString) — consistent with
+        // how every other date in the app (leaves, timesheets shown on the
+        // Attendance page, etc.) is bucketed, and so overnight shifts don't
+        // get split across two calendar days.
         const d = new Date(t.clockIn);
         if (isNaN(d.getTime())) continue;
-        const shiftDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+        const shiftDate = getNYWorkDateString(d);
         shiftDatesWithShift.add(shiftDate);
         
         let shiftMins = 0;
@@ -2964,11 +2994,11 @@ export const hrActions = {
       const lookbackStart = new Date(today);
       lookbackStart.setDate(today.getDate() - 5); // Check at most past 5 days
       for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-        const dateStr = cursor.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
-        if (dateStr >= pktTodayStr) break;
+        const dateStr = getNYWorkDateString(cursor);
+        if (dateStr >= nyTodayStr) break;
         if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
         if (joinedStr && dateStr < joinedStr) continue;
-        if (!isWeekday(dateStr)) continue;
+        if (!isWeekday(dateStr)) continue; // Saturday/Sunday (by NY calendar) are never checked
         const recordId = `${emp.email.toLowerCase()}_${dateStr}`;
         // Check both the canonical lowercase key AND the raw stored form to
         // prevent case-drift re-creation (the historic bug that caused deleted

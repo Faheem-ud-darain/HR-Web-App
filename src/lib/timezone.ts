@@ -85,6 +85,25 @@ export function getNYMidnight(dateStr: string): Date {
   return d;
 }
 
+/**
+ * Returns the "work day" calendar date (YYYY-MM-DD) for a given instant, in
+ * America/New_York time, but with the day boundary set to 1:00 AM instead of
+ * midnight. Per explicit product decision, the attendance/absence "day"
+ * starts at 1am NY — not midnight — so an overnight shift that runs past
+ * midnight (e.g. clocking in at 11pm and working until 2am) stays bucketed
+ * entirely under the day it started, and isn't split across two calendar
+ * days (which could otherwise land the tail end of a Friday-night shift on
+ * a Saturday and get it flagged as weekend/insufficient-hours).
+ */
+export function getNYWorkDateString(date: Date | string | number = new Date()): string {
+  const d = date instanceof Date ? date : new Date(date);
+  // Roll the instant back by 1 hour before reading the NY calendar date, so
+  // anything from 00:00 up to 00:59 NY is still attributed to "yesterday's"
+  // work day, and the new work day only begins at 1:00 AM NY.
+  const shifted = new Date(d.getTime() - 60 * 60 * 1000);
+  return getNYDateString(shifted);
+}
+
 /** Returns "Today" / "Yesterday" / short date — all judged in America/New_York. */
 export function formatRelativeDateNY(date: Date | string | number): string {
   const d = date instanceof Date ? date : new Date(date);
