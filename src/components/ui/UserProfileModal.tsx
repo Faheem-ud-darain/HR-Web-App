@@ -26,6 +26,15 @@ import { ImageLightbox } from './ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { X, User, Mail, Shield, ShieldAlert, Key, DollarSign, Calendar, MapPin, Landmark, Briefcase, FileText, CheckSquare, Square, Trash2, Download, Phone, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
+// Detects the `pbkdf2$<iterations>$<salt>$<hash>` format hashPassword()
+// writes (see serverAuth.ts) — deliberately re-implemented here rather than
+// importing isBcryptHash from serverAuth.ts, since that file is
+// server-only (it also holds SESSION_JWT_SECRET handling) and must never be
+// imported from a 'use client' component.
+function isHashedPassword(value: string | undefined | null): boolean {
+  return typeof value === 'string' && /^pbkdf2\$\d+\$[A-Za-z0-9+/=]+\$[A-Za-z0-9+/=]+$/.test(value);
+}
+
 interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -113,7 +122,17 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
         setProfile(match);
         setFullName(match.fullName);
         setEmail(match.email);
-        setPassword(match.password || 'employee123');
+        // Never prefill from a pbkdf2$... hash — match.password is that raw
+        // hash once this employee has logged in since the password-hashing
+        // migration (see serverAuth.ts), and showing it verbatim is exactly
+        // the "long random password" HR was seeing. Leaving it blank here
+        // means "don't change the password" all the way through to the
+        // server (the admin route only touches password when this field is
+        // non-empty), which also closes the "every save re-hashes the
+        // already-hashed value and breaks login" bug — that check lives
+        // server-side too, but not prefilling a hash means it's never even
+        // resubmitted unless HR actually types a new one.
+        setPassword(isHashedPassword(match.password) ? '' : (match.password || ''));
         setJobTitle(match.jobTitle || 'Staff');
         setBaseSalary(match.baseSalary.toString());
         setRegion(match.region || 'Pakistan');
@@ -223,6 +242,13 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
       setIsEditing(false);
       refetchProfiles();
       onUpdate?.();
+    } catch (err) {
+      // Without this, a failed save (e.g. the server 400ing because the
+      // password box had something under 6 characters in it) silently did
+      // nothing — isEditing never cleared, no error shown, just "pressed
+      // save, it is not saving" with no feedback at all.
+      console.error('Profile save failed:', err);
+      alert(`Could not save these changes: ${err instanceof Error ? err.message : 'unknown error'}. Nothing was saved — please check the fields (the password box in particular needs to be at least 6 characters, or left blank to keep the current password) and try again.`);
     } finally {
       setIsSavingProfile(false);
     }
@@ -630,8 +656,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Account Password *</label>
-                <input type="text" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Account Password</label>
+                <input type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep the current password" minLength={6} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                <p className="text-[10px] text-slate-400 font-medium">Their current password is never shown here for security. Only fill this in to set a new one (at least 6 characters) — otherwise leave it blank.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

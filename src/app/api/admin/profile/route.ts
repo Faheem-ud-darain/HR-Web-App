@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireSession, hashPassword } from '@/lib/serverAuth';
+import { requireSession, hashPassword, isBcryptHash } from '@/lib/serverAuth';
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
@@ -86,7 +86,15 @@ export async function POST(request: Request) {
       await adminUpdateProfile(profileId, fromProfileFields(real));
     }
 
-    if (newPassword !== undefined && newPassword !== null && newPassword !== '') {
+    // Skip entirely if this is already a pbkdf2$... hash — the client's
+    // Edit Credentials field pre-fills from whatever's currently stored
+    // (see UserProfileModal.tsx), which is that same hash once an employee
+    // has logged in since the hashing migration. Without this check, every
+    // profile save that didn't touch the password field at all — editing
+    // Job Title, Base Salary, anything — would re-hash an already-hashed
+    // value into a hash-of-a-hash and silently break that employee's login,
+    // which is exactly what happened here.
+    if (newPassword !== undefined && newPassword !== null && newPassword !== '' && !isBcryptHash(newPassword)) {
       if (typeof newPassword !== 'string' || newPassword.length < 6) {
         return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
       }
