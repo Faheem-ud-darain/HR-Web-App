@@ -2,7 +2,7 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from './pocketbase';
-import { getNYDateString, getNYWorkDateString, formatTimeNY, formatDateNY } from './timezone';
+import { getNYDateString, formatTimeNY, formatDateNY } from './timezone';
 import { getOrCreateDeviceId, getAuthToken } from './session';
 import { API_BASE } from './apiBase';
 
@@ -2892,15 +2892,14 @@ export const hrActions = {
   runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
     const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
     // Per explicit product decision: absence "day" bucketing runs on the same
-    // America/New_York calendar used everywhere else in the app (shift dates,
-    // leave dates, attendance display) — not the employee's own device/region
-    // timezone — with the day boundary at 1am NY instead of midnight (see
-    // getNYWorkDateString). Using a different timezone basis here than the
-    // rest of the app was the root cause of employees getting marked absent
-    // on what was actually a Saturday/Sunday from this app's own point of
-    // view: an overnight shift or a day-boundary a few hours off could shift
-    // a date across the Mon-Fri/weekend line entirely.
-    const nyTodayStr = getNYWorkDateString(new Date());
+    // America/New_York midnight-boundary calendar used everywhere else in the
+    // app (shift dates via localShiftDate, leave dates, attendance display) —
+    // not the employee's own device/region timezone. Using a different
+    // timezone basis here than the rest of the app was the root cause of
+    // employees getting marked absent on what was actually a Saturday/Sunday
+    // from this app's own point of view: a several-hour day-boundary offset
+    // could shift a date across the Mon-Fri/weekend line entirely.
+    const nyTodayStr = getNYDateString(new Date());
     const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
     let existingRecords = await hrActions.getAbsenceRecords();
 
@@ -2937,7 +2936,7 @@ export const hrActions = {
       let joinedStr = '';
       if (emp.joinedDate) {
         const jd = new Date(emp.joinedDate);
-        if (!isNaN(jd.getTime())) joinedStr = getNYWorkDateString(jd);
+        if (!isNaN(jd.getTime())) joinedStr = getNYDateString(jd);
       }
 
       const shiftDatesWithShift = new Set<string>();
@@ -2948,13 +2947,12 @@ export const hrActions = {
         if (!t.clockIn) continue;
 
         // Bucket by the absolute UTC clockIn timestamp converted to the NY
-        // 1am-boundary work day (see getNYWorkDateString) — consistent with
-        // how every other date in the app (leaves, timesheets shown on the
-        // Attendance page, etc.) is bucketed, and so overnight shifts don't
-        // get split across two calendar days.
+        // midnight-boundary calendar day — consistent with how every other
+        // date in the app (leaves, timesheets shown on the Attendance page,
+        // etc.) is bucketed via getNYDateString/localShiftDate.
         const d = new Date(t.clockIn);
         if (isNaN(d.getTime())) continue;
-        const shiftDate = getNYWorkDateString(d);
+        const shiftDate = getNYDateString(d);
         shiftDatesWithShift.add(shiftDate);
         
         let shiftMins = 0;
@@ -2994,7 +2992,7 @@ export const hrActions = {
       const lookbackStart = new Date(today);
       lookbackStart.setDate(today.getDate() - 5); // Check at most past 5 days
       for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-        const dateStr = getNYWorkDateString(cursor);
+        const dateStr = getNYDateString(cursor);
         if (dateStr >= nyTodayStr) break;
         if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
         if (joinedStr && dateStr < joinedStr) continue;
