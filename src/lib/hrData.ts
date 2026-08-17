@@ -41,6 +41,24 @@ async function pbList(collection: string, opts: { sort?: string; filter?: string
   }
 }
 
+// Looks up all rows in `collection` whose `field` matches `email`,
+// case-insensitively — a case-insensitive `~` filter narrows server-side,
+// then an exact (still case-insensitive) client-side check drops any
+// substring false-match, same pattern used throughout this file (see
+// getScreenshots, pbUpsertByField). Exists because a plain `=` filter is
+// case-SENSITIVE in PocketBase, so any row written back when an employee's
+// email was still stored mixed-case (before fromProfileFields started
+// lowercasing it) would silently never match here — that's the exact "some
+// employees still see the capital-letter email bug" symptom.
+async function pbListByEmailField(collection: string, field: string, email: string, opts: { extraFilter?: string; sort?: string } = {}): Promise<any[]> {
+  if (!email) return [];
+  const escaped = email.replace(/"/g, '\\"');
+  const wanted = email.toLowerCase();
+  const filter = opts.extraFilter ? `${field} ~ "${escaped}" && ${opts.extraFilter}` : `${field} ~ "${escaped}"`;
+  const rows = await pbList(collection, { filter, sort: opts.sort });
+  return rows.filter((r: any) => (r[field] || '').toLowerCase() === wanted);
+}
+
 async function pbCreate(collection: string, fields: any): Promise<any> {
   return pb.collection(collection).create(fields);
 }
@@ -870,7 +888,14 @@ function toProfile(p: any, extras: Partial<Profile> = {}): Profile {
 function fromProfileFields(p: Partial<Profile>): any {
   const fields: any = {};
   if (p.fullName !== undefined) fields.full_name = p.fullName;
-  if (p.email !== undefined) fields.email = p.email;
+  // Normalize to lowercase on write — every downstream lookup (timesheets,
+  // tasks, tickets, tracking settings, absence records, etc.) assumes a
+  // lowercase employeeEmail and either does a case-insensitive `~` filter
+  // with a client-side re-check, or (in a few older/simpler call sites) a
+  // plain exact `=` filter that silently fails to match a mixed-case email.
+  // Normalizing here, once, at the source is safer than trying to make
+  // every one of those call sites case-insensitive.
+  if (p.email !== undefined) fields.email = p.email.toLowerCase();
   if (p.role !== undefined) fields.role = p.role;
   if (p.joinedDate !== undefined) fields.joined_date = p.joinedDate;
   if (p.onboardingCompleted !== undefined) fields.onboarding_completed = p.onboardingCompleted;
@@ -1062,10 +1087,7 @@ export function useMyTasks(email: string | null | undefined) {
     queryKey: ['hr_tasks_mine', (email || '').toLowerCase()],
     queryFn: async () => {
       if (!email) return [];
-      return (await pbList('hr_tasks', {
-        sort: '-created',
-        filter: `assigned_email = "${email.replace(/"/g, '\\"')}"`,
-      })).map(toTask);
+      return (await pbListByEmailField('hr_tasks', 'assigned_email', email, { sort: '-created' })).map(toTask);
     },
     enabled: !!email,
   });
@@ -1957,15 +1979,15 @@ export const hrActions = {
       deletions.push(
         pbList('hr_payroll', { filter: `employee_id = "${id}"` })
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_payroll', r.id)))),
-        pbList('hr_timesheets', { filter: `employee_id = "${email.replace(/"/g, '\\"')}"` })
+        pbListByEmailField('hr_timesheets', 'employee_id', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_timesheets', r.id)))),
-        pbList('hr_tasks', { filter: `assigned_email = "${email.replace(/"/g, '\\"')}"` })
+        pbListByEmailField('hr_tasks', 'assigned_email', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_tasks', r.id)))),
-        pbList('hr_tickets', { filter: `employee_email = "${email.replace(/"/g, '\\"')}"` })
+        pbListByEmailField('hr_tickets', 'employee_email', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_tickets', r.id)))),
-        pbList('hr_career_applications', { filter: `applicant_email = "${email.replace(/"/g, '\\"')}"` })
+        pbListByEmailField('hr_career_applications', 'applicant_email', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_career_applications', r.id)))),
-        pbList('hr_notifications', { filter: `recipient_email = "${email.replace(/"/g, '\\"')}"` })
+        pbListByEmailField('hr_notifications', 'recipient_email', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_notifications', r.id)))),
       );
     }
@@ -2054,11 +2076,11 @@ export const hrActions = {
 
     const [payrollRows, timesheetRows, taskRows, ticketRows, appRows, notifRows, leaveRows, shots] = await Promise.all([
       pbList('hr_payroll', { filter: `employee_id = "${profile.id}"` }),
-      email ? pbList('hr_timesheets', { filter: `employee_id = "${email.replace(/"/g, '\\"')}"` }) : Promise.resolve([]),
-      email ? pbList('hr_tasks', { filter: `assigned_email = "${email.replace(/"/g, '\\"')}"` }) : Promise.resolve([]),
-      email ? pbList('hr_tickets', { filter: `employee_email = "${email.replace(/"/g, '\\"')}"` }) : Promise.resolve([]),
-      email ? pbList('hr_career_applications', { filter: `applicant_email = "${email.replace(/"/g, '\\"')}"` }) : Promise.resolve([]),
-      email ? pbList('hr_notifications', { filter: `recipient_email = "${email.replace(/"/g, '\\"')}"` }) : Promise.resolve([]),
+      pbListByEmailField('hr_timesheets', 'employee_id', email),
+      pbListByEmailField('hr_tasks', 'assigned_email', email),
+      pbListByEmailField('hr_tickets', 'employee_email', email),
+      pbListByEmailField('hr_career_applications', 'applicant_email', email),
+      pbListByEmailField('hr_notifications', 'recipient_email', email),
       pbList('hr_leaves', { filter: `employee_name = "${profile.fullName.replace(/"/g, '\\"')}"` }),
       email ? hrActions.getScreenshots({ employeeEmail: email }) : Promise.resolve([]),
     ]);
@@ -2825,7 +2847,11 @@ export const hrActions = {
       enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
       agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
     };
-    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...defaults, ...updates, employeeEmail: email });
+    // Write employeeEmail lowercased on create — otherwise a caller passing
+    // a mixed-case email here (e.g. from a not-yet-normalized profile) would
+    // seed a mixed-case row that every OTHER lookup in this file then has to
+    // work around via a `~` filter + client-side lowercase check.
+    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...defaults, ...updates, employeeEmail: email.toLowerCase() });
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
   regenerateAgentToken: async (email: string): Promise<string> => {
@@ -3730,9 +3756,17 @@ export const hrActions = {
   },
 
   // ── Timesheets ────────────────────────────────────────────────────────
+  // Uses a case-insensitive `~` filter + exact client-side re-check (the
+  // established pattern elsewhere in this file), not a plain `=` filter,
+  // because hr_timesheets rows can predate the email-lowercasing fix in
+  // fromProfileFields/addEmployee — a profile saved back when its email was
+  // stored mixed-case would otherwise silently never match its own open
+  // shift here, leaving clockIn/clockOut looking broken for that employee.
   getOpenShift: async (employeeEmail: string): Promise<TimesheetEntry | null> => {
-    const all = (await pbList('hr_timesheets', { filter: `employee_id = "${employeeEmail}" && clock_out = ""` })).map(toTimesheet);
-    return all[0] || null;
+    const wanted = employeeEmail.toLowerCase();
+    const escaped = employeeEmail.replace(/"/g, '\\"');
+    const matches = (await pbList('hr_timesheets', { filter: `employee_id ~ "${escaped}" && clock_out = ""` })).map(toTimesheet);
+    return matches.find(t => (t.employeeEmail || '').toLowerCase() === wanted) || null;
   },
   clockIn: async (employeeEmail: string): Promise<TimesheetEntry> => {
     const existingOpen = await hrActions.getOpenShift(employeeEmail);

@@ -571,10 +571,16 @@ def auto_clock_out(base_url, employee_email):
     if not employee_email:
         return False
     url = f"{base_url}/api/collections/hr_timesheets/records"
-    params = {"filter": f'(employee_id="{employee_email}" && clock_out="")', "perPage": 1}
+    # `~` (case-insensitive LIKE) instead of `=` — a plain exact-match filter
+    # is case-SENSITIVE in PocketBase, so if this employee's hr_profiles
+    # email (or an older hr_timesheets row) was ever stored mixed-case, this
+    # would silently find nothing and never close their shift. Re-check
+    # exactly (still case-insensitively) below to guard against a substring
+    # false-match from the `~` filter.
+    params = {"filter": f'(employee_id~"{employee_email}" && clock_out="")', "perPage": 10}
     resp = requests.get(url, params=params, timeout=15)
     resp.raise_for_status()
-    items = resp.json().get("items", [])
+    items = [i for i in resp.json().get("items", []) if (i.get("employee_id") or "").lower() == employee_email.lower()]
     if not items:
         return False
     record = items[0]
@@ -1069,10 +1075,12 @@ def _fetch_profile_for_deduction(base_url, employee_email):
     Absent Details / Payroll pages if this ever happens."""
     try:
         url = f"{base_url}/api/collections/hr_profiles/records"
-        params = {"filter": f'(email="{employee_email}")', "perPage": 1}
+        # `~` + exact case-insensitive re-check, not a plain `=` — same
+        # mixed-case-email footgun as auto_clock_out above.
+        params = {"filter": f'(email~"{employee_email}")', "perPage": 10}
         resp = requests.get(url, params=params, timeout=15)
         resp.raise_for_status()
-        items = resp.json().get("items", [])
+        items = [i for i in resp.json().get("items", []) if (i.get("email") or "").lower() == employee_email.lower()]
         if not items:
             return employee_email, 0
         row = items[0]

@@ -54,7 +54,14 @@ export function fromProfileFields(p: Record<string, any>): Record<string, any> {
   const fields: Record<string, any> = {};
   for (const [key, pbKey] of Object.entries(FIELD_MAP)) {
     if (p[key] !== undefined) {
-      fields[pbKey] = key === 'isTeamLead' ? String(!!p[key]) : p[key];
+      // Normalize email to lowercase on write, same as hrData.ts's
+      // fromProfileFields — keep these two in sync (see file-header note).
+      // Every downstream lookup keyed on employeeEmail assumes lowercase;
+      // a mixed-case email slipping through here (this is the server-side
+      // path used by the admin addEmployee/updateProfile API routes) is
+      // exactly the "some employees still facing the capital-letter email
+      // issue" bug class.
+      fields[pbKey] = key === 'isTeamLead' ? String(!!p[key]) : key === 'email' ? String(p[key]).toLowerCase() : p[key];
     }
   }
   return fields;
