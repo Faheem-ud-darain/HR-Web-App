@@ -107,7 +107,20 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "17"  # bumped for the get_tracking_settings hr_tracking_settings_prod_v1 fix above
+APP_VERSION = "18"  # bumped for the mandatory-update-floor enforcement below (MIN_SUPPORTED_VERSION)
+# Hard floor — must stay in sync with TRACKER_MIN_VERSION in
+# src/lib/trackerSetup.ts (that constant drives the "Update Required" badge
+# HR/Admin sees in TrackingView; this one actually enforces it client-side).
+# Fixed 2026-08-18 — below this version, _check_and_prompt_update() refuses
+# to let the app keep running at all instead of just suggesting an update.
+# Root cause this closes: the old update prompt was a dismissible Yes/No
+# dialog, so an employee could click "No" forever and stay on an ancient,
+# effectively-broken build indefinitely — that's exactly how alex@delcargo.us
+# ended up stuck on v10 (predates the capture-health heartbeat fields
+# entirely) with a live-looking heartbeat but zero screenshots for 6 days,
+# and HR's "Force Disconnect" button had no way to reach or affect it since
+# v10 also predates the stop-command signal it relies on.
+MIN_SUPPORTED_VERSION = "14"
 GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -1417,8 +1430,48 @@ def _perform_update(root, latest_version):
 def _check_and_prompt_update():
     """Runs before anything else in main() — see the module-level flow at
     the bottom of this file. Uses its own short-lived, hidden root so it
-    doesn't depend on (or delay) the real TrackerApp/dashboard window."""
+    doesn't depend on (or delay) the real TrackerApp/dashboard window.
+
+    Two tiers:
+      1. Hard floor (MIN_SUPPORTED_VERSION) — this build is old enough to be
+         considered broken/unsupported. No Yes/No choice: download (or send
+         the person to the releases page) and exit. Does not depend on
+         check_for_update() succeeding, since "can't reach GitHub right now"
+         is not a reason to keep running a known-broken build.
+      2. Soft/optional — a newer build exists but this one is still
+         supported. Dismissible, same as before.
+    """
     latest = check_for_update()
+
+    if _parse_version(APP_VERSION) < _parse_version(MIN_SUPPORTED_VERSION):
+        root = tk.Tk()
+        root.withdraw()
+        target = latest or MIN_SUPPORTED_VERSION
+        messagebox.showwarning(
+            APP_NAME,
+            f"This DelCargo Tracker build (v{APP_VERSION}) is too old to keep "
+            f"running — v{target} or newer is required.\n\n"
+            "The update will download now; the app will close until it's "
+            "reinstalled.",
+            parent=root,
+        )
+        if latest:
+            _perform_update(root, latest)
+        else:
+            # Couldn't confirm the actual latest version (offline/GitHub
+            # unreachable) — still refuse to continue on a known-broken
+            # build, just without an auto-download to point at.
+            webbrowser.open(GITHUB_RELEASES_PAGE)
+            messagebox.showerror(
+                APP_NAME,
+                "Couldn't reach the update server just now. Please install the "
+                "latest DelCargo Tracker from the page that just opened — "
+                "this build can no longer be used.",
+                parent=root,
+            )
+        root.destroy()
+        sys.exit(1)  # Hard stop — never fall through into running the old build.
+
     if latest is None:
         return
     root = tk.Tk()

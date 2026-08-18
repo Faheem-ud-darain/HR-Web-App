@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { Clock, CheckCircle2, ChevronRight, AlertTriangle, Briefcase, Calendar, User, Flag, Monitor, MapPin, LocateFixed, Wifi, WifiOff, Smartphone, Landmark, Gift, Star, Loader2 } from 'lucide-react';
-import { isNativeMobileApp } from '@/lib/trackerSetup';
+import { isNativeMobileApp, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
@@ -91,6 +91,15 @@ export default function EmployeeDashboard() {
   const [trackerHeartbeat, setTrackerHeartbeat] = useState<TrackerHeartbeat | null>(null);
   const [showTrackerRequiredModal, setShowTrackerRequiredModal] = useState(false);
   const [showMobileBlockedModal, setShowMobileBlockedModal] = useState(false);
+  // Fixed 2026-08-18 — a heartbeat-is-live check alone isn't enough to let
+  // Start Shift through: an outdated tracker build can still answer pings
+  // and heartbeats perfectly (that's exactly the alex@delcargo.us case —
+  // v10, live heartbeat, zero screenshots for 6 days). Previously an
+  // employee could leave that build's own "update required" popup sitting
+  // open and just click Start Shift from here instead, and the dashboard
+  // would happily start tracked time against a tracker that isn't actually
+  // capturing anything current. See showTrackerUpdateRequiredModal below.
+  const [showTrackerUpdateRequiredModal, setShowTrackerUpdateRequiredModal] = useState(false);
   const [checkingTracker, setCheckingTracker] = useState(false);
   // Grace-period tracking for heartbeat-based auto-clock-out. Only clock out
   // if heartbeat has been dead > TRACKER_HEARTBEAT_GRACE_MS AND no quit intent
@@ -686,6 +695,7 @@ export default function EmployeeDashboard() {
                           hrActions.clearTrackerPong(userProfile.email).catch(() => {});
                         }
 
+                        let liveHb: TrackerHeartbeat | null = null;
                         if (!pongReceived) {
                           // Dual-Validation Rule: the ping/pong handshake
                           // failed or timed out (SSE not connected — e.g. a
@@ -702,8 +712,31 @@ export default function EmployeeDashboard() {
                             return;
                           }
                           // Heartbeat is live — proceed even without a pong.
+                          liveHb = freshHb;
+                        } else {
+                          // Pong confirmed the tracker is live, but pong alone
+                          // doesn't carry agentVersion — fetch the heartbeat too
+                          // so the version gate right below has something to
+                          // check.
+                          liveHb = await hrActions.getTrackerHeartbeat(userProfile.email).catch(() => null);
+                          setTrackerHeartbeat(liveHb ?? null);
                         }
-                        // Tracker confirmed live — proceed
+
+                        // Version gate — same TRACKER_MIN_VERSION check that
+                        // shows HR/Admin an "Update Required" badge in
+                        // TrackingView. A live tracker isn't enough on its
+                        // own: an old-enough build can keep answering pings
+                        // and heartbeats while producing nothing usable (no
+                        // capture-health reporting, possibly no real capture
+                        // at all — see PROJECT_HISTORY.md 1d). Block Start
+                        // Shift here too so leaving that build's own update
+                        // popup open and clicking Start Shift instead can't
+                        // route around it.
+                        if (needsTrackerUpdate(liveHb?.agentVersion, liveHb?.deviceLabel)) {
+                          setShowTrackerUpdateRequiredModal(true);
+                          return;
+                        }
+                        // Tracker confirmed live and up to date — proceed
                       }
 
                       // ── Clock In ────────────────────────────────────────────
@@ -1201,6 +1234,38 @@ export default function EmployeeDashboard() {
               </button>
               <button
                 onClick={() => setShowTrackerRequiredModal(false)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Tracker-update-required prompt — shown when Start Shift is blocked
+          because the connected desktop agent is live but running a build
+          older than TRACKER_MIN_VERSION (see trackerSetup.ts). Distinct from
+          showTrackerRequiredModal above, which is for "not connected at
+          all" — this one is for "connected, but too old to trust." */}
+      {showTrackerUpdateRequiredModal && (
+        <Modal isOpen onClose={() => setShowTrackerUpdateRequiredModal(false)} title="Tracker Update Required">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                Your DelCargo Tracker app{trackerHeartbeat?.agentVersion ? ` (v${trackerHeartbeat.agentVersion})` : ''} is running but out of date — v{TRACKER_MIN_VERSION} or newer is required before you can start a tracked shift. Please update the app (it should prompt you automatically), then try starting your shift again.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <button
+                onClick={() => router.push('/employee/tracker')}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+              >
+                Go to Tracker Setup
+              </button>
+              <button
+                onClick={() => setShowTrackerUpdateRequiredModal(false)}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Close

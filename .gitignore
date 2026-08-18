@@ -88,3 +88,12 @@ tracker-agent/icon.png
 android/keystore.properties
 *.keystore
 *.jks
+
+# Added 2026-08-18 — a stray `_to_delete/` folder (used as a workaround
+# since the device-bridge tooling can't delete files, only move them) had
+# an old .env.local backup with real secrets in it, and `git add .` swept
+# the whole thing into a commit that GitHub's push protection correctly
+# rejected. Never let this directory, or debug logs/pycache, get tracked.
+_to_delete/
+tracker-agent/__pycache__/
+tracker-agent/*.log

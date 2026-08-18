@@ -122,6 +122,134 @@ get added later. Mirrors the pattern `check_active_shift` already uses for
   that key — keeping them around only invites the same confusion again for
   anyone who goes looking.
 
+## 1c. Fixed: HR/Direct Messages screen was pushed up / not full-height (2026-08-18)
+
+Reported as "the Direct HR Messages UI is broken", later narrowed down by the
+user to a visual/layout glitch: the chat panel looked squeezed and pushed
+upward instead of filling the screen the way the regular Team Chat page does.
+
+Root cause: `src/app/(dashboard)/layout.tsx` decides whether a route gets the
+full-height, non-scrolling "chat shell" (`main` → `overflow-hidden flex
+flex-col`, content wrapper → `flex-1 h-full max-w-none`) purely off the
+pathname:
+
+```ts
+const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats');
+```
+
+`employee/direct-messages`, `hr/direct-messages`, and `admin/direct-messages`
+all render `TeamChatView` too (via a single virtual "HR & Admin" DM channel —
+see `TeamChatView`'s own `includeHrDirectChannel` prop for the built-in way
+to do this), but their route doesn't end in `/chat` or `/team-chats`, so they
+fell through to the *default* branch instead: `overflow-y-auto ... pb-28
+md:pb-8` on `main` and `max-w-6xl` (not `h-full`) on the content wrapper.
+That's a normal scrolling page, not the pinned WhatsApp-style shell
+`TeamChatView` is built to run inside — hence the panel getting pushed up.
+
+Fix: added `|| pathname?.endsWith('/direct-messages')` to `isChatScreen`, so
+all three Direct/HR Messages routes now get the same full-height treatment
+as Team Chat. One-line change, no changes needed to `TeamChatView.tsx` or
+either `direct-messages/page.tsx` — they were already built correctly, they
+just weren't being given a properly bounded height to fill.
+
+## 1d. Investigated: alex@delcargo.us stuck on tracker v10, zero screenshots for 6 days; made agent updates mandatory (2026-08-18)
+
+Reported: alex's tracker not uploading screenshots, and HR's "Force
+Disconnect" button in TrackingView appeared to do nothing for his account.
+
+**Diagnosis.** Live data in `hr_delcargo_store`/`hr_screenshots`:
+- `tracker_heartbeat_alex_delcargo_us` is fresh (updates every few minutes,
+  `lastSeenAt` current) — the desktop app is genuinely running and phoning
+  home. It's not "closed."
+- `hr_screenshots` has nothing for alex since **2026-08-12** — 6 days of a
+  live heartbeat producing zero captures.
+- The heartbeat's `agentVersion` is `"10"` — old enough that the payload
+  doesn't even include the newer capture-health fields (`captureEnabled`,
+  `lastCaptureAt`, `lastCaptureError`, `consecutiveCaptureFailures`,
+  `isLocked`) every other employee's heartbeat has. v10 predates that whole
+  diagnostic layer.
+- `hr_tracking_settings` for alex got a new `agentToken` on 2026-08-17 (one
+  day after screenshots already stopped) — so a stale-token mismatch alone
+  doesn't explain the original break, but it means even if v10 tried to
+  capture now, it'd be rejected the same way Olivia's case was (see 1b).
+
+**Why "Force Disconnect" didn't work — reproduced directly.** Deleted
+`tracker_heartbeat_alex_delcargo_us` by hand (exactly what
+`hrActions.forceDisconnectAllTrackers` does) at 16:31:52 UTC. Within about a
+minute a brand new heartbeat row appeared on its own, still reporting
+`agentVersion: "10"` — the still-running v10 process just rewrote it on its
+normal cycle, completely unaffected. `forceDisconnectAllTrackers` also
+writes a "stop command" key that a running tracker is supposed to pick up
+over a realtime SSE subscription and react to (see the `_realtime_loop` /
+`stop_cmd` handling in `agent_gui.py`) — but that signal-based
+disconnect/kill mechanism almost certainly postdates v10, same as the
+capture-health fields did, so v10 has no code path that even checks for it.
+**Conclusion: there is currently no way to remotely kill an already-running
+tracker that old.** The button isn't bugged — it was never built as a true
+kill-switch (its own docstring says as much: "escape hatch for the stuck
+'device already connected' state," not "force-quit a live legitimate
+agent"), and it can't retroactively teach an old installed binary to listen
+for a signal it was never built to understand. The only real fix for a
+stuck-old-version case like this is to have the person quit the app
+themselves (or physically end the process) and reinstall.
+
+**Fix shipped: made the desktop updater mandatory below a floor version.**
+`src/lib/trackerSetup.ts`'s `TRACKER_MIN_VERSION` (`"14"`) already drives an
+"Update Required" badge in `TrackingView.tsx` for any connected agent below
+it — that part was already working and already correctly flags alex's v10.
+What was missing: the agent's *own* updater (`_check_and_prompt_update` in
+`agent_gui.py`) was a dismissible `askyesno` popup, so an employee could
+click "No" (or just close it) every single launch, forever, and never
+actually update — this is exactly how alex ended up 4 major versions behind
+with nobody forcing the issue.
+
+Added `MIN_SUPPORTED_VERSION = "14"` in `agent_gui.py` (kept in sync with
+`TRACKER_MIN_VERSION` above — bump both together) and split
+`_check_and_prompt_update()` into two tiers:
+- **Below `MIN_SUPPORTED_VERSION`:** no Yes/No choice. Downloads the update
+  (or opens the releases page if GitHub can't be reached) and calls
+  `sys.exit(1)` — the app refuses to continue running on a known-broken
+  build at all.
+- **Below latest but at/above the floor:** unchanged — the existing
+  dismissible "update available" prompt.
+
+Bumped `APP_VERSION` to `"18"` for this change. Action items: cut a
+`tracker-agent-v18` tag/release so this actually reaches everyone (per the
+existing auto-update flow — agents below the new floor will now hard-block
+on their *next* launch and be forced through the update). Alex specifically
+still needs the app quit-and-reinstalled by hand once, since v10 can't
+receive this fix through its own (nonexistent, for that signal) update
+path — it has to be replaced from outside.
+
+**Follow-up fix (same day): closed the "leave the update popup open, click
+Start Shift instead" bypass.** The agent-side mandatory floor above only
+protects a *future* launch — it can't affect a build that's already
+running right now with its update prompt sitting open/dismissed. Nothing
+before this stopped that already-running old tracker's live heartbeat from
+satisfying the employee dashboard's Start Shift check: `isHeartbeatLive()`
+only asks "did a heartbeat arrive recently," not "is this a build we trust."
+So an employee could open the tracker, see the forced-update warning, leave
+it there instead of updating, then go start their shift from the web
+dashboard anyway — heartbeat's live, tracker's "connected," shift starts,
+same as the alex situation (capturing nothing usable) but now for anyone
+who just doesn't update.
+
+Fixed in `src/app/(dashboard)/employee/page.tsx`'s Start Shift handler
+(the manual/Pakistan-employee button — USA's automatic GPS-geofence
+clock-in path doesn't gate on tracker liveness at all today and was left
+as-is, out of scope for this fix): after the ping/pong handshake (or its
+heartbeat fallback) confirms the tracker is live, it now also runs the same
+`needsTrackerUpdate(agentVersion, deviceLabel)` check from
+`trackerSetup.ts` that already drives HR/Admin's "Update Required" badge
+in `TrackingView.tsx`. If the connected agent is below `TRACKER_MIN_VERSION`,
+Start Shift is blocked with a new "Tracker Update Required" modal
+(distinct from the existing "Tracker App Required" modal, which is for
+"not connected at all") instead of proceeding to `clockIn()`. Added
+`showTrackerUpdateRequiredModal` state alongside the existing
+`showTrackerRequiredModal`/`showMobileBlockedModal`. One extra
+`getTrackerHeartbeat` call was added on the pong-succeeded path specifically
+to get `agentVersion` for this check — pong itself doesn't carry it.
+
 ## 2. Existing Notes/ docs — what's current, what's stale
 
 - **HANDOFF_NOTES.md** — STALE. Describes the old Supabase-based

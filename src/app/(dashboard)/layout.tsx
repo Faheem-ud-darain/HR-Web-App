@@ -120,7 +120,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats');
+  // Fixed 2026-08-18 — this used to only match '/chat' and '/team-chats',
+  // so the Direct/HR Messages screens (which also render TeamChatView, just
+  // with a single virtual DM channel) fell through to the default scrolling
+  // page shell below instead of the full-height, non-scrolling one. Visual
+  // symptom: the chat panel looked squeezed/pushed upward instead of filling
+  // the screen the way Team Chat does, because its wrapper got `max-w-6xl`
+  // + `overflow-y-auto` instead of `flex-1 h-full max-w-none` + `overflow-hidden`.
+  const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats') || pathname?.endsWith('/direct-messages');
   // Support Tickets has its own bottom-anchored reply composer, same as Team
   // Chat — the floating pill nav (Sidebar.tsx) now hides on both for the
   // same reason. Since neither screen needs to reserve space for that pill
