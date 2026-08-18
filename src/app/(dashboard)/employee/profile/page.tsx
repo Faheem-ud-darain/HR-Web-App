@@ -69,6 +69,50 @@ export default function EmployeeProfilePage() {
   const [phoneSuccess, setPhoneSuccess] = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
+  // Self-service account deletion request — added 2026-08-18 for App Store
+  // review (Guideline 5.1.1(v)): there was no way for an employee to
+  // initiate deleting their own account from inside the app at all, only
+  // an HR/Admin-side "Delete Account Permanently" action in
+  // UserProfileModal.tsx for managing *other* people's accounts. Actual
+  // deletion still has to go through HR (payroll/legal records, offboarding
+  // checklist, etc. — see hrActions.deleteEmployee's purge list), so this
+  // records the request + notifies HR/Admin immediately rather than
+  // performing an instant self-serve delete, which matches Apple's
+  // guidance that a clear in-app way to *initiate* deletion is acceptable
+  // when immediate automatic deletion isn't practical for the business.
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deletionRequest, setDeletionRequest] = useState<{ requestedAt: string } | null>(null);
+  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
+  const [deletionRequestError, setDeletionRequestError] = useState('');
+
+  useEffect(() => {
+    if (!profile?.email) return;
+    let active = true;
+    hrActions.getKV(`account_deletion_request_${profile.email.toLowerCase()}`)
+      .then(data => { if (active) setDeletionRequest(data || null); })
+      .catch(() => { /* null if never requested */ });
+    return () => { active = false; };
+  }, [profile?.email]);
+
+  const handleRequestAccountDeletion = async () => {
+    if (!profile?.email || isRequestingDeletion) return;
+    setIsRequestingDeletion(true);
+    setDeletionRequestError('');
+    try {
+      const requestedAt = new Date().toISOString();
+      await hrActions.setKV(`account_deletion_request_${profile.email.toLowerCase()}`, { email: profile.email, requestedAt });
+      const actorName = profile.fullName || profile.email;
+      await hrActions.addNotification('all', 'hr', `${actorName} (${profile.email}) has requested their account be deleted.`, 'internal', actorName, profile.email);
+      await hrActions.addNotification('all', 'admin', `${actorName} (${profile.email}) has requested their account be deleted.`, 'internal', actorName, profile.email);
+      setDeletionRequest({ requestedAt });
+      setShowDeleteAccountModal(false);
+    } catch {
+      setDeletionRequestError("Couldn't send your request — please try again, or contact HR directly.");
+    } finally {
+      setIsRequestingDeletion(false);
+    }
+  };
+
   useEffect(() => {
     const email = getSessionEmail();
     if (!email || !allProfiles) return;
@@ -664,8 +708,62 @@ export default function EmployeeProfilePage() {
           {/* Logged-in Devices */}
           {profile?.email && <LoggedInDevicesCard email={profile.email} />}
           <AppVersionCard />
+
+          {/* Danger Zone — self-service account deletion request. */}
+          <Card className="border border-rose-200 p-5 space-y-3">
+            <h3 className="font-bold text-rose-700 text-sm">Danger Zone</h3>
+            {deletionRequest ? (
+              <div className="text-xs text-slate-600 font-medium leading-relaxed bg-rose-50 border border-rose-100 rounded-lg p-3">
+                Account deletion requested on {formatDateNY(deletionRequest.requestedAt)}. HR will contact you to confirm and process this — it hasn&apos;t been deleted yet.
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  You can request that your account and personal data be deleted. HR will be notified immediately and will follow up to confirm before anything is removed.
+                </p>
+                {deletionRequestError && (
+                  <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" />{deletionRequestError}
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowDeleteAccountModal(true)}
+                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-4 py-2 rounded-lg transition-colors active:scale-97"
+                >
+                  Request Account Deletion
+                </button>
+              </>
+            )}
+          </Card>
         </div>
       </div>
+
+      {/* Request Account Deletion confirmation */}
+      <Modal isOpen={showDeleteAccountModal} onClose={() => setShowDeleteAccountModal(false)} title="Request Account Deletion">
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 p-4 rounded-xl">
+            <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+              This sends HR and Admin an immediate request to delete your account and personal data. It doesn&apos;t delete anything automatically — HR will follow up with you to confirm before it&apos;s processed (records like payroll history may need to be retained for a period as required by law).
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+            <button
+              onClick={() => setShowDeleteAccountModal(false)}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRequestAccountDeletion}
+              disabled={isRequestingDeletion}
+              className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+            >
+              {isRequestingDeletion ? 'Sending…' : 'Send Deletion Request'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Password Reset Modal */}
       <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">

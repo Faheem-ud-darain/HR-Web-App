@@ -250,6 +250,80 @@ Start Shift is blocked with a new "Tracker Update Required" modal
 `getTrackerHeartbeat` call was added on the pong-succeeded path specifically
 to get `agentVersion` for this check — pong itself doesn't carry it.
 
+## 1e. Apple App Store review pass — 3 of 5 findings fixed (2026-08-18)
+
+Audited the iOS Capacitor app for App Store compliance (geofencing/location
+usage was explicitly excluded — already well-documented with reviewer-
+facing comments in Info.plist). Five findings; two left as-is per explicit
+instruction, three fixed:
+
+**Left alone (bigger judgment calls, not code fixes):**
+1. The app (`com.delcargo.internal`, display name "Delcargo Internal") is a
+   single-organization internal tool. Apple often redirects apps like this
+   to Apple Business Manager Custom Apps instead of the public App Store —
+   worth a real decision before investing more here, not something code
+   can resolve.
+2. `@onesignal/capacitor-plugin` is installed and compiled into the native
+   target (`packageClassList` in the generated `capacitor.config.json`),
+   but there's no `.entitlements` file anywhere in `ios/App` and nothing in
+   `project.pbxproj` enables the Push Notifications capability or sets
+   `aps-environment`. Push almost certainly doesn't deliver on iOS right
+   now. Fixing this means turning on the capability inside Xcode (Signing &
+   Capabilities → + Push Notifications), which isn't something to do by
+   hand-editing the project file blind.
+
+**Fixed:**
+
+3. **`PrivacyInfo.xcprivacy` existed but was never added to the Xcode
+   target.** The file itself (data types, no tracking, UserDefaults reason
+   code) was already well-reasoned — its own header comment even warned
+   "won't be picked up automatically just by sitting in this folder." But
+   `project.pbxproj` had zero references to it, so none of that content
+   was shipping in the actual build. Added it properly: a `PBXFileReference`
+   (`69A9C1D970F9AC41751098E0`), a `PBXBuildFile` entry
+   (`07D456F815E1B5DD38DF7BA1`) wiring it into the Resources build phase,
+   and a group entry next to `Info.plist`. Verified brace-balance and that
+   all 4 expected references exist before committing — this is exactly the
+   kind of file where a malformed edit corrupts the whole project, so it
+   was checked rather than assumed correct.
+
+4. **"Connect Google Account" (`GoogleIntegrationCard.tsx`) was silently
+   broken on the native app.** `handleConnect` calls `window.open(authUrl,
+   'GoogleAuthPopup', ...)` and waits for a `postMessage` from the popup.
+   Inside a Capacitor WKWebView there is no popup surface for `window.open`
+   to target (and no `@capacitor/browser` plugin installed to hand off to
+   a real system browser either), and separately Google's own policy
+   blocks OAuth consent screens from loading inside any embedded webview
+   regardless. Tapping the button on iOS/Android would do nothing — a
+   plausible Guideline 2.1 "app completeness" flag if a reviewer tries it.
+   A real native fix needs deep-link/custom-URL-scheme plumbing (Info.plist
+   + AppDelegate + a callback route that can hand results back across a
+   separate browser session) — out of scope for a quick fix. Instead:
+   `isNativeMobileApp()` now gates the "not yet connected" state — on
+   native it shows an explanation ("connect from the web dashboard
+   instead") rather than a button that does nothing. Already-connected
+   accounts still work fine natively (toggles/disconnect are just KV
+   reads/writes, no popup involved), so only the initial connect flow is
+   gated.
+
+5. **No self-service account deletion path (Guideline 5.1.1(v)).** The only
+   "Delete Account Permanently" action lived in the HR-facing
+   `UserProfileModal.tsx`, for admins managing *other* employees'
+   accounts — there was nothing in an employee's own profile letting them
+   initiate deleting their own account. Real deletion still has to go
+   through HR (payroll/legal retention, the offboarding checklist,
+   `hrActions.deleteEmployee`'s purge list), so this doesn't do an instant
+   self-serve delete — it records the request (new KV key
+   `account_deletion_request_<email>`, reusing the same `getKV`/`setKV`
+   pattern `GoogleIntegrationCard.tsx` already uses) and immediately
+   notifies HR and Admin via `hrActions.addNotification` (category
+   `'internal'`, so it bypasses per-user notification-preference filtering)
+   so someone actually follows up. Added to `employee/profile/page.tsx` as
+   a "Danger Zone" card + confirmation modal, right after `AppVersionCard`.
+   Once requested, the card shows the request date instead of the button
+   until HR processes it externally (there's no automatic un-request/
+   cancel flow yet — a future nice-to-have, not required for review).
+
 ## 2. Existing Notes/ docs — what's current, what's stale
 
 - **HANDOFF_NOTES.md** — STALE. Describes the old Supabase-based
