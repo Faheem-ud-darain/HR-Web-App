@@ -1602,7 +1602,15 @@ export function getRemainingPTO(leaves: LeaveApplication[], fullName: string, jo
 // out can't be shifted by a day depending on the runtime's own local
 // timezone — noon UTC is always still the same calendar day in
 // America/New_York (which is never more than 5 hours behind UTC).
-function isWeekday(dateStr: string): boolean {
+//
+// Exported so any UI that renders a per-day Present/Absent style status
+// (see AbsenceDetailsView.tsx's AttendanceStatusBadges) can apply the same
+// weekend exclusion runAbsenceCheck already enforces for real absence
+// deductions below — without this, a stray/partial timesheet row landing
+// on a Saturday or Sunday (e.g. an accidental clock-in, or a shift auto-
+// closed just after midnight) reads as a missed workday even though the
+// company never expects anyone to work that day at all.
+export function isWeekday(dateStr: string): boolean {
   const day = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
   return day >= 1 && day <= 5;
 }

@@ -30,13 +30,108 @@ PocketBase collections currently in use: `hr_profiles`, `hr_leaves`,
 `hr_delcargo_store` (generic key/value store — see rule 3 in hrData.ts),
 `hr_screenshots`, `hr_inactivity_logs`.
 
+## 1a. Infrastructure — file storage (PocketBase → DigitalOcean Spaces)
+
+**Confirmed live** (verified directly in the PocketBase Admin UI, Settings →
+Files storage, 2026-08-18): PocketBase's file storage is configured to use
+S3-compatible storage, not the droplet's local disk. Bucket
+`delcargo-packages`, region `nyc3`, endpoint `nyc3.digitaloceanspaces.com`,
+"S3 connected successfully." This means `hr_screenshots` (the
+fastest-growing collection — see section 4's screenshot-retention notes),
+profile pictures (`profile_picture_file`), and any other real PocketBase
+file-field uploads are stored in and served from the Spaces bucket, not
+disk on the droplet. This setting lives entirely in PocketBase's own admin
+config (not in this repo, not in any env var here), which is why grepping
+this codebase for S3/Spaces config turns up nothing — that absence does NOT
+mean storage is still local; check the Admin UI (or ask whoever manages the
+droplet) to confirm current state, don't infer it from the repo alone.
+
+What this does NOT cover yet: base64 blobs still sitting inside the
+`hr_delcargo_store` KV table (CVs, passports, identity docs — see
+`profile/me`'s `KV_DOC_KEYS`) are plain JSON field values, not PocketBase
+file-field uploads, so they are NOT affected by the S3 setting above — they
+still live inside PocketBase's SQLite database file regardless of where
+file-field uploads go. Moving those to real file fields would let them
+benefit from the same S3 offload.
+
+## 1b. CRITICAL — tracker-agent's settings lookup reads a deprecated, now-duplicated KV key; breaks unpredictably per-employee
+
+**Found and fixed 2026-08-18** while investigating a real report: employee
+`olivia@delcargo.us`, 2+ hours into an active shift, tracker showing
+connected (v16, heartbeat alive, `isLocked: false`), zero screenshots ever
+(`lastCaptureAt: null`). Her `tracker_heartbeat_olivia_delcargo_us` KV
+row's `lastCaptureError` said "Setup token not recognized — ask HR/Admin to
+check your setup" — despite her real `hr_tracking_settings` record showing
+`enabled: true` with a valid `agentToken`.
+
+Root cause: `tracker-agent/agent_gui.py`'s `get_tracking_settings()` looked
+up the agent's token against the deprecated `hr_tracking_settings_prod_v1`
+KV blob instead of the real `hr_tracking_settings` collection the web app
+migrated to a while ago (the same "stale pre-migration KV key" bug class
+`check_active_shift()` right below it in the same file had already been
+fixed for once — see that function's own docstring).
+
+**Initial theory (revised — see below): "affects everyone set up after the
+migration."** That turned out to be too simple. Checked the actual data:
+that KV key isn't one row — `hr_delcargo_store` has **six separate records
+all sharing the key `hr_tracking_settings_prod_v1`**, created between
+2026-07-08 and 2026-08-14, each holding a different snapshot of who's
+enabled and with what token (most likely from repeated manual edits in the
+PocketBase Admin UI while troubleshooting specific employees, creating a
+new record instead of editing the existing one each time — worth telling
+whoever manages the droplet to always edit the existing KV row for a given
+`key`, never create a new one). `get_tracking_settings`'s lookup takes
+whichever one of those six rows an unsorted `perPage=1` query happens to
+return and searches only that copy — no sort, no uniqueness guarantee.
+
+For an employee whose settings haven't changed since July (e.g. `alex`,
+whose token is identical across all six snapshots), any of the six rows
+gives the same correct answer — completely masking the bug for them,
+regardless of agent version. Olivia's settings were toggled/regenerated
+multiple times around 2026-08-12 to 08-13 (three different now-stale,
+`enabled: false` snapshots of her exist from that window); her current
+valid token only appears in the oldest (July 8) snapshot, and is missing
+entirely from the newest (Aug 14) one. Whichever of the six the lookup
+happened to land on for her was one where she either didn't appear or
+appeared disabled — hence "Setup token not recognized" despite her real
+record being correct. **This is not a v16-vs-v11 thing** — it's exposed
+specifically by an employee's settings having changed recently, which can
+happen on any agent version still reading this deprecated key.
+
+**Fixed** by querying the real `hr_tracking_settings` collection directly
+(filtered by `agentToken`, exactly one row per employee, no duplicates) —
+this removes the dependency on the deprecated KV key entirely, so it can't
+be affected by however many stale duplicate snapshots exist there or ever
+get added later. Mirrors the pattern `check_active_shift` already uses for
+`hr_timesheets`. `APP_VERSION` bumped `"16"` → `"17"`.
+
+**Action items:**
+- Cut and push a new `tracker-agent-vN` git tag so CI builds v17 and
+  already-installed agents auto-update — see `tracker-agent/README.md` /
+  `.github/workflows/build-tracker-agent.yml`. Until that release goes out,
+  any currently-running agent (any version still on the old code) remains
+  exposed to this same failure mode if that employee's tracking settings
+  get changed again.
+- `src/components/layout/Sidebar.tsx` still reads
+  `useKVByPrefix('hr_tracking_settings_prod_v1')` client-side too (to
+  decide whether to show the Tracker link) — same deprecated-key pattern,
+  lower stakes than the agent's own capture check but worth migrating to
+  `useTrackingSettings()`/the real collection in a follow-up pass.
+- Consider deleting the 5 stale duplicate `hr_tracking_settings_prod_v1`
+  rows in `hr_delcargo_store` now that nothing authoritative depends on
+  that key — keeping them around only invites the same confusion again for
+  anyone who goes looking.
+
 ## 2. Existing Notes/ docs — what's current, what's stale
 
 - **HANDOFF_NOTES.md** — STALE. Describes the old Supabase-based
   architecture (`db.ts`, RLS) for the screen-tracking feature. The app has
   since migrated fully to PocketBase; this doc's concrete file references no
   longer match reality. Some bug-pattern lessons in it (case-insensitive
-  email matching, stale-cache races) are still conceptually useful.
+  email matching, stale-cache races) are still conceptually useful. Its
+  section on "Real Supabase Storage bucket... should move before scaling up"
+  is doubly obsolete now — see section 1a above: file storage moved to
+  DigitalOcean Spaces (via PocketBase's S3 integration), confirmed live.
 - **SCHEMA_REFERENCE.md** — Mostly current (dated 2026-07-09), PocketBase-era,
   but a partial snapshot — doesn't include newer collections (`hr_payroll`,
   `hr_teams`, `hr_messages`, `hr_team_documents`, `hr_timesheets`,
@@ -70,12 +165,33 @@ PocketBase collections currently in use: `hr_profiles`, `hr_leaves`,
 - `push_announcements.pb.js` — fires on new `hr_announcements` rows, same
   OneSignal send, targets `all`/`usa`/`pakistan` (warehouse-specific
   targeting already collapses to `all` client-side before it reaches here).
-- **No server-side cron exists anywhere in this app.** Every "periodic
-  check" (screenshot retention sweep, stale-shift-abandoned check,
-  absence-notification check) is client-triggered from a dashboard page's
-  `useEffect` on mount, guarded to no-op if nothing's actually due. If a true
-  server cron is ever needed, PocketBase 0.22.x's JS hooks support
-  `cronAdd(id, cronExpr, handler)` — not used yet.
+- `auto_close_stale_shifts.pb.js` — **added 2026-08-18, the first real
+  server-side cron in this app.** Runs every 15 minutes via `cronAdd`
+  and re-implements (server-side, in PocketBase's own JS sandbox) the same
+  three shift-closing checks that used to be purely client-triggered:
+  orphaned tracker-governed shifts (30 min dead heartbeat),
+  abandoned manual shifts (15 min stale portal-tab heartbeat, non-USA
+  only), and the 16-hour hard cap catch-all for any shift still open
+  regardless of category. Direct fix for a real incident — a shift ran for
+  ~24 hours because every one of those checks previously only ran from
+  inside an HR/Admin or Employee dashboard's `useEffect`, so nothing fired
+  at all if the right browser tab wasn't open. See the file's own header
+  comment for the full root-cause writeup and exactly which client-side
+  functions in `hrData.ts` each pass mirrors. The client-side versions
+  (`autoCloseOrphanTrackedShifts`, `closeStaleManualShiftIfAbandoned`,
+  `autoCloseStaleOpenShifts`) were deliberately left in place, not removed
+  — they're idempotent (a shift already closed by the cron just gets
+  skipped) and still give an immediate in-app result when a tab IS open,
+  rather than waiting for the next 15-minute tick.
+- Below is the previous state of this section, kept for context on why the
+  above was needed: **No server-side cron existed anywhere in this app
+  before 2026-08-18.** Every other "periodic check" (screenshot retention
+  sweep, absence-notification check) is still client-triggered from a
+  dashboard page's `useEffect` on mount, guarded to no-op if nothing's
+  actually due — those haven't been moved to cron yet; only the shift-close
+  checks have, since those were the ones with a confirmed real-world
+  failure. PocketBase 0.22.x's JS hooks support `cronAdd(id, cronExpr,
+  handler)` — now used by `auto_close_stale_shifts.pb.js` above.
 
 ## 4. Feature history (most recent first)
 

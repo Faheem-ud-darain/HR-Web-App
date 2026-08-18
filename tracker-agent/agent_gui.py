@@ -107,7 +107,7 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "16"
+APP_VERSION = "17"  # bumped for the get_tracking_settings hr_tracking_settings_prod_v1 fix above
 GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -517,15 +517,32 @@ def supabase_headers(anon_key):  # kept as alias so old configs don't break
 
 
 def get_tracking_settings(base_url, _unused_key, agent_token):
-    """Fetch this agent's tracking settings by looking up its token in the KV store."""
-    _, value = pb_get_kv(base_url, "hr_tracking_settings_prod_v1")
-    if value is None:
+    """Fetch this agent's tracking settings from the real hr_tracking_settings
+    collection, filtered by this agent's token.
+
+    Fixed 2026-08-18 — this used to read a KV row (hr_tracking_settings_prod_v1)
+    from before the web app migrated tracking settings to a real PocketBase
+    collection with a unique index on employeeEmail (see hrData.ts's
+    getAllTrackingSettings/updateTrackingSettings and the migration notes on
+    hr_tracking_settings). The web app stopped writing to that KV key
+    entirely once the migration landed, so any agent whose setup code was
+    generated (or regenerated) afterward could never find its own token
+    there: get_tracking_settings always returned None, captureEnabled stayed
+    false forever, and the agent reported "Setup token not recognized — ask
+    HR/Admin to check your setup" even though HR/Admin's dashboard correctly
+    showed tracking enabled the whole time — real screenshots simply never
+    got taken. Same bug class check_active_shift right below already had
+    fixed for hr_timesheets (see its own docstring); this one just never got
+    the same treatment when tracking settings made the same move.
+    """
+    if not agent_token:
         return None
-    all_settings = value if isinstance(value, list) else []
-    for s in all_settings:
-        if s.get("agentToken") == agent_token:
-            return s
-    return None
+    url = f"{base_url}/api/collections/hr_tracking_settings/records"
+    params = {"filter": f'(agentToken="{agent_token}")', "perPage": 1}
+    resp = requests.get(url, params=params, timeout=15)
+    resp.raise_for_status()
+    items = resp.json().get("items", [])
+    return items[0] if items else None
 
 
 def check_active_shift(base_url, _unused_key, employee_email):

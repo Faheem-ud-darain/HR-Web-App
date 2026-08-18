@@ -44,7 +44,7 @@ Added a "Clear All" button to the notification bell (`TopNav.tsx`), available to
 
 ## 4. Things NOT done / explicitly deferred
 
-- Real Supabase Storage bucket for screenshots/documents — currently base64-in-Postgres via `delcargo_store`, fine for free-tier small-scale testing, should move before scaling up.
+- ~~Real Supabase Storage bucket for screenshots/documents — currently base64-in-Postgres via `delcargo_store`, fine for free-tier small-scale testing, should move before scaling up.~~ **DONE, and superseded** — the app moved off Supabase to PocketBase, screenshots moved to real PocketBase file-field records, and PocketBase's own file storage is now configured for DigitalOcean Spaces (S3-compatible), confirmed live in the Admin UI on 2026-08-18. See `PROJECT_HISTORY.md` section 1a. (Base64 blobs for CVs/passports/identity docs in `hr_delcargo_store` are a separate, still-open item — also covered in that section.)
 - Code signing for the desktop app — currently unsigned, so Windows SmartScreen / macOS Gatekeeper show "unknown publisher" warnings on first run.
 - RLS / Supabase Auth / real RBAC enforcement — explicitly deferred until the user says they're moving to deployment phase. Do not enable without asking first.
 - "Push bank details self-service feature" — was on an earlier task list, status unclear, not raised recently. Don't resume without confirming with the user.

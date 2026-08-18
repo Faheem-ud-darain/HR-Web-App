@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName } from '@/lib/hrData';
+import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
 import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
 import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 
@@ -302,6 +302,20 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       <Badge variant="warning">On Shift</Badge>
     ) : row.totalMinutes >= 240 ? (
       <Badge variant="success">Present ({formatDuration(row.totalMinutes)})</Badge>
+    ) : !isWeekday(row.date) ? (
+      // Weekend day with a stray/partial shift (accidental clock-in, a shift
+      // auto-closed just after midnight, etc.) — never label this "Absent".
+      // Mirrors the weekend exclusion runAbsenceCheck already enforces for
+      // real payroll absence deductions (including that function's own
+      // self-healing reversal of any absence record that ever landed on a
+      // Saturday/Sunday) — this display-only badge just never had the same
+      // guard, so it could still show "Absent" for a day nobody was ever
+      // expected to work.
+      row.totalMinutes > 0 ? (
+        <Badge variant="info">Weekend ({formatDuration(row.totalMinutes)} worked)</Badge>
+      ) : (
+        <Badge variant="info">Weekend</Badge>
+      )
     ) : (
       <Badge variant="danger">Absent (&lt; 4h worked)</Badge>
     )
