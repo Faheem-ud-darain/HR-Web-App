@@ -261,16 +261,13 @@ instruction, three fixed:
 1. The app (`com.delcargo.internal`, display name "Delcargo Internal") is a
    single-organization internal tool. Apple often redirects apps like this
    to Apple Business Manager Custom Apps instead of the public App Store —
-   worth a real decision before investing more here, not something code
-   can resolve.
-2. `@onesignal/capacitor-plugin` is installed and compiled into the native
-   target (`packageClassList` in the generated `capacitor.config.json`),
-   but there's no `.entitlements` file anywhere in `ios/App` and nothing in
-   `project.pbxproj` enables the Push Notifications capability or sets
-   `aps-environment`. Push almost certainly doesn't deliver on iOS right
-   now. Fixing this means turning on the capability inside Xcode (Signing &
-   Capabilities → + Push Notifications), which isn't something to do by
-   hand-editing the project file blind.
+   raised with the user 2026-08-19, who confirmed they want public App
+   Store distribution, not Custom Apps. Decision made — staying public.
+
+2. ~~`@onesignal/capacitor-plugin` push capability~~ — **see 2026-08-19 fix
+   below (1f-addendum).** Originally left alone here because turning on a
+   capability in Xcode isn't something to hand-edit blind. Now fixed
+   properly at the project-file level — see below.
 
 **Fixed:**
 
@@ -376,6 +373,58 @@ reviewer-detection code exists anywhere in the codebase — confirmed via
 grep — so if this is a factor at all, it's a configuration choice on that
 one account, not app logic), and (b) confirming with Apple/re-submitting
 now that this specific impossible-number bug is fixed.
+
+## 1f-addendum. Fixed: Push Notifications capability now persisted in the project file, not re-added by hand each build (2026-08-19)
+
+**Trigger**: user confirmed they want to keep public App Store distribution
+(closing out 1e's item 1 — staying public, not moving to Apple Business
+Manager Custom Apps), and clarified that item 2 (Push Notifications
+capability) wasn't actually undone — they've been manually re-adding it in
+Xcode's Signing & Capabilities every time they build on their other Mac.
+
+**Root cause**: turning on a capability in Xcode's UI writes two things:
+an `.entitlements` file, and a `CODE_SIGN_ENTITLEMENTS` build setting
+pointing at it. Neither existed anywhere in this repo before today — no
+`ios/App/App/App.entitlements` file, and no `CODE_SIGN_ENTITLEMENTS` line
+in `project.pbxproj`'s target build settings (confirmed by reading the
+whole file). So whatever the user clicked in Xcode locally never made it
+into a commit — it lived only in that one Xcode session's in-memory
+project state, gone the moment they closed Xcode or pulled fresh code on
+either Mac. That's why it needed re-doing "every time."
+
+**Fix**: added `ios/App/App/App.entitlements` with `aps-environment` set
+to `development` (Xcode/App Store Connect automatically swap this to
+`production` at archive/export time based on the distribution provisioning
+profile chosen — this is normal, expected behavior for automatic signing,
+not something that needs a second entitlements file). Wired it into
+`project.pbxproj`: one new `PBXFileReference`
+(`3F8E29D1A4C5B6071829E4F1`), added to the `App` group next to
+`PrivacyInfo.xcprivacy`, and a `CODE_SIGN_ENTITLEMENTS = App/App.entitlements;`
+line added to both the Debug and Release build configurations of the
+`App` target. Verified brace/paren balance on the whole file before
+committing (49/49, 26/26) — same care as the `PrivacyInfo.xcprivacy` edit
+in 1e, since a malformed edit here corrupts the whole Xcode project.
+
+This should mean: after pulling this commit, Xcode should show the Push
+Notifications capability already present under Signing & Capabilities —
+no manual re-add needed on either Mac, or a fresh clone, going forward.
+
+**Not done / worth knowing:**
+- `Info.plist`'s `UIBackgroundModes` currently only lists `location` (for
+  the geofencing background updates). It does **not** list
+  `remote-notification`. Basic push (banners/alerts arriving while the app
+  is foregrounded or backgrounded normally) doesn't need that — it's only
+  needed for silent/background pushes that should wake the app to fetch
+  data without a visible alert. OneSignal doesn't require this for normal
+  notification delivery, so left it out; flag if a "silent push" use case
+  comes up later.
+- Still can't be verified from here (no Xcode/no macOS in this session) —
+  next real build should confirm the capability shows up automatically and
+  that a push actually arrives on a physical device/TestFlight build.
+- Also still open: whether `test@delcargo.us` (the account used for the
+  Apple review) has `trackingEnabled`/`region` set in a way that hid
+  the Timesheet Tracker tab or the location prompt from the reviewer —
+  next investigation step, see below.
 
 ## 2. Existing Notes/ docs — what's current, what's stale
 
