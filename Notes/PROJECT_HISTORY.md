@@ -544,6 +544,107 @@ here doesn't reconnect their existing installs by itself.
 "screen grab failed" capture error (real capture failure, not a stale
 token) — flagged during the same audit, not yet investigated.
 
+## 1k. Added HR/Admin "Force End Shift" button so a stale-token employee actually hits the new 1j gate (2026-08-19)
+
+**Reported by Faheem**: with 1j's block only firing on the next Start
+Shift attempt, zara/alex (both already mid-shift when 1j shipped) would
+just coast to the end of their current shift with a non-functional
+tracker before ever seeing the new error — nothing forced them to
+restart sooner. Asked for an HR-side button to force-close their current
+shift so they're made to start again and run into the block.
+
+**Added** in `src/components/ui/TrackingView.tsx` (HR/Admin's Tracking
+Monitor page, `canManage` only — never shown to Team Leads):
+- A red "Force End Shift" button next to Screenshots/Mouse Activity in
+  both the desktop table and mobile card layouts, shown only for an
+  employee who currently has an open shift (`openShiftFor`, the same
+  `!clockOut && clockIn` definition used everywhere else in this file).
+- Clicking it opens a confirmation modal explaining exactly what happens
+  (ends the shift the same way their own "End Shift" button would —
+  writes `clock_out`, sends the Signal 5 stop command, cleans up the tab
+  heartbeat — then next Start Shift attempt runs the normal ping/pong →
+  version → stale-token gate sequence from 1j).
+- Confirming calls `hrActions.clockOut(email)` (existing function, no
+  changes needed there), refetches timesheets so the row updates
+  immediately, and sends the employee an in-app notification explaining
+  their shift was ended by HR/Admin and why.
+
+This is a manual HR action, not automatic — 1j's actual block still only
+fires the next time the employee tries to start a shift. This button
+just gives HR/Admin a way to force that "next time" to be now, for an
+employee already mid-shift on a stale token.
+
+## 1l. Added HR/Admin "Force Disconnect" button — guarantees the next Start Shift hits the 1j block, instead of hoping the token happens to already be stale (2026-08-19)
+
+**Reported by Faheem**: 1k's "Force End Shift" only helps if the
+employee's tracker is ALREADY on a stale token — for anyone not
+currently in that state, ending their shift changes nothing; they could
+just click Start Shift again immediately and sail straight through.
+Asked for a way to force a disconnect so the employee is guaranteed to
+hit the reconnect error and has to comply.
+
+**This is `regenerateAgentToken()`, already built** — it's the exact
+function 1i's fix used to explain how Olivia/zara/alex ended up
+stale in the first place, and it was already wired to a "Regenerate
+Token" button, just buried inside the per-employee Setup Agent modal
+(`handleRegenerateToken`, requires opening Setup Agent first). Added a
+top-level "Force Disconnect" button (orange, `ShieldAlert` icon) next to
+Force End Shift in both the table and mobile card layouts, calling the
+same `hrActions.regenerateAgentToken(email)` directly — no modal
+detour needed.
+
+**What it actually does**: regenerates the employee's `agentToken` in
+`hr_tracking_settings`. Their currently-installed desktop tracker is
+holding the OLD token; its next settings poll (every 20s) finds no
+matching row, sets `captureEnabled: false` and
+`lastCaptureError: "Setup token not recognized..."`, which is precisely
+what `hasStaleTrackerToken()` (1j) checks for. Their very next Start
+Shift attempt is guaranteed to hit the "Reconnect Tracker Required"
+block — there's no scenario where the old code still works after this.
+
+**Confirmation modal** explains this plainly before it fires, and warns
+separately if the employee currently has an open shift (regenerating the
+token does NOT end it by itself — capture just stops working mid-shift —
+so HR/Admin is told to pair it with Force End Shift from 1k if they want
+the employee clocked out immediately too). Also sends the employee an
+in-app notification telling them their setup code was reset and where to
+get the new one.
+
+**Together, 1j + 1k + 1l give HR/Admin the full lever**: 1j is the
+always-on gate that blocks Start Shift on a stale token; 1k force-ends a
+shift that's already running on one; 1l is what actually creates that
+stale-token state on demand, for an employee who needs to be made to
+reconnect right now rather than whenever their tracker happens to drift
+out of sync on its own.
+
+## 1m. Added a public Support page (2026-08-19)
+
+**Reported by Faheem**: needed a Support page with the `hr@delcargo.us`
+contact and "anything Apple tags as a support page" — App Store Connect
+requires a live, publicly-reachable Support URL (separate field from,
+and in addition to, the Privacy Policy URL that `src/app/privacy/page.tsx`
+already covers).
+
+**Added** `src/app/support/page.tsx` — a public (no-auth) page mirroring
+the privacy page's exact header/footer structure, with:
+- A prominent `hr@delcargo.us` contact section (with an expected 1–2
+  business day response time note).
+- An FAQ covering the recurring real issues from this session: forgot
+  password, the tracker "Reconnect Required" / stale-setup-code flow
+  from 1j–1l, missing screenshots, missing push notifications, leave/
+  payroll/ticket requests, and account/data deletion requests (routed
+  through HR since this is an internally-provisioned app, not a
+  self-service consumer product).
+- A link back to the Privacy Policy page.
+
+Also added a "Support" link next to the existing "Privacy Policy" link
+in `src/app/page.tsx`'s public homepage footer, so both are reachable
+from the same place App Review (or anyone else) would land on.
+
+**Not done**: this is written from what's already documented in this
+file, not reviewed by HR for tone/accuracy — worth a quick read-through
+before submitting the App Store URL.
+
 ## 2. Existing Notes/ docs — what's current, what's stale
 
 - **HANDOFF_NOTES.md** — STALE. Describes the old Supabase-based

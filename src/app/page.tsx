@@ -93,6 +93,8 @@ export default function Home() {
         <span>© {new Date().getFullYear()} DelCargo Operations Team. All rights reserved.</span>
         <span className="text-slate-300">•</span>
         <Link href="/privacy" className="hover:text-orange-600 transition-colors">Privacy Policy</Link>
+        <span className="text-slate-300">•</span>
+        <Link href="/support" className="hover:text-orange-600 transition-colors">Support</Link>
       </footer>
     </div>
   );

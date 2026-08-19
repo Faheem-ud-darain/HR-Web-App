@@ -116,8 +116,9 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // refetch trigger is needed since this view doesn't mutate heartbeats.
   const { data: heartbeatRows, refetch: refetchHeartbeats } = useKVByPrefix('tracker_heartbeat_');
   // Needed to compute "Shift Time" / "Active Time" (shift minus inactivity)
-  // in the Mouse Activity modal below.
-  const { data: allTimesheets } = useTimesheets();
+  // in the Mouse Activity modal below, and (refetch) to find + force-close
+  // an employee's currently open shift — see handleForceEndShift below.
+  const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets();
 
   // Team Lead's own profile — used to resolve which teams they lead, so
   // their tracking view only ever shows their own teammates, never the
@@ -156,6 +157,74 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   const heartbeatFor = (email: string): TrackerHeartbeat | null =>
     heartbeats.find(h => h.employeeEmail?.toLowerCase() === email.toLowerCase()) || null;
+
+  // Same "open shift" definition used everywhere else in this codebase
+  // (clockOut empty/unset) — not a separate query, just a client-side
+  // filter over the timesheets already loaded for the Mouse Activity modal.
+  const openShiftFor = (email: string): TimesheetEntry | null =>
+    (allTimesheets || []).find(t => !t.clockOut && t.clockIn && t.employeeEmail?.toLowerCase() === email.toLowerCase()) || null;
+
+  // Force End Shift — added 2026-08-19, explicit request: HR/Admin needs a
+  // way to make an employee whose desktop tracker is stuck on a stale/
+  // regenerated setup code actually go through the new "Reconnect Required"
+  // block instead of just quietly finishing out their current (untracked)
+  // shift. Ends their open timesheet exactly the way their own "End Shift"
+  // button would (hrActions.clockOut — writes clock_out, stops the tracker
+  // via Signal 5, cleans up the tab heartbeat), so the next time they try to
+  // start a shift they hit the same ping/pong → version → stale-token gate
+  // sequence as any other Start Shift attempt.
+  const [forceEndShiftEmp, setForceEndShiftEmp] = useState<Profile | null>(null);
+  const [forceEndingShift, setForceEndingShift] = useState(false);
+
+  const handleForceEndShift = async (emp: Profile) => {
+    setForceEndingShift(true);
+    try {
+      await hrActions.clockOut(emp.email);
+      await refetchTimesheets();
+      await hrActions.addNotification(
+        emp.email,
+        'employee',
+        'Your shift was ended by HR/Admin. Please reconnect your DelCargo Tracker (check the Tracker Setup page for a new setup code if prompted) before starting your next shift.'
+      );
+      setForceEndShiftEmp(null);
+    } finally {
+      setForceEndingShift(false);
+    }
+  };
+
+  // Force Disconnect — added 2026-08-19, explicit follow-up request: "Force
+  // End Shift" above only stops the CURRENT shift; if the employee's tracker
+  // isn't actually stale, they could just hit Start Shift again immediately
+  // and sail right through the 1j gate with nothing changed. This button
+  // guarantees the block: it calls the EXISTING regenerateAgentToken()
+  // (already used by "Regenerate Token" inside the Setup Agent modal — see
+  // handleRegenerateToken above) directly from the row/card, without HR
+  // having to open that modal first. Once the token is regenerated, the
+  // employee's currently-installed tracker is instantly holding a setup
+  // code that no longer matches any row in hr_tracking_settings — its next
+  // settings poll (every 20s, see agent_gui.py) reports "Setup token not
+  // recognized," hasStaleTrackerToken() flips true, and the very next Start
+  // Shift attempt is blocked by the "Reconnect Tracker Required" modal until
+  // they paste in the new code from the Tracker Setup page. This is how
+  // HR/Admin makes reconnecting mandatory rather than optional.
+  const [forceDisconnectEmp, setForceDisconnectEmp] = useState<Profile | null>(null);
+  const [revokingSetupCode, setRevokingSetupCode] = useState(false);
+
+  const handleForceDisconnectTracker = async (emp: Profile) => {
+    setRevokingSetupCode(true);
+    try {
+      await hrActions.regenerateAgentToken(emp.email);
+      await refetchSettings();
+      await hrActions.addNotification(
+        emp.email,
+        'employee',
+        'Your tracker setup code was reset by HR/Admin, so your desktop tracker can no longer connect. Open the Tracker Setup page, copy the new setup code, and paste it into the DelCargo Tracker app before you can start your next shift.'
+      );
+      setForceDisconnectEmp(null);
+    } finally {
+      setRevokingSetupCode(false);
+    }
+  };
 
   // Shown alongside the green "Connected" badge (only while the heartbeat is
   // live) to close the exploit where a tracker sits "Connected" for hours
@@ -644,6 +713,24 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                         >
                           <MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity
                         </button>
+                        {canManage && openShiftFor(emp.email) && (
+                          <button
+                            onClick={() => setForceEndShiftEmp(emp)}
+                            title="End their current shift now — they'll need to Start Shift again, going through the tracker connection check"
+                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                          >
+                            <WifiOff className="h-3.5 w-3.5" /> Force End Shift
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => setForceDisconnectEmp(emp)}
+                            title="Invalidate their current setup code — their tracker will be forced to show 'Reconnect Required' and Start Shift will be blocked until they paste in the new code"
+                            className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -769,6 +856,22 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                       <MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity
                     </button>
                   </div>
+                  {canManage && openShiftFor(emp.email) && (
+                    <button
+                      onClick={() => setForceEndShiftEmp(emp)}
+                      className="w-full text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
+                    >
+                      <WifiOff className="h-3.5 w-3.5" /> Force End Shift
+                    </button>
+                  )}
+                  {canManage && (
+                    <button
+                      onClick={() => setForceDisconnectEmp(emp)}
+                      className="w-full text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
+                    >
+                      <ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -778,6 +881,77 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
           )}
         </div>
       </Card>
+
+      {/* Force End Shift confirmation — see handleForceEndShift above. */}
+      {forceEndShiftEmp && (
+        <Modal isOpen onClose={() => setForceEndShiftEmp(null)} title="Force End Shift">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 p-4 rounded-xl">
+              <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                This will immediately end {displayName(forceEndShiftEmp, role)}&apos;s current shift, the same as if they clicked &quot;End Shift&quot; themselves. Their desktop tracker will be told to stop capturing right away. The next time they try to start a shift, the portal will run the same tracker connection check as always — if their tracker is still on an old/regenerated setup code, they&apos;ll see the &quot;Reconnect Tracker Required&quot; block until they reconnect it.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <button
+                onClick={() => handleForceEndShift(forceEndShiftEmp)}
+                disabled={forceEndingShift}
+                className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+              >
+                {forceEndingShift ? 'Ending Shift…' : 'Force End Shift'}
+              </button>
+              <button
+                onClick={() => setForceEndShiftEmp(null)}
+                disabled={forceEndingShift}
+                className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Force Disconnect confirmation — see handleForceDisconnectTracker
+          above. This is what actually GUARANTEES the "Reconnect Required"
+          block on their next Start Shift attempt, unlike Force End Shift
+          alone (which does nothing if their tracker wasn't already stale). */}
+      {forceDisconnectEmp && (
+        <Modal isOpen onClose={() => setForceDisconnectEmp(null)} title="Force Disconnect Tracker">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 rounded-xl">
+              <ShieldAlert className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                This immediately invalidates {displayName(forceDisconnectEmp, role)}&apos;s current tracker setup code. Their currently-installed desktop tracker will stop being recognized within about 20 seconds and show &quot;Setup token not recognized&quot; on their side. Their next Start Shift attempt will be blocked with the &quot;Reconnect Tracker Required&quot; screen until they open Tracker Setup, copy the new code, and paste it into the app — there is no way around it.
+              </p>
+            </div>
+            {openShiftFor(forceDisconnectEmp.email) && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                  {displayName(forceDisconnectEmp, role)} is currently on an open shift. This alone won&apos;t end it — their tracker will simply stop capturing mid-shift. Use Force End Shift as well if you want them clocked out right now.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+              <button
+                onClick={() => handleForceDisconnectTracker(forceDisconnectEmp)}
+                disabled={revokingSetupCode}
+                className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+              >
+                {revokingSetupCode ? 'Disconnecting…' : 'Force Disconnect'}
+              </button>
+              <button
+                onClick={() => setForceDisconnectEmp(null)}
+                disabled={revokingSetupCode}
+                className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Setup Agent Modal */}
       <Modal isOpen={!!setupEmp} onClose={() => setSetupEmp(null)} title={setupEmp ? `Setup Agent — ${displayName(setupEmp, role)}` : 'Setup Agent'}>
