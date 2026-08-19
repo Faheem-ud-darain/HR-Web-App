@@ -324,6 +324,59 @@ instruction, three fixed:
    until HR processes it externally (there's no automatic un-request/
    cancel flow yet — a future nice-to-have, not required for review).
 
+## 1f. Fixed: "My Activity" tab showed impossible hours (e.g. 68h35m "Active Today") on accounts with zero timesheet records (2026-08-19)
+
+**Trigger**: a brand-new account created solely for an Apple App Store
+reviewer to test the app — with zero timesheet records of its own — showed
+"Active Today: 68h 35m" on the employee-facing Shift Tracker → My Activity
+tab. Worth treating as a live candidate cause of the open Guideline 5.6
+("manipulative and misleading behavior") rejection, since it's exactly the
+kind of bogus, unexplainable number a reviewer poking around a fresh
+account would notice and flag.
+
+**Root cause**: `employee/tracker/page.tsx` (line ~200) was passing
+`allTimesheets` — the raw result of `useTimesheets()`, i.e. every
+employee's timesheet records company-wide, completely unfiltered — as the
+`timesheets` prop into `<EmployeeActivityInsights>`. That component's
+`shiftSecondsForDay()` has no filtering of its own; it assumes whatever
+array it's handed already belongs to one person and just sums each
+record's overlap with the day in question. So it was silently aggregating
+every employee's clocked hours for that calendar day and displaying the
+total as if it were the logged-in employee's own "Active Today" / 7-day
+chart — regardless of whose account was open. A handful of lines further
+down, the same page already computes `timesheetEntries`
+(`allTimesheets` filtered to `t.employeeEmail.toLowerCase() ===
+email.toLowerCase()`) for its own Shift History table, but that filtered
+array was never reused for the Activity tab.
+
+This also means it wasn't specific to Apple's test account — any employee
+opening "My Activity" on a day when other employees had long/overlapping
+shifts recorded could see an inflated, cross-employee number that had
+nothing to do with their own attendance. Confirmed this is a display-only
+bug: payroll (`computePayrollView` in `hrData.ts`) uses flat base salary +
+leave/absence deductions, not this summed-hours path, so no pay was ever
+calculated using the inflated figure.
+
+**Fix**: one-line change — pass `timesheetEntries` (already scoped to the
+logged-in employee) instead of `allTimesheets` into
+`<EmployeeActivityInsights>`.
+
+**Checked and ruled out as a duplicate bug**: `TrackingView.tsx`'s
+analogous-looking `getShiftSecondsInRange()` (HR-facing range totals) does
+correctly filter by `email` before summing (`.filter(t =>
+t.employeeEmail.toLowerCase() === email.toLowerCase())`) — an earlier note
+in this doc mischaracterized it as sharing the same unfiltered pattern;
+re-reading it now shows that was wrong, and it needs no fix.
+
+**Not yet done**: the two other Guideline 5.6 angles raised earlier are
+still open — (a) whether the demo/reviewer account had `trackingEnabled`
+and/or `region === 'USA'` configured such that the Timesheet Tracker nav
+item and the Always-location prompt were invisible to the reviewer (no
+reviewer-detection code exists anywhere in the codebase — confirmed via
+grep — so if this is a factor at all, it's a configuration choice on that
+one account, not app logic), and (b) confirming with Apple/re-submitting
+now that this specific impossible-number bug is fixed.
+
 ## 2. Existing Notes/ docs — what's current, what's stale
 
 - **HANDOFF_NOTES.md** — STALE. Describes the old Supabase-based

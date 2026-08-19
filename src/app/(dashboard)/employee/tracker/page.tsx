@@ -197,7 +197,7 @@ export default function TrackerPage() {
 
       {activeTab === 'activity' ? (
         profile ? (
-          <EmployeeActivityInsights employeeEmail={profile.email} timesheets={allTimesheets} />
+          <EmployeeActivityInsights employeeEmail={profile.email} timesheets={timesheetEntries} />
         ) : (
           // profile resolves a beat after allProfiles loads — previously this
           // rendered nothing at all in that gap, which looked like a broken/
