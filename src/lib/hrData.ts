@@ -454,7 +454,31 @@ export interface TrackerHeartbeat {
   captureEnabled?: boolean;
 }
 
-export type CaptureHealthStatus = 'ok' | 'locked' | 'failing' | 'idle' | 'unknown';
+export type CaptureHealthStatus = 'ok' | 'locked' | 'failing' | 'idle' | 'unknown' | 'stale_token';
+
+// Exact substring tracker-agent/agent_gui.py's get_tracking_settings() writes
+// into lastCaptureError when the agent's currently-paired agentToken no
+// longer matches any row in hr_tracking_settings — i.e. HR/Admin (or the
+// employee) regenerated the setup code, but this specific already-running
+// desktop agent hasn't been given the new code yet. Keep this in sync with
+// the literal string in agent_gui.py's get_tracking_settings()/settings-poll
+// loop if that message ever changes.
+const STALE_TOKEN_ERROR_MARKER = 'Setup token not recognized';
+
+// True when a heartbeat's own error field says the agent can't find its
+// settings row anymore — added 2026-08-19 after zara@delcargo.us and
+// alex@delcargo.us silently stopped capturing for over an hour with
+// hr_tracking_settings.enabled genuinely true the whole time: someone had
+// regenerated their setup codes (agentToken) to fix an earlier issue, but
+// their already-running desktop agents kept authenticating with the OLD
+// token, which no longer matched anything, so get_tracking_settings()
+// returned null and the agent silently reported captureEnabled: false with
+// this specific error — indistinguishable from "not on shift" unless this
+// exact error string is checked for. Exported so both the Start Shift gate
+// (employee/page.tsx) and getCaptureHealth below can use the same check.
+export function hasStaleTrackerToken(hb: TrackerHeartbeat | null): boolean {
+  return !!hb && hb.captureEnabled === false && (hb.lastCaptureError || '').includes(STALE_TOKEN_ERROR_MARKER);
+}
 
 /**
  * Classifies whether a live tracker heartbeat is actually producing usable
@@ -464,17 +488,26 @@ export type CaptureHealthStatus = 'ok' | 'locked' | 'failing' | 'idle' | 'unknow
  * (i.e. the employee has an active shift) — otherwise every offline/no-
  * shift employee would show as "failing" for no reason.
  *
- * - 'idle'    — agent connected but not currently supposed to be capturing
- *               (no active shift, or HR has tracking off for them).
- * - 'locked'  — agent detected the OS session was locked on its last tick.
- * - 'failing' — 3+ consecutive capture/upload failures (not lock-related —
- *               e.g. permission revoked, disk full, persistent network error).
- * - 'ok'      — capturing normally.
- * - 'unknown' — pre-v14 agent build, no capture-health fields reported yet.
+ * - 'idle'        — agent connected but not currently supposed to be
+ *                    capturing (no active shift, or HR has tracking off).
+ * - 'locked'      — agent detected the OS session was locked on its last tick.
+ * - 'stale_token' — agent's setup code was regenerated but this device
+ *                    hasn't been reconnected with the new one yet (see
+ *                    hasStaleTrackerToken above). Checked BEFORE the
+ *                    generic captureEnabled===false→'idle' case below,
+ *                    since otherwise this looked identical to "not on
+ *                    shift" and silently hid a real problem from HR.
+ * - 'failing'     — 3+ consecutive capture/upload failures (not lock- or
+ *                    token-related — e.g. permission revoked, disk full,
+ *                    a genuine screen-grab/OS API error, persistent network
+ *                    error).
+ * - 'ok'          — capturing normally.
+ * - 'unknown'     — pre-v14 agent build, no capture-health fields reported yet.
  */
 export function getCaptureHealth(hb: TrackerHeartbeat | null): { status: CaptureHealthStatus; detail?: string } {
   if (!hb) return { status: 'unknown' };
   if (hb.isLocked) return { status: 'locked', detail: hb.lastCaptureError || 'Screen is locked' };
+  if (hasStaleTrackerToken(hb)) return { status: 'stale_token', detail: hb.lastCaptureError || undefined };
   if (hb.captureEnabled === false) return { status: 'idle' };
   if (hb.captureEnabled === undefined) return { status: 'unknown' };
   if ((hb.consecutiveCaptureFailures ?? 0) >= 3) {
@@ -2851,15 +2884,46 @@ export const hrActions = {
       excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
     })),
   updateTrackingSettings: async (email: string, updates: Partial<TrackingSettings>): Promise<TrackingSettings> => {
-    const defaults = {
-      enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
-      agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
-    };
+    // CRITICAL FIX (2026-08-19): this used to build the write payload as
+    // `{...defaults, ...updates}` where `defaults` was a hard-coded
+    // {enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
+    // agentToken: <freshly random>} object — NOT "fall back to this only
+    // if creating a new row," but "always start from this, then layer the
+    // caller's partial update on top." Since pb.collection().update() is a
+    // real partial write (whatever keys are present in the payload get
+    // written, full stop), any caller that only intended to change ONE
+    // field silently overwrote every other field back to that hard-coded
+    // default on every single call. Concretely, this meant:
+    //   - regenerateAgentToken() (passes only {agentToken}) silently reset
+    //     enabled back to false and intervalMinutes back to 15 every time
+    //     an employee regenerated their own setup code.
+    //   - TrackingView.tsx's handleIntervalChange (only {intervalMinutes})
+    //     and handleExcludeToggle (only {excludeFromAutoDelete}) each
+    //     silently turned tracking OFF for that employee as a side effect
+    //     of an unrelated settings change.
+    //   - Even handleToggle (only {enabled}) silently regenerated a brand
+    //     new agentToken on every toggle, invalidating whatever setup code
+    //     the employee's desktop agent already had paired.
+    // Root-caused via olivia@delcargo.us's hr_tracking_settings row showing
+    // enabled: false, updated within seconds of her shift starting/agent
+    // reconnecting — consistent with someone regenerating her code around
+    // then and unknowingly flipping tracking off as a side effect.
+    // Fix: fetch the REAL existing row first and use ITS current values as
+    // the base for anything `updates` doesn't touch. The hard-coded
+    // `defaults` (including a freshly-random agentToken) now only apply
+    // when there is no existing row at all — genuine first-time creation.
+    const existing = await hrActions.getTrackingSettingsFor(email);
+    const base = existing.agentToken
+      ? { enabled: existing.enabled, intervalMinutes: existing.intervalMinutes, excludeFromAutoDelete: existing.excludeFromAutoDelete, agentToken: existing.agentToken }
+      : {
+          enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
+          agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
+        };
     // Write employeeEmail lowercased on create — otherwise a caller passing
     // a mixed-case email here (e.g. from a not-yet-normalized profile) would
     // seed a mixed-case row that every OTHER lookup in this file then has to
     // work around via a `~` filter + client-side lowercase check.
-    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...defaults, ...updates, employeeEmail: email.toLowerCase() });
+    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...base, ...updates, employeeEmail: email.toLowerCase() });
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
   regenerateAgentToken: async (email: string): Promise<string> => {

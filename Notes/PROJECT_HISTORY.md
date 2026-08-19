@@ -261,13 +261,16 @@ instruction, three fixed:
 1. The app (`com.delcargo.internal`, display name "Delcargo Internal") is a
    single-organization internal tool. Apple often redirects apps like this
    to Apple Business Manager Custom Apps instead of the public App Store —
-   raised with the user 2026-08-19, who confirmed they want public App
-   Store distribution, not Custom Apps. Decision made — staying public.
-
-2. ~~`@onesignal/capacitor-plugin` push capability~~ — **see 2026-08-19 fix
-   below (1f-addendum).** Originally left alone here because turning on a
-   capability in Xcode isn't something to hand-edit blind. Now fixed
-   properly at the project-file level — see below.
+   worth a real decision before investing more here, not something code
+   can resolve.
+2. `@onesignal/capacitor-plugin` is installed and compiled into the native
+   target (`packageClassList` in the generated `capacitor.config.json`),
+   but there's no `.entitlements` file anywhere in `ios/App` and nothing in
+   `project.pbxproj` enables the Push Notifications capability or sets
+   `aps-environment`. Push almost certainly doesn't deliver on iOS right
+   now. Fixing this means turning on the capability inside Xcode (Signing &
+   Capabilities → + Push Notifications), which isn't something to do by
+   hand-editing the project file blind.
 
 **Fixed:**
 
@@ -374,57 +377,172 @@ grep — so if this is a factor at all, it's a configuration choice on that
 one account, not app logic), and (b) confirming with Apple/re-submitting
 now that this specific impossible-number bug is fixed.
 
-## 1f-addendum. Fixed: Push Notifications capability now persisted in the project file, not re-added by hand each build (2026-08-19)
+## 1h. Bumped the mandatory tracker-update floor from v14 to v16 (2026-08-19)
 
-**Trigger**: user confirmed they want to keep public App Store distribution
-(closing out 1e's item 1 — staying public, not moving to Apple Business
-Manager Custom Apps), and clarified that item 2 (Push Notifications
-capability) wasn't actually undone — they've been manually re-adding it in
-Xcode's Signing & Capabilities every time they build on their other Mac.
+User asked directly whether the portal actually blocks trackers below v16
+— it did not; the floor set in 1d was v14 and had never been revisited
+since. Bumped both halves of the version gate to 16, keeping them in sync
+per their existing cross-referencing comments:
 
-**Root cause**: turning on a capability in Xcode's UI writes two things:
-an `.entitlements` file, and a `CODE_SIGN_ENTITLEMENTS` build setting
-pointing at it. Neither existed anywhere in this repo before today — no
-`ios/App/App/App.entitlements` file, and no `CODE_SIGN_ENTITLEMENTS` line
-in `project.pbxproj`'s target build settings (confirmed by reading the
-whole file). So whatever the user clicked in Xcode locally never made it
-into a commit — it lived only in that one Xcode session's in-memory
-project state, gone the moment they closed Xcode or pulled fresh code on
-either Mac. That's why it needed re-doing "every time."
+- `TRACKER_MIN_VERSION` in `src/lib/trackerSetup.ts` — drives the web
+  portal side: the "Update Required" banners in `TrackingView.tsx` (HR/
+  Admin view) and `employee/tracker/page.tsx` (employee self-service
+  Setup & History tab), and — this is the one that actually blocks
+  anything — the Start Shift gate added in 1d, which now refuses to clock
+  in any employee whose connected tracker reports an `agentVersion` below
+  16.
+- `MIN_SUPPORTED_VERSION` in `tracker-agent/agent_gui.py` — the desktop
+  app's own client-side hard floor from 1d; below this the agent
+  `sys.exit(1)`s instead of offering a dismissible prompt. Also bumped to
+  16.
 
-**Fix**: added `ios/App/App/App.entitlements` with `aps-environment` set
-to `development` (Xcode/App Store Connect automatically swap this to
-`production` at archive/export time based on the distribution provisioning
-profile chosen — this is normal, expected behavior for automatic signing,
-not something that needs a second entitlements file). Wired it into
-`project.pbxproj`: one new `PBXFileReference`
-(`3F8E29D1A4C5B6071829E4F1`), added to the `App` group next to
-`PrivacyInfo.xcprivacy`, and a `CODE_SIGN_ENTITLEMENTS = App/App.entitlements;`
-line added to both the Debug and Release build configurations of the
-`App` target. Verified brace/paren balance on the whole file before
-committing (49/49, 26/26) — same care as the `PrivacyInfo.xcprivacy` edit
-in 1e, since a malformed edit here corrupts the whole Xcode project.
+`APP_VERSION` in `agent_gui.py` is still `"18"` (the agent's own current
+build number) — no change needed there, since 18 ≥ 16 the currently
+shipping build isn't affected, it just means anyone still on v14 or v15
+specifically will now also be forced to update, not just v13-and-below as
+before.
 
-This should mean: after pulling this commit, Xcode should show the Push
-Notifications capability already present under Signing & Capabilities —
-no manual re-add needed on either Mac, or a fresh clone, going forward.
+**Not yet done**: no new tracker-agent release needed for this change (it
+only changes what version number the *portal* and *already-installed
+agent* require, not the agent's own code) — but worth confirming no
+currently-connected employee is actually running v14 or v15 today, since
+they'll be hard-blocked from starting a shift (portal side) or from
+running the app at all (agent side, if `agent_gui.py`'s change is also
+shipped in a build employees have) the next time either check runs. Check
+`TrackingView.tsx`'s outdated-build badges across all employees before
+assuming this is a no-op change for everyone currently connected.
 
-**Not done / worth knowing:**
-- `Info.plist`'s `UIBackgroundModes` currently only lists `location` (for
-  the geofencing background updates). It does **not** list
-  `remote-notification`. Basic push (banners/alerts arriving while the app
-  is foregrounded or backgrounded normally) doesn't need that — it's only
-  needed for silent/background pushes that should wake the app to fetch
-  data without a visible alert. OneSignal doesn't require this for normal
-  notification delivery, so left it out; flag if a "silent push" use case
-  comes up later.
-- Still can't be verified from here (no Xcode/no macOS in this session) —
-  next real build should confirm the capability shows up automatically and
-  that a push actually arrives on a physical device/TestFlight build.
-- Also still open: whether `test@delcargo.us` (the account used for the
-  Apple review) has `trackingEnabled`/`region` set in a way that hid
-  the Timesheet Tracker tab or the location prompt from the reviewer —
-  next investigation step, see below.
+## 1i. CRITICAL — updateTrackingSettings() silently reset unrelated tracking fields back to hard-coded defaults on every partial update (2026-08-19)
+
+**Trigger**: user reported olivia@delcargo.us still not showing screenshots
+even on tracker v18 (i.e., after the actual mandatory-update work and
+after the 1b KV-lookup fix, both already shipped and both irrelevant
+here). Checked her data directly in PocketBase:
+
+- `hr_profiles`: `tracking_enabled: true` (HR's profile-level toggle) —
+  looks correctly on.
+- `hr_tracking_settings` (the row the agent and the portal actually read
+  for the on/off decision): `enabled: false`, `updated` timestamp
+  **2026-08-19 12:01:01 UTC** — seconds after her shift clock-in
+  (12:00:00.833Z) and her agent's `connectedAt` (12:01:23). Her heartbeat
+  confirmed the mechanism working exactly as designed given that data:
+  `agentVersion: "18"`, `isLocked: false`, `consecutiveCaptureFailures: 0`,
+  but `captureEnabled: false` and `lastCaptureAt: null` — the agent
+  correctly refuses to capture because the real settings row says not to.
+- `hr_timesheets`: confirmed she's been working real shifts continuously
+  (8/17, 8/18, today) with zero gap explaining a legitimate pause.
+- `hr_screenshots`: her last-ever captured screenshot is 2026-08-12
+  16:07:14 UTC — every shift since then (8/13, 8/17, 8/18, today) produced
+  zero screenshots despite being multi-hour, clocked-in shifts.
+
+**Root cause**: `hrActions.updateTrackingSettings()` in `hrData.ts` built
+its write payload as `{...defaults, ...updates}`, where `defaults` was a
+hard-coded `{enabled: false, intervalMinutes: 15, excludeFromAutoDelete:
+false, agentToken: <freshly random string>}` object. Since
+`pb.collection().update()` is a genuine partial write — whatever keys are
+present in the payload get written, full stop — this meant `defaults`
+wasn't really "what a brand new row starts as," it was "what gets
+written back into the DB for any field the caller didn't explicitly
+touch," even for an existing, already-configured row. Every caller in
+the app only ever passes the ONE field it means to change:
+
+- `regenerateAgentToken()` passes only `{agentToken}` → every regenerate
+  silently reset `enabled` back to `false` and `intervalMinutes` back to
+  `15`.
+- `TrackingView.tsx`'s `handleIntervalChange` passes only
+  `{intervalMinutes}`, and `handleExcludeToggle` only
+  `{excludeFromAutoDelete}` → each silently turned tracking **off** for
+  that employee as a pure side effect of an unrelated setting.
+- Even `handleToggle` (only `{enabled}`) silently regenerated a brand new
+  random `agentToken` on every single toggle — invalidating whatever
+  setup code that employee's desktop agent already had paired, on top of
+  whatever the toggle click actually intended.
+
+Olivia's timing points at someone (understandably) trying
+`regenerateAgentToken` on her around today's shift start to fix the
+already-known v14→v16/1b issues — which, under this bug, flipped her
+`enabled` to `false` as an invisible side effect of a call that only
+meant to touch her token.
+
+**This is not olivia-specific** — spot-checking the full
+`hr_tracking_settings` list right now shows `faheem@delcargo.us` and
+`zara@delcargo.us` also currently `enabled: false`. Did not touch either
+of those — unlike olivia, there's no shift-timing correlation pointing at
+this bug for them specifically, and `alex@delcargo.us` (also `false`) may
+well be an intentional disable given the "slacking off" context from 1d.
+**Worth checking with HR whether faheem/zara's tracking being off is
+intentional or another instance of this same bug** before assuming
+either way.
+
+**Fixed**: `updateTrackingSettings()` now fetches the real existing row
+first (`getTrackingSettingsFor`) and uses ITS current values as the base
+for any field `updates` doesn't touch — the hard-coded `defaults`
+(including generating a fresh random `agentToken`) now only apply when
+there's genuinely no existing row yet (first-time creation, the only
+case they were ever supposed to cover).
+
+**Data fixed**: manually flipped olivia's `hr_tracking_settings.enabled`
+back to `true` directly in the PocketBase Admin UI — the code fix alone
+doesn't retroactively repair a row this bug already corrupted.
+
+**Not yet done**: no live testing possible from here. Once pushed, worth
+confirming with olivia directly that screenshots resume on her next
+capture interval, and worth a quick pass with HR on whether faheem/zara
+should actually be re-enabled.
+
+## 1j. Portal now blocks Start Shift (and flags HR) when a desktop tracker is running on a stale/regenerated-away setup code (2026-08-19)
+
+**Reported by Faheem**: "make sure if user create new code their portal
+stops starting the shift so there old tracker never shows or receives the
+tracking heartbeats and start the shift." Prompted by the live audit that
+turned up `zara@delcargo.us` and `alex@delcargo.us` both still pasting
+their OLD setup code into the desktop tracker app after their
+`agentToken` had been regenerated (most likely during the 1i cleanup
+above) — the tracker agent was still running and answering heartbeats,
+but `get_tracking_settings()` in `agent_gui.py` filters
+`hr_tracking_settings` by exact `agentToken` match, finds no row, and
+falls back to `enabled = False` with
+`last_error = "Setup token not recognized — ask HR/Admin to check your setup."`
+Before this fix, that state was invisible from the portal's point of
+view: the ping/pong handshake and heartbeat both succeed, `agentVersion`
+can be fully current, so Start Shift let the employee clock in against a
+tracker that could never actually capture anything, and HR/Admin's
+TrackingView showed it as plain "idle" — indistinguishable from a
+legitimately off-shift employee.
+
+**Fixed** across three files:
+- `src/lib/hrData.ts` — added `hasStaleTrackerToken(hb)`, which returns
+  true when `hb.captureEnabled === false` and `hb.lastCaptureError`
+  contains `"Setup token not recognized"`. Added a new `'stale_token'`
+  value to `CaptureHealthStatus` and wired it into `getCaptureHealth()`
+  ahead of the generic `captureEnabled === false` → `'idle'` fallback, so
+  this state is never silently absorbed into "idle" again.
+- `src/components/ui/TrackingView.tsx` — `CaptureHealthBadge` renders a
+  distinct orange "Reconnect Required" badge (RefreshCw icon) for
+  `'stale_token'`, so HR/Admin can tell this apart from both "idle" and
+  "Update Required" at a glance.
+- `src/app/(dashboard)/employee/page.tsx` — Start Shift's existing
+  ping/pong → heartbeat-fallback → `needsTrackerUpdate` gate sequence now
+  has a fourth check, `hasStaleTrackerToken(liveHb)`, immediately after
+  the version gate. If it trips, Start Shift is blocked and a new
+  "Reconnect Tracker Required" modal (`showTrackerReconnectRequiredModal`)
+  explains that the setup code was regenerated and links to
+  `/employee/tracker` to grab the new one — mirrors the existing
+  `showTrackerUpdateRequiredModal` pattern.
+- `src/app/(dashboard)/employee/tracker/page.tsx` — added a matching
+  "Reconnect Required — Setup Code Changed" banner (shown whenever
+  `hasStaleTrackerToken(heartbeat)` is true) above the download buttons,
+  so the employee sees the warning on this page even before they attempt
+  to start a shift.
+
+**Not a code fix, still needed**: zara and alex both still need to
+manually open their Tracker Setup page and re-paste the current setup
+code into their desktop tracker apps — regenerating the token again from
+here doesn't reconnect their existing installs by itself.
+
+**Still open, unrelated to this fix**: `sofia@delcargo.us` has a genuine
+"screen grab failed" capture error (real capture failure, not a stale
+token) — flagged during the same audit, not yet investigated.
 
 ## 2. Existing Notes/ docs — what's current, what's stale
 

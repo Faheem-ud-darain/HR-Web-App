@@ -120,7 +120,9 @@ APP_VERSION = "18"  # bumped for the mandatory-update-floor enforcement below (M
 # entirely) with a live-looking heartbeat but zero screenshots for 6 days,
 # and HR's "Force Disconnect" button had no way to reach or affect it since
 # v10 also predates the stop-command signal it relies on.
-MIN_SUPPORTED_VERSION = "14"
+# Bumped 14 -> 16 (2026-08-19, explicit request) in lockstep with
+# TRACKER_MIN_VERSION in trackerSetup.ts.
+MIN_SUPPORTED_VERSION = "16"
 GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"

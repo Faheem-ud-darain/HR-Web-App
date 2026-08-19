@@ -179,6 +179,22 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
         </span>
       );
     }
+    if (health.status === 'stale_token') {
+      // The employee's setup code was regenerated (by HR/Admin or the
+      // employee themselves) but this already-running desktop agent is
+      // still authenticating with the OLD token, so it can no longer find
+      // its own settings row — captureEnabled reports false but for a
+      // completely different reason than "not on shift" (which is what
+      // 'idle' — rendered as nothing at all — covers). Without this
+      // distinct badge, this looked identical to a connected-but-idle
+      // tracker, which is exactly how zara/alex silently went uncaptured
+      // for over an hour despite tracking being genuinely enabled for them.
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-1 rounded-full" title={health.detail}>
+          <RefreshCw className="h-3 w-3" /> Reconnect Required
+        </span>
+      );
+    }
     return null;
   };
 

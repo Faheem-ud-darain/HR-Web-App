@@ -41,7 +41,13 @@ export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 // but producing nothing — this closes the exact exploit where employees on
 // v11-v13 could sit at a lock screen for hours and still show as fully
 // tracked. Everyone must be pushed onto v14+.
-export const TRACKER_MIN_VERSION = '14';
+// Bumped 14 -> 16 (2026-08-19, explicit request): everyone must be pushed
+// onto v16+. Keep in sync with MIN_SUPPORTED_VERSION in
+// tracker-agent/agent_gui.py — that constant is the desktop app's own
+// non-dismissible hard floor (sys.exit(1) below it), this one is what
+// gates the web portal (Start Shift block in employee/page.tsx and the
+// "Update Required" banners in TrackingView.tsx / employee/tracker/page.tsx).
+export const TRACKER_MIN_VERSION = '16';
 
 // Device label the Chromebook/Chrome extension reports in its heartbeat
 // (see chrome-extension/background.js's handleHeartbeatTick) — used below
