@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost' },
       { protocol: 'https', hostname: 'pb.delcargo.us' },
+      // Current production host (moved off Vercel to Cloudflare, 2026-08-20
+      // — see src/lib/apiBase.ts). Kept the old Vercel hostname below too,
+      // harmless to leave in, in case anything (old cached pages, old email
+      // links) still references an image URL on that host.
+      { protocol: 'https', hostname: 'hub.delcargo.us' },
       { protocol: 'https', hostname: 'delcargo-io.vercel.app' },
     ],
   },

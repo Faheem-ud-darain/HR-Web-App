@@ -65,7 +65,9 @@ onRecordAfterCreateRequest((e) => {
       // Same app-logo fallback as push_notifications.pb.js — an
       // announcement isn't "from" a specific contact, so use the app's own
       // icon as the large icon instead of the default grey bell.
-      onesignal.sendPush(emails, "📢 " + title, content, { largeIcon: "https://delcargo-io.vercel.app/AppIcon.png" });
+      // Updated 2026-08-20: app moved off Vercel to hub.delcargo.us
+      // (Cloudflare) — see src/lib/apiBase.ts.
+      onesignal.sendPush(emails, "📢 " + title, content, { largeIcon: "https://hub.delcargo.us/AppIcon.png" });
     }
   } catch (err) {
     console.log("[push_announcements] hook error:", err);

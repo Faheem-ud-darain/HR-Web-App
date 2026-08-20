@@ -6,12 +6,14 @@
 // the native WebView, so native calls need the deployed site's absolute
 // URL instead.
 //
-// Current production URL: https://delcargo-io.vercel.app (confirmed by the
-// user on 2026-08-04). This is expected to move to a custom subdomain
-// later — when that happens, set NEXT_PUBLIC_SITE_URL in the deployment
-// env instead of editing this file, and rebuild the native apps so the
-// new value gets baked into the static export.
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://delcargo-io.vercel.app';
+// Current production URL: https://hub.delcargo.us (moved off the old
+// delcargo-io.vercel.app URL to a Cloudflare-hosted custom subdomain,
+// 2026-08-20 — confirmed by the user). Bumped here AND the native apps
+// need a rebuild for this to take effect, since this value is baked into
+// the static export at build time, not read at runtime. If the host moves
+// again, prefer setting NEXT_PUBLIC_SITE_URL in the deployment env over
+// editing this file — then only a rebuild is needed, no code change.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://hub.delcargo.us';
 
 const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.();
 

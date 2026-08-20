@@ -645,6 +645,99 @@ from the same place App Review (or anyone else) would land on.
 file, not reviewed by HR for tone/accuracy — worth a quick read-through
 before submitting the App Store URL.
 
+## 1n. CRITICAL — login (and every other /api/* route) was unreachable from the native app due to missing CORS headers (2026-08-20)
+
+**Reported by Faheem**: couldn't log in at all when running a fresh build
+on the iOS Simulator from Xcode. Login worked fine on web.
+
+**Root cause**: the native Capacitor build is a static export with no
+server of its own, so `src/lib/apiBase.ts` points every Next.js API-route
+call (`/api/auth/login`, forgot-password, reset-password,
+verify-reset-otp, payroll/me, profile/me, admin/*) at the deployed
+Vercel site's absolute URL (`https://delcargo-io.vercel.app`) instead of
+a relative path. That makes every one of those `fetch()` calls
+cross-origin from the app's point of view — the request's `Origin` is
+`capacitor://localhost` on iOS (`https://localhost` on Android per
+capacitor.config.ts's default `androidScheme`), not
+delcargo-io.vercel.app. None of the 8 route handlers under
+`src/app/api/**` ever set `Access-Control-Allow-Origin` or handled the
+CORS preflight `OPTIONS` request that a JSON-body `POST` triggers. So
+the WKWebView's `fetch` — which enforces CORS exactly like desktop
+Safari — silently discarded the response. The login route itself was
+running fine server-side and returning a real 200 with a valid session
+token the whole time; the WebView's networking layer just refused to
+hand that response to the JS code, which surfaced as the generic
+&quot;An error occurred while logging in.&quot; catch-block message in
+`src/app/auth/page.tsx`. This never showed up in web testing because the
+web build's `fetch('/api/auth/login')` is same-origin (relative path)
+and never triggers CORS at all — so this bug could only ever be caught
+by testing a real native build, which is exactly what surfaced it.
+
+**Fixed**: added `src/middleware.ts`, matched to `/api/:path*`, that
+answers every `OPTIONS` preflight with a 204 + the required
+`Access-Control-Allow-Origin/Methods/Headers` headers, and stamps those
+same headers onto every other `/api/*` response. Fixed centrally here
+(middleware runs ahead of all 8 route handlers) rather than editing each
+`route.ts` individually, so no future route can regress this by simply
+forgetting to add CORS headers. `Access-Control-Allow-Origin: '*'` is
+safe specifically because none of these routes rely on cookies
+(`credentials: 'include'`) — auth is a bearer token/JSON body, not a
+cookie — so there's no session-fixation risk from allowing any origin to
+read the response.
+
+**Not yet verified**: no way to test a live rebuild from here — next
+step is rebuilding (`npm run cap:sync:ios`, re-run in Xcode) and
+confirming login now succeeds on the simulator. Should also spot-check
+Forgot Password / Reset Password on native, since those hit the same
+API-route pattern and were presumably broken by the identical bug.
+
+## 1o. Production host moved from Vercel (delcargo-io.vercel.app) to Cloudflare (hub.delcargo.us) — updated every hardcoded reference (2026-08-20)
+
+**Reported by Faheem**, while working through the 1.4 App Store build:
+the app is now live at `hub.delcargo.us` on Cloudflare, not the old
+`delcargo-io.vercel.app` Vercel URL. This directly affects 1n's CORS fix
+(and predates it) — `src/lib/apiBase.ts`'s `SITE_URL` was the ONE place
+that actually determines what host the native app's login/password-
+reset/payroll API calls hit, and it was still hardcoded to the old
+Vercel URL. Left unfixed, the 1.4 build's login would either hit a dead
+URL or an out-of-date deployment, regardless of the 1n middleware fix
+being correct.
+
+**Fixed** — updated every hardcoded `delcargo-io.vercel.app` reference
+found via a full-repo grep:
+- `src/lib/apiBase.ts` — `SITE_URL` fallback now `https://hub.delcargo.us`.
+  **This requires a native app rebuild** (`npm run cap:sync:ios`, re-Archive)
+  since it's baked into the static export at build time, not read at
+  runtime — updating this file alone does nothing until the next build.
+- `next.config.ts` — added `hub.delcargo.us` to the image `remotePatterns`
+  allowlist (kept the old Vercel hostname too, harmless to leave, in case
+  anything still references an image URL there).
+- `pb_hooks/push_announcements.pb.js` and `pb_hooks/push_notifications.pb.js`
+  — both had the app-logo push-notification icon URL hardcoded to the old
+  Vercel host (`.../AppIcon.png`); updated to `hub.delcargo.us`. **These
+  are PocketBase server hooks, deployed separately from the Next.js app**
+  (they run on the PocketBase droplet, not Vercel/Cloudflare) — pushing
+  this repo change alone does nothing; the updated `pb_hooks/*.pb.js`
+  files need to be copied to wherever PocketBase reads its hooks from and
+  PocketBase restarted/reloaded for the fix to take effect.
+- `src/app/api/auth/google/callback/route.ts` — checked, NOT changed:
+  its `redirect_uri` is built from `new URL(request.url).origin` at
+  request time, so it already automatically reflects whatever host it's
+  actually running on. **Still worth checking manually**: Google Cloud
+  Console's OAuth client "Authorized redirect URIs" list needs
+  `https://hub.delcargo.us/api/auth/google/callback` added (Google
+  rejects the callback if the exact URI isn't allow-listed there) — that
+  side can't be checked or fixed from here.
+
+**Not yet done**: confirm the Cloudflare deployment of `hub.delcargo.us`
+is actually running the real Next.js server (API routes + this session's
+new `src/middleware.ts` CORS fix), not a static-only Cloudflare Pages
+export — if it's the latter, `/api/*` doesn't exist there at all and 1n's
+fix (and login itself) needs a different hosting approach entirely. Also
+still needs: rebuilding the native app so the new `apiBase.ts` value
+ships in the 1.4 (or next) build, and restarting PocketBase with the
+updated `pb_hooks/*.pb.js` files.
+
 ## 2. Existing Notes/ docs — what's current, what's stale
 
 - **HANDOFF_NOTES.md** — STALE. Describes the old Supabase-based

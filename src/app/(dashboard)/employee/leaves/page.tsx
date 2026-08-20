@@ -6,7 +6,7 @@ import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Clock, PlusCircle, CheckCircle2, AlertCircle, HelpCircle, BadgeCheck, Loader2 } from 'lucide-react';
+import { Clock, PlusCircle, CheckCircle2, AlertCircle, HelpCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
 
 export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
@@ -25,6 +25,13 @@ export default function EmployeeLeavesPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
+
+  // Withdraw-request state — employees can only delete their own leave
+  // requests while they're still 'pending' (see hrActions.deleteLeave in
+  // hrData.ts for the actual guard; this modal is just the confirm UI).
+  const [deletingLeaveId, setDeletingLeaveId] = useState<string | null>(null);
+  const [isDeletingLeave, setIsDeletingLeave] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Cashout simulator state
   const [cashoutDays, setCashoutDays] = useState(0);
@@ -208,6 +215,31 @@ export default function EmployeeLeavesPage() {
     }
   };
 
+  const handleDeleteLeave = async (id: string) => {
+    setIsDeletingLeave(true);
+    setDeleteError('');
+    try {
+      const result = await hrActions.deleteLeave(id);
+      if (!result.success) {
+        // Most likely cause: HR/Admin acted on it in the gap between this
+        // list loading and the employee clicking Delete. Refresh so the
+        // now-stale row (still showing "Pending" locally) shows its real
+        // status instead of leaving the employee confused about why the
+        // delete failed.
+        setDeleteError(result.reason || 'Could not delete this leave request. Please try again.');
+        await refetchLeaves();
+        return;
+      }
+      setDeletingLeaveId(null);
+      await refetchLeaves();
+    } catch (err) {
+      console.error('[Leaves] Delete error:', err);
+      setDeleteError('Something went wrong deleting this request. Please try again.');
+    } finally {
+      setIsDeletingLeave(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
@@ -339,6 +371,7 @@ export default function EmployeeLeavesPage() {
                 <th className="px-6 py-4">Dates</th>
                 <th className="px-6 py-4">Reason</th>
                 <th className="px-6 py-4 text-center">Status</th>
+                <th className="px-6 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -348,11 +381,25 @@ export default function EmployeeLeavesPage() {
                   <td className="px-6 py-4 text-slate-600 font-medium">{leave.duration}</td>
                   <td className="px-6 py-4 text-slate-500">{leave.reason}</td>
                   <td className="px-6 py-4 text-center">{getStatusBadge(leave.status)}</td>
+                  <td className="px-6 py-4 text-center">
+                    {leave.status === 'pending' ? (
+                      <button
+                        type="button"
+                        onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
+                        title="Withdraw this leave request"
+                        className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <span className="text-slate-300 text-xs">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {filteredLeaves.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center py-12 text-slate-400 font-semibold italic text-xs">
+                  <td colSpan={5} className="text-center py-12 text-slate-400 font-semibold italic text-xs">
                     No leave requests found
                   </td>
                 </tr>
@@ -366,7 +413,19 @@ export default function EmployeeLeavesPage() {
             <div key={leave.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold text-slate-900">{leave.type}</p>
-                {getStatusBadge(leave.status)}
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(leave.status)}
+                  {leave.status === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
+                      title="Withdraw this leave request"
+                      className="text-slate-400 hover:text-rose-600 transition-colors p-1 rounded-lg hover:bg-rose-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -457,6 +516,48 @@ export default function EmployeeLeavesPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Withdraw-request confirm modal — only ever opened for a leave that
+          was 'pending' at the moment the trash icon was clicked; the actual
+          guard against deleting an already-processed request lives
+          server-side in hrActions.deleteLeave (re-checks fresh status). */}
+      <Modal
+        isOpen={!!deletingLeaveId}
+        onClose={() => { if (!isDeletingLeave) { setDeletingLeaveId(null); setDeleteError(''); } }}
+        title="Withdraw Leave Request?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            This will permanently withdraw your leave request. This is only possible while it's
+            still pending — once HR or Admin acts on it, it can no longer be deleted.
+          </p>
+          {deleteError && (
+            <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+              {deleteError}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={isDeletingLeave}
+              onClick={() => { setDeletingLeaveId(null); setDeleteError(''); }}
+              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeletingLeave}
+              onClick={() => deletingLeaveId && handleDeleteLeave(deletingLeaveId)}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            >
+              {isDeletingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isDeletingLeave ? 'Withdrawing…' : 'Withdraw Request'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

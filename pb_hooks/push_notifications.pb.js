@@ -113,7 +113,9 @@ onRecordAfterCreateRequest((e) => {
       // showing a specific person's photo isn't appropriate), fall back to
       // the app's own logo instead of leaving it blank — that's what was
       // rendering as a plain grey bell icon before.
-      const APP_LOGO_URL = "https://delcargo-io.vercel.app/AppIcon.png";
+      // Updated 2026-08-20: app moved off Vercel to hub.delcargo.us
+      // (Cloudflare) — see src/lib/apiBase.ts.
+      const APP_LOGO_URL = "https://hub.delcargo.us/AppIcon.png";
       let largeIcon = APP_LOGO_URL;
       if (senderEmail) {
         try {
