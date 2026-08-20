@@ -75,8 +75,23 @@ export default function EmployeeLeavesPage() {
       return;
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // startDate/endDate come from <input type="date"> as bare "YYYY-MM-DD"
+    // strings. `new Date("2026-08-14")` parses that as 2026-08-14T00:00:00Z
+    // (UTC midnight) per spec — NOT local midnight. Anyone in a timezone
+    // behind UTC (any US timezone, including this app's own display
+    // timezone, America/New_York) then sees it roll back to Aug 13 the
+    // moment it's formatted with toLocaleDateString below, since that UTC
+    // instant falls on the previous calendar day locally. This is the exact
+    // off-by-one-day bug src/lib/timezone.ts's header comment warns about.
+    // Fix: build the Date from the y/m/d components directly so it lands on
+    // local midnight of the calendar day the employee actually picked,
+    // regardless of device/server timezone.
+    const parseDateOnly = (dateStr: string) => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
+    const start = parseDateOnly(startDate);
+    const end = parseDateOnly(endDate);
 
     if (end < start) {
       setError('End date cannot be before start date.');
