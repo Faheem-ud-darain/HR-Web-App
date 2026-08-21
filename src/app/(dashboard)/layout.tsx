@@ -134,6 +134,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // anymore, they get a small fixed bottom breathing-room padding instead of
   // the large pb-24 other tabs use to clear it.
   const isTicketsScreen = pathname?.endsWith('/tickets');
+  // Screen Tracking (TrackingView.tsx) got squeezed into the default
+  // max-w-6xl (1152px) page shell below, same as any ordinary form/list
+  // page — but its table has 7 columns including a 4-button Actions column
+  // (Setup Agent / Screenshots / Mouse Activity / Force End Shift / Force
+  // Disconnect), which needs real width. At max-w-6xl on a normal desktop
+  // viewport that left ~200px of dead space on each side while the Actions
+  // buttons themselves wrapped/cropped inside the table's own horizontal
+  // scrollbar. Covers all three roles that render TrackingView: HR/Admin's
+  // own pages plus the read-only Team Lead view.
+  const isWideTableScreen = pathname?.endsWith('/tracking') || pathname?.endsWith('/team-tracking');
   // When the ticket conversation panel is open it calls pushModal() (see
   // TicketsView.tsx) — subscribe to that signal so we can switch the tickets
   // screen's <main> to overflow-hidden while it's open. Without this, the
@@ -1167,7 +1177,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               nav-tab switch so its animating state (and page-enter) resets
               and re-triggers each time, not just on first load — previously
               content swapped instantly with zero motion. */}
-          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${isChatScreen ? 'flex-1 h-full max-w-none' : 'max-w-6xl'}`}>
+          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${isChatScreen ? 'flex-1 h-full max-w-none' : isWideTableScreen ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
             {children}
           </PageTransition>
         </main>
