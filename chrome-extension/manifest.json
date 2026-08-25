@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Delcargo HR Tracker",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Official Delcargo HR activity tracker and time logger extension for Chromebooks & Chrome Browser.",
   "update_url": "https://raw.githubusercontent.com/Faheem-ud-darain/HR-Web-App/main/chrome-extension/updates.xml",
   "icons": {

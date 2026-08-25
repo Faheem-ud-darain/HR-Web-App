@@ -17,9 +17,10 @@ script is the background-service approach.
 
 HOW IT WORKS
 ------------
-1. On each cycle, it asks the DelCargo PocketBase server (using the public
-   `hr_delcargo_store` collection — no auth token needed) whether tracking is
-   currently enabled for this agent's token, and what interval to use.
+1. On each cycle, it asks the DelCargo PocketBase server (the public
+   `hr_tracking_settings` collection, matched by this agent's token — no
+   auth needed) whether tracking is currently enabled for this agent's
+   token, and what interval to use.
 2. If enabled, it takes a screenshot, compresses it, and uploads it.
 3. It sleeps for the configured interval and repeats.
 
@@ -160,15 +161,31 @@ def pb_set_kv(base_url, key, value):
 
 
 def get_tracking_settings(base_url, agent_token):
-    """Fetch this agent's tracking settings by looking up its token."""
-    _, value = pb_get_kv(base_url, "hr_tracking_settings_prod_v1")
-    if value is None:
+    """Fetch this agent's tracking settings from the real hr_tracking_settings
+    collection, filtered by this agent's token.
+
+    Fixed 2026-08-25 — this used to read a KV row (hr_tracking_settings_prod_v1)
+    from before the web app migrated tracking settings to a real PocketBase
+    collection with a unique index on employeeEmail (see hrData.ts's
+    getAllTrackingSettings/updateTrackingSettings). The web app stopped
+    writing to that KV key entirely once the migration landed, so this
+    lookup always returned None: this script printed "Could not find
+    tracking settings for this token" and sat idle forever, no matter how
+    fresh the setup code was. Same bug, same fix as get_tracking_settings in
+    tracker-agent/agent_gui.py (fixed there 2026-08-18) — this standalone
+    "Advanced: raw script" copy just never got the same treatment."""
+    if not agent_token:
         return None
-    all_settings = value if isinstance(value, list) else []
-    for s in all_settings:
-        if s.get("agentToken") == agent_token:
-            return s
-    return None
+    url = f"{base_url}/api/collections/hr_tracking_settings/records"
+    params = {"filter": f'(agentToken="{agent_token}")', "perPage": 1}
+    try:
+        resp = requests.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+        return items[0] if items else None
+    except Exception as e:
+        print(f"[warn] get_tracking_settings failed: {e}")
+        return None
 
 
 def heartbeat_key_for(email):

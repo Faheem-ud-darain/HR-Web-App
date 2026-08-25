@@ -603,6 +603,50 @@ export interface TrackerStopCommand {
 }
 const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(email)}`;
 
+// Signal 6: Remote-command channel — added 2026-08-24 so HR/Admin can act on
+// a specific employee's tracker directly instead of guessing what's wrong
+// from heartbeat fields alone (see TrackingView's "Run Diagnostics" /
+// "Reload Settings Now" buttons). Written by the portal, read by the tracker
+// agent via the same realtime SSE subscription as ping/stop_cmd — see
+// command_key_for/_handle_command in agent_gui.py. Only a v19+ agent
+// (APP_VERSION) knows to look for this key at all; anything older just
+// never responds, which the portal must treat as "can't tell" rather than
+// "definitely broken" — see needsTrackerUpdate/TRACKER_MIN_VERSION, which
+// is intentionally NOT being bumped for this (soft rollout, HR's call).
+export type TrackerCommandType = 'diagnostics' | 'reload_settings';
+export interface TrackerCommand {
+  employeeEmail: string;
+  type: TrackerCommandType;
+  commandId: string; // random id — agent deletes key after acting on it
+  issuedAt: string;  // ISO — agent ignores commands older than 60s
+}
+const trackerCommandKeyFor = (email: string) => `tracker_command_${_slugify(email)}`;
+
+// Signal 7: Written by the tracker agent in response to a 'diagnostics'
+// command — a live health snapshot straight from the agent's own dashboard
+// state (self.state in agent_gui.py), not anything re-derived on the portal
+// side, so it can't drift from what the employee's own tracker window shows.
+export interface TrackerDiagnostics {
+  employeeEmail: string;
+  respondedAt: string; // ISO
+  appVersion: string;
+  platform: string;
+  deviceLabel: string;
+  connected: boolean;
+  connectionStatus: string | null;
+  enabled: boolean;
+  enabledByHr: boolean;
+  shiftActive: boolean;
+  isLocked: boolean;
+  lastError: string | null;
+  lastCaptureAt: string | null;
+  consecutiveCaptureFailures: number | null;
+  intervalMinutes: number | null;
+  autostart: boolean;
+  updateAvailableVersion: string | null;
+}
+const trackerDiagnosticsKeyFor = (email: string) => `tracker_diagnostics_${_slugify(email)}`;
+
 // Grace period before auto-clock-out when heartbeat dies but no quit intent
 // signal is present. Protects active shifts from transient server timeouts
 // (screenshot uploads blocking heartbeat writes). After 15 min continuously
@@ -3020,6 +3064,36 @@ export const hrActions = {
       commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
       issuedAt: new Date().toISOString(),
     } as TrackerStopCommand);
+  },
+
+  // Signal 6/7: Remote command channel — added 2026-08-24. writeTrackerCommand
+  // writes the request; a v19+ agent picks it up over the same realtime SSE
+  // subscription used for ping/stop_cmd (see _handle_command in agent_gui.py)
+  // and, for 'diagnostics', responds with Signal 7 in trackerDiagnosticsKeyFor.
+  // An older agent simply never sees the key — callers MUST treat "no
+  // response within a few seconds" as "can't reach this tracker" (likely an
+  // old build, since this predates any hard update floor) rather than
+  // silently retrying forever or reporting it as a definite failure.
+  writeTrackerCommand: async (email: string, type: TrackerCommandType): Promise<void> => {
+    await pbSetKV(trackerCommandKeyFor(email), {
+      employeeEmail: email,
+      type,
+      commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
+      issuedAt: new Date().toISOString(),
+    } as TrackerCommand);
+  },
+  clearTrackerCommand: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([trackerCommandKeyFor(email)]);
+  },
+  // Diagnostics response is left in place (not auto-deleted here) so the
+  // Setup Agent modal can show "last diagnostics" even after being closed
+  // and reopened — clearTrackerDiagnostics is a separate explicit action for
+  // callers that want a clean slate before issuing a fresh request (so a
+  // stale response from a previous run can't be mistaken for a live one).
+  getTrackerDiagnostics: (email: string): Promise<TrackerDiagnostics | null> =>
+    pbGetKV(trackerDiagnosticsKeyFor(email)),
+  clearTrackerDiagnostics: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([trackerDiagnosticsKeyFor(email)]);
   },
 
   // Employee/HR self-service escape hatch for the "another device is

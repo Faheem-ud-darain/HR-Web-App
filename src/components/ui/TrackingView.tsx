@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -9,6 +9,7 @@ import {
   Profile,
   TrackingSettings,
   TrackerHeartbeat,
+  TrackerDiagnostics,
   Screenshot,
   InactivityLog,
   TimesheetEntry,
@@ -60,6 +61,21 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // Setup Agent modal
   const [setupEmp, setSetupEmp] = useState<Profile | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Remote diagnostics (Signal 6/7) — added 2026-08-24. 'idle' before the
+  // first request; 'waiting' while polling for a Signal 7 response;
+  // 'timeout' when a v18-or-earlier agent (or an offline one) never
+  // answers within DIAGNOSTICS_TIMEOUT_MS — that state is deliberately
+  // worded as "couldn't reach it" in the UI, not "broken", since a plain
+  // timeout is also the expected result from any agent older than v19.
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState<'idle' | 'waiting' | 'ok' | 'timeout'>('idle');
+  const [diagnosticsResult, setDiagnosticsResult] = useState<TrackerDiagnostics | null>(null);
+  // Guards against a still-in-flight poll chain from a PREVIOUS request (a
+  // different employee's modal, or a second click) writing its late result
+  // into what's now a different request's state. Each handleRunDiagnostics
+  // call claims a fresh id here; a poll only applies its result if its own
+  // id is still the current one when it resolves.
+  const diagnosticsRequestIdRef = useRef(0);
 
   // Screenshot viewer modal
   const [viewerEmp, setViewerEmp] = useState<Profile | null>(null);
@@ -300,12 +316,51 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   const handleOpenSetup = async (emp: Profile) => {
     setCopied(false);
+    setDiagnosticsStatus('idle');
+    setDiagnosticsResult(null);
     const settings = settingsFor(emp.email);
     if (!settings.agentToken) {
       await hrActions.updateTrackingSettings(emp.email, {});
       await refetchSettings();
     }
     setSetupEmp(emp);
+  };
+
+  // Signal 6/7 round trip: clear any stale response first (so a leftover
+  // answer from a previous request can't be mistaken for this one), issue
+  // the command, then poll for up to DIAGNOSTICS_TIMEOUT_MS. A v18-or-older
+  // agent never writes a response at all — that's the expected, common case
+  // right now during the soft rollout, not an error — so the timeout state
+  // is worded accordingly in the UI rather than as a failure.
+  const DIAGNOSTICS_POLL_MS = 1000;
+  const DIAGNOSTICS_TIMEOUT_MS = 10000;
+  const handleRunDiagnostics = async (email: string) => {
+    const requestId = ++diagnosticsRequestIdRef.current;
+    setDiagnosticsStatus('waiting');
+    setDiagnosticsResult(null);
+    await hrActions.clearTrackerDiagnostics(email).catch(() => {});
+    await hrActions.writeTrackerCommand(email, 'diagnostics');
+    const startedAt = Date.now();
+    const poll = async () => {
+      if (diagnosticsRequestIdRef.current !== requestId) return; // superseded
+      const result = await hrActions.getTrackerDiagnostics(email).catch(() => null);
+      if (diagnosticsRequestIdRef.current !== requestId) return; // superseded while awaiting
+      if (result) {
+        setDiagnosticsResult(result);
+        setDiagnosticsStatus('ok');
+        return;
+      }
+      if (Date.now() - startedAt >= DIAGNOSTICS_TIMEOUT_MS) {
+        setDiagnosticsStatus('timeout');
+        return;
+      }
+      setTimeout(poll, DIAGNOSTICS_POLL_MS);
+    };
+    setTimeout(poll, DIAGNOSTICS_POLL_MS);
+  };
+
+  const handleReloadSettingsNow = async (email: string) => {
+    await hrActions.writeTrackerCommand(email, 'reload_settings');
   };
 
   const handleRegenerateToken = async (email: string) => {
@@ -692,24 +747,38 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                       </td>
                     )}
                     <td className="px-6 py-4 text-center">
-                      <div className="flex flex-col sm:flex-row justify-center gap-2">
+                      {/* flex-wrap + whitespace-nowrap/shrink-0 on every
+                          button — fixed 2026-08-21. Without these, a row
+                          with 5 buttons (Setup Agent/Screenshots/Mouse
+                          Activity/Force End Shift/Force Disconnect, shown
+                          only when that employee has an open shift) had its
+                          buttons squeezed narrower than their text by the
+                          flex container, wrapping each label onto two
+                          lines and making that row visibly taller/
+                          misaligned next to every 4-button row beside it.
+                          Now a row that doesn't fit on one line wraps whole
+                          buttons onto a second line instead of shrinking
+                          and wrapping text inside them, so every button
+                          stays a consistent single-line pill regardless of
+                          how many are present in that row. */}
+                      <div className="flex flex-wrap sm:flex-row justify-center gap-2">
                         {canManage && (
                         <button
                           onClick={() => handleOpenSetup(emp)}
-                          className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                          className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
                         >
                           <Settings className="h-3.5 w-3.5" /> Setup Agent
                         </button>
                         )}
                         <button
                           onClick={() => handleOpenViewer(emp)}
-                          className="text-[10px] font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                          className="text-[10px] font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
                         >
                           <ImageIcon className="h-3.5 w-3.5" /> Screenshots
                         </button>
                         <button
                           onClick={() => handleOpenMouseView(emp)}
-                          className="text-[10px] font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                          className="text-[10px] font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
                         >
                           <MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity
                         </button>
@@ -717,7 +786,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                           <button
                             onClick={() => setForceEndShiftEmp(emp)}
                             title="End their current shift now — they'll need to Start Shift again, going through the tracker connection check"
-                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
                           >
                             <WifiOff className="h-3.5 w-3.5" /> Force End Shift
                           </button>
@@ -726,7 +795,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                           <button
                             onClick={() => setForceDisconnectEmp(emp)}
                             title="Invalidate their current setup code — their tracker will be forced to show 'Reconnect Required' and Start Shift will be blocked until they paste in the new code"
-                            className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                            className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
                           >
                             <ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect
                           </button>
@@ -954,7 +1023,14 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
       )}
 
       {/* Setup Agent Modal */}
-      <Modal isOpen={!!setupEmp} onClose={() => setSetupEmp(null)} title={setupEmp ? `Setup Agent — ${displayName(setupEmp, role)}` : 'Setup Agent'}>
+      <Modal
+        isOpen={!!setupEmp}
+        onClose={() => {
+          diagnosticsRequestIdRef.current += 1; // invalidate any in-flight poll
+          setSetupEmp(null);
+        }}
+        title={setupEmp ? `Setup Agent — ${displayName(setupEmp, role)}` : 'Setup Agent'}
+      >
         {setupEmp && (() => {
           const settings = settingsFor(setupEmp.email);
           return (
@@ -1043,6 +1119,69 @@ AGENT_TOKEN=${settings.agentToken}`}
                   </p>
                 </div>
               </details>
+
+              <div className="space-y-2 border-t border-slate-200 pt-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  <span className="font-bold text-slate-800">Live diagnostics.</span> Ask this employee&apos;s tracker directly what&apos;s happening right now, instead of guessing from the last heartbeat. Only works on tracker app v19 or newer — an older build simply won&apos;t answer.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleRunDiagnostics(setupEmp.email)}
+                    disabled={diagnosticsStatus === 'waiting'}
+                    className="text-xs font-semibold text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-50 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${diagnosticsStatus === 'waiting' ? 'animate-spin' : ''}`} />
+                    {diagnosticsStatus === 'waiting' ? 'Asking tracker…' : 'Run Diagnostics'}
+                  </button>
+                  <button
+                    onClick={() => handleReloadSettingsNow(setupEmp.email)}
+                    className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                    title="Tell the tracker to re-check its settings and shift status right now instead of waiting for its next poll"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Reload Settings Now
+                  </button>
+                </div>
+
+                {diagnosticsStatus === 'timeout' && (
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-slate-700 leading-relaxed">
+                      No response after 10 seconds. This means either the tracker isn&apos;t running right now, or it&apos;s still on an older build (pre-v19) that doesn&apos;t know how to answer yet — not necessarily that anything is broken.
+                    </p>
+                  </div>
+                )}
+
+                {diagnosticsStatus === 'ok' && diagnosticsResult && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Responded {formatDateTimeNY(diagnosticsResult.respondedAt)}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        v{diagnosticsResult.appVersion} · {diagnosticsResult.platform}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                      <span>Connection: <span className="font-semibold">{diagnosticsResult.connectionStatus || (diagnosticsResult.connected ? 'connected' : 'disconnected')}</span></span>
+                      <span>Tracking (HR): <span className="font-semibold">{diagnosticsResult.enabledByHr ? 'enabled' : 'disabled'}</span></span>
+                      <span>Shift active: <span className="font-semibold">{diagnosticsResult.shiftActive ? 'yes' : 'no'}</span></span>
+                      <span>Currently capturing: <span className="font-semibold">{diagnosticsResult.enabled ? 'yes' : 'no'}</span></span>
+                      <span>Screen locked: <span className="font-semibold">{diagnosticsResult.isLocked ? 'yes' : 'no'}</span></span>
+                      <span>Capture interval: <span className="font-semibold">{diagnosticsResult.intervalMinutes ?? '—'} min</span></span>
+                      <span>Consecutive failures: <span className="font-semibold">{diagnosticsResult.consecutiveCaptureFailures ?? 0}</span></span>
+                      <span>Last capture: <span className="font-semibold">{diagnosticsResult.lastCaptureAt ? formatDateTimeNY(diagnosticsResult.lastCaptureAt) : 'never'}</span></span>
+                    </div>
+                    {diagnosticsResult.lastError && (
+                      <p className="text-[11px] text-rose-600 font-semibold pt-1">Last error: {diagnosticsResult.lastError}</p>
+                    )}
+                    {diagnosticsResult.updateAvailableVersion && (
+                      <p className="text-[11px] text-amber-700 font-semibold pt-1">
+                        Update available: v{diagnosticsResult.updateAvailableVersion} — ask the employee to restart the tracker app to pick it up.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <p className="text-[10px] text-slate-400 leading-relaxed border-t border-slate-200 pt-3">
                 Tracking must be toggled &quot;Active&quot; above for captures to be accepted. The app only captures while that toggle is on and (for remote employees) their shift is active.

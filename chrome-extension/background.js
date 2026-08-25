@@ -182,6 +182,42 @@ async function pbSetKV(serverUrl, key, value) {
   }
 }
 
+// ── Real hr_tracking_settings lookup ────────────────────────────────────────
+// Fixed 2026-08-25 — this used to read a KV row (hr_tracking_settings_prod_v1)
+// from before the web app migrated tracking settings to a real PocketBase
+// collection with a unique index on employeeEmail (see hrData.ts's
+// getAllTrackingSettings/updateTrackingSettings). The web app stopped writing
+// to that KV key entirely once the migration landed, so this lookup always
+// returned null: (1) popup.js's setup-code connect flow could never validate
+// ANY current/regenerated setup code — every Chromebook trying to connect or
+// reconnect got "This setup code is not recognized," full stop; and (2) even
+// an already-connected Chromebook fell back to a hardcoded 1-minute
+// screenshot interval forever, ignoring whatever HR configured. Same bug
+// class as get_tracking_settings in tracker-agent/agent_gui.py, which got
+// this exact fix on 2026-08-18 — the extension just never got the same
+// treatment. Also NEW here: this is the only place that checks `enabled` at
+// all for this extension — previously nothing did (see handleHeartbeatTick),
+// so toggling an employee's tracking to "Inactive" in TrackingView had zero
+// effect on a connected Chromebook; it kept capturing for as long as a shift
+// was open. Returns the settings record (with `enabled`, `intervalMinutes`,
+// `employeeEmail`) or null if the token isn't recognized by the server.
+async function getTrackingSettingsByToken(serverUrl, agentToken) {
+  if (!agentToken) return null;
+  try {
+    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+    const res = await fetch(
+      `${cleanUrl}/api/collections/hr_tracking_settings/records?filter=${encodeURIComponent(`agentToken="${agentToken}"`)}&perPage=1`,
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.items?.[0] || null;
+  } catch (e) {
+    console.warn('[Delcargo Tracker] getTrackingSettingsByToken failed:', e);
+    return null;
+  }
+}
+
 async function pbDeleteKV(serverUrl, key) {
   const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const filterUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`;
@@ -335,58 +371,68 @@ async function handleHeartbeatTick() {
       shiftStartTime: clockInIso
     });
 
-    // 3. Fetch custom screenshot interval setting from PocketBase (hr_tracking_settings_prod_v1)
+    // 3. Fetch this device's real tracking settings (hr_tracking_settings,
+    // matched by agentToken) — both the enabled/disabled gate AND the
+    // custom screenshot interval now come from here. Previously NOTHING
+    // checked `enabled` at all in this extension (only shift-open gated
+    // capture), so toggling an employee's tracking to "Inactive" in
+    // TrackingView had zero effect on an already-connected Chromebook —
+    // it kept capturing regardless. Fixed 2026-08-25.
+    const trackingSettings = await getTrackingSettingsByToken(serverUrl, data.agentToken);
+    const enabledByHr = !!trackingSettings?.enabled;
     let intervalMinutes = 1;
-    try {
-      const settingsList = await pbGetKV(serverUrl, 'hr_tracking_settings_prod_v1');
-      if (Array.isArray(settingsList)) {
-        const empSetting = settingsList.find(s => s && (s.employeeEmail || '').toLowerCase() === email);
-        if (empSetting && empSetting.intervalMinutes) {
-          intervalMinutes = Math.max(1, parseInt(empSetting.intervalMinutes, 10) || 1);
-        }
-      }
-    } catch (e) {
-      console.error('[Delcargo Tracker] Fetch settings error:', e);
+    if (trackingSettings?.intervalMinutes) {
+      intervalMinutes = Math.max(1, parseInt(trackingSettings.intervalMinutes, 10) || 1);
     }
-
     chrome.storage.local.set({ screenshotIntervalMinutes: intervalMinutes });
 
-    // ── Staggered screenshot uploads (see staggered_screenshot_plan.md) ──
-    // Without this, lastScreenshotTime starts at 0, so the very first
-    // "is it due" check after a shift opens is always true — meaning every
-    // Chromebook whose shift starts at (near) the same moment captures its
-    // first screenshot in the same instant, and then repeats that same
-    // synchronized timing every interval afterward. screenshotJitterMs is a
-    // small persistent per-device offset (0–45s, matching the desktop
-    // agent's initial_jitter) generated once and reused — NOT regenerated
-    // every tick, which would just be noise instead of a stable phase
-    // offset — so this device's captures settle into their own consistent,
-    // randomized slot instead of everyone's boundary lining up.
-    let jitterMs = data.screenshotJitterMs;
-    if (typeof jitterMs !== 'number') {
-      jitterMs = Math.floor(Math.random() * 45000);
-      chrome.storage.local.set({ screenshotJitterMs: jitterMs });
-    }
-
-    const lastShot = data.lastScreenshotTime || 0;
-    const intervalMs = intervalMinutes * 60 * 1000;
-    let isDue;
-    if (lastShot === 0) {
-      // First capture since this shift opened — stagger from shift start
-      // by this device's jitter offset rather than firing instantly.
-      const shiftStartMs = new Date(clockInIso).getTime() || Date.now();
-      isDue = (Date.now() - shiftStartMs) >= jitterMs;
+    if (!trackingSettings) {
+      // Token not recognized by the server at all — e.g. HR regenerated
+      // this employee's setup code, or the row was never created. Don't
+      // capture anything until this device is reconnected with a current
+      // setup code; still fall through to the idle/auto-absence check
+      // below since that's about attendance, not screen recording.
+      console.warn('[Delcargo Tracker] Setup token not recognized by server — ask HR/Admin to check your setup.');
+    } else if (!enabledByHr) {
+      console.log('[Delcargo Tracker] Tracking is disabled for this account — skipping capture.');
     } else {
-      // Small +/-3s wobble each cycle on top of the base interval so
-      // repeated captures don't resettle into lockstep with any other
-      // device even when configured intervals match exactly.
-      const wobbleMs = Math.random() * 6000 - 3000;
-      isDue = (Date.now() - lastShot) >= (intervalMs + wobbleMs);
-    }
-    if (isDue) {
-      chrome.storage.local.set({ lastScreenshotTime: Date.now() });
-      console.log('[Delcargo Tracker] Screenshot due -> capturing screen now...');
-      handleScreenshotTick();
+      // ── Staggered screenshot uploads (see staggered_screenshot_plan.md) ──
+      // Without this, lastScreenshotTime starts at 0, so the very first
+      // "is it due" check after a shift opens is always true — meaning every
+      // Chromebook whose shift starts at (near) the same moment captures its
+      // first screenshot in the same instant, and then repeats that same
+      // synchronized timing every interval afterward. screenshotJitterMs is a
+      // small persistent per-device offset (0–45s, matching the desktop
+      // agent's initial_jitter) generated once and reused — NOT regenerated
+      // every tick, which would just be noise instead of a stable phase
+      // offset — so this device's captures settle into their own consistent,
+      // randomized slot instead of everyone's boundary lining up.
+      let jitterMs = data.screenshotJitterMs;
+      if (typeof jitterMs !== 'number') {
+        jitterMs = Math.floor(Math.random() * 45000);
+        chrome.storage.local.set({ screenshotJitterMs: jitterMs });
+      }
+
+      const lastShot = data.lastScreenshotTime || 0;
+      const intervalMs = intervalMinutes * 60 * 1000;
+      let isDue;
+      if (lastShot === 0) {
+        // First capture since this shift opened — stagger from shift start
+        // by this device's jitter offset rather than firing instantly.
+        const shiftStartMs = new Date(clockInIso).getTime() || Date.now();
+        isDue = (Date.now() - shiftStartMs) >= jitterMs;
+      } else {
+        // Small +/-3s wobble each cycle on top of the base interval so
+        // repeated captures don't resettle into lockstep with any other
+        // device even when configured intervals match exactly.
+        const wobbleMs = Math.random() * 6000 - 3000;
+        isDue = (Date.now() - lastShot) >= (intervalMs + wobbleMs);
+      }
+      if (isDue) {
+        chrome.storage.local.set({ lastScreenshotTime: Date.now() });
+        console.log('[Delcargo Tracker] Screenshot due -> capturing screen now...');
+        handleScreenshotTick();
+      }
     }
 
     // 4. Live continuous 37+ minutes idle check (only during active shift)

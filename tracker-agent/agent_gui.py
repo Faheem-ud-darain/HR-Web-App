@@ -107,7 +107,16 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "18"  # bumped for the mandatory-update-floor enforcement below (MIN_SUPPORTED_VERSION)
+APP_VERSION = "19"  # Bumped 18 -> 19 (2026-08-24) for the Signal 6/7 remote-command
+# channel (command_key_for/diagnostics_key_for, _handle_command, write_diagnostics)
+# — HR's "Run Diagnostics" / "Reload Settings Now" buttons in TrackingView only
+# do anything on a v19+ agent, since older builds never open the new SSE branch.
+# Deliberately NOT bumping MIN_SUPPORTED_VERSION below — this is a soft rollout:
+# no one is forced onto v19 yet. HR wanted to let adoption happen at its own pace
+# first and raise the hard floor later, the same way v16 eventually got forced.
+# A v18-and-earlier agent just won't respond to the new buttons; TrackingView's
+# UI must make that distinguishable from "the command failed" (see its own
+# comment on the diagnostics timeout/no-response state).
 # Hard floor — must stay in sync with TRACKER_MIN_VERSION in
 # src/lib/trackerSetup.ts (that constant drives the "Update Required" badge
 # HR/Admin sees in TrackingView; this one actually enforces it client-side).
@@ -761,6 +770,29 @@ def stop_cmd_key_for(email):
     return "tracker_stop_cmd_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
 
 
+def command_key_for(email):
+    """Signal 6 key: written by HR/Admin from TrackingView (Run Diagnostics /
+    Reload Settings Now / Check for Update Now buttons), read by tracker
+    agent over the same realtime SSE subscription as ping/stop_cmd. Added
+    2026-08-24 to give HR a direct remote-command channel instead of having
+    to guess what's wrong with a specific employee's tracker from heartbeat
+    fields alone — see command_key_for's sibling diagnostics_key_for for the
+    response half of the round trip. Deliberately reuses the existing
+    hr_delcargo_store KV pattern rather than a new collection so this ships
+    without waiting on the separate collections-split migration; those rows
+    move over whenever that migration happens."""
+    return "tracker_command_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
+
+
+def diagnostics_key_for(email):
+    """Signal 7 key: written by tracker agent in response to a 'diagnostics'
+    command, read by portal. Holds a point-in-time health snapshot — agent
+    version, connection/capture state, last error, shift status, OS/platform
+    info — so HR can see what's actually happening on that employee's
+    machine right now instead of inferring it from stale heartbeat fields."""
+    return "tracker_diagnostics_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
+
+
 def write_quit_intent(base_url, employee_email):
     """Signal 2: Writes an explicit 'I am deliberately quitting' signal to
     PocketBase. The web portal checks this key to distinguish a deliberate
@@ -812,6 +844,51 @@ def clear_stop_cmd(base_url, employee_email):
             requests.delete(url, timeout=10)
     except Exception as e:
         print(f"[warn] clear_stop_cmd failed: {e}")
+
+
+def clear_command(base_url, employee_email):
+    """Signal 6 cleanup: Deletes the command key after the tracker has acted
+    on it, so a stale command doesn't re-fire on reconnect/next SSE replay."""
+    key = command_key_for(employee_email)
+    try:
+        record_id, _ = pb_get_kv(base_url, key)
+        if record_id:
+            url = f"{base_url}/api/collections/{PB_COLLECTION}/records/{record_id}"
+            requests.delete(url, timeout=10)
+    except Exception as e:
+        print(f"[warn] clear_command failed: {e}")
+
+
+def write_diagnostics(base_url, employee_email, state_snapshot, cfg):
+    """Signal 7: Writes a point-in-time health snapshot in response to a
+    'diagnostics' command (Signal 6). state_snapshot is this agent's own
+    self.state dict (read under state_lock by the caller before this is
+    invoked from a background thread) — reusing exactly what the dashboard
+    UI already shows rather than a second, possibly-diverging code path."""
+    key = diagnostics_key_for(employee_email)
+    payload = {
+        "employeeEmail": employee_email,
+        "respondedAt": datetime.now(timezone.utc).isoformat(),
+        "appVersion": APP_VERSION,
+        "platform": platform.system(),
+        "deviceLabel": get_device_label(),
+        "connected": bool(state_snapshot.get("connected")),
+        "connectionStatus": state_snapshot.get("connection_status"),
+        "enabled": bool(state_snapshot.get("enabled")),
+        "enabledByHr": bool(state_snapshot.get("enabled_by_hr")),
+        "shiftActive": bool(state_snapshot.get("shift_active")),
+        "isLocked": bool(state_snapshot.get("is_locked")),
+        "lastError": state_snapshot.get("last_error"),
+        "lastCaptureAt": state_snapshot.get("last_capture"),
+        "consecutiveCaptureFailures": state_snapshot.get("consecutive_capture_failures"),
+        "intervalMinutes": state_snapshot.get("interval"),
+        "autostart": bool((cfg or {}).get("autostart")),
+        "updateAvailableVersion": state_snapshot.get("update_available_version"),
+    }
+    try:
+        pb_set_kv(base_url, key, payload)
+    except Exception as e:
+        print(f"[warn] write_diagnostics failed: {e}")
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -2107,6 +2184,78 @@ class TrackerApp:
             daemon=True,
         ).start()
 
+    def _handle_command(self, command_data):
+        """Signal 6 handler: called from _realtime_loop when a
+        tracker_command_<email> key is created/updated in hr_delcargo_store.
+        Added 2026-08-24 alongside write_diagnostics/diagnostics_key_for —
+        gives HR a direct way to ask a specific employee's tracker "what's
+        actually going on right now" (Run Diagnostics) or nudge it to
+        re-check its settings immediately (Reload Settings Now), instead of
+        inferring from stale/ambiguous heartbeat fields alone.
+
+        Deliberately does NOT include a live-remote "install update now"
+        action: forcing an update mid-shift from a background thread would
+        mean tearing down and rebuilding this process's own Tk root, which
+        risks corrupting whatever screen the employee currently has open.
+        The existing startup-time _check_and_prompt_update() flow already
+        handles updates safely; a 'diagnostics' response reports whether
+        one is available so HR knows to ask the employee to restart, without
+        this agent trying to force it live."""
+        if not self.cfg:
+            return
+        employee_email = self.cfg.get("employee_email", "").strip().lower()
+        cmd_email = (command_data.get("employeeEmail") or "").strip().lower()
+        if cmd_email != employee_email:
+            return  # not for this employee
+
+        command_type = command_data.get("type")
+        issued_at_iso = command_data.get("issuedAt", "")
+        # Ignore stale commands (> 60 seconds old) — same staleness window as
+        # Signal 5's stop command, for the same reason: don't let a command
+        # that already got its answer (or was abandoned) re-fire on SSE
+        # reconnect/replay.
+        try:
+            issued_at = datetime.fromisoformat(issued_at_iso.replace("Z", "+00:00"))
+            age_seconds = (datetime.now(timezone.utc) - issued_at).total_seconds()
+            if age_seconds > 60:
+                print(f"[info] Ignoring stale command (type={command_type}, age={age_seconds:.0f}s)")
+                return
+        except Exception:
+            return
+
+        print(f"[info] Command received from portal: {command_type}")
+
+        if command_type == "diagnostics":
+            def worker():
+                with self.state_lock:
+                    snapshot = dict(self.state)
+                latest = None
+                try:
+                    latest = check_for_update()
+                except Exception:
+                    latest = None
+                snapshot["update_available_version"] = latest
+                write_diagnostics(self.cfg["url"], employee_email, snapshot, self.cfg)
+                clear_command(self.cfg["url"], employee_email)
+            threading.Thread(target=worker, daemon=True).start()
+        elif command_type == "reload_settings":
+            # Wake the worker loop immediately so it re-fetches
+            # hr_tracking_settings and re-checks shift status on its next
+            # pass, instead of waiting up to SETTINGS_POLL_SECONDS.
+            self.wake_event.set()
+            threading.Thread(
+                target=clear_command,
+                args=(self.cfg["url"], employee_email),
+                daemon=True,
+            ).start()
+        else:
+            print(f"[info] Unknown command type ignored: {command_type}")
+            threading.Thread(
+                target=clear_command,
+                args=(self.cfg["url"], employee_email),
+                daemon=True,
+            ).start()
+
     def _heartbeat_loop(self, cfg, stop_event):
         while not stop_event.is_set():
             # Retry heartbeat up to 3 times on network/timeout error.
@@ -2394,6 +2543,10 @@ class TrackerApp:
                             elif kv_key == stop_cmd_key_for(employee_email):
                                 # Portal ended the shift — stop capturing immediately (Signal 5)
                                 self._handle_stop_cmd(kv_value)
+                            elif kv_key == command_key_for(employee_email):
+                                # HR/Admin asked for diagnostics or a settings
+                                # reload from TrackingView (Signal 6)
+                                self._handle_command(kv_value)
                         except Exception as inner_e:
                             print(f"[warn] Failed to process hr_delcargo_store event: {inner_e}")
             except Exception as e:

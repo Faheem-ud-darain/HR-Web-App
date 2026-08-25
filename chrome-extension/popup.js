@@ -143,17 +143,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const serverUrl = (decoded.serverUrl || 'https://pb.delcargo.us').replace(/\/+$/, '');
       const token = decoded.token;
 
-      const kvResp = await fetch(`${serverUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent('key="hr_tracking_settings_prod_v1"')}`);
-      if (!kvResp.ok) throw new Error('Could not reach server. Please check your network connection.');
+      // Fixed 2026-08-25 — this used to look up the token inside
+      // hr_tracking_settings_prod_v1, a KV blob the web app stopped writing
+      // to once tracking settings migrated to the real hr_tracking_settings
+      // collection (see hrData.ts's updateTrackingSettings). That meant
+      // EVERY setup code generated or regenerated after the migration was
+      // unfindable here — this extension could never actually connect or
+      // reconnect a Chromebook, no matter how fresh the code was. Same bug
+      // class as tracker-agent/agent_gui.py's get_tracking_settings, fixed
+      // there on 2026-08-18; this is the equivalent fix for the extension.
+      const settingsResp = await fetch(
+        `${serverUrl}/api/collections/hr_tracking_settings/records?filter=${encodeURIComponent(`agentToken="${token}"`)}&perPage=1`
+      );
+      if (!settingsResp.ok) throw new Error('Could not reach server. Please check your network connection.');
 
-      const kvData = await kvResp.json();
-      const settingsList = kvData?.items?.[0]?.value;
+      const settingsData = await settingsResp.json();
+      const matchedSetting = settingsData?.items?.[0];
 
-      if (!Array.isArray(settingsList)) {
-        throw new Error("Could not retrieve tracker settings from server.");
-      }
-
-      const matchedSetting = settingsList.find(s => s && s.agentToken === token);
       if (!matchedSetting || !matchedSetting.employeeEmail) {
         throw new Error("This setup code is not recognized. Please ask HR/Admin for a fresh setup code from the Tracker Setup screen.");
       }
