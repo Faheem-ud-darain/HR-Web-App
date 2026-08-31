@@ -388,6 +388,14 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
       const targetId = new URLSearchParams(window.location.search).get('teamId');
       if (targetId && teams.some(t => t.id === targetId)) {
         appliedChatDeepLinkRef.current = true;
+        // This genuinely belongs in an effect, not render: it's reading
+        // window.location (an external, client-only system guarded by the
+        // typeof-window check above) and immediately following up with a
+        // real side effect on that same system (history.replaceState) to
+        // strip the ?teamId= param once it's been applied — not just a
+        // plain prop-driven state reset, which is what the
+        // react-hooks/set-state-in-effect rule is meant to steer away from.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveTeamId(targetId);
         window.history.replaceState(null, '', window.location.pathname);
         return;
@@ -405,10 +413,25 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
   const { data: teamDocuments = [] } = useTeamDocuments(activeTeamId);
   const docTagList = teamDocuments.map(d => ({ title: d.title, url: d.fileUrl }));
 
-  // Reset windowing limit when switching active team
-  useEffect(() => {
+  // Reset per-channel UI/composer state when switching teams — a message
+  // window, filter, mention selection, or typing indicator set up for one
+  // channel isn't meaningful in another. Done synchronously during render
+  // (React's documented pattern for "adjusting state when a prop changes",
+  // see https://react.dev/learn/you-might-not-need-an-effect) rather than
+  // in a useEffect, so nothing ever renders with the previous channel's
+  // stale state, even for one frame.
+  const [resetForTeamId, setResetForTeamId] = useState(activeTeamId);
+  if (activeTeamId !== resetForTeamId) {
+    setResetForTeamId(activeTeamId);
     setMessageLimit(50);
-  }, [activeTeamId]);
+    setSearchQuery(''); setDateFrom(''); setDateTo('');
+    setFileTypeFilter('all'); setSizeFilter('all'); setShowFilters(false);
+    setMention(null);
+    setMentionedProfiles(new Map());
+    setDocTag(null);
+    setShowEmojiPicker(false);
+    setTypingNames([]);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -437,29 +460,13 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     hrActions.getMessageReadMap().then(setMessageReadMap);
   };
 
-  // Reset search/filter state when switching teams — a filter set up for
-  // one channel isn't necessarily meaningful in another.
-  useEffect(() => {
-    setSearchQuery(''); setDateFrom(''); setDateTo('');
-    setFileTypeFilter('all'); setSizeFilter('all'); setShowFilters(false);
-  }, [activeTeamId]);
-
-  // Reset the composer's mention state when switching teams so a stale
-  // dropdown/selection from one channel can't bleed into another.
-  useEffect(() => {
-    setMention(null);
-    setMentionedProfiles(new Map());
-    setDocTag(null);
-    setShowEmojiPicker(false);
-  }, [activeTeamId]);
-
   // "X is typing…" — poll everyone else's typing state for the active
   // channel every 2s (short enough that the indicator feels live, long
-  // enough not to hammer the KV collection). Also clears this device's own
-  // typing marker whenever the channel changes, so switching teams mid-type
-  // doesn't leave a stale "typing…" showing in the channel just left.
+  // enough not to hammer the KV collection). The reset of this device's
+  // own typing marker on channel switch lives in the render-time block
+  // above (setTypingNames([])); this effect only owns the polling
+  // subscription itself.
   useEffect(() => {
-    setTypingNames([]);
     if (!activeTeamId || !currentUserEmail) return;
     let cancelled = false;
     const poll = () => {
@@ -504,6 +511,12 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
   const announcements = messages.filter(m => m.isAnnouncement);
 
   const activeTeam = teams.find(t => t.id === activeTeamId);
+  // HR & Admin Line gets its own card treatment (see the message-rendering
+  // branch below) — a permanent two-party channel where the whole point is
+  // "who sent this, HR or Admin" being unmistakable at a glance, regardless
+  // of whether you're the sender or the reader. Everywhere else (Team Chat,
+  // DMs) keeps the existing self/other bubble convention untouched.
+  const isHrAdminLine = activeTeamId === HR_ADMIN_LINE_TEAM_ID;
   // Who can upload/delete Team Documents for the active team: Admin and HR
   // always, a Team Lead only for a team they actually lead (not just any
   // team they happen to be shown, and not a regular member).
@@ -580,6 +593,11 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     // stale.
     if (activeTeamId && currentUserEmail) {
       if (value.trim()) {
+        // Date.now() here runs inside this onChange handler, never during
+        // render — the react-hooks/purity rule can't prove that statically
+        // for a named (non-inline) handler function, so it flags it as if
+        // it were called from the render body itself.
+        // eslint-disable-next-line react-hooks/purity
         const now = Date.now();
         if (now - lastTypingTouchRef.current > 1500) {
           lastTypingTouchRef.current = now;
@@ -1009,10 +1027,11 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
 
             // Forwarded messages (HR & Admin Line — see
             // hrActions.forwardToHrAdminLine in hrData.ts) render as their
-            // own distinct card, not a left/right bubble — same
-            // full-width "stand out from the back-and-forth" treatment as
-            // Announcements above, sky-themed instead of amber so the two
-            // are never confused for each other at a glance.
+            // own distinct card — role-colored border on a white
+            // background, not the amber full-width banner Announcements
+            // use above — but still sit left/right in the normal
+            // sender-flow like a regular bubble, sized to their content
+            // rather than stretching the full width of the thread.
             if (m.isForward) {
               const kindLabel = m.forwardKind ? FORWARD_KIND_LABEL[m.forwardKind] : 'Forwarded';
               const originalHref = m.forwardKind && m.forwardLink
@@ -1022,61 +1041,95 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                 // comment on the Message interface in hrData.ts.
                 ? buildNotificationLink(currentUserRole === 'admin' ? 'admin' : 'hr', m.forwardKind, m.forwardLink)
                 : undefined;
+              // Forwarded messages only ever land in the HR & Admin Line
+              // (see hrActions.forwardToHrAdminLine — nothing else posts
+              // isForward: true), so the card is always role-colored: same
+              // purple/sky pairing as roleBadgeInfo(), reused here so "who
+              // forwarded this" reads at a glance the same way "who sent
+              // this" does on a regular message below — a white card with a
+              // colored border/accent, not a solid color fill, so it still
+              // reads as part of the app rather than a loud banner.
+              const c = isAdminSender
+                ? { border: 'border-purple-300', text: 'text-purple-700', tag: 'bg-purple-50', btnHover: 'hover:bg-purple-600 hover:border-purple-600' }
+                : { border: 'border-sky-300', text: 'text-sky-700', tag: 'bg-sky-50', btnHover: 'hover:bg-sky-600 hover:border-sky-600' };
+              // Sits in the same left/right-by-sender flow as a regular
+              // bubble below (own messages on your right, the other
+              // person's on your left) and only ever takes up as much
+              // width as its content needs, capped at 75% — it's a
+              // distinct card, not a full-width banner like Announcements.
               return (
-                <div key={m.id} className="border-2 border-sky-300 bg-sky-50 rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-1.5 text-[10px] font-black text-sky-700 uppercase tracking-wider mb-1">
-                    <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
-                    {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                    <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
+                <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
+                  <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
+                  <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
+                    <div className={`border ${c.border} bg-white rounded-xl px-4 py-3 ${isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
+                      <div className={`flex items-center gap-1.5 text-[10px] font-black ${c.text} uppercase tracking-wider mb-1`}>
+                        <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
+                        {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
+                        <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
+                      </div>
+                      {m.forwardLabel && (
+                        <p className="text-xs font-bold text-slate-800 break-words">{m.forwardLabel}</p>
+                      )}
+                      {m.forwardNote && (
+                        <p className="text-xs font-medium text-slate-600 italic mt-1 whitespace-pre-wrap break-words">&ldquo;{m.forwardNote}&rdquo;</p>
+                      )}
+                      {m.attachmentUrl && (
+                        isImageAttachment(m.attachmentName) ? (
+                          <button
+                            type="button"
+                            onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
+                            className="block mt-2"
+                          >
+                            <OptimizedImage
+                              src={m.attachmentUrl}
+                              alt={m.attachmentName || 'attachment'}
+                              width={400}
+                              height={220}
+                              className="rounded-lg max-h-56 object-cover"
+                            />
+                          </button>
+                        ) : (
+                          <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline ${c.text} mt-2`}>
+                            <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
+                          </a>
+                        )
+                      )}
+                      {originalHref && (
+                        // Styled as a small pill button (not a plain text link) —
+                        // the point of a forward card is a one-glance "here's the
+                        // thing, click to jump straight to it" affordance.
+                        <a
+                          href={originalHref}
+                          className={`inline-flex items-center gap-1.5 text-[11px] font-black ${c.text} bg-white border ${c.border} rounded-full px-2.5 py-1 mt-2 ${c.btnHover} hover:text-white transition-colors`}
+                        >
+                          View original <ExternalLink className="h-3 w-3 shrink-0" />
+                        </a>
+                      )}
+                    </div>
+                    {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
                   </div>
-                  {m.forwardLabel && (
-                    <p className="text-xs font-bold text-slate-800 break-words">{m.forwardLabel}</p>
-                  )}
-                  {m.forwardNote && (
-                    <p className="text-xs font-medium text-slate-600 italic mt-1 whitespace-pre-wrap break-words">"{m.forwardNote}"</p>
-                  )}
-                  {m.attachmentUrl && (
-                    isImageAttachment(m.attachmentName) ? (
-                      <button
-                        type="button"
-                        onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
-                        className="block mt-2"
-                      >
-                        <OptimizedImage
-                          src={m.attachmentUrl}
-                          alt={m.attachmentName || 'attachment'}
-                          width={400}
-                          height={220}
-                          className="rounded-lg max-h-56 object-cover"
-                        />
-                      </button>
-                    ) : (
-                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[11px] font-bold underline text-sky-700 mt-2">
-                        <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
-                      </a>
-                    )
-                  )}
-                  {originalHref && (
-                    // Styled as a small pill button (not a plain text link) —
-                    // the point of a forward card is a one-glance "here's the
-                    // thing, click to jump straight to it" affordance.
-                    <a
-                      href={originalHref}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-black text-sky-700 bg-white border border-sky-300 rounded-full px-2.5 py-1 mt-2 hover:bg-sky-600 hover:text-white hover:border-sky-600 transition-colors"
-                    >
-                      View original <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
-                  )}
                 </div>
               );
             }
 
+            // HR & Admin Line: a white card with a role-colored border/
+            // text (purple for Admin, sky for HR — same pairing as
+            // roleBadgeInfo() and the Forwarded cards above) instead of the
+            // solid self/other fill used everywhere else. The point of this
+            // channel is "who sent this, HR or Admin" being obvious to BOTH
+            // sides regardless of which one of them is reading it right
+            // now — a self-vs-other color scheme can't do that (it'd show
+            // the same message in a different color to each viewer), so it
+            // only applies here; Team Chat/DMs keep their normal bubbles.
+            const hrAdminColor = isAdminSender
+              ? { border: 'border-purple-300', text: 'text-purple-700', name: 'text-purple-700' }
+              : { border: 'border-sky-300', text: 'text-sky-700', name: 'text-sky-700' };
             return (
               <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
                 <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
                 <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`text-[10px] font-bold ${isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
+                    <span className={`text-[10px] font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
                     {isAdminSender ? (
                       <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
                         <Crown className="h-2.5 w-2.5" /> Admin
@@ -1092,13 +1145,15 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                     )}
                   </div>
                   <div className={`rounded-2xl px-3.5 py-2.5 text-xs font-medium leading-relaxed ${
-                    isAdminSender
-                      ? 'bg-purple-600 text-white ring-2 ring-purple-200 ' + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
-                      : isSelf ? 'bg-orange-600 text-white rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                    isHrAdminLine
+                      ? `bg-white border ${hrAdminColor.border} text-slate-800 ` + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
+                      : isAdminSender
+                        ? 'bg-purple-600 text-white ring-2 ring-purple-200 ' + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
+                        : isSelf ? 'bg-orange-600 text-white rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'
                   }`}>
                     {m.text && (
                       <p className="whitespace-pre-wrap break-words">
-                        {renderMessageText(m.text, mentionLabels, docTagList, isAdminSender || isSelf)}
+                        {renderMessageText(m.text, mentionLabels, docTagList, !isHrAdminLine && (isAdminSender || isSelf))}
                       </p>
                     )}
                     {m.attachmentUrl && (
@@ -1121,7 +1176,9 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                           href={m.attachmentUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className={`flex items-center gap-1.5 text-[11px] font-bold underline ${m.text ? 'mt-2' : ''} ${isAdminSender || isSelf ? 'text-white' : 'text-orange-700'}`}
+                          className={`flex items-center gap-1.5 text-[11px] font-bold underline ${m.text ? 'mt-2' : ''} ${
+                            isHrAdminLine ? hrAdminColor.text : (isAdminSender || isSelf ? 'text-white' : 'text-orange-700')
+                          }`}
                         >
                           <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'}
                           {m.attachmentSize !== undefined && <span className="font-semibold opacity-80">({formatBytes(m.attachmentSize)})</span>}

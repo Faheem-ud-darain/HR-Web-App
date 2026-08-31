@@ -1694,27 +1694,49 @@ message row. A plain (non-forwarded) message sent directly into the
 channel also notifies the other role, with generic wording — handled in
 `TeamChatView.tsx`'s `handleSend`, gated on `teamId === HR_ADMIN_LINE_TEAM_ID`.
 
-Forwarded messages render as their own sky-themed card (mirrors the
-amber-themed Announcement card already in `TeamChatView.tsx`) — a
-"Forwarded → Ticket/Announcement/Message" tag, the source's title/channel
-name, the optional note, the copied attachment if any, and a "View
-original" link. That link is deliberately NOT a pre-built path stored at
-forward time: `buildNotificationLink` bakes in a role-specific base path
-(`/hr/...` vs `/admin/...`), but this channel is read by BOTH roles, so
-`Message.forwardLink` stores only the raw source id and the real URL is
-resolved at render time using the *viewer's own* role.
+Forwarded messages render as their own card (mirrors the amber-themed
+Announcement card's "distinct, not a plain bubble" idea but not its
+color) — a "Forwarded → Ticket/Announcement/Message" tag, the source's
+title/channel name, the optional note, the copied attachment if any, and
+a "View original" pill-button link. That link is deliberately NOT a
+pre-built path stored at forward time: `buildNotificationLink` bakes in
+a role-specific base path (`/hr/...` vs `/admin/...`), but this channel
+is read by BOTH roles, so `Message.forwardLink` stores only the raw
+source id and the real URL is resolved at render time using the
+*viewer's own* role.
 
 **Schema**: `Message` gained `isForward?`, `forwardKind?`, `forwardLabel?`,
 `forwardLink?`, `forwardNote?`, mapped in `toMessage` from new
 `is_forward`/`forward_kind`/`forward_label`/`forward_link`/`forward_note`
-columns on `hr_messages`. **NOT applied to the live PocketBase instance
-by this session** — per this app's standing rule, schema changes against
-the live droplet are written as a migration script for the user to run
-themselves, never executed directly here. New script:
+columns on `hr_messages`. A fallback migration script exists at
 `migration_data/add_forward_fields_to_messages.py` (companion to
-`create_messages_collection.py`, same idempotent add-missing-fields
-pattern) — **the user needs to run this themselves** before the
-forward_* fields exist on the live instance. Until then, PocketBase
-silently drops those keys on write and `toMessage`'s forward_* reads all
-come back `undefined` — not a crash, a forwarded message just renders as
-an empty-looking plain message with no card until the migration runs.
+`create_messages_collection.py`) but wasn't what actually applied this —
+the user explicitly authorized a one-time exception to add these five
+fields directly through PocketBase's Admin UI, using their own
+already-authenticated dashboard session, rather than running the script.
+Applied and confirmed live (`"Successfully updated collection."`), field
+names verified to match `toMessage`/`forwardToHrAdminLine` exactly, and
+forwarding has since been manually tested end-to-end as both HR and
+Admin — this is not a standing exception to the schema-change rule, just
+how this one field-add happened.
+
+**Card redesign, same day, later in the session:** both regular HR &
+Admin Line bubbles and forward cards were recolored from a solid-fill
+self/other scheme to a role-based one — purple border/accent for
+Admin-sent, sky for HR-sent, computed from `isAdminSender` so the color
+is consistent for both viewers rather than flipping depending on who's
+looking (the way Team Chat/DM bubbles do, which is fine there but wrong
+for a channel whose whole point is "who sent this" being obvious to
+both sides). Cards moved from a solid/thick-border fill to a white
+background with a single-width colored border, closer to the rest of
+the app's visual language than a loud banner. Scoped via
+`isHrAdminLine = activeTeamId === HR_ADMIN_LINE_TEAM_ID` for regular
+bubbles (forward cards apply it unconditionally, since they only ever
+appear in this one channel); Team Chat/DM styling is untouched, and the
+Announcement card's amber was deliberately left alone since it marks
+content type app-wide, not sender identity. Forward cards were also
+found to be rendering full-width regardless of sender, ignoring the
+left/right convention every regular bubble already followed — fixed to
+sit in the same sender-side flow (own forwards on the right, the other
+person's on the left, `max-w-[75%]` capped) instead of always spanning
+the full thread width.
