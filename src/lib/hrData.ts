@@ -603,6 +603,48 @@ export interface TrackerStopCommand {
 }
 const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(email)}`;
 
+// Signal 6: Written by HR/Admin from TrackingView (Run Diagnostics / Reload
+// Settings Now buttons). Tracker agent reads this via the same realtime SSE
+// subscription as ping/stop_cmd and deletes the key itself once acted on
+// (see clear_command in agent_gui.py) — the portal never has to clean this
+// one up. Added 2026-08-24 alongside Signal 7 below to give HR a direct
+// remote-command channel instead of guessing what's wrong with a specific
+// employee's tracker from stale heartbeat fields alone.
+export interface TrackerCommand {
+  employeeEmail: string;
+  type: 'diagnostics' | 'reload_settings';
+  issuedAt: string; // ISO — agent ignores commands older than ~60s
+}
+const trackerCommandKeyFor = (email: string) => `tracker_command_${_slugify(email)}`;
+
+// Signal 7: Written by tracker agent in response to a 'diagnostics' command
+// (Signal 6) — a point-in-time health snapshot (agent version, connection/
+// capture state, last error, shift status, OS/platform info) so HR can see
+// what's actually happening on that employee's machine right now instead of
+// inferring it from stale heartbeat fields. Field names here mirror
+// write_diagnostics()'s payload in agent_gui.py exactly (camelCase on this
+// side, same on that one since PocketBase KV values are opaque JSON).
+export interface TrackerDiagnostics {
+  employeeEmail: string;
+  respondedAt: string; // ISO
+  appVersion: string;
+  platform: string;
+  deviceLabel: string;
+  connected: boolean;
+  connectionStatus?: string;
+  enabled: boolean;
+  enabledByHr: boolean;
+  shiftActive: boolean;
+  isLocked: boolean;
+  lastError?: string;
+  lastCaptureAt?: string;
+  consecutiveCaptureFailures?: number;
+  intervalMinutes?: number;
+  autostart: boolean;
+  updateAvailableVersion?: string;
+}
+const trackerDiagnosticsKeyFor = (email: string) => `tracker_diagnostics_${_slugify(email)}`;
+
 // Grace period before auto-clock-out when heartbeat dies but no quit intent
 // signal is present. Protects active shifts from transient server timeouts
 // (screenshot uploads blocking heartbeat writes). After 15 min continuously
@@ -3256,6 +3298,29 @@ export const hrActions = {
       commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
       issuedAt: new Date().toISOString(),
     } as TrackerStopCommand);
+  },
+
+  // Signal 6: Command — portal writes this when HR/Admin clicks "Run
+  // Diagnostics" or "Reload Settings Now" in TrackingView. Tracker agent
+  // reads via realtime SSE, acts on it, and deletes the key itself
+  // (clear_command in agent_gui.py) — nothing to clean up on this side.
+  writeTrackerCommand: async (email: string, type: 'diagnostics' | 'reload_settings'): Promise<void> => {
+    await pbSetKV(trackerCommandKeyFor(email), {
+      employeeEmail: email,
+      type,
+      issuedAt: new Date().toISOString(),
+    } as TrackerCommand);
+  },
+
+  // Signal 7: Diagnostics response — tracker agent writes this after acting
+  // on a 'diagnostics' command. Portal polls for it (see
+  // TrackingView.tsx's handleRunDiagnostics: 1s interval, 10s timeout) —
+  // an agent older than v19 (or one that's offline) never responds at all,
+  // which is the expected/common case during the soft rollout, not a bug.
+  getTrackerDiagnostics: (email: string): Promise<TrackerDiagnostics | null> =>
+    pbGetKV(trackerDiagnosticsKeyFor(email)),
+  clearTrackerDiagnostics: async (email: string): Promise<void> => {
+    await pbDeleteKVByKeys([trackerDiagnosticsKeyFor(email)]);
   },
 
   // Employee/HR self-service escape hatch for the "another device is
