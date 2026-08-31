@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, getAbsenceDeductionForMonth } from '@/lib/hrData';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
@@ -300,7 +300,12 @@ export default function HRPayrollPage() {
                           const empProfile = employees.find(e => e.id === emp.employeeId);
                           const records = empProfile ? absenceRecords.filter(a => a.date.slice(0, 7) === monthKey && a.employeeEmail.toLowerCase() === empProfile.email.toLowerCase()) : [];
                           if (records.length === 0) return null;
-                          const total = records.reduce((acc, a) => acc + a.deductionAmount, 0);
+                          // Recomputed from the employee's current base salary
+                          // (see getAbsenceDeductionForMonth in hrData.ts) — NOT
+                          // a sum of each record's frozen deductionAmount, so
+                          // this always matches what computePayrollView actually
+                          // charges, even after a since-corrected salary error.
+                          const total = getAbsenceDeductionForMonth(records, empProfile!.email, empProfile!.baseSalary, monthKey);
                           return <div className="text-[10px] text-rose-600 font-bold mt-1">Absent ({records.length}d, {formatMoney(total, emp.region)})</div>;
                         })()}
                       </td>
@@ -342,7 +347,11 @@ export default function HRPayrollPage() {
           const monthKeyMobile = new Date().toISOString().slice(0, 7);
           const absenceRecordsMobile = empProfileMobile ? absenceRecords.filter(a => a.date.slice(0, 7) === monthKeyMobile && a.employeeEmail.toLowerCase() === empProfileMobile.email.toLowerCase()) : [];
           const absentCountMobile = absenceRecordsMobile.length;
-          const absentTotalMobile = absenceRecordsMobile.reduce((acc, a) => acc + a.deductionAmount, 0);
+          // See the desktop table's identical comment above — recomputed
+          // from current base salary, not the records' frozen deductionAmount.
+          const absentTotalMobile = empProfileMobile
+            ? getAbsenceDeductionForMonth(absenceRecordsMobile, empProfileMobile.email, empProfileMobile.baseSalary, monthKeyMobile)
+            : 0;
           return (
             <div key={emp.employeeId} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">

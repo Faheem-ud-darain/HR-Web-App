@@ -603,50 +603,6 @@ export interface TrackerStopCommand {
 }
 const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(email)}`;
 
-// Signal 6: Remote-command channel — added 2026-08-24 so HR/Admin can act on
-// a specific employee's tracker directly instead of guessing what's wrong
-// from heartbeat fields alone (see TrackingView's "Run Diagnostics" /
-// "Reload Settings Now" buttons). Written by the portal, read by the tracker
-// agent via the same realtime SSE subscription as ping/stop_cmd — see
-// command_key_for/_handle_command in agent_gui.py. Only a v19+ agent
-// (APP_VERSION) knows to look for this key at all; anything older just
-// never responds, which the portal must treat as "can't tell" rather than
-// "definitely broken" — see needsTrackerUpdate/TRACKER_MIN_VERSION, which
-// is intentionally NOT being bumped for this (soft rollout, HR's call).
-export type TrackerCommandType = 'diagnostics' | 'reload_settings';
-export interface TrackerCommand {
-  employeeEmail: string;
-  type: TrackerCommandType;
-  commandId: string; // random id — agent deletes key after acting on it
-  issuedAt: string;  // ISO — agent ignores commands older than 60s
-}
-const trackerCommandKeyFor = (email: string) => `tracker_command_${_slugify(email)}`;
-
-// Signal 7: Written by the tracker agent in response to a 'diagnostics'
-// command — a live health snapshot straight from the agent's own dashboard
-// state (self.state in agent_gui.py), not anything re-derived on the portal
-// side, so it can't drift from what the employee's own tracker window shows.
-export interface TrackerDiagnostics {
-  employeeEmail: string;
-  respondedAt: string; // ISO
-  appVersion: string;
-  platform: string;
-  deviceLabel: string;
-  connected: boolean;
-  connectionStatus: string | null;
-  enabled: boolean;
-  enabledByHr: boolean;
-  shiftActive: boolean;
-  isLocked: boolean;
-  lastError: string | null;
-  lastCaptureAt: string | null;
-  consecutiveCaptureFailures: number | null;
-  intervalMinutes: number | null;
-  autostart: boolean;
-  updateAvailableVersion: string | null;
-}
-const trackerDiagnosticsKeyFor = (email: string) => `tracker_diagnostics_${_slugify(email)}`;
-
 // Grace period before auto-clock-out when heartbeat dies but no quit intent
 // signal is present. Protects active shifts from transient server timeouts
 // (screenshot uploads blocking heartbeat writes). After 15 min continuously
@@ -718,6 +674,16 @@ export interface Notification {
   // mention). Absent for generic/'internal' notifications with nothing to
   // deep-link to, and for anything created before this field existed.
   link?: string;
+  // The category this row was created with (see hrActions.addNotification).
+  // Written on every row but, until the HR & Admin Line feature, never read
+  // back into the app — nothing client-side needed it (the per-recipient
+  // opt-out check happens server-side in pb_hooks/push_notifications.pb.js
+  // against the raw record). The HR & Admin Line sidebar unread-dot needs
+  // it to pick 'hr_admin_line' rows out of the notifications feed that's
+  // already loaded app-wide for the bell — see hasUnseenHrAdminLineActivity
+  // below — rather than fetching hr_notifications a second time just for
+  // that.
+  category?: NotificationCategory;
 }
 type NotificationReadMap = Record<string, string[]>;
 type NotificationClearedMap = Record<string, string[]>;
@@ -741,8 +707,13 @@ type AnnouncementReadMap = Record<string, string[]>;
 // as one of its pushable categories server-side. That file isn't present in
 // this repo checkout/session, so it could not be updated as part of this
 // feature — see PROJECT_HISTORY.md for the exact server-side change needed.
-export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'maintenance' | 'internal';
-export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal' | 'maintenance'>, boolean>;
+// 'hr_admin_line' (HR & Admin channel — see HR_ADMIN_LINE_TEAM_ID below) is
+// a 7th category, added the same way 'maintenance' was: always-fires,
+// deliberately NOT included in NotificationPrefs/DEFAULT_NOTIFICATION_PREFS
+// below, same reasoning — this is HR and Admin's own direct line to each
+// other, not something either side should be able to silently opt out of.
+export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'maintenance' | 'hr_admin_line' | 'internal';
+export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal' | 'maintenance' | 'hr_admin_line'>, boolean>;
 const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true, shift: true };
 
 // Builds the role-correct in-app path for a notification's `link` field.
@@ -754,11 +725,28 @@ function roleBasePath(role: string): string {
   if (role === 'admin') return '/admin';
   return '/employee'; // employee, team_lead, or anything else
 }
-export function buildNotificationLink(role: string, kind: 'ticket' | 'leave' | 'chat' | 'task', id: string): string {
+// Fixed, well-known teamId for the permanent HR & Admin channel (see the
+// "HR & Admin Line" feature) — one real hr_messages channel shared by
+// every hr/admin user, never surfaced to employee/team_lead. Unlike Team
+// Chat/DMs there's no hr_teams row backing it; TeamChatView is handed a
+// single synthetic { id: HR_ADMIN_LINE_TEAM_ID, name: 'HR & Admin',
+// members: [] } team instead — see (dashboard)/admin/hr-admin/page.tsx and
+// (dashboard)/hr/hr-admin/page.tsx.
+export const HR_ADMIN_LINE_TEAM_ID = 'hr_admin_line';
+
+export function buildNotificationLink(role: string, kind: 'ticket' | 'leave' | 'chat' | 'task' | 'announcement' | 'hr_admin', id: string): string {
   const base = roleBasePath(role);
   if (kind === 'ticket') return `${base}/tickets?ticketId=${id}`;
   if (kind === 'leave') return `${base}/leaves?leaveId=${id}`;
   if (kind === 'task') return `${base}/tasks?taskId=${id}`; // Tasks list doesn't deep-select by id yet — still lands on the right screen.
+  // Announcements are composed/listed inline on the HR/Admin dashboard
+  // page itself (admin/page.tsx, hr/page.tsx) — there's no dedicated
+  // announcements page or deep-select-by-id support yet, so (like 'task'
+  // above) this just lands on the right dashboard.
+  if (kind === 'announcement') return base;
+  // HR & Admin channel — same fixed route for every forward/message
+  // notification into it, id is always HR_ADMIN_LINE_TEAM_ID.
+  if (kind === 'hr_admin') return `${base}/hr-admin`;
   // Team Chat route differs per role even though the base doesn't follow
   // the simple /leaves, /tickets pattern.
   const chatPath = role === 'hr' || role === 'admin' ? `${base}/team-chats` : `${base}/chat`;
@@ -864,6 +852,32 @@ export interface Message {
   id: string; teamId: string; senderEmail: string; senderName: string;
   text?: string; attachmentUrl?: string; attachmentName?: string; attachmentSize?: number;
   isAnnouncement?: boolean; timestamp: string;
+  // Forward metadata (HR & Admin Line feature) — set only on messages sent
+  // via hrActions.forwardToHrAdminLine, always into the fixed
+  // HR_ADMIN_LINE_TEAM_ID channel. `text` is left empty on a forwarded
+  // message; the forwarded card renders from these fields instead.
+  // Requires the forward_* columns added by
+  // migration_data/add_forward_fields_to_messages.py — NOT YET RUN against
+  // the live PocketBase instance as of this writing (see that script's
+  // header comment). Until it's run, PocketBase silently drops these keys
+  // on write and toMessage's forward_* reads all come back undefined, so
+  // a forwarded message just renders as an empty-looking plain message
+  // with no card — not a crash, just missing the extra styling until the
+  // migration is applied.
+  isForward?: boolean;
+  forwardKind?: 'ticket' | 'announcement' | 'chat';
+  // The source's title (ticket/announcement) or source channel's display
+  // name (chat) — NOT a UI label like "Forwarded → Ticket"; that tag is
+  // derived from forwardKind at render time (see TeamChatView.tsx).
+  forwardLabel?: string;
+  // The source record's raw id (ticket id / announcement id / source
+  // teamId) — deliberately NOT a pre-built path. buildNotificationLink
+  // bakes in a role-specific base path (/hr/... vs /admin/...), but this
+  // channel is read by BOTH hr and admin, so the "View original" link is
+  // resolved at render time from this raw id + forwardKind using the
+  // *viewer's own* role, not the forwarder's.
+  forwardLink?: string;
+  forwardNote?: string;
 }
 
 // Team Documents — per-team onboarding/instructional file library shown
@@ -1018,7 +1032,7 @@ function toLeave(l: any): LeaveApplication {
   return { id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status };
 }
 function toNotification(n: any): Notification {
-  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, created: n.created, read: !!n.read, link: n.link || undefined };
+  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, created: n.created, read: !!n.read, link: n.link || undefined, category: n.category || undefined };
 }
 function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
@@ -1061,6 +1075,11 @@ function toMessage(m: any): Message {
     attachmentSize: typeof m.attachment_size === 'number' ? m.attachment_size : undefined,
     isAnnouncement: !!m.is_announcement,
     timestamp: m.created,
+    isForward: !!m.is_forward,
+    forwardKind: m.forward_kind || undefined,
+    forwardLabel: m.forward_label || undefined,
+    forwardLink: m.forward_link || undefined,
+    forwardNote: m.forward_note || undefined,
   };
 }
 function toTeamDocument(d: any): TeamDocument {
@@ -1791,6 +1810,36 @@ export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[]
   return Math.round(remainingDays * dailyRate);
 }
 
+// Absence deduction for one employee's target month, recomputed from their
+// CURRENT base salary — deliberately NOT a sum of each AbsenceRecord's own
+// (frozen) `deductionAmount` field. That field is set once, at detection
+// time, from whatever emp.baseSalary was that day (see runAbsenceCheck) and
+// never revisited. If a salary was ever wrong in the system for a while
+// (data-entry mistake, since-corrected) any absence recorded during that
+// window kept charging 2x the OLD, much larger daily rate forever — this
+// is how a 20,000 salary could show a 130,000 "absence deduction": a
+// couple of leftover records from when the salary was mistakenly set much
+// higher. Recomputing from count * current daily rate means a salary
+// correction fixes every past absence deduction for that employee too, not
+// just future ones. Shared by computePayrollView and the HR/Admin payroll
+// pages' own "absence total" breakdown so both always show the same number.
+// Never negative (a month can't have a negative absence count) — guarded
+// anyway in case a bad/NaN baseSalary ever slips through.
+export function getAbsenceDeductionForMonth(
+  absenceRecords: AbsenceRecord[],
+  employeeEmail: string,
+  currentBaseSalary: number,
+  monthKey: string
+): number {
+  const wanted = (employeeEmail || '').toLowerCase();
+  const count = absenceRecords.filter(
+    a => a.employeeEmail.toLowerCase() === wanted && a.date.slice(0, 7) === monthKey
+  ).length;
+  const dailyRate = currentBaseSalary / WORKING_DAYS_PER_MONTH;
+  const raw = Math.round(count * 2 * dailyRate);
+  return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+}
+
 export const formatMoney = (amount: number, region?: 'USA' | 'Pakistan') =>
   region === 'USA' ? `$${amount.toLocaleString()}` : `PKR ${amount.toLocaleString()}`;
 
@@ -1915,6 +1964,40 @@ export function markMessageActivitySeen(
   if (typeof window === 'undefined' || !email) return;
   const current = computeMessageActivitySignature(messages, myTeamIds, email);
   window.localStorage.setItem(chatSeenStorageKey(role, email), String(current));
+}
+
+// ---------------------------------------------------------------------------
+// HR & Admin Line unseen-activity — deliberately NOT the
+// hasUnseenMessageActivity/useAllMessages pattern above. That pattern
+// requires polling every hr_messages row (useAllMessages, 20s interval)
+// just to compute a sidebar dot, which is exactly the always-on background
+// load this feature was explicitly asked NOT to add before the HR & Admin
+// page is actually opened (see the page components). Instead this drives
+// the dot off `hr_notifications`, which is already polled app-wide for
+// TopNav's bell (useNotifications, 15s interval) regardless of which page
+// is open — so checking it here is free, not a new cost. Only once the HR
+// & Admin page itself mounts does useMessages(HR_ADMIN_LINE_TEAM_ID) start
+// polling that channel's actual messages.
+//
+// Broadcast notifications (recipientEmail === 'all') use the same
+// per-user readMap-based "seen" tracking TopNav's bell already fetches via
+// hrActions.getNotificationReadMap() — NOT the localStorage counter
+// pattern the other hasUnseenX helpers above use, because that map is the
+// one place "read" state for a broadcast row actually lives; there's no
+// separate concept of "seen" to invent here.
+export function hasUnseenHrAdminLineActivity(
+  notifications: Notification[],
+  readMap: NotificationReadMap,
+  role: 'admin' | 'hr',
+  email: string,
+): boolean {
+  if (!email) return false;
+  return notifications.some(n =>
+    n.category === 'hr_admin_line' &&
+    n.recipientRole === role &&
+    n.recipientEmail === 'all' &&
+    !(readMap[n.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase())
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -2751,6 +2834,91 @@ export const hrActions = {
     }
   },
 
+  // ── HR & Admin Line forwarding (hr_messages, HR_ADMIN_LINE_TEAM_ID) ────
+  // Single mechanism behind all 3 forward trigger points (TicketsView,
+  // the admin/hr dashboard announcement panels, TeamChatView message
+  // bubbles) — always lands in the one fixed HR & Admin channel, always
+  // notifies the OTHER role (hr forwards -> notify admin, admin forwards
+  // -> notify hr), never dedups (re-forwarding the same source is just
+  // another independent message row — see the feature spec).
+  //
+  // `sourceLabel` means two different things depending on forwardKind:
+  // for 'ticket'/'announcement' it's the source's title; for 'chat' it's
+  // the source channel's display name (chat messages have no title) —
+  // both are what the notification body and the forwarded card's snippet
+  // line use, so one param covers it instead of two mutually-exclusive
+  // ones. `sourceId` is the raw record id (ticket id / announcement id /
+  // source teamId) — see the forwardLink comment on the Message interface
+  // for why this is deliberately not a pre-built path.
+  //
+  // `attachmentUrl`/`attachmentName`, when present, are fetched and
+  // re-uploaded as a REAL new attachment on the forwarded message (same
+  // multipart FormData pattern as sendMessage's file branch /
+  // uploadTeamDocument above) — not just a link back to the original
+  // file, so the forwarded card is self-contained even if the source is
+  // later deleted or its attachment expires.
+  forwardToHrAdminLine: async (
+    senderEmail: string,
+    senderName: string,
+    senderRole: 'hr' | 'admin',
+    forwardKind: 'ticket' | 'announcement' | 'chat',
+    sourceLabel: string,
+    sourceId: string,
+    note?: string,
+    attachmentUrl?: string,
+    attachmentName?: string,
+  ): Promise<void> => {
+    const trimmedNote = (note || '').trim();
+    const baseFields: any = {
+      team_id: HR_ADMIN_LINE_TEAM_ID, sender_email: senderEmail, sender_name: senderName, text: '',
+      is_forward: true, forward_kind: forwardKind, forward_label: sourceLabel, forward_link: sourceId,
+    };
+    if (trimmedNote) baseFields.forward_note = trimmedNote;
+
+    let attachmentCopied = false;
+    if (attachmentUrl) {
+      try {
+        const fileRes = await fetch(attachmentUrl);
+        if (!fileRes.ok) throw new Error(`HTTP ${fileRes.status}`);
+        const blob = await fileRes.blob();
+        const file = new File([blob], attachmentName || 'attachment', { type: blob.type });
+        const form = new FormData();
+        Object.entries(baseFields).forEach(([k, v]) => form.append(k, String(v)));
+        form.append('attachment', file);
+        form.append('attachment_name', file.name);
+        form.append('attachment_size', String(file.size));
+        // Bypass Vercel proxy for large file uploads (same as sendMessage/uploadTeamDocument)
+        const res = await fetch('https://pb.delcargo.us/api/collections/hr_messages/records', { method: 'POST', body: form });
+        if (!res.ok) throw new Error(`Forward failed: ${res.status} ${await res.text()}`);
+        attachmentCopied = true;
+      } catch (err) {
+        // Copying the original attachment failed — still forward the
+        // message itself below rather than losing the whole forward over
+        // one file fetch/upload error.
+        console.error('[hrData] forwardToHrAdminLine: attachment copy failed, forwarding without it', err);
+      }
+    }
+    if (!attachmentCopied) {
+      await pbCreate('hr_messages', baseFields);
+    }
+
+    // Notify the OTHER role — see the header comment above. Always fires:
+    // 'hr_admin_line' is a maintenance-style always-on category, not
+    // gated by NotificationPrefs (see the type definition near the top of
+    // this file). Best-effort: a failed notification shouldn't make the
+    // forward itself look like it failed — the message above already sent.
+    const otherRole: 'hr' | 'admin' = senderRole === 'hr' ? 'admin' : 'hr';
+    const body = forwardKind === 'ticket'
+      ? `${senderName} forwarded a ticket to you: "${sourceLabel}"`
+      : forwardKind === 'announcement'
+      ? `${senderName} forwarded an announcement: "${sourceLabel}"`
+      : `${senderName} forwarded a message from ${sourceLabel}`;
+    await hrActions.addNotification(
+      'all', otherRole, body, 'hr_admin_line', senderName, senderEmail,
+      buildNotificationLink(otherRole, 'hr_admin', HR_ADMIN_LINE_TEAM_ID),
+    ).catch(err => console.error('[hrData] forwardToHrAdminLine: notification failed', err));
+  },
+
   // ── Team Chat read receipts (hr_message_reads_v1) ──────────────────────
   // Small, "announcement styled" read receipts for regular chat messages —
   // same read-tracking pattern as getAnnouncementReadMap/markAnnouncementsSeen
@@ -2880,13 +3048,18 @@ export const hrActions = {
             return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
           }, 0);
         const dailyRateForDeduction = emp.baseSalary / WORKING_DAYS_PER_MONTH;
-        const urgentDeduction = Math.round(urgentDays * 2 * dailyRateForDeduction);
+        const rawUrgentDeduction = Math.round(urgentDays * 2 * dailyRateForDeduction);
+        // Never negative — guards against a malformed `duration` string
+        // (parseLeaveDates returning something that nets out negative/NaN)
+        // silently turning into a negative "deduction" that would actually
+        // increase pay.
+        const urgentDeduction = Number.isFinite(rawUrgentDeduction) ? Math.max(0, rawUrgentDeduction) : 0;
         const onboardingPenalty = emp.onboardingCompleted ? 0 : (emp.region === 'USA' ? 10 : 200);
 
-        // 3. Absence Deductions
-        const absenceDeduction = absenceRecords
-          .filter(a => a.employeeEmail.toLowerCase() === emp.email.toLowerCase() && a.date.slice(0, 7) === targetMonthKey)
-          .reduce((acc, a) => acc + a.deductionAmount, 0);
+        // 3. Absence Deductions — see getAbsenceDeductionForMonth's own
+        // comment for why this is recomputed from the employee's current
+        // base salary instead of summing each record's frozen snapshot.
+        const absenceDeduction = getAbsenceDeductionForMonth(absenceRecords, emp.email, emp.baseSalary, targetMonthKey);
 
         // 4. Calculate Prior Month Unpaid Salary Arrears (Rollover)
         // If employee has unprocessed payroll from previous months (e.g. joined late in July and unpaid), carry over as Arrears
@@ -2897,12 +3070,31 @@ export const hrActions = {
         // If employee joined late in the month (after day 5) and July hasn't been processed, the prorated salary carries into bonus/base
         const totalBaseWithArrears = effectiveBaseSalary + priorUnpaidArrears;
 
+        // Combined deductions for the month — floored at 0 (a deduction can
+        // never subtract a negative amount, i.e. add to pay) and capped at
+        // this month's own base salary (effectiveBaseSalary, deliberately
+        // NOT totalBaseWithArrears — arrears are a separate carry-over
+        // concept and shouldn't raise or lower how much THIS month's
+        // deductions are allowed to eat into THIS month's pay). This is the
+        // safety net for exactly the scenario that prompted it: a leftover
+        // bad/stale deduction (or several) summing to far more than the
+        // employee's actual salary and producing a nonsensical net pay.
+        // It's a display/payroll-output safeguard, not a substitute for
+        // fixing the underlying bad record(s) — if this cap is ever
+        // visibly kicking in for a real employee, HR/Admin should still go
+        // look at why (see getAbsenceDeductionForMonth's comment for the
+        // most common cause).
+        const rawCombinedDeductions = urgentDeduction + absenceDeduction + onboardingPenalty;
+        const combinedDeductions = Number.isFinite(rawCombinedDeductions)
+          ? Math.max(0, Math.min(rawCombinedDeductions, effectiveBaseSalary))
+          : 0;
+
         if (existing) {
           return {
             ...existing,
             region: emp.region,
             baseSalary: existing.processed ? existing.baseSalary : totalBaseWithArrears,
-            deductions: urgentDeduction + absenceDeduction + (emp.onboardingCompleted ? 0 : onboardingPenalty),
+            deductions: combinedDeductions,
             incrementAmount: existing.processed ? existing.incrementAmount : pendingIncrement,
           };
         }
@@ -2916,7 +3108,7 @@ export const hrActions = {
           baseSalary: totalBaseWithArrears,
           unpaidLeaves: emp.onboardingCompleted ? 0 : 2,
           bonus: 0,
-          deductions: urgentDeduction + absenceDeduction + onboardingPenalty,
+          deductions: combinedDeductions,
           incrementAmount: pendingIncrement,
           processed: false,
         };
@@ -3064,36 +3256,6 @@ export const hrActions = {
       commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
       issuedAt: new Date().toISOString(),
     } as TrackerStopCommand);
-  },
-
-  // Signal 6/7: Remote command channel — added 2026-08-24. writeTrackerCommand
-  // writes the request; a v19+ agent picks it up over the same realtime SSE
-  // subscription used for ping/stop_cmd (see _handle_command in agent_gui.py)
-  // and, for 'diagnostics', responds with Signal 7 in trackerDiagnosticsKeyFor.
-  // An older agent simply never sees the key — callers MUST treat "no
-  // response within a few seconds" as "can't reach this tracker" (likely an
-  // old build, since this predates any hard update floor) rather than
-  // silently retrying forever or reporting it as a definite failure.
-  writeTrackerCommand: async (email: string, type: TrackerCommandType): Promise<void> => {
-    await pbSetKV(trackerCommandKeyFor(email), {
-      employeeEmail: email,
-      type,
-      commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
-      issuedAt: new Date().toISOString(),
-    } as TrackerCommand);
-  },
-  clearTrackerCommand: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([trackerCommandKeyFor(email)]);
-  },
-  // Diagnostics response is left in place (not auto-deleted here) so the
-  // Setup Agent modal can show "last diagnostics" even after being closed
-  // and reopened — clearTrackerDiagnostics is a separate explicit action for
-  // callers that want a clean slate before issuing a fresh request (so a
-  // stale response from a previous run can't be mistaken for a live one).
-  getTrackerDiagnostics: (email: string): Promise<TrackerDiagnostics | null> =>
-    pbGetKV(trackerDiagnosticsKeyFor(email)),
-  clearTrackerDiagnostics: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([trackerDiagnosticsKeyFor(email)]);
   },
 
   // Employee/HR self-service escape hatch for the "another device is

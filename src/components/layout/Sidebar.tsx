@@ -2,8 +2,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download } from 'lucide-react';
-import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useKVByPrefix, hasUnseenTicketActivity, hasUnseenMessageActivity, TrackingSettings } from '@/lib/hrData';
+import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download } from 'lucide-react';
+import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useNotifications, useKVByPrefix, hasUnseenTicketActivity, hasUnseenMessageActivity, hasUnseenHrAdminLineActivity, TrackingSettings } from '@/lib/hrData';
 import { getSessionEmail, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 import { useAnyModalOpen } from '@/lib/modalStack';
@@ -99,9 +99,22 @@ export function Sidebar({ role }: SidebarProps) {
   const { data: allTickets } = useTickets();
   // Same idea for Team Chat — see useAllMessages' comment in hrData.ts.
   const { data: allMessages } = useAllMessages();
+  // Already polled app-wide for TopNav's bell (15s interval) regardless of
+  // which page is open — reused here (react-query dedupes by queryKey) to
+  // drive the HR & Admin nav dot WITHOUT adding a second hr_messages poll
+  // for this channel. See hasUnseenHrAdminLineActivity's comment in
+  // hrData.ts for why this deliberately does NOT follow the
+  // useAllMessages/hasUnseenMessageActivity pattern above.
+  const { data: allNotifications } = useNotifications();
+  const [notificationReadMap, setNotificationReadMap] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    hrActions.getNotificationReadMap().then(setNotificationReadMap).catch(() => {});
+  }, []);
 
   const hasUnseenTickets = hasUnseenTicketActivity(allTickets || [], role, userEmail);
   const hasUnseenChat = hasUnseenMessageActivity(allMessages || [], myTeamIds, role, userEmail);
+  const hasUnseenHrAdmin = (role === 'hr' || role === 'admin')
+    && hasUnseenHrAdminLineActivity(allNotifications || [], notificationReadMap, role, userEmail);
 
   useEffect(() => {
     const email = getSessionEmail();
@@ -171,6 +184,11 @@ export function Sidebar({ role }: SidebarProps) {
 
   const adminItems = [
     { name: 'Overview', href: '/admin', icon: LayoutDashboard },
+    // Highest-priority item for hr/admin — HR & Admin's own private,
+    // permanent line to each other (forwarded tickets/announcements/
+    // messages land here too). Placed right under Overview, ahead of
+    // every other feature, per the feature spec.
+    { name: 'HR & Admin', href: '/admin/hr-admin', icon: Radio },
     { name: 'Warehouses', href: '/admin/warehouses', icon: MapPin },
     { name: 'Tasks', href: '/admin/tasks', icon: ClipboardList },
     { name: 'Leaves Approval', href: '/admin/leaves', icon: Clock },
@@ -187,6 +205,8 @@ export function Sidebar({ role }: SidebarProps) {
 
   const hrItems = [
     { name: 'HR Dashboard', href: '/hr', icon: LayoutDashboard },
+    // See the identical comment on adminItems above.
+    { name: 'HR & Admin', href: '/hr/hr-admin', icon: Radio },
     { name: 'Task Management', href: '/hr/tasks', icon: ClipboardList },
     { name: 'Onboarding', href: '/hr/onboarding', icon: UserPlus },
     { name: 'Leave Management', href: '/hr/leaves', icon: Clock },
@@ -300,7 +320,7 @@ export function Sidebar({ role }: SidebarProps) {
           {links.map((item, i) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
-            const showDot = (item.href.endsWith('/tickets') && hasUnseenTickets) || ((item.href.endsWith('/chat') || item.href.endsWith('/team-chats')) && hasUnseenChat);
+            const showDot = (item.href.endsWith('/tickets') && hasUnseenTickets) || ((item.href.endsWith('/chat') || item.href.endsWith('/team-chats')) && hasUnseenChat) || (item.href.endsWith('/hr-admin') && hasUnseenHrAdmin);
             return (
               <Link
                 key={item.name}
@@ -379,7 +399,7 @@ export function Sidebar({ role }: SidebarProps) {
           {mobileQuickLinks.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
-            const showDot = (item.href.endsWith('/tickets') && hasUnseenTickets) || ((item.href.endsWith('/chat') || item.href.endsWith('/team-chats')) && hasUnseenChat);
+            const showDot = (item.href.endsWith('/tickets') && hasUnseenTickets) || ((item.href.endsWith('/chat') || item.href.endsWith('/team-chats')) && hasUnseenChat) || (item.href.endsWith('/hr-admin') && hasUnseenHrAdmin);
             
             return (
               <Link
@@ -466,7 +486,7 @@ export function Sidebar({ role }: SidebarProps) {
                 {mobileSideLinks.map(item => {
                   const isActive = pathname === item.href;
                   const Icon = item.icon;
-                  const showDot = (item.href.endsWith('/tickets') && hasUnseenTickets) || ((item.href.endsWith('/chat') || item.href.endsWith('/team-chats')) && hasUnseenChat);
+                  const showDot = (item.href.endsWith('/tickets') && hasUnseenTickets) || ((item.href.endsWith('/chat') || item.href.endsWith('/team-chats')) && hasUnseenChat) || (item.href.endsWith('/hr-admin') && hasUnseenHrAdmin);
                   return (
                     <Link
                       key={item.name}

@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Team, Profile, Message, useMessages, useTeamDocuments, hrActions, displayName, buildNotificationLink } from '@/lib/hrData';
+import { Team, Profile, Message, useMessages, useTeamDocuments, hrActions, displayName, buildNotificationLink, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { TypingIndicator } from './TypingIndicator';
-import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star, Video } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star, Video, Forward, ExternalLink } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { OptimizedImage } from './OptimizedImage';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
@@ -178,6 +178,15 @@ function sizeBucket(bytes?: number): SizeFilter {
   return 'large';
 }
 
+// Display tag for a forwarded message's card — see the "Forward" action
+// on tickets/announcements/chat messages (hrActions.forwardToHrAdminLine
+// in hrData.ts) and the m.isForward rendering branch below.
+const FORWARD_KIND_LABEL: Record<'ticket' | 'announcement' | 'chat', string> = {
+  ticket: 'Forwarded → Ticket',
+  announcement: 'Forwarded → Announcement',
+  chat: 'Forwarded → Message',
+};
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -284,6 +293,57 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
   // instead, same as Tickets.
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState<string | undefined>(undefined);
+  // "Forward to HR & Admin" — the chat-message trigger point of the 3-way
+  // forward mechanism (see hrActions.forwardToHrAdminLine in hrData.ts;
+  // the other 2 live in TicketsView.tsx and the admin/hr dashboard
+  // announcement panels). forwardTarget holds a snapshot of whichever
+  // message the Forward icon was clicked on; null means the modal is
+  // closed. Only rendered for hr/admin viewers — see the Forward icon
+  // button in the message list below.
+  const [forwardTarget, setForwardTarget] = useState<{ sourceLabel: string; sourceId: string; preview: string; attachmentUrl?: string; attachmentName?: string } | null>(null);
+  const [forwardNote, setForwardNote] = useState('');
+  const [forwarding, setForwarding] = useState(false);
+  const [forwardError, setForwardError] = useState('');
+  const canForward = currentUserRole === 'hr' || currentUserRole === 'admin';
+
+  const openForwardModal = (m: Message) => {
+    setForwardTarget({
+      sourceLabel: activeTeam?.name || 'Team Chat',
+      sourceId: activeTeamId || '',
+      preview: m.text || (m.attachmentName ? `Attachment: ${m.attachmentName}` : ''),
+      attachmentUrl: m.attachmentUrl,
+      attachmentName: m.attachmentName,
+    });
+    setForwardNote('');
+    setForwardError('');
+  };
+
+  const submitForward = async () => {
+    if (!forwardTarget || forwarding) return;
+    setForwarding(true);
+    setForwardError('');
+    try {
+      const senderProfile = emailToProfile.get(normEmail(currentUserEmail));
+      await hrActions.forwardToHrAdminLine(
+        currentUserEmail,
+        senderProfile?.fullName || currentUserEmail,
+        currentUserRole === 'admin' ? 'admin' : 'hr',
+        'chat',
+        forwardTarget.sourceLabel,
+        forwardTarget.sourceId,
+        forwardNote,
+        forwardTarget.attachmentUrl,
+        forwardTarget.attachmentName,
+      );
+      setForwardTarget(null);
+      setForwardNote('');
+    } catch (err) {
+      console.error('Forward message failed:', err);
+      setForwardError('Could not forward that message. Please try again.');
+    } finally {
+      setForwarding(false);
+    }
+  };
   // Small "announcement styled" read receipts — see hrActions.getMessageReadMap
   // / markMessagesSeen in hrData.ts. Kept deliberately tiny (see the facepile
   // JSX below) so it reads as a subtle detail under your own messages, not a
@@ -661,6 +721,21 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
           .addNotification(p.email, p.role, `${senderLabelForRecipient} mentioned you in ${teamLabel} chat.`, 'chat_mention', senderLabelForRecipient, currentUserEmail, buildNotificationLink(p.role, 'chat', teamId))
           .catch(err => console.error('Mention notification failed:', err));
       });
+
+      // HR & Admin Line: every regular (non-forward) message sent
+      // directly in this fixed channel also notifies the OTHER role —
+      // forwards get their own, more specific notification wording from
+      // hrActions.forwardToHrAdminLine instead (see submitForward above),
+      // so this only covers messages typed straight into the composer.
+      if (teamId === HR_ADMIN_LINE_TEAM_ID) {
+        const otherRole = currentUserRole === 'hr' ? 'admin' : currentUserRole === 'admin' ? 'hr' : null;
+        if (otherRole) {
+          const senderLabelForOther = senderProfile?.fullName || currentUserEmail;
+          hrActions
+            .addNotification('all', otherRole, `${senderLabelForOther} sent a message in HR & Admin.`, 'hr_admin_line', senderLabelForOther, currentUserEmail, buildNotificationLink(otherRole, 'hr_admin', teamId))
+            .catch(err => console.error('HR & Admin Line notification failed:', err));
+        }
+      }
     } catch (err) {
       console.error('Send message failed:', err);
       setSendError('Could not send that message. Please try again.');
@@ -892,7 +967,14 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                   <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">
                     <Megaphone className="h-3.5 w-3.5" /> Announcement · {label}
                     {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                    <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
+                    <span className="text-slate-400 font-semibold normal-case ml-auto flex items-center gap-1.5">
+                      {formatTimestamp(m.timestamp)}
+                      {canForward && (
+                        <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors">
+                          <Forward className="h-3 w-3" />
+                        </button>
+                      )}
+                    </span>
                   </div>
                   {m.text && (
                     <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap break-words">
@@ -925,6 +1007,70 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               );
             }
 
+            // Forwarded messages (HR & Admin Line — see
+            // hrActions.forwardToHrAdminLine in hrData.ts) render as their
+            // own distinct card, not a left/right bubble — same
+            // full-width "stand out from the back-and-forth" treatment as
+            // Announcements above, sky-themed instead of amber so the two
+            // are never confused for each other at a glance.
+            if (m.isForward) {
+              const kindLabel = m.forwardKind ? FORWARD_KIND_LABEL[m.forwardKind] : 'Forwarded';
+              const originalHref = m.forwardKind && m.forwardLink
+                // View-original link is resolved from the raw stored id at
+                // render time using the *viewer's* own role (this channel
+                // is read by both hr and admin) — see the forwardLink
+                // comment on the Message interface in hrData.ts.
+                ? buildNotificationLink(currentUserRole === 'admin' ? 'admin' : 'hr', m.forwardKind, m.forwardLink)
+                : undefined;
+              return (
+                <div key={m.id} className="border-2 border-sky-300 bg-sky-50 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-1.5 text-[10px] font-black text-sky-700 uppercase tracking-wider mb-1">
+                    <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
+                    {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
+                    <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
+                  </div>
+                  {m.forwardLabel && (
+                    <p className="text-xs font-bold text-slate-800 break-words">{m.forwardLabel}</p>
+                  )}
+                  {m.forwardNote && (
+                    <p className="text-xs font-medium text-slate-600 italic mt-1 whitespace-pre-wrap break-words">"{m.forwardNote}"</p>
+                  )}
+                  {m.attachmentUrl && (
+                    isImageAttachment(m.attachmentName) ? (
+                      <button
+                        type="button"
+                        onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
+                        className="block mt-2"
+                      >
+                        <OptimizedImage
+                          src={m.attachmentUrl}
+                          alt={m.attachmentName || 'attachment'}
+                          width={400}
+                          height={220}
+                          className="rounded-lg max-h-56 object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[11px] font-bold underline text-sky-700 mt-2">
+                        <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
+                      </a>
+                    )
+                  )}
+                  {originalHref && (
+                    // Styled as a small pill button (not a plain text link) —
+                    // the point of a forward card is a one-glance "here's the
+                    // thing, click to jump straight to it" affordance.
+                    <a
+                      href={originalHref}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black text-sky-700 bg-white border border-sky-300 rounded-full px-2.5 py-1 mt-2 hover:bg-sky-600 hover:text-white hover:border-sky-600 transition-colors"
+                    >
+                      View original <ExternalLink className="h-3 w-3 shrink-0" />
+                    </a>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
                 <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
@@ -939,6 +1085,11 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                       <RoleBadge role={senderRole} />
                     )}
                     <span className="text-[9px] text-slate-400 font-semibold">{formatTimestamp(m.timestamp)}</span>
+                    {canForward && (
+                      <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors">
+                        <Forward className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                   <div className={`rounded-2xl px-3.5 py-2.5 text-xs font-medium leading-relaxed ${
                     isAdminSender
@@ -1216,6 +1367,64 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
             <p className="text-center py-8 text-slate-400 font-semibold text-xs italic">No members in this channel yet.</p>
           )}
         </div>
+      </Modal>
+
+      {/* Forward-to-HR-&-Admin modal — one shared mechanism across all 3
+          trigger points (this one for chat messages; TicketsView.tsx and
+          the admin/hr dashboard announcement panels have their own local
+          copy of the same note-composer + preview shape). Note is
+          optional — Cancel/skip leaves it blank and Forward still works
+          in one click, per the feature spec. */}
+      <Modal
+        isOpen={!!forwardTarget}
+        onClose={() => { if (!forwarding) { setForwardTarget(null); setForwardNote(''); setForwardError(''); } }}
+        title="Forward to HR & Admin"
+      >
+        {forwardTarget && (
+          <div className="space-y-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">From {forwardTarget.sourceLabel}</p>
+              <p className="text-xs font-semibold text-slate-700 whitespace-pre-wrap break-words line-clamp-3">
+                {forwardTarget.preview || <span className="italic text-slate-400">(no text)</span>}
+              </p>
+              {forwardTarget.attachmentName && (
+                <p className="text-[11px] font-bold text-slate-500 mt-1.5 flex items-center gap-1">
+                  <FileText className="h-3 w-3 shrink-0" /> {forwardTarget.attachmentName}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+              <textarea
+                value={forwardNote}
+                onChange={e => setForwardNote(e.target.value)}
+                rows={2}
+                placeholder="Add a note for HR & Admin…"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
+              />
+            </div>
+            {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={forwarding}
+                onClick={() => { setForwardTarget(null); setForwardNote(''); setForwardError(''); }}
+                className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={forwarding}
+                onClick={submitForward}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                {forwarding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {forwarding ? 'Forwarding…' : 'Forward'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

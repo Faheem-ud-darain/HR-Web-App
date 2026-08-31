@@ -7,9 +7,10 @@ import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { OrgCalendar } from '@/components/ui/OrgCalendar';
 import { TaskModal } from '@/components/ui/TaskModal';
-import { DollarSign, TrendingUp, Users, Clock, ClipboardList, CheckCircle2, AlertTriangle, PlusCircle, Loader2, Trash2, Eye, Video } from 'lucide-react';
+import { DollarSign, TrendingUp, Users, Clock, ClipboardList, CheckCircle2, AlertTriangle, PlusCircle, Loader2, Trash2, Eye, Video, Forward } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useProfiles, useLeaves, useTasks, useAnnouncements, useWarehouses, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
+import { useProfiles, useLeaves, useTasks, useAnnouncements, useWarehouses, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink, Announcement } from '@/lib/hrData';
+import { getSessionEmail } from '@/lib/session';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
 import { ScheduleMeetModal } from '@/components/ui/ScheduleMeetModal';
@@ -69,6 +70,40 @@ export default function AdminDashboard() {
   const openViewersModal = (annId: string) => {
     setViewersAnnId(annId);
     hrActions.getAnnouncementReadMap().then(setAnnouncementReadMap);
+  };
+
+  // "Forward" (HR & Admin Line) — see hrActions.forwardToHrAdminLine in
+  // hrData.ts, same one mechanism TicketsView.tsx and TeamChatView.tsx
+  // use for their own trigger points. Admin's own dashboard, so every
+  // forward here notifies HR (the other role).
+  const [forwardingAnn, setForwardingAnn] = useState<Announcement | null>(null);
+  const [annForwardNote, setAnnForwardNote] = useState('');
+  const [isForwardingAnn, setIsForwardingAnn] = useState(false);
+  const [annForwardError, setAnnForwardError] = useState('');
+
+  const submitAnnouncementForward = async () => {
+    if (!forwardingAnn || isForwardingAnn) return;
+    setIsForwardingAnn(true);
+    setAnnForwardError('');
+    try {
+      const senderEmail = getSessionEmail() || '';
+      await hrActions.forwardToHrAdminLine(
+        senderEmail,
+        'CEO Admin',
+        'admin',
+        'announcement',
+        forwardingAnn.title,
+        forwardingAnn.id,
+        annForwardNote,
+      );
+      setForwardingAnn(null);
+      setAnnForwardNote('');
+    } catch (err) {
+      console.error('Forward announcement failed:', err);
+      setAnnForwardError('Could not forward that announcement. Please try again.');
+    } finally {
+      setIsForwardingAnn(false);
+    }
   };
 
   useEffect(() => {
@@ -408,6 +443,13 @@ export default function AdminDashboard() {
                       : ann.target.toUpperCase()}
                   </Badge>
                   <button
+                    onClick={() => { setForwardingAnn(ann); setAnnForwardNote(''); setAnnForwardError(''); }}
+                    title="Forward to HR & Admin"
+                    className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                  >
+                    <Forward className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => handleDeleteAnnouncement(ann.id)}
                     disabled={deletingAnnId === ann.id}
                     title="Delete announcement"
@@ -598,6 +640,54 @@ export default function AdminDashboard() {
         isOpen={isScheduleMeetOpen}
         onClose={() => setIsScheduleMeetOpen(false)}
       />
+
+      {/* Forward-to-HR-&-Admin modal — same shape as TicketsView's and
+          TeamChatView's (see hrActions.forwardToHrAdminLine in hrData.ts). */}
+      <Modal
+        isOpen={!!forwardingAnn}
+        onClose={() => { if (!isForwardingAnn) { setForwardingAnn(null); setAnnForwardNote(''); setAnnForwardError(''); } }}
+        title="Forward to HR & Admin"
+      >
+        {forwardingAnn && (
+          <div className="space-y-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Announcement</p>
+              <p className="text-xs font-bold text-slate-800 break-words">{forwardingAnn.title}</p>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-3 whitespace-pre-wrap break-words">{forwardingAnn.content}</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+              <textarea
+                value={annForwardNote}
+                onChange={e => setAnnForwardNote(e.target.value)}
+                rows={2}
+                placeholder="Add a note for HR & Admin…"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
+              />
+            </div>
+            {annForwardError && <p className="text-xs font-semibold text-rose-600">{annForwardError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isForwardingAnn}
+                onClick={() => { setForwardingAnn(null); setAnnForwardNote(''); setAnnForwardError(''); }}
+                className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isForwardingAnn}
+                onClick={submitAnnouncementForward}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                {isForwardingAnn && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {isForwardingAnn ? 'Forwarding…' : 'Forward'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

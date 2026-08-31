@@ -8,7 +8,7 @@ import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenS
 import { TypingIndicator } from './TypingIndicator';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search } from 'lucide-react';
+import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search, Forward } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatDateTimeNY, formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
@@ -119,6 +119,46 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [inspectEmployee, setInspectEmployee] = useState<Profile | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState<string | undefined>(undefined);
+
+  // "Forward" (HR & Admin Line) — shown to hr/admin only, gated by `role`
+  // directly rather than `isPrivileged` (which also covers Technical Team
+  // members on employee/team_lead accounts — this action is HR/Admin's
+  // private line to each other, not extended to Technical Team). Works
+  // for closed tickets too (no status restriction — see the feature
+  // spec), and re-forwarding is unrestricted: no dedup, each forward is
+  // just a new independent hr_messages row. A Ticket has no attachment
+  // field of its own (only TicketReply does), so a forwarded ticket never
+  // carries a copied attachment.
+  const canForwardToHrAdmin = role === 'hr' || role === 'admin';
+  const [forwardingTicket, setForwardingTicket] = useState<Ticket | null>(null);
+  const [forwardNote, setForwardNote] = useState('');
+  const [isForwarding, setIsForwarding] = useState(false);
+  const [forwardError, setForwardError] = useState('');
+
+  const submitTicketForward = async () => {
+    if (!forwardingTicket || isForwarding) return;
+    setIsForwarding(true);
+    setForwardError('');
+    try {
+      const forwarderName = userProfile?.fullName || (role === 'hr' ? 'HR Manager' : 'System Admin');
+      await hrActions.forwardToHrAdminLine(
+        currentEmail,
+        forwarderName,
+        role === 'admin' ? 'admin' : 'hr',
+        'ticket',
+        forwardingTicket.title,
+        forwardingTicket.id,
+        forwardNote,
+      );
+      setForwardingTicket(null);
+      setForwardNote('');
+    } catch (err) {
+      console.error('Forward ticket failed:', err);
+      setForwardError('Could not forward that ticket. Please try again.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
 
   // On mobile, an open ticket becomes a fixed full-screen overlay (see the
   // `selectedTicket ? '... fixed inset-x-0 top-0 bottom-[64px] ...'` panel
@@ -742,6 +782,16 @@ export function TicketsView({ role }: TicketsViewProps) {
                       <Badge variant={t.status === 'open' ? 'warning' : 'success'}>
                         {t.status === 'open' ? 'Open' : 'Closed'}
                       </Badge>
+                      {canForwardToHrAdmin && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setForwardingTicket(t); setForwardNote(''); setForwardError(''); }}
+                          title="Forward to HR & Admin"
+                          className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                        >
+                          <Forward className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 line-clamp-1 mb-2">{t.description}</p>
@@ -884,6 +934,19 @@ export function TicketsView({ role }: TicketsViewProps) {
                           <span className="text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
                             <Lock className="h-3 w-3" /> Closed
                           </span>
+                        )}
+                        {/* Available on closed tickets too — no status
+                            restriction, matches the list row's Forward
+                            action above. */}
+                        {canForwardToHrAdmin && (
+                          <button
+                            onClick={() => { setForwardingTicket(selectedTicket); setForwardNote(''); setForwardError(''); }}
+                            title="Forward to HR & Admin"
+                            className="h-8 w-8 lg:w-auto lg:px-3 lg:py-1.5 text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1 shrink-0"
+                          >
+                            <Forward className="h-3.5 w-3.5 shrink-0" />
+                            <span className="hidden lg:inline">Forward</span>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1259,6 +1322,56 @@ export function TicketsView({ role }: TicketsViewProps) {
         downloadName={lightboxName}
         onClose={() => { setLightboxSrc(null); setLightboxName(undefined); }}
       />
+
+      {/* Forward-to-HR-&-Admin modal — same note-composer + preview shape
+          as TeamChatView's forward modal and the announcement panels'
+          (see hrActions.forwardToHrAdminLine in hrData.ts for the one
+          shared mechanism behind all 3). Note is optional. */}
+      <Modal
+        isOpen={!!forwardingTicket}
+        onClose={() => { if (!isForwarding) { setForwardingTicket(null); setForwardNote(''); setForwardError(''); } }}
+        title="Forward to HR & Admin"
+      >
+        {forwardingTicket && (
+          <div className="space-y-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ticket</p>
+              <p className="text-xs font-bold text-slate-800 break-words">{forwardingTicket.title}</p>
+              <p className="text-xs text-slate-500 mt-1 line-clamp-3 break-words">{forwardingTicket.description}</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+              <textarea
+                value={forwardNote}
+                onChange={e => setForwardNote(e.target.value)}
+                rows={2}
+                placeholder="Add a note for HR & Admin…"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
+              />
+            </div>
+            {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isForwarding}
+                onClick={() => { setForwardingTicket(null); setForwardNote(''); setForwardError(''); }}
+                className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isForwarding}
+                onClick={submitTicketForward}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                {isForwarding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {isForwarding ? 'Forwarding…' : 'Forward'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

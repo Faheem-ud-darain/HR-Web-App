@@ -35,7 +35,12 @@ onRecordAfterCreateRequest((e) => {
     // employee shouldn't be able to silence "the whole system is about to
     // go down," so unlike the other 4 categories here it skips the
     // per-recipient prefs filter below entirely (see the `allowed` step).
-    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift", "maintenance"];
+    // "hr_admin_line" (HR & Admin Line — a permanent, shared hr/admin-only
+    // chat channel, added the same way) is the same kind of always-on
+    // category: it's HR and Admin's own direct line to each other, so
+    // there's no opt-out toggle for it client-side either (see
+    // NotificationPrefs in hrData.ts) — it gets the same bypass below.
+    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift", "maintenance", "hr_admin_line"];
     console.log("[push_notifications] fired, category=", category);
     if (pushableCategories.indexOf(category) === -1) {
       console.log("[push_notifications] category not pushable, skipping");
@@ -84,10 +89,11 @@ onRecordAfterCreateRequest((e) => {
       prefsMap = {}; // no prefs row yet — everyone defaults to on
     }
 
-    // "maintenance" bypasses the opt-out check entirely — see the comment
-    // on pushableCategories above. Every other category still respects
-    // whatever the recipient set in NotificationPreferencesCard.
-    const allowed = category === "maintenance"
+    // "maintenance" and "hr_admin_line" bypass the opt-out check
+    // entirely — see the comment on pushableCategories above. Every other
+    // category still respects whatever the recipient set in
+    // NotificationPreferencesCard.
+    const allowed = (category === "maintenance" || category === "hr_admin_line")
       ? emails
       : emails.filter((email) => {
           const p = prefsMap[email.toLowerCase()];
@@ -102,7 +108,7 @@ onRecordAfterCreateRequest((e) => {
       // hrData.ts), falling back to a generic per-category label if it's
       // missing (e.g. notifications created before this field existed, or
       // system actions with no natural "contact").
-      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update", maintenance: "System Maintenance" };
+      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update", maintenance: "System Maintenance", hr_admin_line: "HR & Admin" };
       const title = pushTitle || fallbackTitles[category] || "Delcargo Internal";
 
       // Resolve the sender's profile picture (if we have their email) to

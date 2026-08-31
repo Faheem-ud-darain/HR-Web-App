@@ -1620,3 +1620,101 @@ displayed time genuinely differs correctly between two devices set to
 different timezones, (c) the in-app bell shows the maintenance
 notification, and (d) once the `pb_hooks` gap above is closed, that a real
 push arrives on a phone with the app closed.
+
+## 14. HR & Admin Line — permanent shared channel + cross-forwarding (2026-08-31)
+
+New feature: a permanent, real chat channel between HR and Admin only
+(never employee/team_lead), plus a "Forward" action on tickets,
+announcements, and chat/DM messages that lands a copy in that channel —
+so HR/Admin have one place to escalate things to each other without
+leaving a paper trail buried inside a ticket thread or a DM.
+
+**Built as a real hr_messages channel, not a new collection** — same
+reasoning as Team Chat/DMs: `TeamChatView` is handed a single synthetic
+`{ id: HR_ADMIN_LINE_TEAM_ID, name: 'HR & Admin', members: [] }` team (no
+`hr_teams` row backs it, same trick `DirectMessagesView` uses for
+`dm_<profileId>` channels), with a fixed well-known teamId
+(`'hr_admin_line'`, see `HR_ADMIN_LINE_TEAM_ID` in hrData.ts) so every
+forward/notification always targets the same channel. New routes:
+`admin/hr-admin/page.tsx` and `hr/hr-admin/page.tsx`, new top-of-nav
+Sidebar item "HR & Admin" (`Radio` icon), gated to hr/admin only.
+
+**Deliberately did NOT reuse the `useAllMessages()` pattern**
+`direct-messages/page.tsx` uses for its sidebar unread dot — that hook
+polls every `hr_messages` row every 20s just to compute one dot, which is
+exactly the always-on background cost the user explicitly asked not to
+add before someone actually opens the HR & Admin page. Instead the
+sidebar dot (`hasUnseenHrAdminLineActivity` in hrData.ts) is driven off
+`hr_notifications`, which is already polled app-wide for TopNav's bell
+(`useNotifications`, 15s interval) regardless of which page is open —
+checking it is free, not a new cost. `useMessages(HR_ADMIN_LINE_TEAM_ID)`
+(already lazy/enabled-gated by teamId) only starts polling once the page
+actually mounts, same as any other single-team chat screen.
+
+This also meant `Notification.category` needed to be read back into the
+app for the first time — it was written on every row (`addNotification`)
+but never mapped in `toNotification`, since nothing client-side had
+needed it before (the opt-out check happens server-side against the raw
+record). Added `category?: NotificationCategory` to the `Notification`
+interface + `toNotification` mapping.
+
+**New `NotificationCategory` value: `'hr_admin_line'`** — added the exact
+same way `'maintenance'` was (see section 12 above): always-fires,
+explicitly excluded from `NotificationPrefs`/`DEFAULT_NOTIFICATION_PREFS`
+— this is HR and Admin's own direct line to each other, not something
+either side should be able to silently opt out of. `pb_hooks/push_notifications.pb.js`
+(present and editable in this checkout — same correction as section 12
+noted for `pushableCategories`) updated the same way: `'hr_admin_line'`
+added to `pushableCategories`, bypasses the per-recipient prefs filter
+alongside `'maintenance'`, and got a `"HR & Admin"` `fallbackTitles` entry.
+
+**`buildNotificationLink` extended** with two new `kind` values:
+`'hr_admin'` (resolves to `/hr/hr-admin` or `/admin/hr-admin`, used for
+every notification into this channel) and `'announcement'` (resolves to
+just the role's dashboard root — announcements have no dedicated page or
+deep-select-by-id support yet, same "lands on the right screen" fallback
+`'task'` already used).
+
+**Forwarding — one shared mechanism (`hrActions.forwardToHrAdminLine` in
+hrData.ts), three trigger points**: a Forward icon on ticket list rows +
+the open ticket's detail header (`TicketsView.tsx`, gated by `role`
+directly — not `isPrivileged`, which also covers Technical Team members
+on employee/team_lead accounts; this is HR/Admin's own line, not
+extended to them), next to each announcement on the admin/hr dashboards
+(`admin/page.tsx`, `hr/page.tsx`), and on every chat/DM message bubble in
+`TeamChatView.tsx`. Every forward: shows an optional note (skippable,
+`Modal.tsx`-based composer, one click still works), re-uploads the
+original's attachment as a real new multipart-FormData attachment (not
+just a link — same pattern `sendMessage`'s file branch already uses) when
+there is one, notifies the OTHER role with forward-specific wording
+(`"X forwarded a ticket to you: \"...\""` / `"...forwarded an
+announcement: ..."` / `"...forwarded a message from ..."`), and never
+dedups — re-forwarding the same source is just another independent
+message row. A plain (non-forwarded) message sent directly into the
+channel also notifies the other role, with generic wording — handled in
+`TeamChatView.tsx`'s `handleSend`, gated on `teamId === HR_ADMIN_LINE_TEAM_ID`.
+
+Forwarded messages render as their own sky-themed card (mirrors the
+amber-themed Announcement card already in `TeamChatView.tsx`) — a
+"Forwarded → Ticket/Announcement/Message" tag, the source's title/channel
+name, the optional note, the copied attachment if any, and a "View
+original" link. That link is deliberately NOT a pre-built path stored at
+forward time: `buildNotificationLink` bakes in a role-specific base path
+(`/hr/...` vs `/admin/...`), but this channel is read by BOTH roles, so
+`Message.forwardLink` stores only the raw source id and the real URL is
+resolved at render time using the *viewer's own* role.
+
+**Schema**: `Message` gained `isForward?`, `forwardKind?`, `forwardLabel?`,
+`forwardLink?`, `forwardNote?`, mapped in `toMessage` from new
+`is_forward`/`forward_kind`/`forward_label`/`forward_link`/`forward_note`
+columns on `hr_messages`. **NOT applied to the live PocketBase instance
+by this session** — per this app's standing rule, schema changes against
+the live droplet are written as a migration script for the user to run
+themselves, never executed directly here. New script:
+`migration_data/add_forward_fields_to_messages.py` (companion to
+`create_messages_collection.py`, same idempotent add-missing-fields
+pattern) — **the user needs to run this themselves** before the
+forward_* fields exist on the live instance. Until then, PocketBase
+silently drops those keys on write and `toMessage`'s forward_* reads all
+come back `undefined` — not a crash, a forwarded message just renders as
+an empty-looking plain message with no card until the migration runs.
