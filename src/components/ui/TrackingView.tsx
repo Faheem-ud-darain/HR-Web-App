@@ -61,6 +61,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // Setup Agent modal
   const [setupEmp, setSetupEmp] = useState<Profile | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedDiagnostics, setCopiedDiagnostics] = useState(false);
 
   // Remote diagnostics (Signal 6/7) — added 2026-08-24. 'idle' before the
   // first request; 'waiting' while polling for a Signal 7 response;
@@ -396,6 +397,40 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Builds a plain-text version of a live diagnostics result — same data
+  // the panel below already renders, just formatted as labeled lines
+  // instead of a grid, so it reads cleanly wherever it's pasted: a ticket,
+  // a Slack message, or straight into an AI chat for help troubleshooting.
+  // Deliberately plain text (no markdown/HTML) since the destination is
+  // unknown and plain text pastes cleanly everywhere.
+  const formatDiagnosticsReport = (emp: Profile, diag: TrackerDiagnostics): string => {
+    const line = (label: string, value: string) => `${label}: ${value}`;
+    const lines = [
+      'DelCargo Tracker Diagnostics Report',
+      line('Employee', `${displayName(emp, role)} <${diag.employeeEmail}>`),
+      line('Device', `${diag.deviceLabel || 'Unknown device'} — ${diag.platform} — Tracker v${diag.appVersion}`),
+      line('Responded at', `${formatDateTimeNY(diag.respondedAt)} (${diag.respondedAt})`),
+      '',
+      line('Connection', diag.connectionStatus || (diag.connected ? 'connected' : 'disconnected')),
+      line('Tracking (HR toggle)', diag.enabledByHr ? 'enabled' : 'disabled'),
+      line('Shift active', diag.shiftActive ? 'yes' : 'no'),
+      line('Currently capturing', diag.enabled ? 'yes' : 'no'),
+      line('Screen locked', diag.isLocked ? 'yes' : 'no'),
+      line('Capture interval', `${diag.intervalMinutes ?? '—'} min`),
+      line('Consecutive capture failures', String(diag.consecutiveCaptureFailures ?? 0)),
+      line('Last capture', diag.lastCaptureAt ? `${formatDateTimeNY(diag.lastCaptureAt)} (${diag.lastCaptureAt})` : 'never'),
+      line('Last error', diag.lastError || 'none'),
+      line('Update available', diag.updateAvailableVersion ? `v${diag.updateAvailableVersion}` : 'no'),
+    ];
+    return lines.join('\n');
+  };
+
+  const copyDiagnosticsReport = (emp: Profile, diag: TrackerDiagnostics) => {
+    navigator.clipboard.writeText(formatDiagnosticsReport(emp, diag));
+    setCopiedDiagnostics(true);
+    setTimeout(() => setCopiedDiagnostics(false), 2000);
   };
 
   const handleOpenViewer = async (emp: Profile) => {
@@ -1153,13 +1188,22 @@ AGENT_TOKEN=${settings.agentToken}`}
 
                 {diagnosticsStatus === 'ok' && diagnosticsResult && (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                         Responded {formatDateTimeNY(diagnosticsResult.respondedAt)}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        v{diagnosticsResult.appVersion} · {diagnosticsResult.platform}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-mono text-slate-400">
+                          v{diagnosticsResult.appVersion} · {diagnosticsResult.platform}
+                        </span>
+                        <button
+                          onClick={() => copyDiagnosticsReport(setupEmp, diagnosticsResult)}
+                          title="Copy this report as plain text — paste it into a ticket, Slack, or an AI chat for help troubleshooting"
+                          className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 px-2 py-1 rounded-md flex items-center gap-1 active:scale-97 transition-colors transition-transform"
+                        >
+                          <Copy className="h-3 w-3" /> {copiedDiagnostics ? 'Copied!' : 'Copy Report'}
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-700">
                       <span>Connection: <span className="font-semibold">{diagnosticsResult.connectionStatus || (diagnosticsResult.connected ? 'connected' : 'disconnected')}</span></span>
