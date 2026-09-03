@@ -128,7 +128,12 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "21"  # Bumped 20 -> 21 (2026-09-03) to fix a hard launch crash on
+APP_VERSION = "22"  # Bumped 21 -> 22 (2026-09-03) to fix the setup-code
+# tk.Text field rendering as a solid black box on macOS (confirmed from a
+# real screenshot) -- it never had explicit bg/fg/insertbackground colors
+# set, which Tk's Windows defaults happened to render fine but macOS did
+# not.
+# Bumped 20 -> 21 (2026-09-03) to fix a hard launch crash on
 # newer macOS (confirmed on 26.6.2 from a real crash report): pystray's
 # tray-icon run loop was started on a background thread (see the Darwin
 # guard added around the pystray import above) which calls AppKit's
@@ -1857,9 +1862,18 @@ class TrackerApp:
 
         tk.Label(card_body, text="SETUP CODE", font=(FONT, 8, "bold"), bg=CARD_BG, fg=MUTED).pack(anchor="w", pady=(0, 6))
         self.code_var = tk.StringVar()
+        # bg/fg/insertbackground must be set explicitly — a plain tk.Text
+        # left to its defaults renders with a black background on macOS
+        # (confirmed from a real screenshot: a solid black box where every
+        # other input-like element in the app is white/light, since this is
+        # the only tk.Text/Entry widget anywhere in this file — everything
+        # else is a Label/Button that already gets its color from CARD_BG/
+        # INK). Windows' Tk defaults happened to look fine unstyled, which
+        # is how this went unnoticed until testing on Mac.
         entry = tk.Text(card_body, height=5, width=40, wrap="word", font=("Consolas", 9),
                          relief="solid", borderwidth=1, highlightthickness=1,
-                         highlightbackground=BORDER, highlightcolor=ACCENT)
+                         highlightbackground=BORDER, highlightcolor=ACCENT,
+                         bg=CARD_BG, fg=INK, insertbackground=INK)
         entry.pack(fill="x")
         self.code_entry = entry
 
