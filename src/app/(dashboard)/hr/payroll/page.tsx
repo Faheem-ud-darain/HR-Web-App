@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, getAbsenceDeductionForMonth, updateProfileAdmin, PayrollRecord } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord } from '@/lib/hrData';
 import { NetPayableModal } from '@/components/ui/NetPayableModal';
 
 export default function HRPayrollPage() {
@@ -240,6 +240,7 @@ export default function HRPayrollPage() {
                   <th className="px-6 py-4 text-right">Bonus ($)</th>
                   <th className="px-6 py-4 text-right">Deductions ($)</th>
                   <th className="px-6 py-4 text-right">Net Payable</th>
+                  <th className="px-6 py-4 text-right">Reserved Salary</th>
                   <th className="px-6 py-4 text-center">Status</th>
                   <th className="px-6 py-4 text-center">Action</th>
                 </tr>
@@ -247,6 +248,8 @@ export default function HRPayrollPage() {
               <tbody className="divide-y divide-slate-200">
                 {filteredData.map(emp => {
                   const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
+                  const empProfile = employees.find(e => e.id === emp.employeeId);
+                  const reservedBalance = (empProfile?.reservedSalaryBalance || 0) + (empProfile?.manualReservedAmount || 0);
                   return (
                     <tr key={emp.employeeId} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4">
@@ -307,22 +310,37 @@ export default function HRPayrollPage() {
                           }
                           return null;
                         })()}
-                        {(() => {
-                          const monthKey = new Date().toISOString().slice(0, 7);
-                          const empProfile = employees.find(e => e.id === emp.employeeId);
-                          const records = empProfile ? absenceRecords.filter(a => a.date.slice(0, 7) === monthKey && a.employeeEmail.toLowerCase() === empProfile.email.toLowerCase()) : [];
-                          if (records.length === 0) return null;
-                          // Recomputed from the employee's current base salary
-                          // (see getAbsenceDeductionForMonth in hrData.ts) — NOT
-                          // a sum of each record's frozen deductionAmount, so
-                          // this always matches what computePayrollView actually
-                          // charges, even after a since-corrected salary error.
-                          const total = getAbsenceDeductionForMonth(records, empProfile!.email, empProfile!.baseSalary, monthKey);
-                          return <div className="text-[10px] text-rose-600 font-bold mt-1">Absent ({records.length}d, {formatMoney(total, emp.region)})</div>;
-                        })()}
+                        {/* Itemized reasons for THIS record's deductions —
+                            straight from computePayrollView's own
+                            deductionBreakdown (already scoped to the same
+                            NY-timezone targetMonthKey used for the real
+                            calculation), not a locally-recomputed guess at
+                            "this month" that can silently disagree with it. */}
+                        {emp.deductionBreakdown.length > 0 && (
+                          <div className="mt-1 space-y-0.5">
+                            {emp.deductionBreakdown.map((item, i) => (
+                              <div key={i} className="text-[10px] text-rose-600 font-bold leading-snug">
+                                {item.label}: {formatMoney(item.amount, emp.region)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="font-semibold text-slate-900">{formatMoney(netPayable, emp.region)}</div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {reservedBalance > 0 ? (
+                          <div>
+                            <span className="text-indigo-700 font-bold">{formatMoney(reservedBalance, emp.region)}</span>
+                            <div className="text-[9px] text-indigo-500 font-bold uppercase">Held, not lost</div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 font-medium">—</span>
+                        )}
+                        {emp.reservedThisMonth > 0 && (
+                          <div className="text-[9px] text-amber-600 font-bold uppercase mt-0.5">+{formatMoney(emp.reservedThisMonth, emp.region)} this month</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center">
                         {emp.processed ? <Badge variant="success">Completed</Badge> : <Badge variant="warning">Pending</Badge>}
@@ -364,14 +382,7 @@ export default function HRPayrollPage() {
           const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
           const urgentCount = leavesList.filter(l => l.employeeName === emp.name && l.type === 'Urgent' && l.status === 'approved').length;
           const empProfileMobile = employees.find(e => e.id === emp.employeeId);
-          const monthKeyMobile = new Date().toISOString().slice(0, 7);
-          const absenceRecordsMobile = empProfileMobile ? absenceRecords.filter(a => a.date.slice(0, 7) === monthKeyMobile && a.employeeEmail.toLowerCase() === empProfileMobile.email.toLowerCase()) : [];
-          const absentCountMobile = absenceRecordsMobile.length;
-          // See the desktop table's identical comment above — recomputed
-          // from current base salary, not the records' frozen deductionAmount.
-          const absentTotalMobile = empProfileMobile
-            ? getAbsenceDeductionForMonth(absenceRecordsMobile, empProfileMobile.email, empProfileMobile.baseSalary, monthKeyMobile)
-            : 0;
+          const reservedBalanceMobile = (empProfileMobile?.reservedSalaryBalance || 0) + (empProfileMobile?.manualReservedAmount || 0);
           return (
             <div key={emp.employeeId} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -410,9 +421,18 @@ export default function HRPayrollPage() {
                   {urgentCount <= 3 ? `Rebate Eligible (${urgentCount} UL)` : `No Rebate (${urgentCount} UL)`}
                 </p>
               )}
-              {absentCountMobile > 0 && (
-                <p className="text-[10px] font-bold text-rose-600">
-                  Absent ({absentCountMobile}d, {formatMoney(absentTotalMobile, emp.region)})
+              {emp.deductionBreakdown.length > 0 && (
+                <div className="space-y-0.5">
+                  {emp.deductionBreakdown.map((item, i) => (
+                    <p key={i} className="text-[10px] font-bold text-rose-600 leading-snug">
+                      {item.label}: {formatMoney(item.amount, emp.region)}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {reservedBalanceMobile > 0 && (
+                <p className="text-[10px] font-bold text-indigo-700">
+                  Reserved Salary: {formatMoney(reservedBalanceMobile, emp.region)} <span className="text-indigo-400 uppercase">(held, not lost)</span>
                 </p>
               )}
               {!emp.processed && (
