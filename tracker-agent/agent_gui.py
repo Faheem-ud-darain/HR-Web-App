@@ -96,6 +96,27 @@ try:
 except ImportError:
     pystray = None  # Tray icon becomes optional; app still runs as a normal window.
 
+# Disabled on macOS (2026-09-03): pystray.Icon.run() is started on its own
+# background thread (see _start_tray below), and on macOS that means
+# -[NSApplication run] gets invoked off the main thread — Tk's own mainloop
+# is already driving AppKit on the main thread for the app's window. Older
+# macOS tolerated this; on macOS 26.6.2 it now hits AppKit's own "called
+# off the main thread" guard and hard-crashes the whole app on launch
+# (EXC_BREAKPOINT / SIGTRAP in NSUpdateCycleInitialize, confirmed from a
+# real crash report — Thread 7's stack is exactly
+# pystray-thread -> PyObjCFFI -> -[NSApplication run]). Every use of
+# self.tray_icon elsewhere is already guarded behind "if pystray"/
+# "if self.tray_icon" (the same graceful-degradation path used when the
+# pystray import itself fails above), so forcing pystray to None here on
+# Darwin disables the tray icon cleanly everywhere — the window still
+# opens and works normally, closing it (X) just quits the app outright
+# instead of minimizing to a menu-bar icon. Properly running pystray
+# alongside Tk on the main thread on macOS would need a real threading-
+# model rework (pystray owning the main run loop instead of Tk); this is
+# the safe stopgap so the app launches at all.
+if platform.system() == "Darwin":
+    pystray = None
+
 APP_NAME = "DelCargo Tracker"
 APP_DIR = os.path.join(os.path.expanduser("~"), ".delcargo_tracker")
 CONFIG_FILE = os.path.join(APP_DIR, "config.json")
@@ -107,7 +128,27 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "19"  # Bumped 18 -> 19 (2026-08-24) for the Signal 6/7 remote-command
+APP_VERSION = "21"  # Bumped 20 -> 21 (2026-09-03) to fix a hard launch crash on
+# newer macOS (confirmed on 26.6.2 from a real crash report): pystray's
+# tray-icon run loop was started on a background thread (see the Darwin
+# guard added around the pystray import above) which calls AppKit's
+# -[NSApplication run] off the main thread while Tk is already driving
+# AppKit on the main thread — tolerated on older macOS, a hard
+# EXC_BREAKPOINT crash on 26.6.2. Tray icon is now simply disabled on
+# macOS (already a fully-supported no-tray code path) rather than
+# crashing on launch. v20's black-screenshot fix (still below) is bundled
+# into this same build since v20 was never tagged/released.
+# Bumped 19 -> 20 (2026-09-03) to fix the Mac black-screenshot
+# gap: capture_and_encode() previously uploaded a solid black frame with no
+# error whenever macOS Screen Recording permission was missing (mss and
+# pyautogui/ImageGrab both fail *silently* that way on macOS, unlike
+# Windows's transient DWM black-frame case this file's cross-engine
+# fallback was actually written for) — heartbeat/capture-health kept
+# reporting "Connected"/healthy the whole time. Now raises instead, so it
+# surfaces as lastCaptureError (web dashboard) and this app's own status
+# card. request_mac_permissions() also now returns a same-launch warning
+# instead of only printing to a console the packaged build never shows.
+# Bumped 18 -> 19 (2026-08-24) for the Signal 6/7 remote-command
 # channel (command_key_for/diagnostics_key_for, _handle_command, write_diagnostics)
 # — HR's "Run Diagnostics" / "Reload Settings Now" buttons in TrackingView only
 # do anything on a v19+ agent, since older builds never open the new SSE branch.
@@ -164,9 +205,22 @@ MAX_ERROR_DISPLAY_LEN = 140  # see _short_error() below
 # ── macOS Native Permission Helper ──────────────────────────────────────────
 def request_mac_permissions():
     """On macOS, triggers a native system permission request for Screen Recording
-    and Accessibility if not already granted, preventing headless crash errors."""
+    and Accessibility if not already granted, preventing headless crash errors.
+
+    Returns a short warning string when the Accessibility check below comes
+    back denied (a decent proxy for "this app is probably also missing
+    Screen Recording" — both are granted from the same Privacy & Security
+    pane), or None when everything looks fine / this isn't macOS. main()
+    passes this through to TrackerApp so it shows up as this run's initial
+    status message (self.state["last_error"]) instead of only ever being
+    printed to a console the packaged --windowed build doesn't even show —
+    previously an employee whose Mac blocked this app had no way to know
+    without opening a terminal. The actual, authoritative signal a real
+    capture is or isn't getting through remains capture_and_encode()'s own
+    black-frame check (see its docstring) — this is only a same-launch
+    heads-up, not the source of truth."""
     if platform.system() != "Darwin":
-        return
+        return None
 
     try:
         # Trigger an initial py_capture test to force macOS Gatekeeper / Screen Recording prompt
@@ -183,8 +237,12 @@ def request_mac_permissions():
         if res.returncode != 0 and "not allowed" in res.stderr.lower():
             # Trigger System Settings open to Privacy & Security -> Screen Recording
             print("[macOS Permission] Accessibility or Screen Recording permission missing. Directing user to Settings.")
+            return ("macOS permissions needed - open System Settings > Privacy & "
+                    "Security and allow DelCargo Tracker under both Screen Recording "
+                    "and Accessibility, then restart the app.")
     except Exception:
         pass
+    return None
 
 
 def _short_error(msg) -> str:
@@ -689,7 +747,11 @@ def tray_location_hint():
     if system == "Windows":
         return "Look for its icon in the system tray near the clock (bottom-right) — click the ^ arrow there if it's hidden — and click it to reopen."
     if system == "Darwin":
-        return "Look for its icon in the menu bar (top-right of the screen) and click it to reopen."
+        # pystray (and its menu-bar icon) is disabled on macOS — see the
+        # Darwin guard around the pystray import — so there is no menu bar
+        # icon to point to. The app instead behaves like a normal Mac app:
+        # closing its window leaves it running with a Dock icon.
+        return "Look for its icon in the Dock and click it to reopen — closing the window just hides it, it's still running in the background."
     return "Look for its icon in your system tray and click it to reopen."
 
 
@@ -1060,6 +1122,33 @@ def capture_and_encode():
         fallback = pyautogui.screenshot()
         if img is None or not _is_black_frame(fallback):
             img = fallback
+
+    # Both engines can independently return a solid black frame instead of
+    # raising when macOS Screen Recording permission has not been granted
+    # to this app (mss and pyautogui/ImageGrab both fail *silently* that
+    # way on macOS — there is no exception to catch). The cross-engine
+    # fallback above only rescues the transient Windows DWM black-frame
+    # case (see mss/agent_gui.py note in requirements.txt); if the frame is
+    # STILL black after trying both engines, that is not transient, and
+    # previously this function returned it anyway — capture_and_encode()
+    # had no final check, so a genuinely blocked Mac would upload an
+    # endless stream of black screenshots while its heartbeat kept
+    # reporting healthy capture-health, identical to a real, working
+    # tracker. Raise instead, so the caller's existing except-block (see
+    # _worker_loop's capture tick) records this as a real capture failure:
+    # it lands in lastCaptureError, which the web dashboard already
+    # surfaces (getCaptureHealth in hrData.ts treats any non-null
+    # lastCaptureError as 'failing'), and in this app's own status card via
+    # self.state["last_error"] (see _tick, which renders it into detail_var).
+    if _is_black_frame(img):
+        if platform.system() == "Darwin":
+            raise RuntimeError(
+                "Screen capture blocked - macOS Screen Recording permission "
+                "not granted. Open System Settings > Privacy & Security > "
+                "Screen Recording, enable DelCargo Tracker, then restart it."
+            )
+        raise RuntimeError("Screen capture returned a black frame from both capture engines")
+
     w, h = img.size
     if w > MAX_WIDTH:
         new_h = int(h * (MAX_WIDTH / w))
@@ -1569,7 +1658,7 @@ def _check_and_prompt_update():
 # ───────────────────────────────── main app ──────────────────────────────────
 
 class TrackerApp:
-    def __init__(self, root):
+    def __init__(self, root, initial_warning=None):
         self.root = root
         self.root.title(APP_NAME)
         self.root.geometry("440x740")
@@ -1585,6 +1674,22 @@ class TrackerApp:
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._set_window_icon()
+
+        # Standard Mac app hooks — needed now that pystray (and its own
+        # menu-bar reopen/quit handling) is disabled on Darwin. Without
+        # these, clicking the Dock icon after the window is hidden
+        # (see hide_window/on_close) would do nothing, and Cmd+Q / the
+        # app menu's "Quit DelCargo Tracker" item would bypass quit_app()'s
+        # clean-shutdown logic (auto-ending an active tracked shift,
+        # clearing the heartbeat) entirely. Harmless no-op on Windows —
+        # createcommand with these Tk/Mac-only virtual event names simply
+        # isn't invoked there.
+        if platform.system() == "Darwin":
+            try:
+                self.root.createcommand('tk::mac::ReopenApplication', self.show_window)
+                self.root.createcommand('tk::mac::Quit', self.quit_app)
+            except Exception:
+                pass
 
         # Canvas-based vertical scrolling container for dynamic responsiveness across screen resolutions
         self.main_canvas = tk.Canvas(self.root, bg=BG, highlightthickness=0, bd=0)
@@ -1613,7 +1718,13 @@ class TrackerApp:
             "employee_email": (self.cfg or {}).get("employee_email", ""),
             "interval": None,
             "last_capture": None,
-            "last_error": None,
+            # Seeded from request_mac_permissions()'s same-launch check (see
+            # main()) so a Mac employee whose Screen Recording/Accessibility
+            # permission is missing sees a status message immediately, not
+            # only after the first capture tick fails (which is also caught
+            # separately, and authoritatively, by capture_and_encode()'s
+            # black-frame check).
+            "last_error": initial_warning,
             "connection_status": "unknown",  # "connected" | "disconnected" | "superseded"
             "superseded_device": None,
             "heartbeat_error": None,
@@ -1894,7 +2005,9 @@ class TrackerApp:
         tk.Label(status_card.inner, textvariable=self.detail_var, bg=CARD_BG, fg=MUTED,
                  font=(FONT, 9), justify="left", anchor="w", wraplength=320).pack(fill="x", anchor="w", pady=(6, 0))
 
-        PillButton(frame, "Minimize to Tray", command=self.hide_window, variant="secondary").pack(fill="x", pady=(0, 10))
+        is_mac = platform.system() == "Darwin"
+        minimize_btn_label = "Minimize to the Dock" if is_mac else "Minimize to Tray"
+        PillButton(frame, minimize_btn_label, command=self.hide_window, variant="secondary").pack(fill="x", pady=(0, 10))
 
         settings_card = Card(frame, padding=14)
         settings_card.pack(fill="x", pady=(0, 14))
@@ -1902,15 +2015,25 @@ class TrackerApp:
         ttk.Checkbutton(settings_card.inner, text="Start automatically when I log in",
                          variable=self.autostart_var, command=self._toggle_autostart,
                          style="Card.TCheckbutton").pack(anchor="w", pady=(0, 8))
+        # Enabled whenever there's a background indicator to fall back on —
+        # pystray's tray icon on Windows, or the Dock on macOS (pystray
+        # itself is disabled there; see the Darwin guard around the
+        # pystray import and _has_background_indicator()). Without either,
+        # there'd be no way to tell the app is still running once its
+        # window is hidden, so the checkbox stays disabled/off in that
+        # fallback case and closing always quits.
+        can_minimize = bool(pystray) or is_mac
+        close_checkbox_text = ("Closing the window (✕) minimizes to the Dock instead of quitting" if is_mac
+                                else "Closing the window (✕) minimizes to tray instead of quitting")
         self.close_to_tray_var = tk.BooleanVar(value=bool(self.cfg.get("close_to_tray", True)))
-        ttk.Checkbutton(settings_card.inner, text="Closing the window (✕) minimizes to tray instead of quitting",
+        ttk.Checkbutton(settings_card.inner, text=close_checkbox_text,
                          variable=self.close_to_tray_var, command=self._toggle_close_to_tray,
-                         style="Card.TCheckbutton", state=("normal" if pystray else "disabled")).pack(anchor="w")
+                         style="Card.TCheckbutton", state=("normal" if can_minimize else "disabled")).pack(anchor="w")
 
         tk.Label(
             frame,
-            text=(tray_location_hint() if pystray and self.close_to_tray_var.get()
-                  else "Closing this window (✕) fully quits the app." if not (pystray and self.close_to_tray_var.get())
+            text=(tray_location_hint() if can_minimize and self.close_to_tray_var.get()
+                  else "Closing this window (✕) fully quits the app." if not (can_minimize and self.close_to_tray_var.get())
                   else ""),
             font=(FONT, 9), bg=BG, fg=MUTED, wraplength=380, justify="left"
         ).pack(anchor="w", pady=(0, 16))
@@ -2830,6 +2953,18 @@ class TrackerApp:
         self.root.lift()
         self.root.focus_force()
 
+    def _has_background_indicator(self) -> bool:
+        """True when there's some visible way for the employee to tell this
+        app is still running after its window is hidden, and to get the
+        window back — a tray icon on Windows (pystray), or the Dock on
+        macOS (a normal, always-present Mac app convention; pystray/the
+        menu-bar icon is disabled on Darwin — see the Darwin guard around
+        the pystray import — but the Dock icon plus the tk::mac::Reopen
+        Application hook wired up in __init__ serves the same purpose).
+        Used by on_close() to decide whether "closing the window" can mean
+        "hide, keep running in the background" or must mean "quit"."""
+        return bool(pystray and self.tray_icon) or platform.system() == "Darwin"
+
     def on_close(self):
         with self.state_lock:
             shift_active = bool(self.state.get("shift_active"))
@@ -2842,14 +2977,14 @@ class TrackerApp:
         # only meant to minimize. Ask explicitly instead of guessing. When
         # nothing is at stake (no active tracked shift), keep the simple,
         # non-interruptive behavior from the "Closing the window minimizes to
-        # tray" setting (see _toggle_close_to_tray) — prompting on every
+        # tray/Dock" setting (see _toggle_close_to_tray) — prompting on every
         # close with nothing to decide would just be annoying.
-        if self.cfg and shift_active and enabled_by_hr and pystray and self.tray_icon:
+        if self.cfg and shift_active and enabled_by_hr and self._has_background_indicator():
             self._show_close_choice_dialog()
             return
 
         close_to_tray = bool((self.cfg or {}).get("close_to_tray", True))
-        if pystray and self.tray_icon and close_to_tray:
+        if self._has_background_indicator() and close_to_tray:
             self.hide_window()
         else:
             self.quit_app()
@@ -2887,7 +3022,8 @@ class TrackerApp:
 
         btns = tk.Frame(dlg, bg=BG)
         btns.pack(fill="x", padx=20, pady=(0, 20))
-        PillButton(btns, "Minimize to System Tray", command=choose_minimize, variant="primary").pack(fill="x", pady=(0, 8))
+        minimize_label = "Minimize to the Dock" if platform.system() == "Darwin" else "Minimize to System Tray"
+        PillButton(btns, minimize_label, command=choose_minimize, variant="primary").pack(fill="x", pady=(0, 8))
         PillButton(btns, "End Shift and Quit", command=choose_end_shift, variant="danger").pack(fill="x", pady=(0, 8))
         PillButton(btns, "Cancel", command=choose_cancel, variant="secondary").pack(fill="x")
 
@@ -3038,8 +3174,12 @@ def main():
     # the docstring above for why.
     _enable_windows_dpi_awareness()
 
-    # Trigger macOS native permission prompt on launch if running on Darwin
-    request_mac_permissions()
+    # Trigger macOS native permission prompt on launch if running on Darwin.
+    # Stashed and handed to TrackerApp below so a denied permission shows up
+    # in the app's own status card from the very first frame, not just in a
+    # console the packaged build never shows (see request_mac_permissions()
+    # docstring).
+    mac_permission_warning = request_mac_permissions()
 
     # The very first thing this app does on every launch: check GitHub for a
     # newer release and offer to update before anything else happens (before
@@ -3065,7 +3205,7 @@ def main():
 
     root = tk.Tk()
     _apply_tk_dpi_scaling(root)
-    TrackerApp(root)
+    TrackerApp(root, initial_warning=mac_permission_warning)
     root.mainloop()
 
 

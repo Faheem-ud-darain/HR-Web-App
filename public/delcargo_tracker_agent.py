@@ -238,12 +238,49 @@ def check_active_shift(base_url, employee_email):
         return False
 
 
+def _is_black_frame(img, grid=8) -> bool:
+    """Cheap black-frame detector (samples an 8x8 grid rather than scanning
+    every pixel) — see the same helper in tracker-agent/agent_gui.py, this
+    is a deliberate copy since this standalone script has no shared import
+    with that PyInstaller build."""
+    try:
+        w, h = img.size
+        if w == 0 or h == 0:
+            return True
+        step_x, step_y = max(1, w // grid), max(1, h // grid)
+        px = img.convert("RGB").load()
+        for y in range(0, h, step_y):
+            for x in range(0, w, step_x):
+                if any(c > 8 for c in px[x, y]):
+                    return False
+        return True
+    except Exception:
+        return False  # can't tell — don't discard a possibly-fine frame
+
+
 def capture_and_encode():
     """Captures a screenshot, resizes/compresses it, and returns raw WebP
     bytes plus its final width/height (no base64 — uploaded as a real file,
     see upload_screenshot). WebP at this quality/method settings is
     noticeably smaller than JPEG at a visually equivalent quality."""
     img = pyautogui.screenshot()
+
+    # pyautogui/Pillow's ImageGrab silently returns a solid black frame on
+    # macOS (no exception) when this script hasn't been granted Screen
+    # Recording permission (System Settings > Privacy & Security) — without
+    # this check that black frame just gets uploaded as if it were a real
+    # capture, indistinguishable on the HR dashboard from one that's
+    # actually working. See the matching fix + longer explanation in
+    # tracker-agent/agent_gui.py's capture_and_encode().
+    if _is_black_frame(img):
+        if platform.system() == "Darwin":
+            raise RuntimeError(
+                "Screen capture blocked - macOS Screen Recording permission "
+                "not granted. Open System Settings > Privacy & Security > "
+                "Screen Recording, enable this script/Terminal/Python, then re-run."
+            )
+        raise RuntimeError("Screen capture returned a black frame")
+
     w, h = img.size
     if w > MAX_WIDTH:
         new_h = int(h * (MAX_WIDTH / w))

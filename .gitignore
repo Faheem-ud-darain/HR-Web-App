@@ -97,3 +97,4 @@ android/keystore.properties
 _to_delete/
 tracker-agent/__pycache__/
 tracker-agent/*.log
+public/__pycache__/

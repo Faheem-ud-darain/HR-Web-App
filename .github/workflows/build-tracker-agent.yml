@@ -54,7 +54,22 @@ jobs:
       - name: Zip the .app bundle and build DMG installer
         run: |
           cd dist
-          hdiutil create -volname "DelCargo Tracker" -srcfolder "DelCargo Tracker.app" -ov -format UDZO "DelCargo_Tracker_Setup.dmg"
+          # Stage the .app alongside a symlink to /Applications so the DMG
+          # shows the standard macOS "drag this app onto that folder" install
+          # UX, instead of just handing back the raw .app with nothing but a
+          # Finder window. Without this, employees were double-clicking the
+          # app straight from the mounted DMG volume (confirmed from a real
+          # crash report's process path: "/Volumes/VOLUME/*/DelCargo
+          # Tracker.app/...") instead of installing it — which also means it
+          # was never in ~/Applications for them to find afterward, and
+          # re-mounting the DMG on every launch is a shakier home for the
+          # macOS permission grants (Screen Recording/Accessibility, see
+          # request_mac_permissions() in agent_gui.py) than a fixed, installed
+          # location.
+          mkdir dmg_staging
+          cp -R "DelCargo Tracker.app" dmg_staging/
+          ln -s /Applications dmg_staging/Applications
+          hdiutil create -volname "DelCargo Tracker" -srcfolder dmg_staging -ov -format UDZO "DelCargo_Tracker_Setup.dmg"
           zip -r "DelCargo-Tracker-Mac.zip" "DelCargo Tracker.app"
       - uses: actions/upload-artifact@v4
         with:
