@@ -16,6 +16,11 @@ interface Payslip {
   bonus: number;
   net: number;
   processed: boolean;
+  // "why was I deducted" — itemized reasons, same list HR/Admin see on the
+  // Net Payable modal (empty until HR/Admin has actually saved this
+  // month's record at least once).
+  deductionBreakdown: { label: string; amount: number }[];
+  reservedThisMonth: number;
 }
 
 export default function EmployeeSalaryPage() {
@@ -79,7 +84,9 @@ export default function EmployeeSalaryPage() {
     deductions: payrollRecord.deductions || 0,
     bonus: payrollRecord.bonus || 0,
     net: baseSalary + pendingIncrement + (payrollRecord.bonus || 0) - (payrollRecord.deductions || 0),
-    processed: !!payrollRecord.processed
+    processed: !!payrollRecord.processed,
+    deductionBreakdown: payrollRecord.deductionBreakdown || [],
+    reservedThisMonth: payrollRecord.reservedThisMonth || 0,
   } : null;
 
   const filteredSlips: Payslip[] = currentSlip ? [currentSlip] : [];
@@ -87,6 +94,11 @@ export default function EmployeeSalaryPage() {
   const incrementHistory = userProfile ? getIncrementHistory(userProfile) : { originalBaseSalary: 0, events: [] };
   const missedYears = userProfile ? getMissedIncrementEvents(userProfile) : 0;
   const anniversarySource = userProfile ? (userProfile.salaryStartDate || userProfile.joinedDate) : '';
+  // Reserved salary balance (item 3/8) — automatic first-month withhold +
+  // any manual HR/Admin annotation, paid out only at resignation/
+  // termination. Purely informational here — never part of "net payable
+  // this month".
+  const reservedBalance = (payrollSelf?.reservedSalaryBalance || 0) + (payrollSelf?.manualReservedAmount || 0);
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -134,6 +146,15 @@ export default function EmployeeSalaryPage() {
           </CardContent>
         </Card>
       </div>
+
+      {reservedBalance > 0 && (
+        <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900">
+          <p className="font-bold text-sm">Reserved Salary Balance: {formatMoney(reservedBalance, userProfile?.region)}</p>
+          <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
+            This is not part of your monthly pay — it is held and paid out to you only if you resign or your employment ends.
+          </p>
+        </div>
+      )}
 
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Historical Pay slips</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">
@@ -363,12 +384,24 @@ export default function EmployeeSalaryPage() {
                   <span className="text-slate-500 font-semibold">Performance bonuses</span>
                   <span className="text-emerald-600 font-semibold">+{formatMoney(selectedSlip.bonus, userProfile?.region)}</span>
                 </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-slate-500 font-semibold">Leave & penalty deductions</span>
-                  <span className="text-rose-600 font-semibold">
-                    {selectedSlip.deductions > 0 ? `-${formatMoney(selectedSlip.deductions, userProfile?.region)}` : formatMoney(0, userProfile?.region)}
-                  </span>
-                </div>
+                {selectedSlip.deductionBreakdown.length > 0 ? (
+                  <div className="py-2 space-y-1.5">
+                    <span className="text-slate-500 font-semibold block mb-1">Deductions — why</span>
+                    {selectedSlip.deductionBreakdown.map((item, i) => (
+                      <div key={i} className="flex justify-between items-start gap-3 pl-2">
+                        <span className="text-slate-500 text-[11px] leading-snug">{item.label}</span>
+                        <span className="text-rose-600 font-semibold shrink-0">-{formatMoney(item.amount, userProfile?.region)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 font-semibold">Leave & penalty deductions</span>
+                    <span className="text-rose-600 font-semibold">
+                      {selectedSlip.deductions > 0 ? `-${formatMoney(selectedSlip.deductions, userProfile?.region)}` : formatMoney(0, userProfile?.region)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center py-2 pt-3 font-bold text-sm text-slate-900 border-t border-slate-200">
                   <span>Net Payable Outflow</span>
                   <span className="text-orange-600">{formatMoney(selectedSlip.net, userProfile?.region)}</span>

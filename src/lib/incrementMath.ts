@@ -58,6 +58,58 @@ export function getPendingIncrement(profile: IncrementInput): number {
   return missedEvents * perEvent;
 }
 
+// Payroll-specific variant (confirmed 2026-09-03): an anniversary increment
+// must not affect pay for its OWN calendar month, even though
+// getMissedIncrementEvents/getPendingIncrement above already treat it as
+// "missed"/"pending" the moment the anniversary date passes (that's still
+// correct for the informational "X pending" badges elsewhere — see
+// UserProfileModal/employee salary page). For actual payroll it must first
+// show up in the NEXT calendar month's record — e.g. an employee who
+// joined August 2025 and hits their Aug 2026 anniversary gets the raise
+// reflected starting with September's pay (processed/paid Oct 1st), not
+// August's (processed/paid Sept 1st), even though by the time August's
+// payroll is actually processed (1-3 days into September) the anniversary
+// date has already passed by the real calendar.
+//
+// targetMonthKey is "YYYY-MM" — the calendar month a PayrollRecord belongs
+// to (computePayrollView's targetMonthKey), NOT necessarily "now". An
+// anniversary event only counts once its own calendar month is strictly
+// BEFORE targetMonthKey's month — comparing months, not exact dates, since
+// the deferral is granular to a full calendar month either way.
+export function getMissedIncrementEventsForPayrollMonth(profile: IncrementInput, targetMonthKey: string): number {
+  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
+  if (!anniversarySource) return 0;
+  const anniversaryDate = new Date(anniversarySource);
+  if (isNaN(anniversaryDate.getTime())) return 0;
+
+  const [targetYear, targetMonthNum] = (targetMonthKey || '').split('-').map(Number);
+  if (!targetYear || !targetMonthNum) return 0;
+
+  const startYear = anniversaryDate.getFullYear();
+  const annivMonthIndex = anniversaryDate.getMonth(); // 0-indexed
+
+  let eventsElapsed = targetYear - startYear;
+  if (eventsElapsed >= 1) {
+    // This year's (i.e. the most recent candidate) anniversary event's own
+    // calendar month, as a "YYYY-MM" key — if it isn't strictly before
+    // targetMonthKey yet, that event doesn't count for this payroll month.
+    const candidateEventYear = startYear + eventsElapsed;
+    const candidateEventMonthKey = `${candidateEventYear}-${String(annivMonthIndex + 1).padStart(2, '0')}`;
+    if (candidateEventMonthKey >= targetMonthKey) eventsElapsed -= 1;
+  }
+  if (eventsElapsed < 1) return 0;
+
+  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - startYear) : 0;
+  return Math.max(0, eventsElapsed - eventsProcessed);
+}
+
+export function getPendingIncrementForPayrollMonth(profile: IncrementInput, targetMonthKey: string): number {
+  const missedEvents = getMissedIncrementEventsForPayrollMonth(profile, targetMonthKey);
+  if (missedEvents <= 0) return 0;
+  const perEvent = profile.region === 'USA' ? 100 : 10000;
+  return missedEvents * perEvent;
+}
+
 // Reconstructs a year-by-year increment timeline for display purposes
 // (e.g. the Salary Ledger's Base Salary breakdown modal). IMPORTANT: the
 // system only ever stores a single flat per-event amount and a

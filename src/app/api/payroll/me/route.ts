@@ -33,6 +33,20 @@ export async function GET(request: Request) {
     // adminListPayrollForEmployee already sorts by -created, so [0] is it.
     const payrollRecord = payrollRows[0] || null;
 
+    // Itemized "why was I deducted" breakdown + this month's reserved
+    // amount — written by /api/admin/payroll alongside the main record
+    // (see that route's comment) since computePayrollView, which computes
+    // both, isn't Edge-safe to import here directly.
+    let deductionBreakdown: { label: string; amount: number }[] = [];
+    let reservedThisMonth = 0;
+    if (payrollRecord?.month) {
+      const breakdownRow = await adminGetKV(`hr_payroll_breakdown_${profile.id}_${payrollRecord.month}`);
+      if (breakdownRow?.value) {
+        deductionBreakdown = Array.isArray(breakdownRow.value.deductionBreakdown) ? breakdownRow.value.deductionBreakdown : [];
+        reservedThisMonth = Number(breakdownRow.value.reservedThisMonth) || 0;
+      }
+    }
+
     // lastIncrementProcessedYear isn't a real hr_profiles column — like
     // `offboarded`, it lives in the hr_profile_extra_ KV overlay (see
     // getProfileExtras/saveProfileExtras in hrData.ts). Has to be fetched
@@ -54,6 +68,10 @@ export async function GET(request: Request) {
       joinedDate: profile.joined_date,
       lastIncrementProcessedYear: extras?.value?.lastIncrementProcessedYear || undefined,
       region: profile.region,
+      // Reserved-balance fields (item 3/8) — read the same way
+      // lastIncrementProcessedYear is above, straight off the overlay.
+      reservedSalaryBalance: Number(extras?.value?.reservedSalaryBalance) || 0,
+      manualReservedAmount: Number(extras?.value?.manualReservedAmount) || 0,
     };
     const pendingIncrement = getPendingIncrement(profileForClient);
 
@@ -65,6 +83,9 @@ export async function GET(request: Request) {
             bonus: Number(payrollRecord.bonus) || 0,
             deductions: Number(payrollRecord.deductions) || 0,
             processed: !!payrollRecord.processed,
+            month: payrollRecord.month || undefined,
+            deductionBreakdown,
+            reservedThisMonth,
           }
         : null,
     });

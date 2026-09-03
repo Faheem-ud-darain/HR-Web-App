@@ -23,7 +23,7 @@ export const OVERLAY_KEYS = [
   'offboarded', 'offboardDate', 'offboardingStatus', 'lastIncrementProcessedYear',
   'accountCreationDate', 'alias', 'approvalStatus', 'approvalReviewedBy',
   'approvalReviewedAt', 'approvalRejectionReason', 'personalPhone', 'companyPhone',
-  'exemptFromAbsenceCheck',
+  'exemptFromAbsenceCheck', 'reservedSalaryBalance', 'manualReservedAmount', 'manualReservedNote',
 ];
 
 const FIELD_MAP: Record<string, string> = {

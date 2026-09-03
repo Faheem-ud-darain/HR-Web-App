@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, getAbsenceDeductionForMonth } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, getAbsenceDeductionForMonth, updateProfileAdmin, PayrollRecord } from '@/lib/hrData';
+import { NetPayableModal } from '@/components/ui/NetPayableModal';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
@@ -24,6 +25,8 @@ export default function HRPayrollPage() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'processed'>('all');
   const [isSyncing, setIsSyncing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [isNetPayableOpen, setIsNetPayableOpen] = useState(false);
+  const [netPayableRecord, setNetPayableRecord] = useState<PayrollRecord | null>(null);
 
   const fetchAllData = async () => {
     await Promise.all([refetchProfiles(), refetchPayroll()]);
@@ -54,6 +57,15 @@ export default function HRPayrollPage() {
       if (record.incrementAmount > 0) {
         const emp = employees.find(e => e.id === employeeId);
         if (emp) await applyIncrementServer(emp, emp.baseSalary, record.incrementAmount);
+      }
+      // First-month reserve (item 3) — this month's entire base salary was
+      // withheld rather than paid (see computePayrollView's
+      // reservedThisMonth); bank it into the employee's running
+      // reservedSalaryBalance now, at the same moment the record is marked
+      // processed, so it's only ever added once per month per employee.
+      if (record.reservedThisMonth > 0) {
+        const emp = employees.find(e => e.id === employeeId);
+        if (emp) await updateProfileAdmin(employeeId, { reservedSalaryBalance: (emp.reservedSalaryBalance || 0) + record.reservedThisMonth });
       }
       await upsertPayrollRecordAdmin({ ...record, processed: true });
       setLocalEdits(prev => { const next = { ...prev }; delete next[employeeId]; return next; });
@@ -316,18 +328,26 @@ export default function HRPayrollPage() {
                         {emp.processed ? <Badge variant="success">Completed</Badge> : <Badge variant="warning">Pending</Badge>}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        {emp.processed ? (
-                          <span className="text-xs text-slate-400 font-semibold">Processed</span>
-                        ) : (
+                        <div className="flex flex-col items-center gap-1.5">
                           <button
-                            onClick={() => handleProcess(emp.employeeId)}
-                            disabled={processingId !== null}
-                            className="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                            onClick={() => { setNetPayableRecord(emp); setIsNetPayableOpen(true); }}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 inline-flex items-center gap-1.5"
                           >
-                            {processingId === emp.employeeId && <Loader2 className="h-3 w-3 animate-spin" />}
-                            {processingId === emp.employeeId ? 'Processing…' : 'Complete Payout'}
+                            Net Payable
                           </button>
-                        )}
+                          {emp.processed ? (
+                            <span className="text-xs text-slate-400 font-semibold">Processed</span>
+                          ) : (
+                            <button
+                              onClick={() => handleProcess(emp.employeeId)}
+                              disabled={processingId !== null}
+                              className="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                            >
+                              {processingId === emp.employeeId && <Loader2 className="h-3 w-3 animate-spin" />}
+                              {processingId === emp.employeeId ? 'Processing…' : 'Complete Payout'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -419,16 +439,24 @@ export default function HRPayrollPage() {
                   </div>
                 </div>
               )}
-              {!emp.processed && (
+              <div className="grid grid-cols-1 gap-2">
                 <button
-                  onClick={() => handleProcess(emp.employeeId)}
-                  disabled={processingId !== null}
-                  className="w-full text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-2.5 rounded-lg transition-colors transition-transform active:scale-97 border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  onClick={() => { setNetPayableRecord(emp); setIsNetPayableOpen(true); }}
+                  className="w-full text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-2.5 rounded-lg transition-colors transition-transform active:scale-97 border border-indigo-200 flex items-center justify-center gap-1.5"
                 >
-                  {processingId === emp.employeeId && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {processingId === emp.employeeId ? 'Processing…' : 'Complete Payout'}
+                  Net Payable
                 </button>
-              )}
+                {!emp.processed && (
+                  <button
+                    onClick={() => handleProcess(emp.employeeId)}
+                    disabled={processingId !== null}
+                    className="w-full text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-2.5 rounded-lg transition-colors transition-transform active:scale-97 border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  >
+                    {processingId === emp.employeeId && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {processingId === emp.employeeId ? 'Processing…' : 'Complete Payout'}
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -436,6 +464,15 @@ export default function HRPayrollPage() {
           <p className="text-xs text-slate-400 font-semibold italic text-center py-8">No records found.</p>
         )}
       </div>
+
+      <NetPayableModal
+        isOpen={isNetPayableOpen}
+        onClose={() => setIsNetPayableOpen(false)}
+        record={netPayableRecord}
+        profile={employees.find(e => e.id === netPayableRecord?.employeeId)}
+        onMarkPaid={(employeeId) => handleProcess(employeeId)}
+        isProcessing={processingId === netPayableRecord?.employeeId}
+      />
     </div>
   );
 }

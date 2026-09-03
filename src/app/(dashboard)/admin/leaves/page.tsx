@@ -10,6 +10,8 @@ const TYPE_COLORS: Record<string, string> = {
   'PTO': 'bg-indigo-100 text-indigo-800',
   'Sick Leave': 'bg-amber-100 text-amber-800',
   'Urgent': 'bg-rose-100 text-rose-800',
+  'Normal': 'bg-sky-100 text-sky-800',
+  'Parental Leave': 'bg-emerald-100 text-emerald-800',
 };
 
 const STATUS_BADGE_MAP: Record<LeaveApplication['status'], { variant: 'success' | 'warning' | 'danger' | 'default'; label: string }> = {
@@ -35,7 +37,7 @@ export default function AdminLeavesPage() {
     const emp = employees.find((e: Profile) => e.fullName === employeeName);
     return emp ? displayName(emp, 'admin') : employeeName;
   };
-  const [histType, setHistType] = useState<'all' | 'PTO' | 'Sick Leave' | 'Urgent'>('all');
+  const [histType, setHistType] = useState<'all' | 'PTO' | 'Sick Leave' | 'Urgent' | 'Normal' | 'Parental Leave'>('all');
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -257,6 +259,8 @@ export default function AdminLeavesPage() {
               <option value="PTO">PTO</option>
               <option value="Sick Leave">Sick Leave</option>
               <option value="Urgent">Urgent</option>
+              <option value="Normal">Normal</option>
+              <option value="Parental Leave">Parental Leave</option>
             </select>
             <span className="text-xs text-slate-400 font-semibold self-center">{historyLeaves.length} records</span>
           </div>

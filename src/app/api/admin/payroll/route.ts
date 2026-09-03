@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { pbAdminFetch } from '@/lib/pbAdmin';
+import { pbAdminFetch, adminSetKV } from '@/lib/pbAdmin';
+
+// Same "why was I deducted" breakdown key scheme /api/payroll/me reads back
+// (see that route's comment) — not a real hr_payroll column (the live
+// schema has none free for it), so it's stored the same way every other
+// non-column profile/payroll extra already is in this app: a KV row,
+// keyed by employeeId + month so each calendar month keeps its own.
+function payrollBreakdownKey(employeeId: string, month: string) {
+  return `hr_payroll_breakdown_${employeeId}_${month}`;
+}
 
 export const runtime = 'edge';
 
@@ -62,6 +71,8 @@ export async function POST(request: Request) {
       processed: record.processed,
       status: record.processed ? 'paid' : 'pending',
       paid_date: record.processed ? new Date().toISOString().split('T')[0] : '',
+      month: record.month || '',
+      year: record.month ? (Number(String(record.month).slice(0, 4)) || undefined) : undefined,
     };
 
     if (looksLikeRealId(record.id)) {
@@ -73,6 +84,19 @@ export async function POST(request: Request) {
       await pbAdminFetch(`/api/collections/hr_payroll/records`, {
         method: 'POST',
         body: JSON.stringify(fields),
+      });
+    }
+
+    // Persist the itemized "why was I deducted" breakdown + this month's
+    // reserved amount alongside the main record, so the employee's own
+    // /api/payroll/me view can show the exact same reasons HR/Admin see on
+    // the Net Payable modal — computePayrollView (client-side only, not
+    // Edge-safe) already computed both of these; this route just needs to
+    // carry them through to storage, not recompute them.
+    if (record.employeeId && record.month) {
+      await adminSetKV(payrollBreakdownKey(record.employeeId, record.month), {
+        deductionBreakdown: Array.isArray(record.deductionBreakdown) ? record.deductionBreakdown : [],
+        reservedThisMonth: Number(record.reservedThisMonth) || 0,
       });
     }
 

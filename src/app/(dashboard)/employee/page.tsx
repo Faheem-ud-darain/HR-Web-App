@@ -5,7 +5,7 @@ import {
   useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTeams,
   useTrackingSettings, hrActions, calculatePTOAccrued, getPTOAccrualDate, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
   TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS,
-  hasStaleTrackerToken,
+  hasStaleTrackerToken, usePayrollSelf, formatMoney,
 } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -40,6 +40,12 @@ const STATUS_LABELS: Record<Task['status'], string> = {
 export default function EmployeeDashboard() {
   const { data: allProfiles } = useProfiles();
   const { data: allLeaves } = useLeaves();
+  // Own net-payable figure only, via the authenticated self-only
+  // /api/payroll/me route (see usePayrollSelf's comment in hrData.ts) — not
+  // the public useProfiles()/usePayroll() combo, which would leak every
+  // employee's base salary to this employee's browser just to show their
+  // own number.
+  const { data: payrollSelf } = usePayrollSelf();
   // Scoped to just this employee's own tasks server-side (see useMyTasks'
   // comment in hrData.ts) instead of fetching every task assigned to
   // everyone in the company and filtering to "mine" client-side.
@@ -800,6 +806,21 @@ export default function EmployeeDashboard() {
                   onClick={async () => {
                     if (!userProfile?.email) return;
 
+                    // IMPORTANT: End Shift must ALWAYS write clock_out
+                    // immediately, no matter how many hours were worked.
+                    // This used to gate the actual clockOut() call behind
+                    // an "Under 8 Hours" confirmation modal — if the
+                    // employee didn't notice/click through that second
+                    // step (its "Keep Shift Running" button was the more
+                    // prominent green one), the shift silently stayed open
+                    // in hr_timesheets with clock_out still empty, closing
+                    // the tracker app didn't help either (the tracker-stop
+                    // signal only fires inside clockOut()), and the shift
+                    // just sat open until the 16-hour hard-cap cron
+                    // eventually caught it. Fixed 2026-09-01: the click
+                    // always ends the shift now; the under-8-hour modal is
+                    // now purely informational (shown after the fact), not
+                    // a gate.
                     const doClockOut = async () => {
                       setShiftActive(false);
                       setGeofenceStatus('Shift Ended');
@@ -836,16 +857,19 @@ export default function EmployeeDashboard() {
                     const totalWorkedMins = Math.floor(totalWorkedMs / 60000);
                     const REQUIRED_SHIFT_MINUTES = 8 * 60; // 480 minutes
 
+                    // End the shift first — always — then, separately,
+                    // surface the under-8-hour heads-up as a plain
+                    // informational modal if it applies. The shift is never
+                    // left open waiting on this.
+                    await doClockOut();
+
                     if (totalWorkedMins < REQUIRED_SHIFT_MINUTES) {
                       setUnder8HourDetails({
                         workedMinutes: totalWorkedMins,
                         remainingMinutes: REQUIRED_SHIFT_MINUTES - totalWorkedMins,
                       });
                       setShowUnder8HourModal(true);
-                      return;
                     }
-
-                    await doClockOut();
                   }}
                   disabled={!shiftActive}
                   className="bg-white hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 border border-rose-200 font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97"
@@ -956,6 +980,35 @@ export default function EmployeeDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Net Payable This Month (item 9, 2026-09-03) — how much salary
+              the employee will actually get at the end of the month,
+              itemized breakdown lives on the My Salary page. */}
+          {payrollSelf?.payrollRecord && (
+            <Card className="border-emerald-200 bg-emerald-50/40">
+              <CardContent className="pt-4 md:pt-5 px-4 md:px-5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-xs font-semibold text-emerald-700">Net Payable This Month</p>
+                    <p className="text-2xl font-bold text-emerald-900 mt-1 tracking-tight">
+                      {formatMoney(
+                        payrollSelf.baseSalary + (payrollSelf.pendingIncrement || 0) + (payrollSelf.payrollRecord.bonus || 0) - (payrollSelf.payrollRecord.deductions || 0),
+                        payrollSelf.region
+                      )}
+                    </p>
+                    {payrollSelf.payrollRecord.deductions > 0 && (
+                      <p className="text-[10px] text-emerald-700 mt-1">
+                        Includes {formatMoney(payrollSelf.payrollRecord.deductions, payrollSelf.region)} in deductions — see My Salary for the full breakdown.
+                      </p>
+                    )}
+                  </div>
+                  <Badge variant={payrollSelf.payrollRecord.processed ? 'success' : 'warning'}>
+                    {payrollSelf.payrollRecord.processed ? 'Paid' : 'Pending'}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Tasks list */}
           {myTasks.length > 0 && (
@@ -1545,29 +1598,35 @@ export default function EmployeeDashboard() {
           </div>
         </Modal>
       )}
-      {/* Early Shift End / Under 8 Hours Warning Modal */}
+      {/* Under 8 Hours heads-up — purely informational now (2026-09-01).
+          By the time this can show, doClockOut() has already run and the
+          shift is already ended; this used to be a confirmation GATE that
+          blocked the actual clock-out until a second click, which is what
+          let shifts silently stay open for up to 16 hours when an employee
+          didn't notice/click through it. Never re-add a button here that
+          the shift-ending action depends on. */}
       {showUnder8HourModal && under8HourDetails && (
-        <Modal isOpen={showUnder8HourModal} onClose={() => setShowUnder8HourModal(false)} title="Under 8 Hours Shift Warning">
+        <Modal isOpen={showUnder8HourModal} onClose={() => setShowUnder8HourModal(false)} title="Shift Ended Under 8 Hours">
           <div className="space-y-4 font-sans text-xs">
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="font-bold text-sm">Mandatory 8-Hour Shift Requirement</p>
+                <p className="font-bold text-sm">Your shift has been ended.</p>
                 <p className="text-amber-800 leading-relaxed font-medium">
-                  Employees are required to complete at least <strong>8 hours</strong> of total shift time per day.
+                  It was under the required <strong>8 hours</strong> of total shift time for today — this may affect your pay for today. HR/Admin has also been notified.
                 </p>
               </div>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
               <div className="flex justify-between items-center text-slate-700">
-                <span className="font-semibold text-slate-500">Today's Completed/Current Shift Time:</span>
+                <span className="font-semibold text-slate-500">Today's Total Shift Time:</span>
                 <span className="font-bold font-mono text-sm text-slate-900">
                   {Math.floor(under8HourDetails.workedMinutes / 60)}h {under8HourDetails.workedMinutes % 60}m
                 </span>
               </div>
               <div className="flex justify-between items-center text-slate-700 pt-2 border-t border-slate-200">
-                <span className="font-semibold text-amber-700">Remaining Time Required Today:</span>
+                <span className="font-semibold text-amber-700">Short By:</span>
                 <span className="font-bold font-mono text-sm text-amber-700">
                   {Math.floor(under8HourDetails.remainingMinutes / 60)}h {under8HourDetails.remainingMinutes % 60}m
                 </span>
@@ -1575,7 +1634,7 @@ export default function EmployeeDashboard() {
             </div>
 
             <p className="text-slate-500 text-[11px] leading-relaxed">
-              If your shift was split into multiple parts due to internet/app disconnections, your total worked time today is combined. If you still need to end your shift early, please confirm below.
+              If your shift was split into multiple parts due to internet/app disconnections, your total worked time today is combined. If this looks wrong, contact HR.
             </p>
 
             <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">
@@ -1583,25 +1642,7 @@ export default function EmployeeDashboard() {
                 onClick={() => setShowUnder8HourModal(false)}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors"
               >
-                Keep Shift Running
-              </button>
-              <button
-                onClick={async () => {
-                  setShowUnder8HourModal(false);
-                  if (!userProfile?.email) return;
-                  setShiftActive(false);
-                  setGeofenceStatus('Shift Ended');
-                  openShiftRef.current = null;
-                  await hrActions.clockOut(userProfile.email);
-                  await refetchTimesheets();
-                  await hrActions.addNotification(userProfile.email, 'employee', `Shift ended before 8 hours completed (${Math.floor(under8HourDetails.workedMinutes / 60)}h ${under8HourDetails.workedMinutes % 60}m worked).`);
-                  const shiftActorName = displayName(userProfile, 'hr');
-                  await hrActions.addNotification('all', 'hr', `${shiftActorName} ended shift early (${Math.floor(under8HourDetails.workedMinutes / 60)}h ${under8HourDetails.workedMinutes % 60}m total today).`, 'shift', shiftActorName, userProfile.email);
-                  await hrActions.addNotification('all', 'admin', `${shiftActorName} ended shift early (${Math.floor(under8HourDetails.workedMinutes / 60)}h ${under8HourDetails.workedMinutes % 60}m total today).`, 'shift', shiftActorName, userProfile.email);
-                }}
-                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-4 py-2 rounded-xl text-xs transition-colors"
-              >
-                Confirm End Shift Early
+                Got it
               </button>
             </div>
           </div>

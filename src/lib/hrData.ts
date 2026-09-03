@@ -22,7 +22,30 @@ import { API_BASE } from './apiBase';
 //      every time, never cached to localStorage.
 // ─────────────────────────────────────────────────────────────────────────
 
-const WORKING_DAYS_PER_MONTH = 22;
+const WORKING_DAYS_PER_MONTH = 22; // legacy fallback only — see getWeekdaysInMonth below, the real divisor everywhere daily-rate math runs now
+
+// Standard full shift length — a day worked for this many minutes (8h)
+// earns the full daily rate; less than this (but at/above the 4h absent
+// floor) earns a proportional fraction. Mirrors employee/page.tsx's own
+// REQUIRED_SHIFT_MINUTES constant for the "End Shift" under-8-hours notice.
+const STANDARD_SHIFT_MINUTES = 8 * 60;
+
+// Per confirmed business rule (2026-09-03): daily rate = base salary /
+// COUNT OF WEEKDAYS (Mon-Fri) in the given calendar month — never the
+// fixed WORKING_DAYS_PER_MONTH=22 constant above, and never calendar days
+// (28-31). monthKey is "YYYY-MM". Falls back to 22 for a malformed key
+// rather than risk a divide-by-zero.
+export function getWeekdaysInMonth(monthKey: string): number {
+  const [year, month] = (monthKey || '').split('-').map(Number);
+  if (!year || !month || month < 1 || month > 12) return WORKING_DAYS_PER_MONTH;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month - 1, d).getDay(); // 0=Sun..6=Sat, local calendar (matches the Y/M/D components directly, no UTC drift)
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count || WORKING_DAYS_PER_MONTH;
+}
 
 // ---------------------------------------------------------------------------
 // Low-level PocketBase primitives
@@ -257,6 +280,13 @@ export interface Profile {
     hrClearance: boolean;
     notes?: string;
     finalLeavePayout?: number;
+    // Reserved-balance payout at resignation/termination (item 3/8 of the
+    // 2026-09-03 payroll overhaul) — reservedSalaryBalance (automatic
+    // first-month withhold) + manualReservedAmount (HR/Admin's manual
+    // record-only annotation) as of the moment offboarding is confirmed.
+    // Like finalLeavePayout, this is a one-time snapshot taken at
+    // confirmOffboard time, not a live-recomputed value.
+    finalReservedPayout?: number;
     // Only meaningful when this employee had a companyPhone on file — the
     // company-allocated number must be handed back before offboarding
     // completes (see confirmOffboard in UserProfileModal.tsx, which blocks
@@ -264,6 +294,21 @@ export interface Profile {
     companyNumberReturned?: boolean;
   };
   lastIncrementProcessedYear?: number;
+  // ── Reserved salary balance (item 3/8, 2026-09-03 payroll overhaul) ────
+  // Automatic: an employee's first calendar month of pay is always withheld
+  // rather than paid out (see computePayrollView's reservedThisMonth), and
+  // accumulates here at "Process" time. Paid out only at resignation or
+  // termination (offboardingStatus.finalReservedPayout above) — never
+  // deducted from any later month's normal pay.
+  reservedSalaryBalance?: number;
+  // Manual: HR/Admin can record an already-reserved amount for an EXISTING
+  // employee (e.g. carried over from before this system existed) purely as
+  // a tracking annotation — per explicit product decision this does NOT
+  // affect that employee's current/live payroll calculation at all, it
+  // only shows alongside reservedSalaryBalance on the Net Payable view and
+  // gets folded into finalReservedPayout at offboarding.
+  manualReservedAmount?: number;
+  manualReservedNote?: string;
   cvFileName?: string;
   cvFileData?: string;
   identityDocs?: { name: string; data: string }[];
@@ -378,7 +423,7 @@ const MAINTENANCE_NOTICE_READS_KEY = 'hr_maintenance_notice_reads_v1';
 type MaintenanceNoticeReadMap = Record<string, string[]>;
 
 export interface LeaveApplication {
-  id: string; employeeName: string; type: 'PTO' | 'Sick Leave' | 'Urgent' | 'Parental Leave';
+  id: string; employeeName: string; type: 'PTO' | 'Sick Leave' | 'Urgent' | 'Parental Leave' | 'Normal';
   duration: string; reason: string; status: 'pending' | 'hr_approved' | 'approved' | 'rejected';
 }
 
@@ -401,6 +446,34 @@ export interface PayrollRecord {
   id: string; employeeId: string; name: string; role: string; region?: 'USA' | 'Pakistan';
   baseSalary: number; unpaidLeaves: number; bonus: number; deductions: number; processed: boolean;
   incrementAmount: number;
+  // "YYYY-MM" (America/New_York calendar month this record belongs to) —
+  // uses hr_payroll's pre-existing month/year columns, which the app used
+  // to leave completely unwritten. Without this, every employee had at
+  // most one hr_payroll row ever: computePayrollView's `existing` lookup
+  // matched by employeeId alone, so "processing" September just overwrote
+  // August's row in place instead of creating a new one, and a paid month
+  // could never go back to showing "pending" the following month. Now
+  // each calendar month gets its own row, scoped by this field.
+  month: string;
+  // NOT a persisted hr_payroll column — the live hr_payroll schema has no
+  // slot for it. Deliberately recomputed fresh every time by
+  // computePayrollView (from emp.joinedDate + this record's own `month`),
+  // the same way effectiveBaseSalary's late-joiner proration already is,
+  // rather than requiring a new PocketBase column. Whatever this equals is
+  // ALSO folded straight into `deductions` before it's ever written, so
+  // net pay (baseSalary + bonus - deductions + incrementAmount) already
+  // reflects it being withheld — this field exists purely so the UI can
+  // show it as its own labeled line ("Reserved — paid at resignation")
+  // instead of an opaque generic deduction. See getShiftShortfallDeduction
+  // and the "1. Calculate Base Salary" block's isEmployeesFirstMonth for
+  // where this comes from.
+  reservedThisMonth: number;
+  // NOT a persisted column either (same reasoning as reservedThisMonth) —
+  // the itemized "why was I deducted" list shown on the Net Payable modal
+  // (HR/Admin) and the Employee dashboard. Sums to (at least) `deductions`
+  // — see its own comment in computePayrollView for why it can sum to
+  // MORE when the safety-net cap has kicked in.
+  deductionBreakdown: { label: string; amount: number }[];
 }
 
 // A single day an employee was auto-marked absent, with a specific reason —
@@ -1064,7 +1137,7 @@ const OVERLAY_KEYS: (keyof Profile)[] = [
   'offboarded', 'offboardDate', 'offboardingStatus', 'lastIncrementProcessedYear',
   'accountCreationDate', 'alias', 'approvalStatus', 'approvalReviewedBy',
   'approvalReviewedAt', 'approvalRejectionReason', 'personalPhone', 'companyPhone',
-  'exemptFromAbsenceCheck',
+  'exemptFromAbsenceCheck', 'reservedSalaryBalance', 'manualReservedAmount', 'manualReservedNote',
 ];
 
 function toWarehouse(w: any): Warehouse {
@@ -1100,6 +1173,13 @@ function toPayroll(p: any): PayrollRecord {
     id: p.id, employeeId: p.employee_id, name: p.employee_name, role: p.role, region: p.region,
     baseSalary: Number(p.base_salary) || 0, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus: Number(p.bonus) || 0,
     deductions: Number(p.deductions) || 0, incrementAmount: Number(p.increment_amount) || 0, processed: !!p.processed,
+    month: typeof p.month === 'string' ? p.month : '',
+    // Not a real column — see PayrollRecord.reservedThisMonth's comment.
+    // computePayrollView recomputes the real value fresh; this raw-record
+    // mapper just needs a safe default for any caller reading usePayroll()
+    // output directly without going through computePayrollView.
+    reservedThisMonth: 0,
+    deductionBreakdown: [],
   };
 }
 function toTeam(t: any): Team {
@@ -1291,7 +1371,20 @@ export interface PayrollSelf {
   lastIncrementProcessedYear?: number;
   region?: 'USA' | 'Pakistan';
   pendingIncrement: number;
-  payrollRecord: { bonus: number; deductions: number; processed: boolean } | null;
+  // Reserved-balance fields (item 3/8) — see /api/payroll/me's comment.
+  reservedSalaryBalance?: number;
+  manualReservedAmount?: number;
+  payrollRecord: {
+    bonus: number;
+    deductions: number;
+    processed: boolean;
+    month?: string;
+    // "why was I deducted" — same itemized list HR/Admin see on the Net
+    // Payable modal (PayrollRecord.deductionBreakdown), plus this month's
+    // reserved-salary amount if this was the employee's first month.
+    deductionBreakdown?: { label: string; amount: number }[];
+    reservedThisMonth?: number;
+  } | null;
 }
 
 // Employee/HR/Admin's OWN salary data, via the new server-side
@@ -1842,13 +1935,13 @@ export function getPTOAccrualDate(profile: Pick<Profile, 'joinedDate' | 'account
 // browser-`pb`-instance imports into the Edge runtime bundle. Re-exported
 // here under their original names so no existing call site anywhere in the
 // app needs to change.
-import { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory } from './incrementMath';
-export { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory };
+import { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory, getPendingIncrementForPayrollMonth } from './incrementMath';
+export { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory, getPendingIncrementForPayrollMonth };
 export type { IncrementEvent } from './incrementMath';
 
 export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[]): number {
   const remainingDays = getRemainingPTO(leaves, profile.fullName, getPTOAccrualDate(profile));
-  const dailyRate = profile.baseSalary / WORKING_DAYS_PER_MONTH;
+  const dailyRate = profile.baseSalary / getWeekdaysInMonth(getNYDateString(new Date()).slice(0, 7));
   return Math.round(remainingDays * dailyRate);
 }
 
@@ -1877,9 +1970,83 @@ export function getAbsenceDeductionForMonth(
   const count = absenceRecords.filter(
     a => a.employeeEmail.toLowerCase() === wanted && a.date.slice(0, 7) === monthKey
   ).length;
-  const dailyRate = currentBaseSalary / WORKING_DAYS_PER_MONTH;
+  const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
   const raw = Math.round(count * 2 * dailyRate);
   return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+}
+
+// Shift-shortfall deduction — the "for each day divide their worked/onshift
+// hours with the total shift hours to calculate their daily salary" half of
+// the 2026-09-03 shift-pay formula. A day with a real shift that ran LESS
+// than the standard 8 hours but still cleared the 4-hour absent floor
+// previously cost nothing at all (only a full no-show/under-4h day did,
+// via the flat 2-day absence penalty below/runAbsenceCheck). This closes
+// that gap: for each such partial day this month, deduct the proportional
+// shortfall — dailyRate * (1 - workedMinutes/480) — from pay. Deliberately
+// scoped identically to runAbsenceCheck (Pakistan region only, not exempt,
+// weekdays only, on/after joinedDate, skipped on approved-leave days) and
+// deliberately SKIPS any date that already has an AbsenceRecord (that
+// day's flat 2-day penalty already covers it — this must never double-
+// charge the same day twice) and any date with zero recorded minutes
+// (a true no-show is runAbsenceCheck's job, not this function's — it only
+// prorates a shift that actually happened but ran short). Only counts
+// dates through yesterday (today's shift may still be in progress).
+export function getShiftShortfallDeduction(
+  timesheets: TimesheetEntry[],
+  absenceRecords: AbsenceRecord[],
+  leaves: LeaveApplication[],
+  profile: Pick<Profile, 'fullName' | 'email' | 'region' | 'joinedDate' | 'exemptFromAbsenceCheck'>,
+  currentBaseSalary: number,
+  monthKey: string,
+  today: Date = new Date()
+): number {
+  if (profile.region !== 'Pakistan') return 0;
+  if (profile.exemptFromAbsenceCheck) return 0;
+
+  const todayStr = getNYDateString(today);
+  const joinedStr = profile.joinedDate && /^\d{4}-\d{2}-\d{2}/.test(profile.joinedDate)
+    ? profile.joinedDate.slice(0, 10)
+    : '';
+  const email = (profile.email || '').toLowerCase();
+  const absentDates = new Set(
+    absenceRecords.filter(a => a.employeeEmail.toLowerCase() === email && !a.deleted).map(a => a.date)
+  );
+
+  // Bucket every timesheet minute this employee worked by NY calendar day —
+  // same shiftDate bucketing runAbsenceCheck uses, just for the whole month
+  // instead of a 5-day lookback.
+  const minutesByDate = new Map<string, number>();
+  for (const t of timesheets) {
+    if (!t.employeeEmail || t.employeeEmail.toLowerCase() !== email || !t.clockIn) continue;
+    const d = new Date(t.clockIn);
+    if (isNaN(d.getTime())) continue;
+    const shiftDate = getNYDateString(d);
+    if (shiftDate.slice(0, 7) !== monthKey) continue;
+    let mins = 0;
+    if (t.clockOut) {
+      const outTime = new Date(t.clockOut).getTime();
+      if (!isNaN(outTime) && outTime > d.getTime()) mins = Math.floor((outTime - d.getTime()) / 60000);
+    }
+    minutesByDate.set(shiftDate, (minutesByDate.get(shiftDate) || 0) + mins);
+  }
+
+  const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
+  const MIN_REQUIRED_WORK_MINUTES = 4 * 60;
+  let totalShortfall = 0;
+
+  for (const [dateStr, mins] of minutesByDate) {
+    if (dateStr >= todayStr) continue; // today/future — shift may still be in progress
+    if (joinedStr && dateStr < joinedStr) continue;
+    if (!isWeekday(dateStr)) continue;
+    if (absentDates.has(dateStr)) continue; // already flat-penalized by runAbsenceCheck — never double-charge
+    if (mins < MIN_REQUIRED_WORK_MINUTES) continue; // that's runAbsenceCheck's job, not this function's
+    if (mins >= STANDARD_SHIFT_MINUTES) continue; // full (or over) shift — no shortfall
+    if (isApprovedLeaveOnDate(leaves, profile.fullName, dateStr)) continue;
+    totalShortfall += dailyRate * (1 - mins / STANDARD_SHIFT_MINUTES);
+  }
+
+  const rounded = Math.round(totalShortfall);
+  return Number.isFinite(rounded) ? Math.max(0, rounded) : 0;
 }
 
 export const formatMoney = (amount: number, region?: 'USA' | 'Pakistan') =>
@@ -3025,16 +3192,18 @@ export const hrActions = {
   // writes) — mirrors old db.getPayroll()'s calculation. Callers decide
   // whether/when to persist via upsertPayrollRecord (e.g. only on "Process").
   //
-  // `timesheets` is unused here now (kept for backward-compat with existing
-  // callers) — `absenceRecords` is the real source of truth for no-call-
-  // no-show / inactivity deductions. Deliberately NOT recomputed live from
-  // timesheets+leaves the way urgent-leave deductions are: absence
-  // detection needs a one-time historical scan (inactivity logs especially)
-  // and needs to persist a specific reason for the Absent Details pages, so
-  // runAbsenceCheck (below) creates a real AbsenceRecord once per absence,
-  // and this function just sums up whichever records already exist for the
-  // employee this month — recomputed fresh every render like everything
-  // else here, just from a different, richer source than a live count.
+  // `absenceRecords` is the real source of truth for no-call-no-show /
+  // inactivity deductions (the flat 2-day penalty). Deliberately NOT
+  // recomputed live from timesheets+leaves the way urgent-leave deductions
+  // are: absence detection needs a one-time historical scan (inactivity
+  // logs especially) and needs to persist a specific reason for the Absent
+  // Details pages, so runAbsenceCheck (below) creates a real AbsenceRecord
+  // once per absence, and this function just sums up whichever records
+  // already exist for the employee this month.
+  //
+  // `timesheets` (2026-09-03) now also feeds getShiftShortfallDeduction —
+  // the day-by-day worked-hours/8-hours proration for shifts that ran
+  // short of a full day without qualifying as absent (4h-8h range).
   computePayrollView: (employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[] = [], absenceRecords: AbsenceRecord[] = []): PayrollRecord[] => {
     const today = new Date();
     const dayOfMonth = parseInt(getNYDateString(today).split('-')[2], 10);
@@ -3050,12 +3219,26 @@ export const hrActions = {
     return employees
       .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
       .map(emp => {
-        const existing = existingPayroll.find(p => p.employeeId === emp.id);
-        const pendingIncrement = getPendingIncrement(emp);
+        // Scoped to THIS calendar month — see PayrollRecord.month's comment.
+        // Without the month check this would match any row ever created
+        // for the employee (there used to only ever be one), silently
+        // reusing/overwriting a prior month's already-paid record instead
+        // of starting a fresh one for targetMonthKey.
+        const existing = existingPayroll.find(p => p.employeeId === emp.id && p.month === targetMonthKey);
+        // Payroll-specific deferral — see getPendingIncrementForPayrollMonth's
+        // comment: an anniversary increment only starts affecting pay from
+        // the calendar month AFTER the anniversary month, never the
+        // anniversary's own month, regardless of when this is processed.
+        const pendingIncrement = getPendingIncrementForPayrollMonth(emp, targetMonthKey);
 
         // 1. Calculate Base Salary for Current Month (Handling Mid-Month Joiners)
         let effectiveBaseSalary = emp.baseSalary;
         let isFirstMonthLateJoiner = false;
+        // True whenever targetMonthKey IS this employee's own first
+        // calendar month of employment — drives the automatic first-month
+        // salary reserve below (item 3), regardless of which day in that
+        // month they actually joined.
+        let isEmployeesFirstMonth = false;
 
         if (emp.joinedDate) {
           const joinedDateObj = new Date(emp.joinedDate);
@@ -3063,6 +3246,7 @@ export const hrActions = {
 
           // Check if employee joined in this current month
           if (joinedMonthKey === targetMonthKey) {
+            isEmployeesFirstMonth = true;
             const joinDayOfMonth = parseInt(getNYDateString(joinedDateObj).split('-')[2], 10);
 
             // Rule:
@@ -3080,7 +3264,8 @@ export const hrActions = {
           }
         }
 
-        // 2. Urgent Leave Deductions
+        // 2. Urgent Leave Deductions — 2 days' pay deducted for EACH DAY of
+        // Urgent leave taken (submitted any time, no advance notice).
         const urgentDays = leaves
           .filter(l => l.employeeName === emp.fullName && l.type === 'Urgent' && l.status === 'approved')
           .reduce((acc, l) => {
@@ -3089,19 +3274,40 @@ export const hrActions = {
             const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
             return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
           }, 0);
-        const dailyRateForDeduction = emp.baseSalary / WORKING_DAYS_PER_MONTH;
+        const dailyRateForDeduction = emp.baseSalary / getWeekdaysInMonth(targetMonthKey);
         const rawUrgentDeduction = Math.round(urgentDays * 2 * dailyRateForDeduction);
         // Never negative — guards against a malformed `duration` string
         // (parseLeaveDates returning something that nets out negative/NaN)
         // silently turning into a negative "deduction" that would actually
         // increase pay.
         const urgentDeduction = Number.isFinite(rawUrgentDeduction) ? Math.max(0, rawUrgentDeduction) : 0;
+
+        // 2b. Normal Leave Deductions — the PTO/Sick-Leave replacement
+        // (see LeaveApplication.type's comment): requires 14 days' advance
+        // notice (enforced client-side at submission, in employee/leaves),
+        // deducts 1 day's pay for EACH DAY taken (half the Urgent-leave
+        // rate, by design — parallel structure, different multiplier).
+        const normalDays = leaves
+          .filter(l => l.employeeName === emp.fullName && l.type === 'Normal' && l.status === 'approved')
+          .reduce((acc, l) => {
+            const dates = parseLeaveDates(l.duration);
+            if (!dates) return acc + 1;
+            const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
+            return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
+          }, 0);
+        const rawNormalDeduction = Math.round(normalDays * 1 * dailyRateForDeduction);
+        const normalDeduction = Number.isFinite(rawNormalDeduction) ? Math.max(0, rawNormalDeduction) : 0;
         const onboardingPenalty = emp.onboardingCompleted ? 0 : (emp.region === 'USA' ? 10 : 200);
 
         // 3. Absence Deductions — see getAbsenceDeductionForMonth's own
         // comment for why this is recomputed from the employee's current
         // base salary instead of summing each record's frozen snapshot.
         const absenceDeduction = getAbsenceDeductionForMonth(absenceRecords, emp.email, emp.baseSalary, targetMonthKey);
+
+        // 3b. Shift Shortfall Deductions — see getShiftShortfallDeduction's
+        // comment. Covers the 4h-8h partial-shift range that absence
+        // detection (< 4h only) never touched at all.
+        const shiftShortfallDeduction = getShiftShortfallDeduction(timesheets, absenceRecords, leaves, emp, emp.baseSalary, targetMonthKey);
 
         // 4. Calculate Prior Month Unpaid Salary Arrears (Rollover)
         // If employee has unprocessed payroll from previous months (e.g. joined late in July and unpaid), carry over as Arrears
@@ -3126,10 +3332,40 @@ export const hrActions = {
         // visibly kicking in for a real employee, HR/Admin should still go
         // look at why (see getAbsenceDeductionForMonth's comment for the
         // most common cause).
-        const rawCombinedDeductions = urgentDeduction + absenceDeduction + onboardingPenalty;
+        // 5. First-Month Reserve (item 3) — an employee's entire first
+        // calendar month of pay is withheld rather than paid out, and
+        // accumulates in their reservedSalaryBalance (see hr/payroll and
+        // admin/payroll pages' handleProcess, which write that balance at
+        // Process time) to be paid out only at resignation/termination.
+        // Folded into combinedDeductions below so net pay for this record
+        // already comes out to (at most) any carried-over arrears from
+        // BEFORE this month — never this month's own base salary — without
+        // needing a separate net-pay formula. See PayrollRecord.
+        // reservedThisMonth's comment for why this isn't its own DB column.
+        const reservedThisMonth = isEmployeesFirstMonth ? Math.round(effectiveBaseSalary) : 0;
+
+        const rawCombinedDeductions = urgentDeduction + normalDeduction + absenceDeduction + shiftShortfallDeduction + onboardingPenalty + reservedThisMonth;
         const combinedDeductions = Number.isFinite(rawCombinedDeductions)
           ? Math.max(0, Math.min(rawCombinedDeductions, effectiveBaseSalary))
           : 0;
+
+        // Itemized breakdown — "show the reason to employee and HR why
+        // salary is deducted" (explicit product decision, 2026-09-03).
+        // Same not-a-DB-column treatment as reservedThisMonth: recomputed
+        // fresh from the pieces above rather than persisted. Deliberately
+        // uses the RAW (pre-cap) per-item amounts, not a cap-scaled share —
+        // if the safety-net cap above ever kicks in, this list can sum to
+        // more than the actual `deductions` charged, which is the more
+        // honest picture ("here's everything that was owed, but you can
+        // never be charged more than one month's pay") rather than
+        // quietly rescaling each reason down.
+        const deductionBreakdown: { label: string; amount: number }[] = [];
+        if (urgentDeduction > 0) deductionBreakdown.push({ label: `Urgent Leave (${urgentDays} day${urgentDays === 1 ? '' : 's'} × 2 days' pay)`, amount: urgentDeduction });
+        if (normalDeduction > 0) deductionBreakdown.push({ label: `Normal Leave (${normalDays} day${normalDays === 1 ? '' : 's'} × 1 day's pay)`, amount: normalDeduction });
+        if (absenceDeduction > 0) deductionBreakdown.push({ label: 'Absence (no-show / under 4h / inactivity)', amount: absenceDeduction });
+        if (shiftShortfallDeduction > 0) deductionBreakdown.push({ label: 'Partial Shifts (worked under 8h, at/above 4h)', amount: shiftShortfallDeduction });
+        if (onboardingPenalty > 0) deductionBreakdown.push({ label: 'Onboarding Not Completed', amount: onboardingPenalty });
+        if (reservedThisMonth > 0) deductionBreakdown.push({ label: 'First-Month Reserve (not lost — paid at resignation/termination)', amount: reservedThisMonth });
 
         if (existing) {
           return {
@@ -3138,6 +3374,9 @@ export const hrActions = {
             baseSalary: existing.processed ? existing.baseSalary : totalBaseWithArrears,
             deductions: combinedDeductions,
             incrementAmount: existing.processed ? existing.incrementAmount : pendingIncrement,
+            month: targetMonthKey,
+            reservedThisMonth,
+            deductionBreakdown,
           };
         }
 
@@ -3153,6 +3392,9 @@ export const hrActions = {
           deductions: combinedDeductions,
           incrementAmount: pendingIncrement,
           processed: false,
+          month: targetMonthKey,
+          reservedThisMonth,
+          deductionBreakdown,
         };
       });
   },
@@ -3163,6 +3405,7 @@ export const hrActions = {
       net_pay: record.baseSalary + record.bonus - record.deductions + record.incrementAmount,
       increment_amount: record.incrementAmount, processed: record.processed,
       status: record.processed ? 'paid' : 'pending', paid_date: record.processed ? new Date().toISOString().split('T')[0] : '',
+      month: record.month || '', year: record.month ? Number(record.month.slice(0, 4)) || undefined : undefined,
     };
     if (looksLikeRealId(record.id)) await pbUpdate('hr_payroll', record.id, fields);
     else await pbCreate('hr_payroll', fields);
@@ -3793,7 +4036,7 @@ export const hrActions = {
         }
         if (!reason) continue; // present and accounted for (worked >= 4h without excessive inactivity)
 
-        const dailyRate = emp.baseSalary / WORKING_DAYS_PER_MONTH;
+        const dailyRate = emp.baseSalary / getWeekdaysInMonth(dateStr.slice(0, 7));
         const deductionAmount = Math.round(2 * dailyRate);
         const name = displayName(emp, 'hr');
 

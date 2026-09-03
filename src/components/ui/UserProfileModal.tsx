@@ -66,6 +66,18 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState<string | undefined>(undefined);
 
+  // Manual reserved-salary annotation (item 8, 2026-09-03) — HR/Admin can
+  // record an already-reserved amount for an EXISTING employee purely as a
+  // tracking note; per explicit product decision this never touches that
+  // employee's live payroll math (see Profile.manualReservedAmount's
+  // comment in hrData.ts). Separate small inline editor, not part of the
+  // main isEditing form below, since it's a standalone action HR/Admin may
+  // want to use without opening a full profile edit.
+  const [isEditingReserve, setIsEditingReserve] = useState(false);
+  const [reserveAmountInput, setReserveAmountInput] = useState('');
+  const [reserveNoteInput, setReserveNoteInput] = useState('');
+  const [isSavingReserve, setIsSavingReserve] = useState(false);
+
   // Edit fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -275,6 +287,10 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
       // Company policy: full payout of the remaining combined PTO/Sick bank
       // at contract end, computed from real accrual + leave records.
       const finalLeavePayout = getFinalLeavePayout(profile, leaves);
+      // Reserved salary balance (item 3/8) — both the automatic
+      // first-month withhold and any manual HR/Admin annotation are only
+      // ever paid out at resignation/termination, right here.
+      const finalReservedPayout = (profile.reservedSalaryBalance || 0) + (profile.manualReservedAmount || 0);
 
       // Offboarding only flips these overlay flags — it deliberately does not
       // touch hr_messages, hr_tasks, hr_tickets, documents, etc. Their chat
@@ -293,7 +309,8 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
           hrClearance,
           companyNumberReturned,
           notes,
-          finalLeavePayout
+          finalLeavePayout,
+          finalReservedPayout
         }
       });
 
@@ -384,6 +401,31 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
       onUpdate?.();
     } finally {
       setIsApplyingIncrement(false);
+    }
+  };
+
+  const openReserveEditor = () => {
+    setReserveAmountInput(profile.manualReservedAmount ? String(profile.manualReservedAmount) : '');
+    setReserveNoteInput(profile.manualReservedNote || '');
+    setIsEditingReserve(true);
+  };
+
+  // Record-only — per item 8's explicit product decision this NEVER
+  // touches the employee's live payroll calculation (see
+  // Profile.manualReservedAmount's comment in hrData.ts). Just a tracking
+  // annotation, e.g. an amount already reserved before this system
+  // existed, shown alongside the automatic reservedSalaryBalance on the
+  // Net Payable modal and paid out together at resignation/termination.
+  const handleSaveReserve = async () => {
+    const amount = Number(reserveAmountInput.replace(/[^0-9.-]/g, '')) || 0;
+    setIsSavingReserve(true);
+    try {
+      await updateProfileAdmin(profile.id, { manualReservedAmount: amount, manualReservedNote: reserveNoteInput.trim() });
+      await refetchProfiles();
+      onUpdate?.();
+      setIsEditingReserve(false);
+    } finally {
+      setIsSavingReserve(false);
     }
   };
 
@@ -554,6 +596,84 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                 )}
               </div>
 
+              {/* Reserved Salary (item 3/8, 2026-09-03) — visible to HR/Admin
+                  only. reservedSalaryBalance is system-managed (automatic
+                  first-month withhold, see hr/payroll's handleProcess) and
+                  shown read-only here; manualReservedAmount is the one
+                  HR/Admin can edit, and never affects live payroll. */}
+              {(currentUserRole === 'admin' || currentUserRole === 'hr') && (
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 text-xs">
+                  <p className="font-bold text-indigo-900 flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Reserved Salary</p>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-indigo-800">
+                    <div>
+                      <span className="block text-[9px] text-indigo-400 font-bold uppercase">Auto-Reserved (system)</span>
+                      {formatMoney(profile.reservedSalaryBalance || 0, profile.region)}
+                    </div>
+                    <div>
+                      <span className="block text-[9px] text-indigo-400 font-bold uppercase">Manually Reserved</span>
+                      {formatMoney(profile.manualReservedAmount || 0, profile.region)}
+                    </div>
+                  </div>
+                  {profile.manualReservedNote && (
+                    <p className="text-[10px] text-indigo-700 italic">Note: {profile.manualReservedNote}</p>
+                  )}
+                  <p className="text-[9px] text-indigo-500 leading-relaxed">
+                    Both amounts are held and paid out only at resignation/termination — neither is deducted from this employee&apos;s current pay.
+                  </p>
+
+                  {!isEditingReserve ? (
+                    <button
+                      type="button"
+                      onClick={openReserveEditor}
+                      className="text-[10px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-2.5 py-1.5 rounded-md active:scale-97 transition-colors transition-transform"
+                    >
+                      Edit Manually Reserved Amount
+                    </button>
+                  ) : (
+                    <div className="space-y-2 pt-1">
+                      <div>
+                        <label className="text-[9px] font-bold text-indigo-400 uppercase">Amount</label>
+                        <input
+                          type="text"
+                          value={reserveAmountInput}
+                          onChange={(e) => setReserveAmountInput(e.target.value)}
+                          className="w-full bg-white border border-indigo-200 rounded-md py-1.5 px-2 text-xs focus:border-indigo-500 outline-none"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-indigo-400 uppercase">Note (optional)</label>
+                        <input
+                          type="text"
+                          value={reserveNoteInput}
+                          onChange={(e) => setReserveNoteInput(e.target.value)}
+                          className="w-full bg-white border border-indigo-200 rounded-md py-1.5 px-2 text-xs focus:border-indigo-500 outline-none"
+                          placeholder="e.g. carried over from before this system"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveReserve}
+                          disabled={isSavingReserve}
+                          className="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-2.5 py-1.5 rounded-md active:scale-97 transition-colors transition-transform"
+                        >
+                          {isSavingReserve ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingReserve(false)}
+                          disabled={isSavingReserve}
+                          className="text-[10px] font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 px-2.5 py-1.5 rounded-md active:scale-97 transition-colors transition-transform"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Offboarding Summary if offboarded */}
               {profile.offboarded && profile.offboardingStatus && (
                 <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl space-y-2 text-xs">
@@ -577,6 +697,11 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                     {profile.offboardingStatus.finalLeavePayout !== undefined && (
                       <p className="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-rose-200/50">
                         <DollarSign className="h-3.5 w-3.5" /> Final PTO/Sick Payout: <span className="font-bold">{formatMoney(profile.offboardingStatus.finalLeavePayout, profile.region)}</span>
+                      </p>
+                    )}
+                    {profile.offboardingStatus.finalReservedPayout !== undefined && (
+                      <p className="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-rose-200/50">
+                        <DollarSign className="h-3.5 w-3.5" /> Final Reserved Salary Payout: <span className="font-bold">{formatMoney(profile.offboardingStatus.finalReservedPayout, profile.region)}</span>
                       </p>
                     )}
                     {profile.offboardingStatus.notes && (

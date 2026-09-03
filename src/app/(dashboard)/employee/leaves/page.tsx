@@ -18,7 +18,7 @@ export default function EmployeeLeavesPage() {
 
   // Modal state
   const [isLeaveOpen, setIsLeaveOpen] = useState(false);
-  const [leaveType, setLeaveType] = useState('pto');
+  const [leaveType, setLeaveType] = useState('urgent');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
@@ -126,61 +126,40 @@ export default function EmployeeLeavesPage() {
       }
     }
 
-    // 2. PTO Validations
-    if (leaveType === 'pto') {
-      // Must be exactly 1 day
-      if (diffDays !== 1) {
-        setError('PTO requests can only be taken for exactly 1 day.');
-        return;
-      }
+    // 2. PTO / Sick Leave are disabled for new requests (2026-09-03 policy
+    // change) — history stays visible (existing PTO/Sick records are never
+    // deleted or hidden), but neither is selectable in the dropdown below
+    // and both are blocked here too as a hard backstop in case a stale
+    // client ever posts one of those values directly.
+    if (leaveType === 'pto' || leaveType === 'sick') {
+      setError('PTO and Sick Leave are no longer available. Please use Urgent or Normal leave instead.');
+      return;
+    }
 
-      // Must be submitted at least 14 days (2 weeks) in advance
+    // 3. Normal Leave Validations — the PTO/Sick-Leave replacement: must be
+    // submitted at least 14 days in advance, no other restriction on
+    // duration or how many can be taken. Deducts 1 day's pay per day taken
+    // (see hrData.ts computePayrollView's Normal-leave deduction comment).
+    if (leaveType === 'normal') {
       const today = new Date();
-      today.setHours(0,0,0,0);
-      start.setHours(0,0,0,0);
-      const differenceInTime = start.getTime() - today.getTime();
-      const differenceInDays = differenceInTime / (1000 * 3600 * 24);
+      today.setHours(0, 0, 0, 0);
+      start.setHours(0, 0, 0, 0);
+      const differenceInDays = (start.getTime() - today.getTime()) / (1000 * 3600 * 24);
       if (differenceInDays < 14) {
-        setError('PTO requests must be submitted at least 14 days (2 weeks) in advance.');
-        return;
-      }
-
-      // Check remaining balance (shared PTO + Sick Leave bank)
-      if (remainingPTO < 1) {
-        setError('Insufficient leave balance remaining in your combined PTO/Sick bank.');
-        return;
-      }
-
-      // Only 1 PTO request per calendar month
-      const startMonth = start.getMonth();
-      const startYear = start.getFullYear();
-      const hasExistingPTO = leaves.some(l => {
-        if (l.type !== 'PTO') return false;
-        const existingStartStr = l.duration.split(' - ')[0];
-        const existingStart = new Date(existingStartStr);
-        return existingStart.getMonth() === startMonth && existingStart.getFullYear() === startYear;
-      });
-      if (hasExistingPTO) {
-        setError('You can only apply for 1 PTO request per calendar month.');
+        setError('Normal leave requests must be submitted at least 14 days in advance.');
         return;
       }
     }
 
-    // 3. Sick Leave Validations — drawn from the same combined bank as PTO,
-    // but no advance-notice requirement (sick days are, by nature, unplanned)
-    // and multi-day requests are allowed.
-    if (leaveType === 'sick') {
-      if (remainingPTO < diffDays) {
-        setError(`Insufficient leave balance remaining. You have ${remainingPTO} day(s) left in your combined PTO/Sick bank.`);
-        return;
-      }
-    }
+    // 4. Urgent Leave — no advance-notice requirement (can be submitted any
+    // time), deducts 2 days' pay per day taken. No extra validation needed
+    // beyond the shared start/end date checks above.
 
     const formatDate = (date: Date) =>
       date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     const durationStr = `${formatDate(start)} - ${formatDate(end)}`;
 
-    const newLeaveType: LeaveApplication['type'] = leaveType === 'pto' ? 'PTO' : leaveType === 'parental_leave' ? 'Parental Leave' : 'Urgent';
+    const newLeaveType: LeaveApplication['type'] = leaveType === 'parental_leave' ? 'Parental Leave' : leaveType === 'normal' ? 'Normal' : 'Urgent';
     const newLeave: Omit<LeaveApplication, 'id'> = {
       employeeName: userProfile?.fullName || 'Employee',
       type: newLeaveType,
@@ -468,8 +447,8 @@ export default function EmployeeLeavesPage() {
               onChange={(e) => setLeaveType(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
             >
-              <option value="pto">Paid Time Off (PTO)</option>
-              <option value="urgent">Urgent Unpaid Leave</option>
+              <option value="urgent">Urgent Leave (any time, deducts 2 days pay/day)</option>
+              <option value="normal">Normal Leave (14 days notice, deducts 1 day pay/day)</option>
               {userProfile?.gender === 'female' && (
                 <option value="parental_leave">Parental Leave (30 Days)</option>
               )}
