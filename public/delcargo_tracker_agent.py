@@ -51,6 +51,7 @@ agreed to this with your employer.
 """
 
 import base64
+import ctypes
 import io
 import json
 import os
@@ -238,6 +239,23 @@ def check_active_shift(base_url, employee_email):
         return False
 
 
+def _macos_has_screen_recording_access():
+    """Deterministic check via CGPreflightScreenCaptureAccess (public
+    CoreGraphics API since macOS 10.15), loaded directly with ctypes — no
+    pyobjc dependency needed. Returns None if unavailable (falls back to
+    the black-frame heuristic below). See the matching helper + full
+    explanation in tracker-agent/agent_gui.py: without this permission,
+    macOS can silently hand back a real, non-black capture of just the
+    desktop wallpaper with every app window excluded — that passes the old
+    black-frame check clean and uploads as if it were a healthy capture."""
+    try:
+        cg = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+        cg.CGPreflightScreenCaptureAccess.restype = ctypes.c_bool
+        return bool(cg.CGPreflightScreenCaptureAccess())
+    except Exception:
+        return None
+
+
 def _is_black_frame(img, grid=8) -> bool:
     """Cheap black-frame detector (samples an 8x8 grid rather than scanning
     every pixel) — see the same helper in tracker-agent/agent_gui.py, this
@@ -272,6 +290,13 @@ def capture_and_encode():
     # capture, indistinguishable on the HR dashboard from one that's
     # actually working. See the matching fix + longer explanation in
     # tracker-agent/agent_gui.py's capture_and_encode().
+    if platform.system() == "Darwin" and _macos_has_screen_recording_access() is False:
+        raise RuntimeError(
+            "Screen capture blocked - macOS Screen Recording permission "
+            "not granted. Open System Settings > Privacy & Security > "
+            "Screen Recording, enable this script/Terminal/Python, then re-run."
+        )
+
     if _is_black_frame(img):
         if platform.system() == "Darwin":
             raise RuntimeError(

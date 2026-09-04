@@ -128,7 +128,16 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "22"  # Bumped 21 -> 22 (2026-09-03) to fix the setup-code
+APP_VERSION = "23"  # Bumped 22 -> 23 (2026-09-04) to fix screenshots on
+# macOS silently capturing only the bare desktop wallpaper (no windows) --
+# without Screen Recording permission, macOS doesn't reliably hand back a
+# black frame the old heuristic looked for; it can instead return a real,
+# non-black capture with every app window excluded from the composite,
+# which passed the old black-frame check and got uploaded as if healthy.
+# Now checked deterministically via CGPreflightScreenCaptureAccess/
+# CGRequestScreenCaptureAccess (see _macos_has_screen_recording_access)
+# instead of only inferring it from pixel content.
+# Bumped 21 -> 22 (2026-09-03) to fix the setup-code
 # tk.Text field rendering as a solid black box on macOS (confirmed from a
 # real screenshot) -- it never had explicit bg/fg/insertbackground colors
 # set, which Tk's Windows defaults happened to render fine but macOS did
@@ -227,13 +236,21 @@ def request_mac_permissions():
     if platform.system() != "Darwin":
         return None
 
-    try:
-        # Trigger an initial py_capture test to force macOS Gatekeeper / Screen Recording prompt
-        # CGPreflightScreenCaptureAccess is checked or triggered via screencapture check
-        cmd = ["screencapture", "-x", "-c"]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
-    except Exception as e:
-        print(f"[macOS Permission Trigger] Warning: {e}")
+    # 2026-09-04: was `screencapture -x -c` (a subprocess trick that
+    # registers *screencapture*'s own TCC entry, not reliably this app's)
+    # followed by an Accessibility-only check used as an indirect proxy for
+    # Screen Recording. Replaced with the real CoreGraphics APIs — this is
+    # the call that actually adds DelCargo Tracker to System Settings >
+    # Privacy & Security > Screen Recording and pops the system prompt the
+    # first time, and _macos_has_screen_recording_access() right after
+    # gives an authoritative answer instead of an inference.
+    _macos_request_screen_capture_access()
+
+    screen_access = _macos_has_screen_recording_access()
+    if screen_access is False:
+        print("[macOS Permission] Screen Recording permission missing. Directing user to Settings.")
+        return ("Screen Recording permission needed - open System Settings > Privacy & "
+                "Security > Screen Recording, enable DelCargo Tracker, then restart the app.")
 
     try:
         # Check accessibility API permission status via osascript
@@ -241,7 +258,7 @@ def request_mac_permissions():
         res = subprocess.run(["osascript", "-e", check_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res.returncode != 0 and "not allowed" in res.stderr.lower():
             # Trigger System Settings open to Privacy & Security -> Screen Recording
-            print("[macOS Permission] Accessibility or Screen Recording permission missing. Directing user to Settings.")
+            print("[macOS Permission] Accessibility permission missing. Directing user to Settings.")
             return ("macOS permissions needed - open System Settings > Privacy & "
                     "Security and allow DelCargo Tracker under both Screen Recording "
                     "and Accessibility, then restart the app.")
@@ -1033,6 +1050,73 @@ def _get_windows_idle_seconds():
         return None
 
 
+# Loaded lazily/once — ctypes.CDLL against the system CoreGraphics
+# framework directly (same "no pyobjc dependency" style as
+# _get_macos_idle_seconds's ioreg approach below) so this PyInstaller build
+# never needs to bundle pyobjc just for two permission calls.
+_cg_framework = None
+
+
+def _cg():
+    global _cg_framework
+    if _cg_framework is None:
+        try:
+            _cg_framework = ctypes.CDLL(
+                "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+            )
+            _cg_framework.CGPreflightScreenCaptureAccess.restype = ctypes.c_bool
+            _cg_framework.CGRequestScreenCaptureAccess.restype = ctypes.c_bool
+        except Exception:
+            _cg_framework = False  # sentinel: "tried and failed", don't retry
+    return _cg_framework or None
+
+
+def _macos_has_screen_recording_access():
+    """Deterministic yes/no via CGPreflightScreenCaptureAccess (public
+    CoreGraphics API since macOS 10.15) — does NOT prompt, just reports the
+    current TCC state for this exact process/binary. Returns None if the
+    check itself is unavailable (very old macOS, or the framework call
+    failed to load) so callers know to fall back to the old pixel-based
+    heuristic instead of trusting a wrong answer.
+
+    Why this exists (2026-09-04): without Screen Recording permission,
+    macOS does not reliably hand back a solid black frame the way the
+    older black-frame heuristic assumed — depending on macOS version it can
+    instead silently return a real, non-black capture of ONLY the desktop
+    picture/wallpaper layer, with every actual app window excluded from
+    the composite. That frame passes _is_black_frame() clean (it has real
+    pixel variation) and gets uploaded as if it were a normal, healthy
+    screenshot — exactly the "just the bare desktop, no windows" symptom
+    reported in production. The old heuristic can't distinguish "genuinely
+    all windows are minimized" from "permission is missing and windows are
+    being redacted", so it isn't a substitute for actually asking the OS."""
+    cg = _cg()
+    if cg is None:
+        return None
+    try:
+        return bool(cg.CGPreflightScreenCaptureAccess())
+    except Exception:
+        return None
+
+
+def _macos_request_screen_capture_access():
+    """Calls CGRequestScreenCaptureAccess — the real API for surfacing this
+    app under System Settings > Privacy & Security > Screen Recording and
+    triggering the system prompt the first time. Replaces the old
+    `screencapture -x -c` subprocess trick (request_mac_permissions()
+    below), which registered *screencapture*'s own permission, not
+    reliably this app's. No-ops harmlessly if already granted or already
+    denied (denied requires the user to flip it in System Settings — no
+    API can re-prompt after an explicit deny)."""
+    cg = _cg()
+    if cg is None:
+        return
+    try:
+        cg.CGRequestScreenCaptureAccess()
+    except Exception:
+        pass
+
+
 def _get_macos_idle_seconds():
     """Seconds since the last HID (mouse OR keyboard) event, via `ioreg`'s
     IOHIDSystem "HIDIdleTime" (nanoseconds) — the same system-wide idle
@@ -1145,6 +1229,19 @@ def capture_and_encode():
     # surfaces (getCaptureHealth in hrData.ts treats any non-null
     # lastCaptureError as 'failing'), and in this app's own status card via
     # self.state["last_error"] (see _tick, which renders it into detail_var).
+    # Deterministic check FIRST on macOS — see _macos_has_screen_recording_access's
+    # docstring for why the black-frame heuristic below can't be trusted
+    # alone here: a missing-permission capture on macOS is often a real,
+    # non-black image of just the desktop picture with every window
+    # excluded, not a black frame, so this must run regardless of what the
+    # captured pixels look like.
+    if platform.system() == "Darwin" and _macos_has_screen_recording_access() is False:
+        raise RuntimeError(
+            "Screen capture blocked - macOS Screen Recording permission "
+            "not granted. Open System Settings > Privacy & Security > "
+            "Screen Recording, enable DelCargo Tracker, then restart it."
+        )
+
     if _is_black_frame(img):
         if platform.system() == "Darwin":
             raise RuntimeError(
