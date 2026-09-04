@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { Clock, CheckCircle2, ChevronRight, AlertTriangle, Briefcase, Calendar, User, Flag, Monitor, MapPin, LocateFixed, Wifi, WifiOff, Smartphone, Landmark, Gift, Star, Loader2 } from 'lucide-react';
-import { isNativeMobileApp, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
+import { isMobileDevice, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
@@ -129,12 +129,17 @@ export default function EmployeeDashboard() {
   const [heartbeatFirstDeadAt, setHeartbeatFirstDeadAt] = useState<number | null>(null);
   // True while the ping/pong pre-flight handshake for Start Shift is running.
   const [pingingTracker, setPingingTracker] = useState(false);
-  // The desktop tracker agent (screenshots/activity monitoring) can only
-  // ever run on a Windows/Mac desktop — never inside the Capacitor-wrapped
-  // native mobile app. So if HR/Admin has screen tracking enabled for this
-  // employee, a shift must not be startable from the mobile app at all,
-  // regardless of tracker-connection state — there's no desktop to connect.
-  const isMobileApp = isNativeMobileApp();
+  // Manual Start Shift is disallowed from ANY mobile device — phone/tablet
+  // browser or the Capacitor-wrapped native app — regardless of whether
+  // screen tracking is even enabled for this employee (explicit product
+  // decision, 2026-09-04, after an employee was able to manually start an
+  // untracked shift from a phone's mobile browser with zero warning: the
+  // old gate only checked isNativeMobileApp(), which a regular mobile
+  // browser sails straight through since it's indistinguishable from any
+  // other browser tab). isMobileDevice() covers both. Kept the name
+  // `isMobileApp` below since it's threaded through a lot of existing
+  // JSX/logic — it now means "any mobile device", not just the app.
+  const isMobileApp = isMobileDevice();
   const [showUnder8HourModal, setShowUnder8HourModal] = useState(false);
   const [under8HourDetails, setUnder8HourDetails] = useState<{ workedMinutes: number; remainingMinutes: number } | null>(null);
 
@@ -670,8 +675,10 @@ export default function EmployeeDashboard() {
                     // previously an uncaught error here left the button
                     // permanently disabled until the page was reloaded.
                     try {
-                      // Mobile block — tracker can't run on mobile at all
-                      if (isTrackingLiveFor(userProfile) && isMobileApp) {
+                      // Mobile block — manual Start Shift is never allowed
+                      // from a mobile device, tracked account or not (see
+                      // isMobileDevice's comment in trackerSetup.ts).
+                      if (isMobileApp) {
                         setShowMobileBlockedModal(true);
                         return;
                       }
@@ -794,7 +801,7 @@ export default function EmployeeDashboard() {
                     shiftActive ||
                     checkingTracker ||
                     pingingTracker ||
-                    (!!userProfile && isTrackingLiveFor(userProfile) && isMobileApp)
+                    isMobileApp
                     // Heartbeat-dead no longer disables the button — the ping/pong
                     // handshake in onClick is the authoritative live check now.
                   }
@@ -905,10 +912,10 @@ export default function EmployeeDashboard() {
             </div>
           ) : (
             <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-              {userProfile && isTrackingLiveFor(userProfile) && isMobileApp && !shiftActive && (
+              {userProfile && isMobileApp && !shiftActive && (
                 <div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700">
                   <Smartphone className="h-3 w-3 shrink-0" />
-                  Screen tracking is enabled for your account — shifts can only be started from a desktop computer, not the mobile app.
+                  Shifts can only be started from a desktop/laptop browser — manual Start Shift is not available on a mobile device.
                 </div>
               )}
               {userProfile && isTrackingLiveFor(userProfile) && !isMobileApp && !shiftActive && (
@@ -1269,16 +1276,18 @@ export default function EmployeeDashboard() {
 
       </div>
 
-      {/* Mobile-blocked prompt — shown when Start Shift is blocked because
-          screen tracking is enabled for this employee and they're on the
-          native mobile app, which has no desktop agent to run the tracker. */}
+      {/* Mobile-blocked prompt — shown whenever Start Shift is attempted
+          from a mobile device (phone/tablet browser or the native app),
+          regardless of whether screen tracking is enabled for this
+          employee. See isMobileDevice's comment in trackerSetup.ts for
+          why this isn't scoped to tracked accounts only. */}
       {showMobileBlockedModal && (
         <Modal isOpen onClose={() => setShowMobileBlockedModal(false)} title="Desktop Required for This Shift">
           <div className="space-y-4">
             <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 p-4 rounded-xl">
               <Smartphone className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Your account has screen tracking enabled by HR/Admin. Since the DelCargo Tracker app only runs on Windows/Mac, shifts for tracked accounts can&apos;t be started from the mobile app. Please start your shift from a desktop computer with the tracker app installed and running.
+                Manual Start Shift isn&apos;t available on a phone or tablet. Please start your shift from a desktop or laptop browser instead.
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">

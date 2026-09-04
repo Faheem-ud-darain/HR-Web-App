@@ -107,6 +107,31 @@ export function isNativeMobileApp(): boolean {
   return typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
 }
 
+// Broader than isNativeMobileApp above — that one only catches the
+// Capacitor-wrapped app. This also catches a phone/tablet's regular
+// mobile BROWSER (Safari/Chrome hitting the site directly by URL), which
+// isNativeMobileApp completely misses since it looks like any other
+// browser tab from the page's point of view. Added 2026-09-04: an
+// employee was able to manually Start Shift from a phone's mobile
+// browser with no tracker running and no warning at all — the
+// mobile-blocked gate in employee/page.tsx only ever checked
+// isNativeMobileApp(), so a phone browser sailed straight through it.
+// Explicit product decision as of that fix: manual Start Shift is
+// disallowed from ANY mobile device (browser or native app), regardless
+// of whether screen tracking is even enabled for that employee — not
+// just when a desktop tracker would otherwise be required.
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (isNativeMobileApp()) return true;
+  const ua = navigator.userAgent || (navigator as unknown as { vendor?: string }).vendor || '';
+  if (/android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua)) return true;
+  // iPadOS 13+ deliberately reports as desktop Safari ("Macintosh") in its
+  // UA string but is still a tablet — multi-touch is the tell a real Mac
+  // laptop/desktop won't have.
+  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  return false;
+}
+
 /** The PocketBase server URL used by both the web app and tracker agents.
  * Now HTTPS via pb.delcargo.us (Caddy reverse proxy in front of PocketBase)
  * instead of the old bare HTTP IP — see src/lib/pocketbase.ts for the full
