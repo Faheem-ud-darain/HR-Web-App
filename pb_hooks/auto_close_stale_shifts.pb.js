@@ -64,8 +64,8 @@
 cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
   const SHIFT_TAB_HEARTBEAT_STALE_MS = 15 * 60 * 1000; // matches SHIFT_TAB_HEARTBEAT_STALE_MS in hrData.ts
   const TRACKER_HEARTBEAT_LIVE_TOLERANCE_MS = 13 * 60 * 1000; // matches isHeartbeatLive's default (3 + 10 min) in hrData.ts
-  const ORPHAN_SHIFT_GRACE_MS = 15 * 60 * 1000; // matches autoCloseOrphanTrackedShifts in hrData.ts (lowered from 30 min per HR request, 2026-09-07)
-  const MIN_SHIFT_AGE_MS = 25 * 60 * 1000; // matches autoCloseOrphanTrackedShifts in hrData.ts (lowered from 45 min per HR request, 2026-09-07)
+  const ORPHAN_SHIFT_GRACE_MS = 30 * 60 * 1000; // reverted to 30 min on 2026-09-07 — the 15-min value caused false auto-closes for employees who were still actively working (see MIN_SHIFT_AGE_MS note below)
+  const MIN_SHIFT_AGE_MS = 45 * 60 * 1000; // reverted to 45 min on 2026-09-07 — at 25 min, Pass 2 (abandoned manual shifts) was becoming eligible to fire during completely normal, brief tracker/tab heartbeat gaps (laptop sleep, wifi blip), incorrectly closing shifts for employees who were still connected and working (confirmed via camila@delcargo.us: shift auto-closed at 16:00, tracker captured a screenshot at 16:04). 45 min gives enough margin above the 13-min tracker and 15-min tab heartbeat tolerances that a normal blip can't coincide with shift-age eligibility.
   const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000; // matches autoCloseStaleOpenShifts in hrData.ts
 
   function slugify(email) {

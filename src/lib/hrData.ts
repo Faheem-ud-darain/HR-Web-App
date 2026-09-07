@@ -3680,8 +3680,8 @@ export const hrActions = {
   // so they're left to the existing closeStaleManualShiftIfAbandoned safety
   // net instead.
   autoCloseOrphanTrackedShifts: async (timesheets: TimesheetEntry[]): Promise<void> => {
-    const ORPHAN_SHIFT_GRACE_MS = 15 * 60 * 1000; // 15 minutes with no heartbeat = orphaned (lowered from 30 min per HR request, 2026-09-07)
-    const MIN_SHIFT_AGE_MS = 25 * 60 * 1000; // don't touch a shift this fresh — first heartbeat may not have posted yet (lowered from 45 min per HR request, 2026-09-07)
+    const ORPHAN_SHIFT_GRACE_MS = 30 * 60 * 1000; // reverted to 30 min on 2026-09-07 — see MIN_SHIFT_AGE_MS note
+    const MIN_SHIFT_AGE_MS = 45 * 60 * 1000; // reverted to 45 min on 2026-09-07 — the 25-min value caused false auto-closes for employees who were still actively working (confirmed via camila@delcargo.us). 45 min keeps enough margin above the 13-min tracker / 15-min tab heartbeat tolerances that a normal brief connectivity blip can't trigger a close.
     const now = Date.now();
     const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
 
