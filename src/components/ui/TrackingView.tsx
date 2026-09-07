@@ -735,7 +735,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                         </div>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                          <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : 'Not installed'}
+                          <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
                         </span>
                       )}
                     </td>
@@ -878,7 +878,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     </div>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full shrink-0">
-                      <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : 'Not installed'}
+                      <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
                     </span>
                   )}
                 </div>
