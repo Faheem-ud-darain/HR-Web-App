@@ -183,7 +183,7 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
     // autoCloseOrphanTrackedShifts) — tracking enabled, heartbeat dead 30+
     // minutes, shift older than 45 minutes so a first-heartbeat-not-posted-
     // yet shift isn't touched. Closes at the last real heartbeat, never "now".
-    const trackingSettings = dao.findRecordsByFilter("hr_tracking_settings", "", "", 500, 0, {});
+    const trackingSettings = dao.findRecordsByFilter("hr_tracking_settings", "id != ''", "", 500, 0, {});
     const settingsByEmail = {};
     trackingSettings.forEach((t) => {
       settingsByEmail[String(t.get("employeeEmail") || "").toLowerCase()] = t;
