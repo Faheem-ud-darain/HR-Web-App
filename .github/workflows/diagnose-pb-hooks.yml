@@ -1,0 +1,83 @@
+name: Diagnose PocketBase Hooks
+
+# Read-only diagnostic for why auto_close_stale_shifts.pb.js (and possibly
+# other pb_hooks) don't appear to be firing on schedule despite
+# deploy-pb-hooks.yml deploying cleanly every time (all green runs since
+# 2026-08-18). Reuses the SAME 3 repo secrets that workflow already has
+# (PB_SSH_HOST/PB_SSH_USERNAME/PB_SSH_PRIVATE_KEY) - no new access needed.
+#
+# Manual-only (workflow_dispatch) - this never runs automatically, and it
+# makes NO changes on the droplet: every command below is read-only
+# (version check, directory listing, log grep). Run it from the Actions
+# tab, then read the "Diagnose" step's output in the run log.
+#
+# What to look for in the output:
+#  - "PocketBase version" - if this is 0.23.0 or higher, that's very
+#    likely the whole story: pb_hooks/*.pb.js in this repo were written
+#    for the pre-0.23 dao()/cronAdd API (see the comments at the top of
+#    pb_hooks/auto_close_stale_shifts.pb.js), which v0.23 removed/renamed.
+#    A hook written for the old API on a new PocketBase either fails to
+#    load at all or throws immediately when it tries to run.
+#  - "pb_hooks dir listing" - confirms the file the deploy workflow
+#    copies (/root/pocketbase/pb_hooks) is the SAME directory the running
+#    process actually reads hooks from (see "serve command" below) and
+#    that its timestamp matches recent deploys, not a stale copy sitting
+#    in the wrong place.
+#  - "serve command" - the actual command line PocketBase was started
+#    with (from systemd or the running process). If this points at a
+#    --dir or working directory OTHER than /root/pocketbase, the deploy
+#    workflow has been copying files into a directory nothing ever reads.
+#  - "recent hook-related log lines" - anything mentioning "auto_close",
+#    "cronAdd", or a JS error/panic around when this cron should have
+#    fired (every 15 minutes) is the most direct evidence either way.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Diagnose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PB_SSH_HOST }}
+          username: ${{ secrets.PB_SSH_USERNAME }}
+          key: ${{ secrets.PB_SSH_PRIVATE_KEY }}
+          script: |
+            echo "-- PocketBase version --"
+            if [ -x /root/pocketbase/pocketbase ]; then
+              /root/pocketbase/pocketbase --version || true
+            else
+              find / -maxdepth 4 -iname 'pocketbase' -type f 2>/dev/null | while read -r bin; do
+                echo "found binary: $bin"
+                "$bin" --version 2>/dev/null || true
+              done
+            fi
+
+            echo ""
+            echo "-- systemd service definition --"
+            systemctl cat pocketbase 2>/dev/null || echo "(no systemd unit named 'pocketbase' found)"
+
+            echo ""
+            echo "-- currently running process command line --"
+            ps aux | grep -i '[p]ocketbase'
+
+            echo ""
+            echo "-- pb_hooks dir listing (deploy target) --"
+            ls -la /root/pocketbase/pb_hooks 2>/dev/null || echo "(/root/pocketbase/pb_hooks does not exist)"
+
+            echo ""
+            echo "-- service status + uptime (has it restarted since last deploy?) --"
+            systemctl status pocketbase --no-pager -l 2>/dev/null | head -20
+
+            echo ""
+            echo "-- recent hook-related log lines (last 3 days) --"
+            journalctl -u pocketbase --since "3 days ago" --no-pager 2>/dev/null \
+              | grep -iE "auto_close|cronAdd|hook|panic|undefined|is not a function|not defined" \
+              | tail -100 \
+              || echo "(no matching log lines, or journalctl unavailable)"
+
+            echo ""
+            echo "-- total log line count last 3 days (sanity check that logs exist at all) --"
+            journalctl -u pocketbase --since "3 days ago" --no-pager 2>/dev/null | wc -l
