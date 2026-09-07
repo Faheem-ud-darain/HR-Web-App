@@ -160,11 +160,6 @@ async function pbFindByField(collection: string, field: string, value: string): 
 // if an update-by-id 404s because the row was deleted elsewhere).
 const kvIdCache = new Map<string, string>();
 
-// See getScreenshots' legacy-source comment below — once a `screenshot_`
-// KV prefix scan comes back empty this session, there's no need to keep
-// re-checking; nothing writes new rows there anymore.
-let legacyScreenshotsConfirmedEmpty = false;
-
 async function pbGetKV(key: string): Promise<any | null> {
   try {
     const rec = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
@@ -761,7 +756,6 @@ const userSessionKeyFor = (email: string) => `user_session_${(email || '').toLow
 // src={imageUrl}>` just works — callers don't need to know which source a
 // given screenshot came from.
 export interface Screenshot { id: string; employeeEmail: string; timestamp: string; imageUrl: string; deviceLabel?: string; legacy?: boolean; }
-interface ScreenshotRetentionState { warnedAt?: string; pendingDeleteIds?: string[]; }
 
 // One contiguous stretch of mouse inactivity (no cursor movement) lasting at
 // least 3 minutes, reported by the desktop tracker agent (see
@@ -4251,70 +4245,29 @@ export const hrActions = {
     } catch { /* best-effort — never block logout on this */ }
     return { shiftStopped };
   },
-  getScreenshots: async (filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<Screenshot[]> => {
-    // Current source: real hr_screenshots collection (PocketBase file field).
-    // PocketBase's `=` filter operator is case-sensitive (SQLite BINARY
-    // collation) — everywhere else in this app compares emails
-    // case-insensitively, so an exact `=` here could silently omit an
-    // employee's own screenshots if their stored casing ever drifts (e.g.
-    // profile email re-saved with different casing after tracking was set
-    // up). `~` (PocketBase's case-insensitive "like") narrows the query
-    // server-side for efficiency, and the exact case-insensitive check
-    // below guards against `~` accidentally substring-matching a different
-    // employee's email (e.g. "bob@x.com" inside "bob@x.company.com").
-    const filterParts: string[] = [];
-    if (filters?.employeeEmail) filterParts.push(`employee_email ~ "${filters.employeeEmail.replace(/"/g, '\\"')}"`);
-    if (filters?.sinceISO) filterParts.push(`captured_at >= "${filters.sinceISO.replace('T', ' ').replace('Z', '')}"`);
-    if (filters?.untilISO) filterParts.push(`captured_at <= "${filters.untilISO.replace('T', ' ').replace('Z', '')}"`);
-    const records = await pbList('hr_screenshots', {
-      sort: '-captured_at',
-      ...(filterParts.length ? { filter: filterParts.join(' && ') } : {}),
+  // 2026-09-07: moved off the public PocketBase client onto an
+  // authenticated route (/api/tracking/screenshots) — hr_screenshots'
+  // List/View rules are locked down as part of the PocketBase public-access
+  // audit, so an unauthenticated fetch here would now just 401/403. The
+  // route replicates the exact same real-collection + legacy-KV merge this
+  // function used to do client-side; see that route's own comment.
+  getScreenshots: async (filters: { employeeEmail: string; sinceISO?: string; untilISO?: string }): Promise<Screenshot[]> => {
+    const token = getAuthToken();
+    if (!token) return [];
+    const params = new URLSearchParams({ employeeEmail: filters.employeeEmail });
+    if (filters.sinceISO) params.set('sinceISO', filters.sinceISO);
+    if (filters.untilISO) params.set('untilISO', filters.untilISO);
+    const res = await fetch(`${API_BASE}/api/tracking/screenshots?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    let fresh: Screenshot[] = records.map((r: any) => ({
-      id: r.id,
-      employeeEmail: r.employee_email,
-      timestamp: r.captured_at,
-      imageUrl: r.image ? pb.files.getURL(r, r.image) : '',
-      deviceLabel: r.device_label || undefined,
-    }));
-    if (filters?.employeeEmail) {
-      const wanted = filters.employeeEmail.toLowerCase();
-      fresh = fresh.filter(s => (s.employeeEmail || '').toLowerCase() === wanted);
-    }
-
-    // Legacy source: base64 rows from before hr_screenshots existed. Kept
-    // readable so old captures aren't silently lost; new agents no longer
-    // write here (see tracker-agent/agent_gui.py). Since nothing writes new
-    // rows here anymore, once a prefix scan comes back empty it will stay
-    // empty for the rest of this browser session — cache that so every
-    // subsequent getScreenshots() call (this runs on every dashboard mount
-    // via checkScreenshotRetention, plus every TrackingView open) skips the
-    // full-collection KV prefix scan entirely instead of re-fetching zero
-    // rows over and over.
-    let legacyShots: Screenshot[] = [];
-    if (!legacyScreenshotsConfirmedEmpty) {
-      const legacyRows = await pbGetKVByPrefix('screenshot_');
-      if (legacyRows.length === 0) {
-        legacyScreenshotsConfirmedEmpty = true;
-      } else {
-        legacyShots = legacyRows.map(row => ({
-          id: row.value.id,
-          employeeEmail: row.value.employeeEmail,
-          timestamp: row.value.timestamp,
-          imageUrl: row.value.imageData,
-          legacy: true,
-        } as Screenshot));
-      }
-    }
-    if (filters?.employeeEmail) {
-      const wanted = filters.employeeEmail.toLowerCase();
-      legacyShots = legacyShots.filter(s => (s.employeeEmail || '').toLowerCase() === wanted);
-    }
-    if (filters?.sinceISO) legacyShots = legacyShots.filter(s => s.timestamp >= filters.sinceISO!);
-    if (filters?.untilISO) legacyShots = legacyShots.filter(s => s.timestamp <= filters.untilISO!);
-
-    return [...fresh, ...legacyShots].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.items || []) as Screenshot[];
   },
+  // Retained for the deleteEmployee purge flow (still on the public client
+  // for now — see the standing note on that migration in
+  // /api/admin/profile/route.ts). The routine monthly sweep no longer calls
+  // this directly — see checkScreenshotRetention below.
   deleteScreenshots: async (ids: string[]): Promise<void> => {
     const realIds = ids.filter(id => looksLikeRealId(id));
     const legacyIds = ids.filter(id => !looksLikeRealId(id));
@@ -4354,48 +4307,26 @@ export const hrActions = {
     }
     return logs;
   },
+  // 2026-09-07: delegated entirely to /api/tracking/screenshots-retention
+  // (admin/hr only) — this used to run the whole warn-then-delete sweep
+  // client-side against the public client, including the actual DELETE
+  // calls, which (unnoticed until this audit) were already silently
+  // failing in production: hr_screenshots' Update/Delete rules were
+  // already admin-only in PocketBase, so the client-side deletes here
+  // never had a real PocketBase admin token and just 403'd every month.
+  // The server route does the identical warn/delete state machine with a
+  // real admin connection, so the sweep actually deletes old screenshots
+  // now. Best-effort: any HR/Admin dashboard mount can trigger this, so a
+  // transient failure here is not worth surfacing to the user.
   checkScreenshotRetention: async (): Promise<void> => {
-    const RETENTION_DAYS = 30, WARNING_GRACE_DAYS = 3;
-    const state = ((await pbGetKV('hr_screenshot_retention_state_v1')) as ScreenshotRetentionState) || {};
-    const now = new Date();
-    // Both branches below used to call getScreenshots() with NO filter —
-    // i.e. fetch the entire hr_screenshots collection (the fastest-growing
-    // collection in the app: one row per tracked employee per capture
-    // interval, every workday) — purely to compare each row's timestamp
-    // against a 30-day cutoff client-side. getScreenshots already supports
-    // a server-side `untilISO` filter (see its own comment), so pass the
-    // cutoff there instead: PocketBase only ever sends back the rows that
-    // are actually old enough to matter, which on a healthy roster (most
-    // screenshots are recent) is a small fraction of the full collection.
-    const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 3600 * 1000);
-    if (state.warnedAt && state.pendingDeleteIds?.length) {
-      const graceElapsed = (now.getTime() - new Date(state.warnedAt).getTime()) >= WARNING_GRACE_DAYS * 24 * 3600 * 1000;
-      if (!graceElapsed) return;
-      const settings = await hrActions.getAllTrackingSettings();
-      const excluded = new Set(settings.filter(s => s.excludeFromAutoDelete).map(s => s.employeeEmail.toLowerCase()));
-      // These rows were already confirmed older than an earlier (stricter)
-      // cutoff when they were first flagged, so they're certainly still
-      // at or before today's cutoff too — safe to reuse the same filtered
-      // fetch rather than pulling everything.
-      const oldShots = await hrActions.getScreenshots({ untilISO: cutoff.toISOString() });
-      const stillDue = oldShots.filter(s => state.pendingDeleteIds!.includes(s.id) && !excluded.has(s.employeeEmail.toLowerCase()));
-      if (stillDue.length > 0) {
-        await hrActions.deleteScreenshots(stillDue.map(s => s.id));
-        await hrActions.addNotification('all', 'hr', `${stillDue.length} screenshot(s) older than ${RETENTION_DAYS} days were automatically deleted per the monthly retention policy.`);
-        await hrActions.addNotification('all', 'admin', `${stillDue.length} screenshot(s) older than ${RETENTION_DAYS} days were automatically deleted per the monthly retention policy.`);
-      }
-      await pbSetKV('hr_screenshot_retention_state_v1', {});
-      return;
-    }
-    const oldShots = await hrActions.getScreenshots({ untilISO: cutoff.toISOString() });
-    if (oldShots.length === 0) return;
-    const settings = await hrActions.getAllTrackingSettings();
-    const excluded = new Set(settings.filter(s => s.excludeFromAutoDelete).map(s => s.employeeEmail.toLowerCase()));
-    const toDelete = oldShots.filter(s => !excluded.has(s.employeeEmail.toLowerCase()));
-    if (toDelete.length === 0) return;
-    await hrActions.addNotification('all', 'hr', `${toDelete.length} screenshot(s) older than ${RETENTION_DAYS} days are scheduled for automatic deletion in ${WARNING_GRACE_DAYS} days. Export or mark specific employees as excluded before then.`);
-    await hrActions.addNotification('all', 'admin', `${toDelete.length} screenshot(s) older than ${RETENTION_DAYS} days are scheduled for automatic deletion in ${WARNING_GRACE_DAYS} days. Export or mark specific employees as excluded before then.`);
-    await pbSetKV('hr_screenshot_retention_state_v1', { warnedAt: now.toISOString(), pendingDeleteIds: toDelete.map(s => s.id) });
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      await fetch(`${API_BASE}/api/tracking/screenshots-retention`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch { /* best-effort — next dashboard mount tries again */ }
   },
 
   // ── Timesheets ────────────────────────────────────────────────────────

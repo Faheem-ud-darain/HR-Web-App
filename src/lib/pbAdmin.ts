@@ -193,3 +193,106 @@ export async function adminListAllPayroll(): Promise<any[]> {
   const list = await pbAdminFetch(`/api/collections/hr_payroll/records?perPage=500&sort=-created`);
   return list?.items || [];
 }
+
+// ── hr_screenshots (added as part of the PocketBase public-access audit,
+// 2026-09-07) ────────────────────────────────────────────────────────────
+// Server-side equivalent of hrActions.getScreenshots' "fresh" (real
+// collection) branch in hrData.ts — same case-insensitive email narrowing
+// (`~` server-side, exact check client-side-equivalent here) and date-range
+// filtering, just authenticated so hr_screenshots' List/View rules can be
+// locked down without breaking the Tracking page or the retention sweep.
+export async function adminListScreenshots(filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<any[]> {
+  const filterParts: string[] = [];
+  if (filters?.employeeEmail) filterParts.push(`employee_email ~ "${filters.employeeEmail.replace(/"/g, '\\"')}"`);
+  if (filters?.sinceISO) filterParts.push(`captured_at >= "${filters.sinceISO.replace('T', ' ').replace('Z', '')}"`);
+  if (filters?.untilISO) filterParts.push(`captured_at <= "${filters.untilISO.replace('T', ' ').replace('Z', '')}"`);
+  const query = filterParts.length ? `?filter=${encodeURIComponent(filterParts.join(' && '))}&perPage=500&sort=-captured_at` : '?perPage=500&sort=-captured_at';
+  const list = await pbAdminFetch(`/api/collections/hr_screenshots/records${query}`);
+  let items: any[] = list?.items || [];
+  if (filters?.employeeEmail) {
+    const wanted = filters.employeeEmail.toLowerCase();
+    items = items.filter((r) => (r.employee_email || '').toLowerCase() === wanted);
+  }
+  return items;
+}
+
+// Same KV-prefix scan as pbGetKVByPrefix in hrData.ts, authenticated. Used
+// for the legacy base64-in-KV screenshot rows (key prefix `screenshot_`,
+// predates the real hr_screenshots collection — see getScreenshots' comment)
+// so the authenticated route below can return the exact same combined
+// result the old public client-side call used to.
+export async function adminGetKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
+  const encoded = encodeURIComponent(`key ~ "${prefix}"`);
+  const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=500`);
+  return (list?.items || []).map((r: any) => ({ key: r.key, value: r.value, id: r.id }));
+}
+
+export async function adminDeleteRecords(collection: string, ids: string[]): Promise<void> {
+  await Promise.allSettled(
+    ids.map((id) => pbAdminFetch(`/api/collections/${collection}/records/${id}`, { method: 'DELETE' }))
+  );
+}
+
+// Mints a short-lived PocketBase file token (superuser-authenticated) for
+// downloading a *protected* file field without the collection's View rule
+// needing to allow public reads — see https://pocketbase.io/docs/files-upload-and-handling/#file-token.
+// hr_screenshots' `image` field is marked protected as part of this same
+// audit (raw file URLs were downloadable by anyone who guessed a record
+// id + filename even with List/View locked down, since an unprotected file
+// field is served with no rule check at all).
+export async function adminGetFileToken(): Promise<string> {
+  const token = await getAdminToken();
+  const res = await fetch(`${PB_URL}/api/files/token`, {
+    method: 'POST',
+    headers: { Authorization: token },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`PocketBase file token request failed: ${res.status} ${body}`);
+  }
+  const data = await res.json();
+  return data.token;
+}
+
+export function adminFileUrl(collectionId: string, recordId: string, filename: string, fileToken: string): string {
+  return `${PB_URL}/api/files/${collectionId}/${recordId}/${filename}?token=${encodeURIComponent(fileToken)}`;
+}
+
+// Authenticated mirror of hrActions.getAllTrackingSettings — used by the
+// screenshot-retention route to know which employees are excluded from
+// auto-delete.
+export async function adminListTrackingSettings(): Promise<any[]> {
+  const list = await pbAdminFetch(`/api/collections/hr_tracking_settings/records?perPage=500`);
+  return (list?.items || []).map((t: any) => ({
+    employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
+    excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
+  }));
+}
+
+// Authenticated mirror of hrActions.addNotification. Uses a plain ISO
+// timestamp rather than formatTimeNY's human-readable NY-local string
+// (that helper isn't Edge-safe to import here) — same simplification
+// already accepted elsewhere in this server-side migration, since every
+// notification consumer prefers PocketBase's own `created` field for
+// display/sorting anyway.
+export async function adminAddNotification(
+  email: string, role: string, message: string, category?: string, pushTitle?: string, senderEmail?: string, link?: string,
+): Promise<void> {
+  await pbAdminFetch(`/api/collections/hr_notifications/records`, {
+    method: 'POST',
+    body: JSON.stringify({
+      recipient_email: email, recipient_role: role, message, read: false,
+      category: category || 'internal', push_title: pushTitle || '', sender_email: senderEmail || '',
+      link: link || '', timestamp: new Date().toISOString(),
+    }),
+  });
+}
+
+// Authenticated mirror of pbDeleteKVByKeys in hrData.ts (find-by-key then
+// delete-by-id, best-effort per key).
+export async function adminDeleteKVByKeys(keys: string[]): Promise<void> {
+  await Promise.allSettled(keys.map(async (key) => {
+    const row = await adminGetKV(key);
+    if (row) await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${row.id}`, { method: 'DELETE' });
+  }));
+}
