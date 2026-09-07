@@ -3634,6 +3634,16 @@ export const hrActions = {
     if (profile.region === 'USA') return false;
     const open = await hrActions.getOpenShift(profile.email);
     if (!open) return false;
+    // BUGFIX 2026-09-07: skip employees with tracker-based tracking
+    // enabled entirely — see the matching comment in Pass 2 of
+    // pb_hooks/auto_close_stale_shifts.pb.js for the full story. In short,
+    // the shift-tab heartbeat below is expected to look stale for a
+    // tracked employee (they don't need the browser tab open at all), so
+    // this function fell through to its own tracker check on a tolerance
+    // tighter than the dedicated tracker-orphan logic elsewhere, and was
+    // falsely clocking out employees who were still actively working.
+    const trackingSettings = await hrActions.getTrackingSettingsFor(profile.email);
+    if (trackingSettings.enabled) return false;
     const [tabHb, trackerHb] = await Promise.all([
       pbGetKV(shiftTabHeartbeatKeyFor(profile.email)) as Promise<ShiftTabHeartbeat | null>,
       hrActions.getTrackerHeartbeat(profile.email),

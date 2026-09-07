@@ -235,6 +235,23 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         const profile = findProfileByEmail(dao, email);
         if (!profile || profile.get("region") === "USA") return; // GPS-governed — no tab heartbeat to check
 
+        // BUGFIX 2026-09-07: this pass used to run for every non-USA open
+        // shift regardless of whether the employee has tracker-based
+        // tracking enabled. For a tracked employee, the shift-tab (browser
+        // tab) heartbeat is essentially never "live" — the whole point of
+        // the desktop tracker is that it works with the tab closed — so
+        // this pass fell straight through to its OWN tracker check, which
+        // uses a much tighter tolerance (TRACKER_HEARTBEAT_LIVE_TOLERANCE_MS,
+        // 13 min) than Pass 1's dedicated orphan check (ORPHAN_SHIFT_GRACE_MS,
+        // 30 min). Any brief, completely normal heartbeat-ping gap over 13
+        // min was enough to trip this pass and falsely close an actively
+        // worked shift — confirmed via camila@delcargo.us, sofia@delcargo.us
+        // and others repeatedly losing shifts while their tracker kept
+        // reporting in throughout. Tracked employees are Pass 1's
+        // responsibility entirely; skip them here.
+        const settings = settingsByEmail[String(email).toLowerCase()];
+        if (settings && settings.get("enabled")) return;
+
         if (isShiftTabHeartbeatLive(dao, email)) return;
         const hb = getTrackerHeartbeat(dao, email);
         if (isTrackerHeartbeatLive(hb)) return; // something else is still actively watching this shift
