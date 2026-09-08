@@ -353,9 +353,13 @@ export function CareersView({ role }: CareersViewProps) {
 
               {/* Right Column: Image */}
               <div className="lg:col-span-5 relative group overflow-hidden rounded-xl border border-slate-200 shadow">
-                <img 
-                  src="/delcargo_warehouse_hightech.png" 
-                  alt="High Tech Warehouse" 
+                <img
+                  src="/delcargo_warehouse_hightech.webp"
+                  alt="High Tech Warehouse"
+                  width={900}
+                  height={900}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-48 sm:h-64 object-cover object-center group-hover:scale-103 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex flex-col justify-end p-4">

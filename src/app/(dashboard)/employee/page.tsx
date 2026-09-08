@@ -187,6 +187,19 @@ export default function EmployeeDashboard() {
     setReviewEntries(entries);
   };
 
+  // BUGFIX 2026-09-08: this dashboard was rendering every right-rail widget
+  // (Announcements, My Team) in its final "empty" shape (a single italic
+  // "No X found" line) the instant the page mounted, then popping the real
+  // content in — sometimes a stack of several cards worth of height — the
+  // moment this data actually arrived a beat later. Cloudflare Web
+  // Analytics flagged this page with the worst Cumulative Layout Shift
+  // score in the app (maximum possible shift value) for exactly this
+  // reason. isInitialLoading mirrors the guard below so those widgets can
+  // render a fixed-height skeleton instead of the empty state while
+  // waiting, so the real content arriving doesn't shove anything else on
+  // the page around.
+  const isInitialLoading = !allProfiles || !allLeaves || !allTasks || !allAnnouncements || !allWarehouses || !allTimesheets;
+
   useEffect(() => {
     if (!allProfiles || !allLeaves || !allTasks || !allAnnouncements || !allWarehouses || !allTimesheets) return;
 
@@ -698,13 +711,31 @@ export default function EmployeeDashboard() {
                           await hrActions.clearTrackerPong(userProfile.email);
                           await hrActions.writeTrackerPing(userProfile.email, requestId);
 
-                          // Poll for pong every 500ms, give up after 8 seconds
+                          // Poll for pong every 500ms, give up after 8 seconds.
+                          //
+                          // BUGFIX 2026-09-08: this used to track "elapsed"
+                          // by just adding POLL_MS every iteration, which
+                          // assumes getTrackerPong() always resolves
+                          // instantly. It doesn't have a timeout of its own
+                          // (see hrData.ts), so on a slow/stalled connection
+                          // a single attempt could take far longer than
+                          // 500ms while this loop's bookkeeping still only
+                          // counted 500ms against the 8s budget — the real
+                          // wall-clock wait could stretch on far past the
+                          // intended timeout (confirmed via analytics: up to
+                          // 11+ minutes), leaving the button stuck showing
+                          // "Connecting to tracker...". Now measured against
+                          // Date.now() directly, so 8 seconds of REAL time is
+                          // always the hard cap no matter how long any
+                          // individual attempt takes (each attempt also now
+                          // has its own 4s ceiling via withTimeout in
+                          // hrData.ts, so at most one slow attempt can be
+                          // in flight when the loop's own deadline hits).
                           const POLL_MS = 500;
                           const TIMEOUT_MS = 8000;
-                          let elapsed = 0;
-                          while (elapsed < TIMEOUT_MS) {
+                          const deadline = Date.now() + TIMEOUT_MS;
+                          while (Date.now() < deadline) {
                             await new Promise(r => setTimeout(r, POLL_MS));
-                            elapsed += POLL_MS;
                             try {
                               const pong = await hrActions.getTrackerPong(userProfile.email);
                               if (pong?.requestId === requestId) {
@@ -1134,7 +1165,14 @@ export default function EmployeeDashboard() {
             <div className="px-5 py-4 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Company Announcements</h3>
             </div>
-            <CardContent className="p-4 space-y-3 max-h-64 overflow-y-auto">
+            <CardContent className="p-4 space-y-3 max-h-64 overflow-y-auto min-h-[88px]">
+              {isInitialLoading ? (
+                <div className="space-y-3 animate-pulse" aria-hidden="true">
+                  <div className="h-14 rounded-lg bg-slate-100" />
+                  <div className="h-14 rounded-lg bg-slate-100" />
+                </div>
+              ) : (
+                <>
               {myAnnouncements.map(ann => {
                 const isUnread = !!userProfile?.email && !hrActions.isAnnouncementRead(ann, userProfile.email, announcementReadMap);
                 return (
@@ -1162,6 +1200,8 @@ export default function EmployeeDashboard() {
               })}
               {myAnnouncements.length === 0 && (
                 <p className="text-xs text-slate-400 font-semibold italic text-center py-2">No announcements for your region.</p>
+              )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -1214,7 +1254,15 @@ export default function EmployeeDashboard() {
             <div className="px-5 py-4 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">My Team ({userProfile?.teams.join(', ')})</h3>
             </div>
-            <CardContent className="p-0">
+            <CardContent className="p-0 min-h-[140px]">
+              {isInitialLoading ? (
+                <div className="p-4 space-y-3 animate-pulse" aria-hidden="true">
+                  <div className="h-8 rounded-lg bg-slate-100" />
+                  <div className="h-6 rounded-lg bg-slate-100" />
+                  <div className="h-6 rounded-lg bg-slate-100" />
+                </div>
+              ) : (
+              <>
               {/* Team Lead — a single highlighted row, not a boxed card;
                   the tint alone is enough to set it apart from the plain
                   co-worker rows below. */}
@@ -1251,6 +1299,8 @@ export default function EmployeeDashboard() {
                   )}
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
 

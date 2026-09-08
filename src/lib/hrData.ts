@@ -51,6 +51,25 @@ export function getWeekdaysInMonth(monthKey: string): number {
 // Low-level PocketBase primitives
 // ---------------------------------------------------------------------------
 
+// BUGFIX 2026-09-08: the PocketBase client (src/lib/pocketbase.ts) has no
+// request timeout configured at all, and several call sites (notably the
+// Start Shift ping/pong handshake below) await a single PocketBase call
+// inside a tight polling loop that assumes each attempt takes ~0ms beyond
+// its own intended delay. On a stalled/flaky connection a bare `fetch` can
+// hang far longer than that — with nothing to cut it off, the awaiting
+// code (and any UI state gated on it, e.g. a disabled "Connecting..."
+// button) can be stuck for minutes. This wraps any promise with a hard
+// deadline so a single slow request can never hang the caller indefinitely.
+function withTimeout<T>(promise: Promise<T>, ms: number, label = 'request'): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
 function looksLikeRealId(id: any): boolean {
   return typeof id === 'string' && /^[a-z0-9]{15}$/.test(id);
 }
@@ -3543,23 +3562,36 @@ export const hrActions = {
 
   // Signal 3: Ping — portal writes this before allowing shift start.
   // Tracker agent reads via realtime SSE and responds with Signal 4 (pong).
+  //
+  // BUGFIX 2026-09-08: every call in this handshake is now wrapped in
+  // withTimeout(). Employees were seeing "Connecting to tracker..." hang
+  // on Start Shift for anywhere from a few seconds to (confirmed via
+  // Cloudflare Web Analytics) over 11 minutes in the worst case — because
+  // the polling loop in employee/page.tsx budgets 8 seconds total assuming
+  // each getTrackerPong() call resolves near-instantly, but the PocketBase
+  // client (pocketbase.ts) has no request timeout at all. A single stalled
+  // request on a flaky connection could hang far past its 500ms slot with
+  // nothing to cut it off. A 4s per-call ceiling here guarantees no single
+  // attempt can ever hold up the button for more than that, regardless of
+  // network conditions — the loop's own 8s budget (now fixed to track real
+  // wall-clock time, see employee/page.tsx) takes over from there.
   writeTrackerPing: async (email: string, requestId: string): Promise<void> => {
-    await pbSetKV(trackerPingKeyFor(email), {
+    await withTimeout(pbSetKV(trackerPingKeyFor(email), {
       employeeEmail: email,
       requestId,
       requestedAt: new Date().toISOString(),
-    } as TrackerPing);
+    } as TrackerPing), 4000, 'writeTrackerPing');
   },
   clearTrackerPing: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([trackerPingKeyFor(email)]);
+    await withTimeout(pbDeleteKVByKeys([trackerPingKeyFor(email)]), 4000, 'clearTrackerPing');
   },
 
   // Signal 4: Pong — tracker agent writes this in response to a ping.
   // Portal polls for this with matching requestId (500ms interval, 8s timeout).
   getTrackerPong: (email: string): Promise<TrackerPong | null> =>
-    pbGetKV(trackerPongKeyFor(email)),
+    withTimeout(pbGetKV(trackerPongKeyFor(email)), 4000, 'getTrackerPong').catch(() => null),
   clearTrackerPong: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([trackerPongKeyFor(email)]);
+    await withTimeout(pbDeleteKVByKeys([trackerPongKeyFor(email)]), 4000, 'clearTrackerPong');
   },
 
   // Signal 5: Stop command — portal writes this when shift ends (via clockOut).

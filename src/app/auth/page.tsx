@@ -436,9 +436,13 @@ export default function AuthPage() {
       <Card className="w-full max-w-5xl bg-white border border-slate-200 rounded-xl overflow-hidden grid grid-cols-1 md:grid-cols-2 p-0">
         {/* Left Side: Premium Image Cover */}
         <div className="relative hidden md:flex flex-col justify-end p-8 bg-slate-900 overflow-hidden">
-          <img 
-            src="/delcargo_warehouse_hightech.png" 
-            alt="Sign In Visual Cover" 
+          <img
+            src="/delcargo_warehouse_hightech.webp"
+            alt="Sign In Visual Cover"
+            width={900}
+            height={900}
+            fetchPriority="high"
+            decoding="async"
             className="absolute inset-0 w-full h-full object-cover opacity-75 object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/30 to-transparent z-10" />
