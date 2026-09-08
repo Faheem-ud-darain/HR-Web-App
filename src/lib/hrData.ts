@@ -3961,6 +3961,11 @@ export const hrActions = {
     const fullHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted();
     const ignoredKeys = new Set(fullHistory.map(r => `${r.employeeEmail.toLowerCase()}_${r.date}`));
     const newRecords: Omit<AbsenceRecord, 'id'>[] = [];
+    // Keyed by employeeEmail_date, same as ignoredKeys/freshIgnoredKeys —
+    // holds the notification payload for each newly-detected absence until
+    // we know for certain THIS call is the one that actually created the
+    // record (see the bugfix comment below, near newRecords.push).
+    const pendingNotifications = new Map<string, { emp: Profile; dateStr: string; reason: AbsenceRecord['reason']; inactivityMinutes?: number; workedMinutes?: number; deductionAmount: number; name: string }>();
 
     for (const emp of employees) {
       if (emp.region !== 'Pakistan') continue;
@@ -4075,33 +4080,29 @@ export const hrActions = {
         const deductionAmount = Math.round(2 * dailyRate);
         const name = displayName(emp, 'hr');
 
+        // BUGFIX 2026-09-08: notifications used to be sent right here,
+        // unconditionally, the moment this scan computed someone as newly
+        // absent — before the DB write (and its de-dupe check) below even
+        // ran. runAbsenceCheck is called from more than one page (HR and
+        // Admin dashboards both mount it), so whenever two dashboards
+        // loaded within moments of each other, BOTH calls independently
+        // computed the same newly-absent employees and BOTH sent the full
+        // HR+Admin+employee notification triple for them — confirmed live:
+        // exact duplicate "marked absent" notifications for the same
+        // person/date, timestamps a fraction of a second apart. The
+        // database write below was always protected by a unique index (see
+        // its own comment), so only one copy of the record was ever
+        // actually created — but by then the duplicate notifications had
+        // already gone out to employees ("misleading... again and again").
+        // Now the record + its notification texts are just collected here;
+        // notifications are sent later, only for whichever records THIS
+        // call actually manages to create (see below) — a concurrent call
+        // that loses the race skips sending its notifications entirely.
         newRecords.push({
           employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
           reason, inactivityMinutes, workedMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
         });
-
-        const reasonText = reason === 'inactivity'
-          ? `was inactive for ${inactivityMinutes} minutes during their shift on ${dateStr}`
-          : reason === 'under_4_hours'
-          ? `worked less than 4 hours (${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m) on ${dateStr}`
-          : `did not start a shift on ${dateStr}`;
-        const empReasonDetail = reason === 'inactivity'
-          ? `${inactivityMinutes} min inactivity during shift`
-          : reason === 'under_4_hours'
-          ? `worked only ${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m (under 4 hours minimum)`
-          : 'not starting a shift';
-        // These 3 notification writes are independent of each other — no
-        // reason to await them one at a time. On a dashboard mount where
-        // several employees newly qualify as absent, that used to serialize
-        // 3x however-many round trips in a row (this function's own comment
-        // already acknowledges it "can run for several seconds").
-        await Promise.all([
-          hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email),
-          // Dashboard-only for Admin — HR already got the pushable copy above,
-          // and payroll deductions are an HR-owned workflow day-to-day.
-          hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, undefined, undefined, emp.email),
-          hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${empReasonDetail}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task'),
-        ]);
+        pendingNotifications.set(`${emp.email.toLowerCase()}_${dateStr}`, { emp, dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount, name });
       }
     }
 
@@ -4109,9 +4110,8 @@ export const hrActions = {
       // Re-fetch the full history (including soft-deleted rows) immediately
       // before creating, rather than reusing the fullHistory snapshot taken
       // at the top of this function. This function can run for several
-      // seconds (an awaited HR+Admin+employee notification triple for every
-      // new absence above) — if HR/Admin deletes an existing absence record
-      // while this run is still in flight (or a second dashboard mount's
+      // seconds — if HR/Admin deletes an existing absence record while this
+      // run is still in flight (or a second dashboard mount's
       // runAbsenceCheck runs concurrently), creating against the stale
       // snapshot would silently resurrect that deletion, which is exactly
       // the "deleted absence comes back" bug this closes. Re-reading fresh
@@ -4126,8 +4126,39 @@ export const hrActions = {
       // concurrent create landing between the fresh-fetch above and this
       // create (e.g. two dashboard mounts racing) is just a benign
       // constraint violation to swallow, not a bug to prevent client-side.
-      await Promise.all(safeNewRecords.map(r => pbCreate('hr_absence_records', r).catch(() => {})));
+      // Track which ones actually succeeded — only those get notified.
+      await Promise.all(safeNewRecords.map(async (r) => {
+        try {
+          await pbCreate('hr_absence_records', r);
+        } catch {
+          // Lost the race (or a genuine write error) — someone else's call
+          // already created this record, or will notify for it themselves.
+          // Either way, THIS call must not notify for it too.
+          pendingNotifications.delete(`${r.employeeEmail.toLowerCase()}_${r.date}`);
+        }
+      }));
     }
+
+    // Send notifications only for records this call actually created.
+    await Promise.all(Array.from(pendingNotifications.values()).map(({ emp, dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount, name }) => {
+      const reasonText = reason === 'inactivity'
+        ? `was inactive for ${inactivityMinutes} minutes during their shift on ${dateStr}`
+        : reason === 'under_4_hours'
+        ? `worked less than 4 hours (${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m) on ${dateStr}`
+        : `did not start a shift on ${dateStr}`;
+      const empReasonDetail = reason === 'inactivity'
+        ? `${inactivityMinutes} min inactivity during shift`
+        : reason === 'under_4_hours'
+        ? `worked only ${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m (under 4 hours minimum)`
+        : 'not starting a shift';
+      return Promise.all([
+        hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email),
+        // Dashboard-only for Admin — HR already got the pushable copy above,
+        // and payroll deductions are an HR-owned workflow day-to-day.
+        hrActions.addNotification('all', 'admin', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, undefined, undefined, emp.email),
+        hrActions.addNotification(emp.email, 'employee', `You were marked absent for ${dateStr} (${empReasonDetail}). A ${formatMoney(deductionAmount, emp.region)} deduction (2 days' pay) has been applied.`, 'leave_task'),
+      ]);
+    }));
   },
 
   // ── Multi-device session enforcement (Employee/Team Lead only) ──────────
