@@ -68,6 +68,25 @@ notes for whoever reviews the diff:
   reduced-motion coverage added by plans 001, 003, and 006 lives alongside
   each new utility class's definition.
 
+## Feature plans (not from the animation audit)
+
+These live in the same folder for consistency with how this repo tracks
+planned work, but are unrelated to the animation audit above — different
+category, different trigger (a product request, not `improve-animations`).
+
+| # | Plan | Severity | Status |
+| --- | --- | --- | --- |
+| 7 | [007-admin-hr-analytics-insights.md](./007-admin-hr-analytics-insights.md) | MEDIUM | TODO |
+| 8 | [008-replace-window-confirm.md](./008-replace-window-confirm.md) | MEDIUM | TODO |
+| 9 | [009-unified-action-feedback.md](./009-unified-action-feedback.md) | MEDIUM | TODO |
+| 10 | [010-paginate-large-tables.md](./010-paginate-large-tables.md) | LOW | TODO |
+
+**Suggested order for 8-10**: 8 and 9 are independent of each other and of 7;
+either can go first. 10 is independent of everything else. None of 7-10
+depend on each other's output, though 8 and 9 may end up sharing a single
+root-level provider mount point (see each plan's Steps) without sharing any
+state — check that when implementing whichever comes second.
+
 ## Not planned (rejected or out of scope)
 
 - **HR Leaves kanban drag-and-drop** (`src/app/(dashboard)/hr/leaves/page.tsx`) —
