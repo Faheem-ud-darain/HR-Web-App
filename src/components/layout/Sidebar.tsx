@@ -227,7 +227,7 @@ export function Sidebar({ role }: SidebarProps) {
     ...(trackingEnabled ? [{ name: 'Timesheet Tracker', href: '/employee/tracker', icon: Clock }] : []),
     { name: 'My Leaves', href: '/employee/leaves', icon: Clock },
     { name: 'Attendance', href: '/employee/absences', icon: UserCheck },
-    { name: 'Salary History', href: '/employee/salary', icon: Wallet },
+    { name: 'Salary', href: '/employee/salary', icon: Wallet },
     { name: 'Career Board', href: '/employee/careers', icon: Briefcase },
     { name: 'Support Tickets', href: '/employee/tickets', icon: HelpCircle },
     { name: 'Team Chat', href: '/employee/chat', icon: MessageSquare },

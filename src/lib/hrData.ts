@@ -1405,6 +1405,37 @@ export function usePayrollSelf() {
     },
   });
 }
+
+// One employee's own daily attendance deductions (hr_absence_records), via
+// the authenticated /api/absences/me route — see that route's own comment
+// for why this exists instead of the old hrActions.getAbsenceRecords()
+// (reads the whole company's records, unauthenticated). Used by the
+// employee Salary page to show a running "why was I deducted this month"
+// list, day by day, rather than only the end-of-month total.
+export interface MyAbsenceRecord {
+  id: string;
+  date: string; // "YYYY-MM-DD"
+  reason: 'no_clock_in' | 'inactivity' | 'under_4_hours';
+  inactivityMinutes?: number;
+  workedMinutes?: number;
+  deductionAmount: number;
+  createdAt: string;
+}
+export function useMyAbsenceRecords() {
+  return useQuery({
+    queryKey: ['absences_me'],
+    queryFn: async (): Promise<MyAbsenceRecord[]> => {
+      const token = getAuthToken();
+      if (!token) return [];
+      const res = await fetch(`${API_BASE}/api/absences/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.items || []) as MyAbsenceRecord[];
+    },
+  });
+}
 export interface ProfileSelf {
   id: string;
   bankName: string;

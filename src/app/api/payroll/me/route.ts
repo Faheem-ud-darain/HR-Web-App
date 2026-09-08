@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { adminFindProfileByEmail, adminListPayrollForEmployee, adminGetKV } from '@/lib/pbAdmin';
 import { getPendingIncrement } from '@/lib/incrementMath';
+import { getNYDateString } from '@/lib/timezone';
+import { adminListAbsenceRecordsForEmail } from '@/lib/pbAdmin';
 
 export const runtime = 'edge';
 
@@ -31,7 +33,38 @@ export async function GET(request: Request) {
     // Same "most recent record for this employee" selection the old
     // client-side usePayroll().find(p => p.employeeId === profile.id) did —
     // adminListPayrollForEmployee already sorts by -created, so [0] is it.
-    const payrollRecord = payrollRows[0] || null;
+    let payrollRecord = payrollRows[0] || null;
+
+    // BUGFIX 2026-09-08: the most recent record isn't necessarily FOR the
+    // current month — until HR/Admin runs payroll for a new month, [0]
+    // above is still last month's already-processed record. The dashboard
+    // and Salary page both label this "This Month" / "Net Payable This
+    // Month", so showing last month's leftover bonus/deductions/processed
+    // status under that label was actively misleading right after a month
+    // rolled over — it looked like this month's numbers when it wasn't.
+    // Same America/New_York month-bucketing computePayrollView itself uses.
+    const currentMonthKey = getNYDateString(new Date()).slice(0, 7); // "YYYY-MM"
+    const recordIsCurrentMonth = payrollRecord?.month === currentMonthKey;
+    if (payrollRecord && !recordIsCurrentMonth) {
+      payrollRecord = { ...payrollRecord, month: currentMonthKey, bonus: 0, deductions: 0, processed: false };
+    }
+
+    // Live running total of this month's daily deductions (hr_absence_records)
+    // — real-time and always current even before HR has run/saved a formal
+    // payroll record for this month, so "Net Payable This Month" reflects
+    // actual deductions so far rather than showing 0 all month until HR
+    // processes it. Once HR does process the month, their saved
+    // `deductions` figure (already includes leave/shift-shortfall deductions
+    // beyond just absences) takes over as the authoritative number instead.
+    let liveDeductionsThisMonth = 0;
+    if (!recordIsCurrentMonth) {
+      try {
+        const absenceRows = await adminListAbsenceRecordsForEmail(session.email);
+        liveDeductionsThisMonth = absenceRows
+          .filter((r: any) => typeof r.date === 'string' && r.date.slice(0, 7) === currentMonthKey)
+          .reduce((sum: number, r: any) => sum + (Number(r.deductionAmount) || 0), 0);
+      } catch { /* best-effort — worst case the dashboard shows 0 until HR processes */ }
+    }
 
     // Itemized "why was I deducted" breakdown + this month's reserved
     // amount — written by /api/admin/payroll alongside the main record
@@ -81,13 +114,19 @@ export async function GET(request: Request) {
       payrollRecord: payrollRecord
         ? {
             bonus: Number(payrollRecord.bonus) || 0,
-            deductions: Number(payrollRecord.deductions) || 0,
+            deductions: recordIsCurrentMonth ? (Number(payrollRecord.deductions) || 0) : liveDeductionsThisMonth,
             processed: !!payrollRecord.processed,
             month: payrollRecord.month || undefined,
             deductionBreakdown,
             reservedThisMonth,
           }
-        : null,
+        : (liveDeductionsThisMonth > 0
+            // No payroll record has EVER been created for this employee yet
+            // (brand new hire, first month) but they already have absence
+            // deductions on the books this month — still surface those
+            // rather than showing nothing at all until HR's first run.
+            ? { bonus: 0, deductions: liveDeductionsThisMonth, processed: false, month: currentMonthKey, deductionBreakdown: [], reservedThisMonth: 0 }
+            : null),
     });
   } catch (err: any) {
     console.error('[payroll/me] error:', err);

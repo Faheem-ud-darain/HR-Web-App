@@ -296,3 +296,15 @@ export async function adminDeleteKVByKeys(keys: string[]): Promise<void> {
     if (row) await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${row.id}`, { method: 'DELETE' });
   }));
 }
+
+// Employee's own absence/deduction records (hr_absence_records) — for the
+// authenticated /api/absences/me route. Scoped by employeeEmail using the
+// same case-insensitive `~` + exact-match-filter pattern used elsewhere in
+// this file (see adminListScreenshots), since PocketBase's `=` filter is
+// case-sensitive and emails have drifted in casing before.
+export async function adminListAbsenceRecordsForEmail(email: string): Promise<any[]> {
+  const encoded = encodeURIComponent(`employeeEmail ~ "${email.replace(/"/g, '\\"')}" && deleted = false`);
+  const list = await pbAdminFetch(`/api/collections/hr_absence_records/records?filter=${encoded}&perPage=200&sort=-date`);
+  const wanted = email.toLowerCase();
+  return (list?.items || []).filter((r: any) => (r.employeeEmail || '').toLowerCase() === wanted);
+}
