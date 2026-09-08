@@ -1721,33 +1721,38 @@ export function useTeamDocuments(teamId: string | null | undefined) {
     refetchInterval: 15000,
   });
 }
+// Shared by useTimesheets (below) AND runAbsenceCheck, which must never
+// trust a caller-supplied, possibly-stale React Query cache for this data
+// (see the BUGFIX comment on runAbsenceCheck's own fetchFreshTimesheets
+// call for the full story) — always does a real network round trip.
+async function fetchTimesheetsFresh(): Promise<TimesheetEntry[]> {
+  try {
+    // Was a flat getList(1, 500) with no date filter — once the company
+    // accumulates more than 500 recent rows (sorted by -created), OLDER
+    // still-open shifts silently fall outside that window. That matters
+    // a lot here: runAbsenceCheck/autoCloseStaleOpenShifts/
+    // autoCloseOrphanTrackedShifts all depend on seeing every currently
+    // open shift to work correctly, regardless of how old its clock-in
+    // was. The filter below keeps the same "recent history" scope
+    // (last 60 days) for closed shifts, but ALWAYS includes any shift
+    // that's still open (clock_out empty) no matter how old, so a
+    // busy roster can't silently lose track of a stuck-open shift.
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 3600 * 1000);
+    const cutoff = sixtyDaysAgo.toISOString().replace('T', ' ').replace('Z', '');
+    const items = await pbList('hr_timesheets', {
+      sort: '-created',
+      filter: `clock_out = "" || date >= "${cutoff}"`,
+    });
+    return items.map(toTimesheet);
+  } catch (err) {
+    console.error('[hrData] getList error in hr_timesheets:', err);
+    return [];
+  }
+}
 export function useTimesheets() {
   return useQuery({
     queryKey: ['hr_timesheets'],
-    queryFn: async () => {
-      try {
-        // Was a flat getList(1, 500) with no date filter — once the company
-        // accumulates more than 500 recent rows (sorted by -created), OLDER
-        // still-open shifts silently fall outside that window. That matters
-        // a lot here: runAbsenceCheck/autoCloseStaleOpenShifts/
-        // autoCloseOrphanTrackedShifts all depend on seeing every currently
-        // open shift to work correctly, regardless of how old its clock-in
-        // was. The filter below keeps the same "recent history" scope
-        // (last 60 days) for closed shifts, but ALWAYS includes any shift
-        // that's still open (clock_out empty) no matter how old, so a
-        // busy roster can't silently lose track of a stuck-open shift.
-        const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 3600 * 1000);
-        const cutoff = sixtyDaysAgo.toISOString().replace('T', ' ').replace('Z', '');
-        const items = await pbList('hr_timesheets', {
-          sort: '-created',
-          filter: `clock_out = "" || date >= "${cutoff}"`,
-        });
-        return items.map(toTimesheet);
-      } catch (err) {
-        console.error('[hrData] getList error in hr_timesheets:', err);
-        return [];
-      }
-    },
+    queryFn: fetchTimesheetsFresh,
   });
 }
 
@@ -3888,7 +3893,26 @@ export const hrActions = {
   // Only ever creates NEW records for days not already recorded — this is
   // safe to call from every HR/Admin dashboard mount, it just no-ops once a
   // given employee+date combination has already been decided.
-  runAbsenceCheck: async (employees: Profile[], timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
+  runAbsenceCheck: async (employees: Profile[], _timesheets: TimesheetEntry[], leaves: LeaveApplication[], inactivityLogs: InactivityLog[]): Promise<void> => {
+    // BUGFIX 2026-09-08: the `_timesheets` parameter is deliberately IGNORED
+    // below in favor of a fresh fetch. This function is called from a
+    // useEffect on the HR/Admin dashboard whose `timesheets` comes from
+    // useTimesheets()'s React Query cache — staleTime 1 minute,
+    // refetchOnWindowFocus disabled (see providers.tsx), no polling
+    // interval. A dashboard tab left open for a while (very normal — HR/
+    // Admin tend to keep it open all day) can sit on an HOURS-old snapshot
+    // that simply predates shifts an employee clocked later that same day,
+    // since nothing forces a refetch in between. Confirmed live: an
+    // employee (luna@delcargo.us) with ~7 hours of real, clocked shifts on
+    // a given date was still marked absent for "not starting a shift"
+    // (0 minutes worked) that date — the check had run against a cached
+    // timesheets snapshot taken before her later shifts existed. Given the
+    // real financial consequence (an incorrect 2-days'-pay deduction) and
+    // that this only ever evaluates days that have already fully ended
+    // (see the `dateStr >= nyTodayStr` cutoff below), it's worth the one
+    // extra network round trip to guarantee this can never again decide
+    // someone's attendance from out-of-date shift data.
+    const timesheets = await fetchTimesheetsFresh();
     const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
     // Per explicit product decision: absence "day" bucketing runs on the same
     // America/New_York midnight-boundary calendar used everywhere else in the
