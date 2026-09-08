@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord, countApprovedLeaveRequestsInMonth } from '@/lib/hrData';
 import { NetPayableModal } from '@/components/ui/NetPayableModal';
 
 export default function HRPayrollPage() {
@@ -314,7 +314,10 @@ export default function HRPayrollPage() {
                           />
                         )}
                         {(() => {
-                          const count = leavesList.filter(l => l.employeeName === emp.name && l.type === 'Urgent' && l.status === 'approved').length;
+                          // Scoped to THIS record's own month (emp.month) — see
+                          // countApprovedLeaveRequestsInMonth's comment: this used to count
+                          // every approved Urgent Leave request all-time, not just this month's.
+                          const count = countApprovedLeaveRequestsInMonth(leavesList, emp.name, 'Urgent', emp.month);
                           if (count > 0 && count <= 3) {
                             return <div className="text-[10px] text-emerald-600 font-bold mt-1">Rebate Eligible ({count} UL)</div>;
                           } else if (count > 3) {
@@ -392,7 +395,7 @@ export default function HRPayrollPage() {
       <div className="md:hidden space-y-3">
         {filteredData.map(emp => {
           const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
-          const urgentCount = leavesList.filter(l => l.employeeName === emp.name && l.type === 'Urgent' && l.status === 'approved').length;
+          const urgentCount = countApprovedLeaveRequestsInMonth(leavesList, emp.name, 'Urgent', emp.month);
           const empProfileMobile = employees.find(e => e.id === emp.employeeId);
           const reservedBalanceMobile = (empProfileMobile?.reservedSalaryBalance || 0) + (empProfileMobile?.manualReservedAmount || 0);
           return (

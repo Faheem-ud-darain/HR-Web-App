@@ -1942,6 +1942,71 @@ export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: stri
   return getApprovedLeaveOnDate(leaves, fullName, dateStr) !== null;
 }
 
+// How many of a SINGLE employee's approved Urgent/Normal leave days
+// (America/New_York calendar days) fall inside one specific payroll month —
+// counted by walking every calendar day the leave's date range spans and
+// checking each one's own month, exactly like runAbsenceCheck/
+// getShiftShortfallDeduction already walk day-by-day elsewhere in this file.
+//
+// This is NOT the same thing as isApprovedLeaveOnDate/getApprovedLeaveOnDate
+// above (which answer "is this ONE date covered") — this answers "how many
+// days of this employee's leave history land in THIS month", which is what
+// computePayrollView's Urgent/Normal Leave deduction needs, and which
+// previously did not exist: computePayrollView used to sum every approved
+// Urgent/Normal leave this employee had EVER taken, with no month filter at
+// all, so a single approved Urgent/Normal leave request kept being deducted
+// again every single month forever, not just the month it was actually
+// taken in. A leave that spans a month boundary (e.g. filed Aug 30 - Sep 2)
+// is correctly split — only the days that actually fall in `monthKey` count
+// toward that month's deduction, the rest count toward the other month.
+export function getApprovedLeaveDaysInMonth(
+  leaves: LeaveApplication[],
+  fullName: string,
+  type: LeaveApplication['type'],
+  monthKey: string
+): number {
+  let total = 0;
+  for (const l of leaves) {
+    if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
+    const dates = parseLeaveDates(l.duration);
+    // Malformed/unparseable duration string — there's no date range to walk,
+    // so there's no way to tell which month (if any) this should count
+    // toward. Skip it rather than guessing, which is also what stops a bad
+    // record like this from silently charging every month forever the way
+    // the old unscoped sum did.
+    if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
+    const endStr = getNYDateString(dates.end);
+    for (const cursor = new Date(dates.start); getNYDateString(cursor) <= endStr; cursor.setDate(cursor.getDate() + 1)) {
+      if (getNYDateString(cursor).slice(0, 7) === monthKey) total++;
+    }
+  }
+  return total;
+}
+
+// Same month-scoping as getApprovedLeaveDaysInMonth above, but counts
+// matching REQUESTS (not days) that overlap the given month at all — used
+// for the "N UL" Rebate Eligible/No Rebate badge on the HR Payroll page,
+// which counts how many separate Urgent Leave requests an employee has,
+// not how many days. Previously that badge counted every approved Urgent
+// Leave request this employee had EVER made, all-time, with no month
+// filter — the same unscoped-forever bug as the deduction math above, just
+// in a purely informational badge rather than the actual charge.
+export function countApprovedLeaveRequestsInMonth(
+  leaves: LeaveApplication[],
+  fullName: string,
+  type: LeaveApplication['type'],
+  monthKey: string
+): number {
+  let count = 0;
+  for (const l of leaves) {
+    if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
+    const dates = parseLeaveDates(l.duration);
+    if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
+    if (getNYDateString(dates.start).slice(0, 7) === monthKey || getNYDateString(dates.end).slice(0, 7) === monthKey) count++;
+  }
+  return count;
+}
+
 // Per explicit product decision: only Pakistan-region employees are subject
 // to this check (USA staff clock in/out automatically via GPS geofencing,
 // so a "missing" shift there means something different — a device/GPS
@@ -3358,15 +3423,14 @@ export const hrActions = {
         }
 
         // 2. Urgent Leave Deductions — 2 days' pay deducted for EACH DAY of
-        // Urgent leave taken (submitted any time, no advance notice).
-        const urgentDays = leaves
-          .filter(l => l.employeeName === emp.fullName && l.type === 'Urgent' && l.status === 'approved')
-          .reduce((acc, l) => {
-            const dates = parseLeaveDates(l.duration);
-            if (!dates) return acc + 1;
-            const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
-            return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
-          }, 0);
+        // Urgent leave taken (submitted any time, no advance notice), but
+        // ONLY for the days of that leave that actually fall in
+        // targetMonthKey — see getApprovedLeaveDaysInMonth's own comment:
+        // this used to sum every approved Urgent leave day this employee
+        // had EVER taken with no month filter at all, so one approved
+        // Urgent/Normal leave request kept being deducted again every
+        // single month forever instead of just the month it was taken in.
+        const urgentDays = getApprovedLeaveDaysInMonth(leaves, emp.fullName, 'Urgent', targetMonthKey);
         const dailyRateForDeduction = emp.baseSalary / getWeekdaysInMonth(targetMonthKey);
         const rawUrgentDeduction = Math.round(urgentDays * 2 * dailyRateForDeduction);
         // Never negative — guards against a malformed `duration` string
@@ -3379,15 +3443,9 @@ export const hrActions = {
         // (see LeaveApplication.type's comment): requires 14 days' advance
         // notice (enforced client-side at submission, in employee/leaves),
         // deducts 1 day's pay for EACH DAY taken (half the Urgent-leave
-        // rate, by design — parallel structure, different multiplier).
-        const normalDays = leaves
-          .filter(l => l.employeeName === emp.fullName && l.type === 'Normal' && l.status === 'approved')
-          .reduce((acc, l) => {
-            const dates = parseLeaveDates(l.duration);
-            if (!dates) return acc + 1;
-            const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
-            return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
-          }, 0);
+        // rate, by design — parallel structure, different multiplier), same
+        // per-month scoping as Urgent Leave above.
+        const normalDays = getApprovedLeaveDaysInMonth(leaves, emp.fullName, 'Normal', targetMonthKey);
         const rawNormalDeduction = Math.round(normalDays * 1 * dailyRateForDeduction);
         const normalDeduction = Number.isFinite(rawNormalDeduction) ? Math.max(0, rawNormalDeduction) : 0;
         const onboardingPenalty = emp.onboardingCompleted ? 0 : (emp.region === 'USA' ? 10 : 200);
