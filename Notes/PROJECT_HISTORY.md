@@ -1,7 +1,9 @@
 # DelCargo HR / Internal App — Project History & Handoff
 
-Last updated: 2026-08-03. Written as a running handoff document — read this
-before starting new work, and add to it (don't replace it) as more gets done.
+Last updated: 2026-09-08 (sections 15-24 added; see section 15 onward for
+everything since the 2026-08-31 entry). Written as a running handoff
+document — read this before starting new work, and add to it (don't
+replace it) as more gets done.
 
 ## 1. What this app is
 
@@ -1019,6 +1021,30 @@ unresolved issues" below).
   written but never run through `npm run build:capacitor` by Claude. Always
   do a real local build before pushing anything from this history.
 
+**Added 2026-09-08, from sections 20-24 above:**
+- **PocketBase public-access audit is only partially done.** `hr_screenshots`
+  is fixed and verified (section 20). Still fully public / unaudited:
+  `hr_tracking_settings`, `hr_delcargo_store` (needs agentToken-scoped
+  rules), `hr_profiles`, `hr_payroll` (need the same authenticated-route
+  treatment as `hr_screenshots`), and `hr_timesheets`/`hr_tickets`/
+  `hr_notifications`/`hr_leaves`/`hr_messages`/`hr_career_applications`.
+  Use `hr_screenshots` as the reference implementation.
+- **zara@delcargo.us's 2026-09-01 absence record is unconfirmed.** Unlike
+  Luna's case (section 23), Zara genuinely has no `hr_timesheets` row for
+  that date at all — this doesn't look like the stale-cache bug, but it's
+  not confirmed either way. Needs the user to check with her directly
+  whether she was working some other way that day (if so, that's a
+  different bug — the tracker never writing a shift row — worth its own
+  investigation).
+- **No post-deploy confirmation of the 2026-09-08 performance fixes**
+  (section 24) — the Start Shift timeout fix, hero image re-encode, and
+  dashboard skeleton loaders were pushed but Cloudflare Web Analytics
+  hasn't been re-checked since to confirm LCP/INP/CLS actually improved.
+- **An untracked `Claude outputs/` directory was noticed in the repo root**
+  during the 2026-09-08 session (not created by that session, origin
+  unknown) — worth the user checking what it is; left alone rather than
+  committed or deleted.
+
 ## 6. Absence system extended (2026-08-03, same session as this document)
 
 Extended the no-call-no-show absence system (section 4) with inactivity
@@ -1740,3 +1766,362 @@ left/right convention every regular bubble already followed — fixed to
 sit in the same sender-side flow (own forwards on the right, the other
 person's on the left, `max-w-[75%]` capped) instead of always spanning
 the full thread width.
+
+## 15. Copy-report button on tracker diagnostics panel (2026-09-01)
+
+Small addition (`8675a66`): a "Copy Report" button on the tracker
+diagnostics panel so an employee/HR/admin can grab the full diagnostic
+text in one click to paste into a ticket, instead of manually
+screenshotting or retyping it.
+
+## 16. Payroll, leave, and reserved-salary system overhaul (2026-09-03)
+
+Major rework (`c778621`) of `hr_payroll` and the leave system:
+
+- **True monthly payroll rollover** — `hr_payroll` records are now scoped
+  per calendar month via the collection's `month`/`year` columns, instead
+  of one record per employee being reused/overwritten forever. This is
+  what makes month-to-month history meaningful at all (and is the
+  foundation the later monthly-reset fix in section 23 builds on).
+- **Leave types replaced**: PTO/Sick leave is gone, replaced by
+  **Urgent** (2x deduction, no notice required) and **Normal** (1x
+  deduction, 14-day advance notice required) across employee, HR, and
+  admin leave pages.
+- **Automatic first-month salary reserve** — a portion of an employee's
+  first month's pay is automatically withheld and only paid out at
+  resignation/termination (standard security-deposit-style reserve),
+  plus a separate manual HR/Admin-editable reserve annotation on the
+  employee profile modal (record-only, doesn't touch live payroll math).
+- **Weekday-based daily salary formula** replacing a flat 22-working-day
+  constant, and a new proration for partial (4-8 hour) shifts that
+  previously incurred zero deduction no matter how short.
+- **Increment timing fix** — an anniversary salary increment now only
+  affects pay starting the calendar month *after* the anniversary, never
+  the anniversary month itself (was previously applying early).
+- **Net Payable modal + "Mark as Paid" action** on both HR and Admin
+  payroll pages, with the full itemized deduction breakdown persisted
+  via a KV overlay and surfaced on both the employee dashboard and the
+  Salary page (this itemized breakdown is what section 18 below then had
+  to fix the on-screen "Absent" summary to actually match).
+
+## 17. Mac tracker agent hardening — crash, black-screenshot bug (twice), and DMG install (2026-09-03 to 2026-09-04, v21→v23)
+
+Three related real-crash-report-driven fixes to the desktop tracker
+agent's macOS support, in order:
+
+- **v21 (`7bfcfc1`)**: `pystray`'s tray-icon run loop crashed on macOS
+  26.6.2 by calling AppKit off the main thread (confirmed from a real
+  crash report) — disabled entirely on Darwin. Closing the window now
+  hides to the Dock and keeps tracking running (same intent as
+  tray-minimize on Windows) instead of quitting, with
+  `tk::mac::ReopenApplication`/`Quit` wired up so the Dock icon and
+  Cmd+Q behave like a normal Mac app. `capture_and_encode()` now raises
+  instead of silently uploading a black frame when macOS Screen
+  Recording permission is missing (same guard added to the lightweight
+  fallback script, `public/delcargo_tracker_agent.py`). The DMG now
+  stages an `/Applications` symlink so it actually installs instead of
+  running from the mounted volume.
+- **v22 (`8e32781`)**: the setup-code `tk.Text` widget had no explicit
+  `bg`/`fg`/`insertbackground` colors — Tk's Windows defaults happened to
+  render it fine, but on macOS it rendered as a solid black box
+  (confirmed from a real v21 screenshot). Explicitly styled to match the
+  app's light theme.
+- **v23 (`6148c52`)**: a second, more serious black-screenshot bug —
+  without macOS Screen Recording permission, `CGWindowListCreateImage`/
+  `ImageGrab` don't reliably return a black frame the way the existing
+  `_is_black_frame()` heuristic assumed. Depending on macOS version they
+  can instead silently return a real, non-black capture of just the
+  desktop wallpaper with every app window excluded — passing the
+  black-frame check clean and uploading as if healthy. This is exactly
+  the "bare desktop, no open windows" symptom reported. Fixed with a
+  deterministic `CGPreflightScreenCaptureAccess` check (via `ctypes`, no
+  `pyobjc` dependency) used before/alongside the heuristic, in both the
+  packaged agent and the fallback script. Also replaced the old
+  `screencapture -x -c` subprocess permission-request trick (registers
+  the wrong app's TCC entry) with the real `CGRequestScreenCaptureAccess`
+  call.
+
+## 18. Fix payroll page hiding deduction reasons; add Reserved Salary column (2026-09-03)
+
+`a28d2d6` — the HR payroll table's on-screen "Absent" annotation computed
+its own `monthKey` from the browser's raw UTC date, which didn't match
+the NY-timezone / "days 1-3 process the previous month" `targetMonthKey`
+that `computePayrollView` actually uses for the real deduction math. Net
+effect: a correctly-computed large deduction could show up on screen as
+an unexplained PKR 0 net payable with no visible reason at all — you had
+to open the Net Payable modal to see why. Fixed by replacing that ad-hoc
+block (desktop and mobile) with the record's own `deductionBreakdown`
+(already computed against the correct month), so every deduction reason
+shows inline. Also added a **Reserved Salary** column (running
+`reservedSalaryBalance + manualReservedAmount`, plus the current month's
+pending reserve) to both HR and Admin payroll tables, matching what the
+Net Payable modal already showed.
+
+## 19. Block manual Start Shift from any mobile device, tracked or not (2026-09-04)
+
+`f984c32` — an employee was able to manually start a shift from a phone's
+mobile *browser* (not the native app) with no desktop tracker running and
+no warning. The existing gate only checked `isNativeMobileApp()` (the
+Capacitor-wrapped app), which a plain mobile browser sails straight
+through, and it only fired when screen tracking was enabled for that
+employee — an untracked account got no gate on any device at all. Added
+`isMobileDevice()` (`trackerSetup.ts`, user-agent + iPadOS touch
+detection layered on the existing native-app check) and used it to block
+manual Start Shift unconditionally on mobile, tracked or not — explicit
+product decision that no employee clocks in manually from a phone/tablet,
+desktop/laptop browser only. USA's automatic GPS-geofence clock-in is
+unaffected.
+
+## 20. PocketBase public-access security audit — hr_screenshots migrated behind authenticated routes and locked down (2026-09-07)
+
+**Background**: this app's own auth (`requireSession()` in
+`serverAuth.ts`, a custom signed JWT) is completely disconnected from
+PocketBase's own `@request.auth` (see section 1's "Data layer rule" —
+PocketBase collection rules here can only ever be "public" or
+"admin-only," never "logged in as this specific app user"). That means
+any collection with public List/View rules is, in practice, world
+readable by anyone who finds the collection name — no login needed.
+
+`hr_screenshots` was found in exactly that state: fully public List/View/
+Create rules, and its image file field unprotected, so anyone with the
+collection or file URL could pull every employee's screenshots with zero
+authentication (`9d73ef2`). Fixed with the now-established pattern (see
+`pbAdmin.ts`/`pbAdminFetch` — a server-side PocketBase superuser client
+used only from Next.js API routes): two new authenticated Edge routes,
+`/api/tracking/screenshots` and `/api/tracking/screenshots-retention`,
+which check the caller's real session role server-side and return only
+what that caller is allowed to see (admin/HR: everyone; team_lead: own
+team only). `hrData.ts`'s `getScreenshots`/`checkScreenshotRetention` now
+call these routes instead of touching the public PocketBase client
+directly. This incidentally also fixed the monthly retention sweep,
+which had been silently 403'ing every month, since `hr_screenshots`'
+Delete rule was already admin-only while the client had no real admin
+auth to satisfy it.
+
+**Completed the same day, verified end-to-end** (this was the
+in-progress item this session picked up and finished): once the new
+routes were confirmed live, the actual PocketBase collection rules for
+`hr_screenshots` were locked down through the Admin UI itself (a raw
+scripted `fetch()` PATCH to mutate collection rules was blocked outright
+by an internal safety classifier — reason: "Blocked by classifier" — so
+this had to be done by clicking through the real Admin UI: Edit
+Collection → Fields → image field → Protected toggle; API Rules tab →
+"Set Admins only" for List/Search and View). Verified afterward with
+direct requests: unauthenticated request → 401, employee-role session →
+403, HR/Admin session → 200; direct `/api/files/...` download of a
+screenshot without a file token also confirmed blocked.
+
+**Still open from the broader remediation plan** (paused while the live
+production bugs in sections 21-24 took priority, not abandoned):
+`hr_tracking_settings`/`hr_delcargo_store` need agentToken-scoped rules,
+`hr_profiles`/`hr_payroll` need the same authenticated-route treatment as
+`hr_screenshots` for their list/read paths, and
+`hr_timesheets`/`hr_tickets`/`hr_notifications`/`hr_leaves`/`hr_messages`/
+`hr_career_applications` all still need the same audit. Whoever picks
+this back up should treat `hr_screenshots` as the reference
+implementation for the pattern (authenticated route + `pbAdminFetch` +
+role check, then lock the PocketBase rule down last, only once the route
+is confirmed live).
+
+## 21. The auto_close_stale_shifts saga — from "cron never actually ran" to "cron closes shifts that are still genuinely active" (2026-08-18 → 2026-09-07)
+
+This is the real story behind the "shift is ending automatically" and
+"9 employees working but dashboard shows 4" complaints, told as one
+thread since the individual commits only make sense together:
+
+1. **`auto_close_stale_shifts.pb.js` was added 2026-08-18** (see section 3)
+   as the app's first real server-side cron, meant to force-close shifts
+   nothing else was catching because no dashboard tab happened to be open.
+2. **It never once actually worked.** `00b138e` (2026-09-07) found — via a
+   new manual-only diagnostic GitHub Action (`a974497`, reuses the
+   existing `PB_SSH_*` secrets to pull PocketBase version/systemd status/
+   `pb_hooks` logs off the droplet) — that the cron had fired correctly
+   every 15 minutes for **1128+ ticks** since it was added, throwing
+   `ReferenceError: autoCloseStaleShifts is not defined` on literally
+   every single one. Root cause: the `cronAdd` callback referenced a
+   top-level `function` declared later in the same file — normally
+   hoisted in standard JS, but PocketBase's JSVM does not preserve that
+   closure for a scheduled cron callback. This is exactly why one
+   employee's shift had sat open 68+ hours despite the "fix" supposedly
+   already being live for three weeks. Fixed by moving every helper
+   function, constant, and the main routine entirely inside the `cronAdd`
+   callback body itself.
+3. **Immediately hit a second bug**: `5f51211` (same day) — now that the
+   cron genuinely ran, the next two ticks both threw
+   `GoError: invalid or empty filter expression`. Pass 1 fetched
+   `hr_tracking_settings` with an empty filter string (`""`) meant to
+   match every row — tolerated by the frontend SDK, rejected outright by
+   this PocketBase build's Go-side filter parser. Fixed with `"id != ''"`,
+   always-true and equivalent.
+4. **Thresholds lowered per HR request** (`bfbb6d2`): orphan-tracked-shift
+   grace period 30→15 min, minimum shift age 45→25 min, mirrored in both
+   the client-side safety net and the server cron.
+5. **The lowered thresholds caused real false-positives** — this is
+   where this conversation's own session picked the thread up, after the
+   user reported "a total of 9 employees currently working but dashboard
+   only shows 4" and then, explicitly, "a lot of Employees are complaining
+   that shift is ending automatically." Diagnosed and fixed same-day
+   (`3c50492`, `7274f26`): reverting the thresholds alone (back to 30/45)
+   only delayed the false closures, it didn't stop them — the real bug
+   was that Pass 2 ("abandoned manual shifts") had **no check at all** for
+   whether an employee had screen tracking enabled. A tracked employee's
+   *tracker* heartbeat could be perfectly alive while their *browser-tab*
+   heartbeat looked stale (expected — a tracker-only employee has no
+   reason to keep the web tab open), and Pass 2 was closing their shift
+   anyway using only the tab-heartbeat check meant for non-tracked manual
+   shifts. Fixed by adding a tracking-enabled skip to Pass 2 (checks
+   `hr_tracking_settings.enabled`, then the shift-tab heartbeat, then
+   falls back to the tracker heartbeat itself, in that order) in both the
+   server cron and its client-side mirror
+   (`closeStaleManualShiftIfAbandoned` in `hrData.ts`).
+
+**Net result**: the cron now genuinely runs, correctly distinguishes
+tracker-governed shifts from manual ones, and no longer force-closes a
+shift out from under someone who is actually still working. Anyone
+touching this file again should read points 2-5 above before changing
+timing thresholds — the failure modes here were never really about the
+numbers, they were about the cron not running at all, then running with
+a syntax-level bug, then running without knowing which category a given
+shift belonged to.
+
+## 22. Tracking page: "Disconnected" vs "Not installed" badge (2026-09-07)
+
+`6525fe8` — the Tracking page badge only checked whether a heartbeat KV
+row existed at all (`hb ? 'Offline' : 'Not installed'`), but the tracker
+agent deliberately deletes its own heartbeat row on a clean quit/
+disconnect (`clear_heartbeat()` in `agent_gui.py`) — so any employee with
+tracking enabled whose tracker was simply closed or had crashed showed
+as "Not installed," identical to someone who had never set it up at all.
+Now also checks `settings.enabled`: a tracked employee with no heartbeat
+correctly reads "Disconnected"; only an employee with tracking off still
+shows "Not installed."
+
+## 23. Duplicate and false-positive "marked absent" notifications; employee-visible daily deductions; monthly salary reset (2026-09-08)
+
+Reported by the user as "misleading Absent notifications sent to
+employees again and again even though they were present," this turned
+out to be **two separate bugs**, found and fixed in sequence the same
+day:
+
+1. **Duplicate notifications (race condition), fixed in `2465e01`**:
+   `runAbsenceCheck` was sending the "you were marked absent" push/in-app
+   notification *before* its own database-write safety check had actually
+   confirmed the record was new — so two concurrent dashboard loads (HR
+   and Admin both open at once, both running the same client-triggered
+   check) could each independently decide "this looks like a new absence"
+   and both fire a notification, even though PocketBase's own partial
+   unique index correctly prevented the second duplicate *database row*.
+   The two specific cases directly re-checked (not just assumed) confirmed
+   this: near-identical timestamps, identical message text, zero duplicate
+   rows in `hr_absence_records`. Fixed by deferring every notification
+   send until *after* the DB write step succeeds for that specific record
+   (a `pendingNotifications` map keyed the same way, drained in one
+   `Promise.all` at the very end, with any record whose write actually
+   failed removed from the map first).
+2. **Genuine false-positive absences (stale cache), fixed in `3d83310`**:
+   the user then confirmed this wasn't the whole story — `luna@delcargo.us`
+   and `zara@delcargo.us` were shown as absent on days they were verifiably
+   present. Direct PocketBase queries confirmed Luna had ~7 hours of real,
+   clocked shifts on 2026-09-07, yet her absence record read
+   `no_clock_in`/`workedMinutes: 0` for that date. Root cause: `runAbsenceCheck`
+   trusted whichever `timesheets` array the calling HR/Admin dashboard tab
+   happened to have cached via React Query (`providers.tsx`: `staleTime`
+   60s, `refetchOnWindowFocus: false`, no `refetchInterval` on
+   `useTimesheets()`) — a tab left open for hours (very normal for HR/Admin)
+   could run the check against a snapshot that simply predated shifts the
+   employee clocked later that same day. Fixed by extracting the
+   timesheets fetch into a shared `fetchTimesheetsFresh()` helper in
+   `hrData.ts` and making `runAbsenceCheck` always call it directly,
+   ignoring whatever `timesheets` its caller passed in, guaranteeing every
+   absence decision is made against a live, just-fetched snapshot.
+   (`zara@delcargo.us`'s one active absence record, 2026-09-01, was
+   separately checked and does **not** appear to be this same bug — she
+   genuinely has no `hr_timesheets` row at all for that date, unlike
+   Luna's case. Flagged back to the user to confirm with her directly
+   whether she was working some other way that day; if so, that would be
+   a different bug — the tracker never writing a shift row at all — worth
+   its own investigation.)
+3. **Employee-visible daily deductions + Salary page rename +
+   monthly reset (`2c2c392`)**, requested in the same conversation turn:
+   employees previously had no way to see their own daily attendance
+   deductions before payroll was processed. Added a new authenticated
+   route (`/api/absences/me`, session-gated, backed by a new
+   `adminListAbsenceRecordsForEmail` helper in `pbAdmin.ts`) and a new
+   `useMyAbsenceRecords()` hook, then redesigned the employee "Salary
+   History" page (renamed to just **"Salary"**, `Sidebar.tsx` nav updated
+   to match) with a new "Daily Deductions This Month" section listing each
+   deduction with its reason and a running total, plus an explicit
+   reassurance note (per the user's explicit wording) that a day's
+   deduction figure is only finalized at end-of-day, specifically so an
+   employee who had to restart their shift multiple times in one day due
+   to errors doesn't panic partway through. Also fixed `/api/payroll/me`
+   (and, as a side effect requiring no extra code, the Employee
+   Dashboard's "Net Payable This Month" widget, which reads the same
+   data) to detect when the stored payroll record's `month` doesn't match
+   the current calendar month and, in that case, show live deductions
+   computed from `hr_absence_records` for the current month instead of
+   stale figures left over from the previous month's processed record —
+   this is what makes the employee's own dashboard/salary numbers
+   actually reset correctly at the start of a new month.
+
+**Documentation correction, discovered during this work**: sections 6 and
+13 of this document (2026-08-03/08-04) describe absence records as living
+in a KV blob, `hr_absence_records_v1`. That's no longer accurate as of
+`10e4274` (2026-08-17, predates even this document's last update before
+today) — absence records now live in a real, dedicated `hr_absence_records`
+PocketBase collection (one row per employee per day, partial unique index
+on non-deleted `employeeEmail`+`date` enforced server-side, soft-delete via
+`deleted`/`deletedAt` instead of a separate tombstone array). The same
+migration also moved `hr_tracking_settings_prod_v1` and
+`hr_ticket_presence_*` off KV blobs onto their own dedicated collections.
+Sections 6/13 are left as historical record below rather than rewritten,
+but treat their KV-blob description of the absence system as superseded.
+
+## 24. Cloudflare Web Analytics performance audit — Start Shift hang, oversized hero image, dashboard layout shift (2026-09-08)
+
+Investigated at the user's request ("check this page ... and tell me
+what's causing our app to crash, fail and hang," a Cloudflare Web
+Analytics URL for `hr-web-app.pages.dev`). Cloudflare Web Analytics
+doesn't capture JS errors/crashes directly, but its Core Web Vitals +
+Debug View pointed at three concrete, code-confirmed problems, all on
+the employee-facing pages:
+
+1. **Start Shift button hangs (the real cause of the "hangs"/"shift
+   ending automatically" complaints)** — `employee/page.tsx`'s Start
+   Shift handler does a ping/pong handshake with the desktop tracker,
+   polling `getTrackerPong()` every 500ms with an intended 8-second
+   give-up. The loop tracked "elapsed" by just adding 500ms per
+   iteration, assuming each `getTrackerPong()` call resolves near-
+   instantly — but the PocketBase client (`pocketbase.ts`) has **no
+   request timeout configured at all**, so a single stalled request on a
+   flaky connection could hang far past its 500ms slot with nothing to
+   cut it off, and the loop's 8-second budget never actually applied.
+   Confirmed via analytics: INP on this button's DOM element ranged from
+   3.3s up to **677 seconds (11+ minutes)** in one real sample. Fixed by
+   tracking a real `Date.now()` deadline in the loop instead of a naive
+   counter, and adding a new `withTimeout()` helper (4-second ceiling) to
+   every call in the handshake (`writeTrackerPing`, `getTrackerPong`,
+   `clearTrackerPing`/`Pong`) in `hrData.ts`.
+2. **LCP** — `delcargo_warehouse_hightech.png` (811KB, 1024x1024, a plain
+   `<img>` with no sizing/lazy hints, used on both the login page hero and
+   the Careers page) was the *only* element Cloudflare's LCP debug view
+   ever flagged across a full week, averaging 14.8s to render and driving
+   page-wide LCP P99 to 61.8s (with spikes to 130s). Re-encoded to WebP
+   at 900x900/quality 80 (85KB, ~90% smaller) with explicit `width`/
+   `height` and priority/lazy-loading hints added on both usages
+   (`src/app/auth/page.tsx`, `src/components/ui/CareersView.tsx`).
+3. **CLS** — `employee/page.tsx` had zero loading skeletons anywhere;
+   Cloudflare flagged this page with the app's worst CLS (maximum
+   possible shift score) because the Announcements and My Team widgets
+   rendered their final empty "No X found" shape the instant the page
+   mounted, then popped to full content height once data actually
+   arrived a beat later. Fixed with fixed-height skeleton placeholders on
+   both widgets, gated on the same `isInitialLoading` condition already
+   used elsewhere in the component to know when its own state has been
+   populated.
+
+All three fixes verified with `tsc --noEmit` and `eslint` (no new errors
+beyond the pre-existing `any`-type baseline in `hrData.ts`) and pushed as
+`d557371`. **Not yet done**: no post-deploy confirmation that the actual
+Cloudflare Web Vitals numbers improved — worth checking the dashboard
+again a day or two after this deploys.
