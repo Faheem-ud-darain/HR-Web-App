@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
+import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
 import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
 import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 
@@ -90,7 +90,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       setLeaveBlockedNotice({ employeeName: leaveCovered.employeeName, date: leaveCovered.date });
       return;
     }
-    const total = selectedRecords.reduce((s, r) => s + r.deductionAmount, 0);
+    const total = selectedRecords.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
     const confirmed = window.confirm(
       `Remove ${selectedIds.size} absence record${selectedIds.size > 1 ? 's' : ''} and reverse ${formatMoney(total, 'Pakistan')} in deductions? This cannot be undone.`
     );
@@ -238,7 +238,17 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     return list;
   }, [absenceRecords, selectedDate, searchQuery]);
 
-  const totalDeducted = filteredAbsences.reduce((acc, r) => acc + r.deductionAmount, 0);
+  // A record whose date turned out to be covered by an approved leave
+  // (approved after runAbsenceCheck already scanned it, see
+  // getApprovedLeaveOnDate's comment) is kept for history but is no longer
+  // actually charged in payroll (getAbsenceDeductionForMonth excludes it) —
+  // so every "$X deducted" total on this page needs to skip it too, or
+  // this audit page would show money being taken that payroll never
+  // actually takes.
+  const effectiveDeductionAmount = (r: AbsenceRecord): number =>
+    getApprovedLeaveOnDate(leaves, r.employeeName, r.date) ? 0 : r.deductionAmount;
+
+  const totalDeducted = filteredAbsences.reduce((acc, r) => acc + effectiveDeductionAmount(r), 0);
 
   // HR/Admin views collapse the day-by-day rows down to one row per
   // employee — clicking opens a detail modal with that employee's full
@@ -323,26 +333,46 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
   // Shared reason label for a single absence record — used in the
   // employee's own flat list AND inside the HR/Admin per-employee modal.
-  const AbsenceReasonLabel = ({ r }: { r: AbsenceRecord }) => (
-    <span className="inline-flex items-center gap-1.5 text-slate-700">
-      {r.reason === 'inactivity' ? (
-        <>
-          <Clock className="h-3.5 w-3.5 text-amber-500" />
-          <span>Inactive {r.inactivityMinutes} min during shift</span>
-        </>
-      ) : r.reason === 'under_4_hours' ? (
-        <>
-          <Clock className="h-3.5 w-3.5 text-rose-500" />
-          <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
-        </>
-      ) : (
-        <>
-          <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
-          <span>Did not start a shift</span>
-        </>
-      )}
-    </span>
-  );
+  //
+  // Always re-checks live leave coverage first, rather than trusting the
+  // record's frozen `reason` — runAbsenceCheck only knew whether a leave
+  // was approved at the moment it scanned (a 5-day lookback), so a leave
+  // approved AFTER that scan leaves a stale no-show/under-4h/inactivity
+  // record behind for what is really now an approved leave day. Showing
+  // "Did not start a shift" for a day HR/Admin has since approved leave for
+  // is exactly the confusing case this fixes — it now reads as the leave
+  // it actually is, with its real type, instead of an unexplained no-show.
+  const AbsenceReasonLabel = ({ r }: { r: AbsenceRecord }) => {
+    const coveringLeave = getApprovedLeaveOnDate(leaves, r.employeeName, r.date);
+    if (coveringLeave) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-emerald-700">
+          <CalendarCheck2 className="h-3.5 w-3.5 text-emerald-500" />
+          <span>Leave ({coveringLeave.type}) — approved after this was recorded</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 text-slate-700">
+        {r.reason === 'inactivity' ? (
+          <>
+            <Clock className="h-3.5 w-3.5 text-amber-500" />
+            <span>Inactive {r.inactivityMinutes} min during shift</span>
+          </>
+        ) : r.reason === 'under_4_hours' ? (
+          <>
+            <Clock className="h-3.5 w-3.5 text-rose-500" />
+            <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
+          </>
+        ) : (
+          <>
+            <CalendarX2 className="h-3.5 w-3.5 text-rose-500" />
+            <span>Did not start a shift</span>
+          </>
+        )}
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-4 md:space-y-6 font-sans">
@@ -810,7 +840,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           <tr key={r.id} className="hover:bg-slate-50/50">
                             <td className="px-5 py-3 font-mono font-bold text-slate-700">{r.date}</td>
                             <td className="px-5 py-3"><AbsenceReasonLabel r={r} /></td>
-                            <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')}</td>
+                            <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</td>
                             <td className="px-5 py-3 text-center">
                               {r.acknowledged
                                 ? <Badge variant="success"><span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Seen</span></Badge>
@@ -833,7 +863,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             : <Badge variant="warning">Pending</Badge>}
                         </div>
                         <p className="text-xs text-slate-600"><AbsenceReasonLabel r={r} /></p>
-                        <p className="text-xs font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')} deducted</p>
+                        <p className="text-xs font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')} deducted</p>
                       </div>
                     ))}
                   </div>
@@ -863,7 +893,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {employeeAbsenceSummaries.map(emp => {
-                        const deducted = emp.records.reduce((s, r) => s + r.deductionAmount, 0);
+                        const deducted = emp.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
                         const pending = emp.records.filter(r => !r.acknowledged).length;
                         return (
                           <tr key={emp.employeeEmail} className="hover:bg-slate-50/50 transition-colors">
@@ -892,7 +922,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 {/* Mobile cards */}
                 <div className="md:hidden divide-y divide-slate-100">
                   {employeeAbsenceSummaries.map(emp => {
-                    const deducted = emp.records.reduce((s, r) => s + r.deductionAmount, 0);
+                    const deducted = emp.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
                     const pending = emp.records.filter(r => !r.acknowledged).length;
                     return (
                       <button
@@ -931,7 +961,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 <h3 className="text-base font-bold text-slate-900">{selectedEmployeeAbsences.employeeName}</h3>
                 <p className="text-xs text-slate-500 font-mono">
                   {selectedEmployeeAbsences.employeeEmail} • {selectedEmployeeAbsences.records.length} absence record{selectedEmployeeAbsences.records.length > 1 ? 's' : ''} •{' '}
-                  {formatMoney(selectedEmployeeAbsences.records.reduce((s, r) => s + r.deductionAmount, 0), 'Pakistan')} deducted
+                  {formatMoney(selectedEmployeeAbsences.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} deducted
                 </p>
               </div>
               <button
@@ -954,7 +984,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                       {empSelectedCount} record{empSelectedCount > 1 ? 's' : ''} selected
                       {' '}—{' '}
                       {formatMoney(
-                        selectedEmployeeAbsences.records.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + r.deductionAmount, 0),
+                        selectedEmployeeAbsences.records.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + effectiveDeductionAmount(r), 0),
                         'Pakistan'
                       )}{' '}to reverse
                     </span>
@@ -1007,7 +1037,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-rose-600">{formatMoney(r.deductionAmount, 'Pakistan')}</span>
+                    <span className="text-xs font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</span>
                     {r.acknowledged
                       ? <Badge variant="success">Seen</Badge>
                       : <Badge variant="warning">Pending</Badge>}

@@ -230,7 +230,7 @@ export default function HRPayrollPage() {
       <div className="hidden md:block">
         <Card className="overflow-hidden p-0 border border-slate-200">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[950px] text-sm text-left border-collapse">
+            <table className="w-full min-w-[1300px] text-sm text-left border-collapse">
               <thead className="text-xs font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4">Employee Details</th>
@@ -255,6 +255,18 @@ export default function HRPayrollPage() {
                       <td className="px-6 py-4">
                         <div className="font-semibold text-slate-900">{emp.name}</div>
                         <div className="text-xs text-slate-500 mt-0.5">{emp.role}</div>
+                        {/* Informational only — a prior month's still-unpaid
+                            net pay ("Complete Payout" never clicked for it).
+                            Deliberately NOT added into this row's own
+                            baseSalary/Net Payable (see PayrollRecord.
+                            pendingArrears's comment): each month must stand
+                            on its own, this is just a pointer telling HR an
+                            old record still needs processing. */}
+                        {emp.pendingArrears > 0 && (
+                          <div className="text-[9px] text-amber-600 font-bold uppercase mt-1">
+                            {formatMoney(emp.pendingArrears, emp.region)} arrears owed (prior month unpaid)
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right font-medium text-slate-900">
                         {formatMoney(emp.baseSalary, emp.region)}
@@ -389,6 +401,11 @@ export default function HRPayrollPage() {
                 <div>
                   <p className="text-sm font-bold text-slate-900">{emp.name}</p>
                   <p className="text-xs text-slate-500">{emp.role}</p>
+                  {emp.pendingArrears > 0 && (
+                    <p className="text-[9px] text-amber-600 font-bold uppercase mt-1">
+                      {formatMoney(emp.pendingArrears, emp.region)} arrears owed (prior month unpaid)
+                    </p>
+                  )}
                 </div>
                 {emp.processed ? <Badge variant="success">Completed</Badge> : <Badge variant="warning">Pending</Badge>}
               </div>

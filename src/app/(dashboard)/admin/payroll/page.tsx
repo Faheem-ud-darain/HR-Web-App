@@ -280,6 +280,15 @@ export default function AdminPayrollPage() {
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-900">{p.name}</div>
                       <div className="text-xs text-slate-500 mt-0.5">{p.role}</div>
+                      {/* Informational only — see PayrollRecord.pendingArrears's
+                          comment. Never folded into this row's own Net
+                          Payable; just flags an old unpaid month HR/Admin
+                          still needs to process. */}
+                      {p.pendingArrears > 0 && (
+                        <div className="text-[9px] text-amber-600 font-bold uppercase mt-1">
+                          {formatMoney(p.pendingArrears, p.region)} arrears owed (prior month unpaid)
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right font-semibold text-slate-900">{formatMoney(netPayable, p.region)}</td>
                     <td className="px-6 py-4 text-right">
@@ -328,6 +337,11 @@ export default function AdminPayrollPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900">{p.name}</p>
                     <p className="text-xs text-slate-500">{p.role}</p>
+                    {p.pendingArrears > 0 && (
+                      <p className="text-[9px] text-amber-600 font-bold uppercase mt-1">
+                        {formatMoney(p.pendingArrears, p.region)} arrears owed (prior month unpaid)
+                      </p>
+                    )}
                   </div>
                   {p.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Pending</Badge>}
                 </div>

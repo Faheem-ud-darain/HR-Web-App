@@ -143,7 +143,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // buttons themselves wrapped/cropped inside the table's own horizontal
   // scrollbar. Covers all three roles that render TrackingView: HR/Admin's
   // own pages plus the read-only Team Lead view.
-  const isWideTableScreen = pathname?.endsWith('/tracking') || pathname?.endsWith('/team-tracking');
+  // HR's Payroll Ledger (hr/payroll/page.tsx) has the same problem: 10
+  // columns (Employee Details / Base Salary / Increment / Onboarding
+  // Penalty / Bonus / Deductions with itemized breakdown lines / Net
+  // Payable / Reserved Salary / Status / Action) squeezed into max-w-6xl
+  // left the rightmost columns (Status/Action) cropped off-screen on normal
+  // desktop widths, with no visible cue that a horizontal scrollbar existed
+  // to reach them.
+  const isWideTableScreen = pathname?.endsWith('/tracking') || pathname?.endsWith('/team-tracking') || pathname?.endsWith('/hr/payroll');
   // When the ticket conversation panel is open it calls pushModal() (see
   // TicketsView.tsx) — subscribe to that signal so we can switch the tickets
   // screen's <main> to overflow-hidden while it's open. Without this, the

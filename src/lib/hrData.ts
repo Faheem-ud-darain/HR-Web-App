@@ -488,6 +488,22 @@ export interface PayrollRecord {
   // — see its own comment in computePayrollView for why it can sum to
   // MORE when the safety-net cap has kicked in.
   deductionBreakdown: { label: string; amount: number }[];
+  // NOT a persisted column (same reasoning as reservedThisMonth) — the sum
+  // of this employee's OTHER hr_payroll rows that are still `!processed`
+  // (any month other than this record's own `month`). Purely informational:
+  // it tells HR/Admin "there is still X unpaid from a prior month sitting
+  // out there", but is deliberately NEVER folded into this month's
+  // baseSalary/deductions/net-pay math. It used to be (see
+  // computePayrollView's old totalBaseWithArrears), which silently pulled a
+  // prior month's already-absence-deducted net pay into the CURRENT
+  // month's base salary the moment that prior month rolled past its
+  // processing window without being marked "Complete Payout" — so an
+  // employee's September numbers (and September's own absence deductions)
+  // were quietly inflated by whatever August still owed. Each month's
+  // figures must stand on their own; unpaid prior months are surfaced here
+  // instead, for HR to resolve by actually processing that old record (at
+  // which point it stops counting toward this).
+  pendingArrears: number;
 }
 
 // A single day an employee was auto-marked absent, with a specific reason —
@@ -1193,6 +1209,7 @@ function toPayroll(p: any): PayrollRecord {
     // output directly without going through computePayrollView.
     reservedThisMonth: 0,
     deductionBreakdown: [],
+    pendingArrears: 0,
   };
 }
 function toTeam(t: any): Team {
@@ -1899,15 +1916,30 @@ export function isWeekday(dateStr: string): boolean {
 // (parseLeaveDates) spans it — compared as NY calendar dates, not raw Date
 // object equality, since parseLeaveDates' Date objects don't carry the
 // fixed-timezone treatment the rest of the app's dates do.
-export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
-  return leaves.some(l => {
-    if (l.employeeName !== fullName || l.status !== 'approved') return false;
+//
+// Returns the actual LeaveApplication (so callers can read its `type` —
+// Urgent/Normal/PTO/Sick Leave/Parental Leave) rather than just a boolean.
+// This matters for AbsenceRecord display/payroll: runAbsenceCheck only
+// checks "is there ANY approved leave covering this date" at the moment it
+// scans (a 5-day lookback), so a leave application approved AFTER that scan
+// already ran leaves behind a stale AbsenceRecord — reason 'no_clock_in' /
+// 'under_4_hours' / 'inactivity' — for a day that turned out to be a real,
+// approved leave day. Every place that shows or charges for that record
+// needs to re-check leave coverage live, not trust the frozen `reason`.
+export function getApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): LeaveApplication | null {
+  for (const l of leaves) {
+    if (l.employeeName !== fullName || l.status !== 'approved') continue;
     const dates = parseLeaveDates(l.duration);
-    if (!dates) return false;
+    if (!dates) continue;
     const startStr = getNYDateString(dates.start);
     const endStr = getNYDateString(dates.end);
-    return dateStr >= startStr && dateStr <= endStr;
-  });
+    if (dateStr >= startStr && dateStr <= endStr) return l;
+  }
+  return null;
+}
+
+export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
+  return getApprovedLeaveOnDate(leaves, fullName, dateStr) !== null;
 }
 
 // Per explicit product decision: only Pakistan-region employees are subject
@@ -2013,12 +2045,24 @@ export function getAbsenceDeductionForMonth(
   absenceRecords: AbsenceRecord[],
   employeeEmail: string,
   currentBaseSalary: number,
-  monthKey: string
+  monthKey: string,
+  leaves: LeaveApplication[] = []
 ): number {
   const wanted = (employeeEmail || '').toLowerCase();
-  const count = absenceRecords.filter(
-    a => a.employeeEmail.toLowerCase() === wanted && a.date.slice(0, 7) === monthKey
-  ).length;
+  const count = absenceRecords.filter(a => {
+    if (a.employeeEmail.toLowerCase() !== wanted) return false;
+    if (a.date.slice(0, 7) !== monthKey) return false;
+    // Skip any absence record whose date turned out to be covered by an
+    // approved leave — see getApprovedLeaveOnDate's comment. runAbsenceCheck
+    // only checked leave status at scan time, so a leave approved afterward
+    // leaves a stale 'no_clock_in'/'under_4_hours'/'inactivity' record
+    // behind for what is actually now a leave day. That day is already
+    // charged (at the correct Urgent/Normal rate, or not at all for
+    // PTO/Sick/Parental) via the Urgent/Normal Leave deduction above —
+    // counting it here too would double-charge the same day.
+    if (getApprovedLeaveOnDate(leaves, a.employeeName, a.date)) return false;
+    return true;
+  }).length;
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
   const raw = Math.round(count * 2 * dailyRate);
   return Number.isFinite(raw) ? Math.max(0, raw) : 0;
@@ -3351,28 +3395,37 @@ export const hrActions = {
         // 3. Absence Deductions — see getAbsenceDeductionForMonth's own
         // comment for why this is recomputed from the employee's current
         // base salary instead of summing each record's frozen snapshot.
-        const absenceDeduction = getAbsenceDeductionForMonth(absenceRecords, emp.email, emp.baseSalary, targetMonthKey);
+        const absenceDeduction = getAbsenceDeductionForMonth(absenceRecords, emp.email, emp.baseSalary, targetMonthKey, leaves);
 
         // 3b. Shift Shortfall Deductions — see getShiftShortfallDeduction's
         // comment. Covers the 4h-8h partial-shift range that absence
         // detection (< 4h only) never touched at all.
         const shiftShortfallDeduction = getShiftShortfallDeduction(timesheets, absenceRecords, leaves, emp, emp.baseSalary, targetMonthKey);
 
-        // 4. Calculate Prior Month Unpaid Salary Arrears (Rollover)
-        // If employee has unprocessed payroll from previous months (e.g. joined late in July and unpaid), carry over as Arrears
-        const priorUnpaidArrears = existingPayroll
+        // 4. Prior Month Unpaid Salary Arrears — informational only.
+        // If this employee has other hr_payroll rows (any month besides
+        // this one) still sitting `!processed`, sum what they'd have paid
+        // out (baseSalary + bonus - deductions + incrementAmount) so HR/
+        // Admin can see "there's still X unpaid from a prior month" and go
+        // process that old record directly. Deliberately NOT added into
+        // this month's baseSalary/deductions/net-pay — see
+        // PayrollRecord.pendingArrears's comment for why folding it in used
+        // to quietly inflate (and re-trigger absence-deduction confusion
+        // on) the CURRENT month's numbers with a prior month's already-
+        // settled deduction math. Each month's own effectiveBaseSalary
+        // (this month's proration only) is what actually gets paid now;
+        // pendingArrears is just a pointer at old unpaid rows, never a
+        // second source of truth for what this month's pay is.
+        const pendingArrears = existingPayroll
           .filter(p => p.employeeId === emp.id && !p.processed && p.id !== existing?.id)
           .reduce((acc, p) => acc + (p.baseSalary + p.bonus - p.deductions + p.incrementAmount), 0);
 
-        // If employee joined late in the month (after day 5) and July hasn't been processed, the prorated salary carries into bonus/base
-        const totalBaseWithArrears = effectiveBaseSalary + priorUnpaidArrears;
-
         // Combined deductions for the month — floored at 0 (a deduction can
         // never subtract a negative amount, i.e. add to pay) and capped at
-        // this month's own base salary (effectiveBaseSalary, deliberately
-        // NOT totalBaseWithArrears — arrears are a separate carry-over
-        // concept and shouldn't raise or lower how much THIS month's
-        // deductions are allowed to eat into THIS month's pay). This is the
+        // this month's own base salary (effectiveBaseSalary — pendingArrears
+        // is purely informational now and never enters this month's pay
+        // math at all, so there's nothing else it could be capped against).
+        // This is the
         // safety net for exactly the scenario that prompted it: a leftover
         // bad/stale deduction (or several) summing to far more than the
         // employee's actual salary and producing a nonsensical net pay.
@@ -3420,12 +3473,13 @@ export const hrActions = {
           return {
             ...existing,
             region: emp.region,
-            baseSalary: existing.processed ? existing.baseSalary : totalBaseWithArrears,
+            baseSalary: existing.processed ? existing.baseSalary : effectiveBaseSalary,
             deductions: combinedDeductions,
             incrementAmount: existing.processed ? existing.incrementAmount : pendingIncrement,
             month: targetMonthKey,
             reservedThisMonth,
             deductionBreakdown,
+            pendingArrears,
           };
         }
 
@@ -3435,13 +3489,14 @@ export const hrActions = {
           name: emp.fullName,
           role: emp.jobTitle || 'Staff',
           region: emp.region,
-          baseSalary: totalBaseWithArrears,
+          baseSalary: effectiveBaseSalary,
           unpaidLeaves: emp.onboardingCompleted ? 0 : 2,
           bonus: 0,
           deductions: combinedDeductions,
           incrementAmount: pendingIncrement,
           processed: false,
           month: targetMonthKey,
+          pendingArrears,
           reservedThisMonth,
           deductionBreakdown,
         };

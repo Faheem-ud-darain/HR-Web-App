@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { usePayrollSelf, useMyAbsenceRecords, formatMoney, getMissedIncrementEvents, getIncrementHistory } from '@/lib/hrData';
+import { usePayrollSelf, useMyAbsenceRecords, useLeaves, getApprovedLeaveOnDate, formatMoney, getMissedIncrementEvents, getIncrementHistory } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
@@ -35,6 +35,11 @@ export default function EmployeeSalaryPage() {
   // Profile.
   const { data: payrollSelf } = usePayrollSelf();
   const { data: myAbsenceRecords = [] } = useMyAbsenceRecords();
+  // Needed only to re-check live leave coverage for each absence record below
+  // (see reasonLabel's comment) — a leave approved AFTER runAbsenceCheck
+  // already scanned that day leaves a stale no-show/under-4h/inactivity
+  // record behind for what is really now an approved leave day.
+  const { data: leaves = [] } = useLeaves();
   const userProfile = payrollSelf
     ? {
         id: payrollSelf.id,
@@ -107,12 +112,26 @@ export default function EmployeeSalaryPage() {
     })
     .sort((a, b) => b.date.localeCompare(a.date));
 
+  // Always re-checks live leave coverage first, rather than trusting the
+  // record's frozen `reason` — see the comment on the `leaves` hook above.
+  // A day that's really an approved Leave now reads as that leave and its
+  // type, not as an unexplained "didn't start a shift".
   const reasonLabel = (r: typeof thisMonthDeductions[number]): string => {
+    const coveringLeave = userProfile ? getApprovedLeaveOnDate(leaves, userProfile.fullName, r.date) : null;
+    if (coveringLeave) return `On Leave (${coveringLeave.type}) — approved after this was recorded`;
     if (r.reason === 'no_clock_in') return "Didn't start a shift that day";
     if (r.reason === 'under_4_hours') return `Shift under 4 hours worked${r.workedMinutes != null ? ` (${Math.round(r.workedMinutes)} min)` : ''}`;
     if (r.reason === 'inactivity') return `Mouse inactive 30+ min during shift${r.inactivityMinutes != null ? ` (${Math.round(r.inactivityMinutes)} min)` : ''}`;
     return r.reason;
   };
+
+  // Matches getAbsenceDeductionForMonth's own exclusion — a leave-covered
+  // record is kept for history (see AbsenceDetailsView's leave-protected-
+  // delete popup) but is no longer actually charged as an absence; showing
+  // its old frozen deductionAmount here would contradict the real payroll
+  // total above it.
+  const reasonAmount = (r: typeof thisMonthDeductions[number]): number =>
+    (userProfile && getApprovedLeaveOnDate(leaves, userProfile.fullName, r.date)) ? 0 : r.deductionAmount;
 
   const incrementHistory = userProfile ? getIncrementHistory(userProfile) : { originalBaseSalary: 0, events: [] };
   const missedYears = userProfile ? getMissedIncrementEvents(userProfile) : 0;
@@ -202,7 +221,7 @@ export default function EmployeeSalaryPage() {
                       <p className="text-[11px] text-slate-500 leading-snug">{reasonLabel(r)}</p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-rose-600 shrink-0">-{formatMoney(r.deductionAmount, userProfile?.region)}</span>
+                  <span className="text-xs font-bold text-rose-600 shrink-0">-{formatMoney(reasonAmount(r), userProfile?.region)}</span>
                 </div>
               ))}
             </div>
@@ -211,7 +230,7 @@ export default function EmployeeSalaryPage() {
           {thisMonthDeductions.length > 0 && (
             <div className="flex justify-between items-center pt-1 text-xs font-bold text-slate-700">
               <span>Total deducted this month so far</span>
-              <span className="text-rose-600">-{formatMoney(thisMonthDeductions.reduce((sum, r) => sum + r.deductionAmount, 0), userProfile?.region)}</span>
+              <span className="text-rose-600">-{formatMoney(thisMonthDeductions.reduce((sum, r) => sum + reasonAmount(r), 0), userProfile?.region)}</span>
             </div>
           )}
         </CardContent>

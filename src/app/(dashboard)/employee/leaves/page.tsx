@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, calculateTenure, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
+import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -105,38 +105,19 @@ export default function EmployeeLeavesPage() {
       return;
     }
 
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 3600 * 24)) + 1;
-
-    // 1. Parental Leave Validations
-    if (leaveType === 'parental_leave') {
-      if (!userProfile) return;
-      if (userProfile.gender !== 'female') {
-        setError('Parental leave is only available to female employees.');
-        return;
-      }
-      const tenure = calculateTenure(userProfile.joinedDate);
-      if (tenure.totalMonths < 12) {
-        setError('Parental leave requires at least 1 year (12 months) of continuous service at DelCargo.');
-        return;
-      }
-      if (diffDays !== 30) {
-        setError('Parental leave requests must be submitted for exactly 30 days.');
-        return;
-      }
-    }
-
-    // 2. PTO / Sick Leave are disabled for new requests (2026-09-03 policy
-    // change) — history stays visible (existing PTO/Sick records are never
-    // deleted or hidden), but neither is selectable in the dropdown below
-    // and both are blocked here too as a hard backstop in case a stale
-    // client ever posts one of those values directly.
-    if (leaveType === 'pto' || leaveType === 'sick') {
-      setError('PTO and Sick Leave are no longer available. Please use Urgent or Normal leave instead.');
+    // 1. PTO / Sick Leave / Parental Leave are all disabled for new requests
+    // (Parental Leave joined PTO/Sick as of this policy update — only
+    // Urgent and Normal leave remain selectable for now) — history stays
+    // visible (existing PTO/Sick/Parental Leave records are never deleted
+    // or hidden), but none of the three is offered in the dropdown below,
+    // and all three are blocked here too as a hard backstop in case a
+    // stale client ever posts one of those values directly.
+    if (leaveType === 'pto' || leaveType === 'sick' || leaveType === 'parental_leave') {
+      setError('Only Urgent and Normal leave are available for new requests right now.');
       return;
     }
 
-    // 3. Normal Leave Validations — the PTO/Sick-Leave replacement: must be
+    // 2. Normal Leave Validations — the PTO/Sick-Leave replacement: must be
     // submitted at least 14 days in advance, no other restriction on
     // duration or how many can be taken. Deducts 1 day's pay per day taken
     // (see hrData.ts computePayrollView's Normal-leave deduction comment).
@@ -151,7 +132,7 @@ export default function EmployeeLeavesPage() {
       }
     }
 
-    // 4. Urgent Leave — no advance-notice requirement (can be submitted any
+    // 3. Urgent Leave — no advance-notice requirement (can be submitted any
     // time), deducts 2 days' pay per day taken. No extra validation needed
     // beyond the shared start/end date checks above.
 
@@ -159,7 +140,7 @@ export default function EmployeeLeavesPage() {
       date.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     const durationStr = `${formatDate(start)} - ${formatDate(end)}`;
 
-    const newLeaveType: LeaveApplication['type'] = leaveType === 'parental_leave' ? 'Parental Leave' : leaveType === 'normal' ? 'Normal' : 'Urgent';
+    const newLeaveType: LeaveApplication['type'] = leaveType === 'normal' ? 'Normal' : 'Urgent';
     const newLeave: Omit<LeaveApplication, 'id'> = {
       employeeName: userProfile?.fullName || 'Employee',
       type: newLeaveType,
@@ -449,9 +430,6 @@ export default function EmployeeLeavesPage() {
             >
               <option value="urgent">Urgent Leave (any time, deducts 2 days pay/day)</option>
               <option value="normal">Normal Leave (14 days notice, deducts 1 day pay/day)</option>
-              {userProfile?.gender === 'female' && (
-                <option value="parental_leave">Parental Leave (30 Days)</option>
-              )}
             </select>
           </div>
 
