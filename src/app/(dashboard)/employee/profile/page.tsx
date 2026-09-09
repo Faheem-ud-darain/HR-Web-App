@@ -18,6 +18,7 @@ import {
   KeyRound, CheckCircle2, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
 } from 'lucide-react';
 import { formatDateNY } from '@/lib/timezone';
+import { Button } from '@/components/ui/Button';
 
 export default function EmployeeProfilePage() {
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
@@ -417,12 +418,14 @@ export default function EmployeeProfilePage() {
                 className="hidden"
               />
             </div>
-            <button
+            <Button
+              variant="secondary"
+              size="md"
               onClick={() => setIsResetOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2.5 md:py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
+              className="border border-slate-200"
             >
               <KeyRound className="h-3.5 w-3.5" /> Reset Password
-            </button>
+            </Button>
           </div>
 
           <h2 className="text-xl font-bold text-slate-900">{profile.fullName}</h2>
@@ -479,12 +482,14 @@ export default function EmployeeProfilePage() {
           <Card className="border border-slate-200 p-0 overflow-hidden">
             <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-sm">Bank Details</h3>
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={openBankEdit}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
+                className="border border-slate-200"
               >
                 <Pencil className="h-3.5 w-3.5" /> Edit
-              </button>
+              </Button>
             </div>
             {myDocs?.bankName ? (
               <div className="divide-y divide-slate-100">
@@ -527,12 +532,14 @@ export default function EmployeeProfilePage() {
           <Card className="border border-slate-200 p-0 overflow-hidden">
             <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-900 text-sm">Contact Numbers</h3>
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={openPhoneEdit}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
+                className="border border-slate-200"
               >
                 <Pencil className="h-3.5 w-3.5" /> Edit
-              </button>
+              </Button>
             </div>
             {myDocs?.personalPhone || myDocs?.companyPhone ? (
               <div className="divide-y divide-slate-100">
@@ -577,12 +584,14 @@ export default function EmployeeProfilePage() {
                   <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => setIsResetOpen(true)}
-                className="w-full sm:w-auto flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm"
+                className="w-full sm:w-auto flex-shrink-0"
               >
                 Change Password
-              </button>
+              </Button>
             </div>
           </Card>
         </div>
@@ -611,13 +620,15 @@ export default function EmployeeProfilePage() {
                     <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.cvFileName || 'Not uploaded yet'}</p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={() => cvInputRef.current?.click()}
                   disabled={docBusy === 'cv'}
-                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                  className="flex-shrink-0 border border-slate-200"
                 >
                   <Upload className="h-3.5 w-3.5" /> {docBusy === 'cv' ? 'Uploading…' : myDocs?.cvFileName ? 'Replace' : 'Upload'}
-                </button>
+                </Button>
                 <input ref={cvInputRef} type="file" accept="image/*,application/pdf" onChange={handleCvUpload} className="hidden" />
               </div>
 
@@ -628,13 +639,15 @@ export default function EmployeeProfilePage() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
                     <p className="text-xs text-slate-500 mt-0.5">{(myDocs?.identityDocs || []).length} document(s) on file</p>
                   </div>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="md"
                     onClick={() => idInputRef.current?.click()}
                     disabled={docBusy === 'id'}
-                    className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                    className="flex-shrink-0 border border-slate-200"
                   >
                     <Upload className="h-3.5 w-3.5" /> {docBusy === 'id' ? 'Uploading…' : 'Add Document'}
-                  </button>
+                  </Button>
                   <input ref={idInputRef} type="file" accept="image/*,application/pdf" onChange={handleIdUpload} className="hidden" />
                 </div>
                 {(myDocs?.identityDocs || []).length > 0 && (
@@ -655,13 +668,15 @@ export default function EmployeeProfilePage() {
                     <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.passportFileName || 'Not uploaded yet'}</p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={() => passportInputRef.current?.click()}
                   disabled={docBusy === 'passport'}
-                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 disabled:opacity-60"
+                  className="flex-shrink-0 border border-slate-200"
                 >
                   <Upload className="h-3.5 w-3.5" /> {docBusy === 'passport' ? 'Uploading…' : myDocs?.passportFileName ? 'Replace' : 'Upload'}
-                </button>
+                </Button>
                 <input ref={passportInputRef} type="file" accept="image/*,application/pdf" onChange={handlePassportUpload} className="hidden" />
               </div>
             </div>
@@ -712,19 +727,21 @@ export default function EmployeeProfilePage() {
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <button
+            <Button
+              variant="secondary"
+              size="md"
               onClick={() => setShowDeleteAccountModal(false)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="danger"
+              size="md"
               onClick={handleRequestAccountDeletion}
               disabled={isRequestingDeletion}
-              className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
             >
               {isRequestingDeletion ? 'Sending…' : 'Send Deletion Request'}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -766,7 +783,7 @@ export default function EmployeeProfilePage() {
           </div>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <button type="button" disabled={isResetting} onClick={() => setIsResetOpen(false)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+            <Button type="button" variant="outline" size="md" disabled={isResetting} onClick={() => setIsResetOpen(false)}>Cancel</Button>
             <button type="submit" disabled={isResetting} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isResetting ? 'Updating…' : 'Update Password'}</button>
           </div>
         </form>
@@ -818,7 +835,7 @@ export default function EmployeeProfilePage() {
           </p>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <button type="button" disabled={isSavingBank} onClick={() => setIsBankEditOpen(false)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+            <Button type="button" variant="outline" size="md" disabled={isSavingBank} onClick={() => setIsBankEditOpen(false)}>Cancel</Button>
             <button type="submit" disabled={isSavingBank} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingBank ? 'Saving…' : 'Save Bank Details'}</button>
           </div>
         </form>
@@ -858,7 +875,7 @@ export default function EmployeeProfilePage() {
           </p>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <button type="button" disabled={isSavingPhone} onClick={() => setIsPhoneEditOpen(false)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+            <Button type="button" variant="outline" size="md" disabled={isSavingPhone} onClick={() => setIsPhoneEditOpen(false)}>Cancel</Button>
             <button type="submit" disabled={isSavingPhone} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingPhone ? 'Saving…' : 'Save Contact Numbers'}</button>
           </div>
         </form>

@@ -25,6 +25,7 @@ import {
 import { API_BASE } from '@/lib/apiBase';
 import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle, Smartphone } from 'lucide-react';
 import { OtpInput } from '@/components/ui/OtpInput';
+import { Button } from '@/components/ui/Button';
 
 export default function AuthPage() {
   // Same cold-start problem as the root page: if the WebView happens to
@@ -478,14 +479,16 @@ export default function AuthPage() {
               <div className="bg-rose-50 text-rose-600 p-3 rounded-lg text-sm font-semibold mb-4 border border-rose-100">
                 <p>{error}</p>
                 {sessionConflict && (
-                  <button
+                  <Button
                     type="button"
+                    variant="danger"
+                    size="sm"
                     onClick={handleForceLoginEverywhere}
                     disabled={loading}
-                    className="mt-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors"
+                    className="mt-2"
                   >
                     {loading ? 'Logging out everywhere…' : 'Log out from everywhere and sign in here'}
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -594,13 +597,14 @@ export default function AuthPage() {
               {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <p className="text-[11px] text-slate-400 font-semibold">Still stuck? Email hr@delcargo.us</p>
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleRequestOtp}
                   disabled={forgotLoading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
                 >
                   {forgotLoading ? 'Sending…' : 'Send Code'}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -652,13 +656,14 @@ export default function AuthPage() {
                 >
                   Use a different email
                 </button>
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleVerifyOtp}
                   disabled={forgotLoading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
                 >
                   {forgotLoading ? 'Verifying…' : 'Continue'}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -707,13 +712,14 @@ export default function AuthPage() {
                 >
                   Back
                 </button>
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleSubmitReset}
                   disabled={forgotLoading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
                 >
                   {forgotLoading ? 'Resetting…' : 'Reset Password'}
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -727,17 +733,18 @@ export default function AuthPage() {
                 </p>
               </div>
               <div className="flex justify-end pt-2 border-t border-slate-200">
-                <button
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={() => {
                     setEmail(forgotEmail);
                     setPassword('');
                     setIsForgotOpen(false);
                     resetForgotFlow();
                   }}
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
                 >
                   Back to Login
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -753,15 +760,16 @@ export default function AuthPage() {
             </p>
           </div>
           <div className="flex justify-end pt-2 border-t border-slate-200">
-            <button
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => {
                 setShiftStoppedNotice(false);
                 if (pendingDashRoute) router.push(`/${pendingDashRoute}`);
               }}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
             >
               Continue to Dashboard
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
