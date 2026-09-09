@@ -18,6 +18,7 @@ import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
 import { formatTimeNY, formatDateNY } from '@/lib/timezone';
+import { Button } from '@/components/ui/Button';
 
 const PRIORITY_STYLES: Record<Task['priority'], string> = {
   high:   'bg-rose-100 text-rose-800 border-rose-200',
@@ -930,12 +931,14 @@ export default function EmployeeDashboard() {
               ) : geoPermission === 'denied' ? (
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[10px] text-rose-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
-                  <button
+                  <Button
+                    variant="danger"
+                    size="sm"
                     onClick={() => window.location.reload()}
-                    className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] transition-colors transition-transform active:scale-97"
+                    className="shrink-0"
                   >
                     Retry
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <p className="text-[9px] text-slate-400 leading-relaxed">Your shift starts and ends automatically as you enter or leave an assigned warehouse's geofence — no manual check-in needed.</p>
@@ -1314,12 +1317,15 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl font-bold text-center text-sm">
                 <Gift className="h-4 w-4 shrink-0" /> Referral Bonus: PKR 10,000
               </div>
-              <button 
-                onClick={() => router.push('/employee/careers')} 
-                className="w-full bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 md:py-2 rounded-lg text-xs hover:bg-slate-100 transition-colors transition-transform active:scale-97 text-center"
+              <Button
+                variant="outline"
+                size="md"
+                fullWidth
+                onClick={() => router.push('/employee/careers')}
+                className="text-center"
               >
                 View open positions to refer →
-              </button>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1341,12 +1347,13 @@ export default function EmployeeDashboard() {
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setShowMobileBlockedModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1365,18 +1372,20 @@ export default function EmployeeDashboard() {
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => router.push('/employee/tracker')}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Go to Tracker Setup
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setShowTrackerRequiredModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1397,18 +1406,20 @@ export default function EmployeeDashboard() {
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => router.push('/employee/tracker')}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Go to Tracker Setup
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setShowTrackerUpdateRequiredModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1431,18 +1442,20 @@ export default function EmployeeDashboard() {
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => router.push('/employee/tracker')}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Go to Tracker Setup
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setShowTrackerReconnectRequiredModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1468,18 +1481,20 @@ export default function EmployeeDashboard() {
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => router.push(shiftStopReason === 'inactivity_absence' ? '/employee/absences' : '/employee/tracker')}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 {shiftStopReason === 'inactivity_absence' ? 'View Absent Details' : 'Go to Tracker Setup'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setShiftStopModal(false)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1537,13 +1552,14 @@ export default function EmployeeDashboard() {
                   Mark Completed
                 </button>
               )}
-              <button
+              <Button
+                variant="outline"
+                size="md"
                 onClick={() => setSelectedTask(null)}
                 disabled={isUpdatingTaskStatus}
-                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1647,12 +1663,13 @@ export default function EmployeeDashboard() {
             </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-200">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setSelectedReviewEmp(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2 rounded-lg text-xs"
               >
                 Close Logs
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

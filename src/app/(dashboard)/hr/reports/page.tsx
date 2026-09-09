@@ -11,6 +11,7 @@ import { UserProfileModal } from '@/components/ui/UserProfileModal';
 import { DocumentsModal } from '@/components/ui/DocumentsModal';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
+import { Button } from '@/components/ui/Button';
 
 export default function ReportsPage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -414,12 +415,13 @@ export default function ReportsPage() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => { setSelectedReviewEmp(null); setReviewEntries([]); }}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2 rounded-lg text-xs transition-colors"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

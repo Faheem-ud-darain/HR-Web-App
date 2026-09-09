@@ -14,6 +14,7 @@ import { formatTimeNY } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
+import { Button } from '@/components/ui/Button';
 
 export default function ReportsPage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -435,21 +436,23 @@ export default function ReportsPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
-              <button
+              <Button
+                variant="outline"
+                size="md"
                 onClick={() => setSelectedEmp(null)}
                 disabled={isSavingAssignment}
-                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handleSaveAssignment}
                 disabled={isSavingAssignment}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-xs disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
                 {isSavingAssignment && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {isSavingAssignment ? 'Saving…' : 'Save Assignment'}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -568,12 +571,13 @@ export default function ReportsPage() {
             </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-200">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setSelectedReviewEmp(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2 rounded-lg text-xs"
               >
                 Close Logs
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
