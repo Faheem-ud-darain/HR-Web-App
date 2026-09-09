@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { Task, hrActions } from '@/lib/hrData';
 import { Trash2, CheckCircle2, RotateCcw, Clock, AlertTriangle, Briefcase, Calendar, User, Tag, Flag, ArrowRight, Building2, Loader2 } from 'lucide-react';
 
@@ -147,23 +148,25 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
         {/* Actions — full-width on mobile, auto on md+ */}
         <div className="flex flex-col md:flex-row flex-wrap gap-2 pt-4 border-t border-slate-200">
           {!readOnly && task.status !== 'done' && (
-            <button
+            <Button
+              variant="primary"
               onClick={cycleStatus}
               disabled={isWorking}
-              className="flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-3 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm min-h-[44px] md:min-h-0 w-full md:w-auto disabled:opacity-60 disabled:cursor-not-allowed"
+              className="!py-3 md:!py-2 shadow-sm active:scale-97 transition-transform min-h-[44px] md:min-h-0 w-full md:w-auto"
             >
               {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Mark as {STATUS_LABELS[STATUS_SEQUENCE[(STATUS_SEQUENCE.indexOf(task.status) + 1) % STATUS_SEQUENCE.length]]}
-            </button>
+            </Button>
           )}
           {!readOnly && task.status !== 'todo' && (
-            <button
+            <Button
+              variant="outline"
               onClick={handleReset}
               disabled={isWorking}
-              className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-3 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform min-h-[44px] md:min-h-0 w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              className="!py-3 md:!py-2 active:scale-97 transition-transform min-h-[44px] md:min-h-0 w-full md:w-auto"
             >
               {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset to To Do
-            </button>
+            </Button>
           )}
           {canDelete && (
             <button
