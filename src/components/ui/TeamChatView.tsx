@@ -11,6 +11,7 @@ import { ImageLightbox } from './ImageLightbox';
 import { OptimizedImage } from './OptimizedImage';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
+import { Button } from './Button';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -1462,23 +1463,25 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
             </div>
             {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}
             <div className="flex justify-end gap-2 pt-1">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="md"
                 disabled={forwarding}
                 onClick={() => { setForwardTarget(null); setForwardNote(''); setForwardError(''); }}
-                className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 disabled={forwarding}
                 onClick={submitForward}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
                 {forwarding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {forwarding ? 'Forwarding…' : 'Forward'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

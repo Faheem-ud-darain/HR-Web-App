@@ -17,6 +17,7 @@ import { useActionToast } from '@/components/ui/ActionToastHost';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { useNativeKeyboard } from '@/hooks/useNativeKeyboard';
+import { Button } from '@/components/ui/Button';
 
 // Converts an uploaded attachment File to a storable data URL: images are
 // compressed to WebP (max 3 MB), PDFs are stored as-is after a size check
@@ -650,12 +651,13 @@ export function TicketsView({ role }: TicketsViewProps) {
           <p className="text-slate-500 text-sm">Open support cases, seek assistance, and view ticket logs.</p>
         </div>
         {isEmp && (
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => setIsNewOpen(true)}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm"
           >
             <Plus className="h-4.5 w-4.5" /> File a Ticket
-          </button>
+          </Button>
         )}
       </div>
 
@@ -825,18 +827,21 @@ export function TicketsView({ role }: TicketsViewProps) {
 
             {allTickets && allTickets.length >= ticketLimit && (
               <div className="pt-2 pb-1 text-center">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
+                  fullWidth
                   onClick={() => setTicketLimit(prev => prev + 50)}
                   disabled={isFetchingTickets}
-                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 active:scale-98"
+                  className="border border-slate-200"
                 >
                   {isFetchingTickets ? (
                     <span>Loading more tickets…</span>
                   ) : (
                     <span>Load More Tickets (+50)</span>
                   )}
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -1248,7 +1253,7 @@ export function TicketsView({ role }: TicketsViewProps) {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-            <button type="button" disabled={isOpeningTicket} onClick={() => { setIsNewOpen(false); setNewTicketFile(null); setNewTicketFileError(''); }} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+            <Button type="button" variant="outline" size="md" disabled={isOpeningTicket} onClick={() => { setIsNewOpen(false); setNewTicketFile(null); setNewTicketFileError(''); }}>Cancel</Button>
             <button type="submit" disabled={isOpeningTicket} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
               {isOpeningTicket && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {isOpeningTicket ? 'Filing…' : 'File Ticket'}
@@ -1300,9 +1305,9 @@ export function TicketsView({ role }: TicketsViewProps) {
             </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-200">
-              <button onClick={() => setInspectEmployee(null)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs">
+              <Button variant="secondary" size="md" onClick={() => setInspectEmployee(null)}>
                 Close Inspector
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1343,23 +1348,25 @@ export function TicketsView({ role }: TicketsViewProps) {
             </div>
             {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}
             <div className="flex justify-end gap-2 pt-1">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="md"
                 disabled={isForwarding}
                 onClick={() => { setForwardingTicket(null); setForwardNote(''); setForwardError(''); }}
-                className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 disabled={isForwarding}
                 onClick={submitTicketForward}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
                 {isForwarding && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {isForwarding ? 'Forwarding…' : 'Forward'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

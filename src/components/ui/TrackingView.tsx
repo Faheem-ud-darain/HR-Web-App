@@ -27,6 +27,7 @@ import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, get
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/components/ui/Button';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Lock, ImageOff } from 'lucide-react';
 
 interface TrackingViewProps {
@@ -1023,20 +1024,22 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="danger"
+                size="md"
                 onClick={() => handleForceEndShift(forceEndShiftEmp)}
                 disabled={forceEndingShift}
-                className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 {forceEndingShift ? 'Ending Shift…' : 'Force End Shift'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setForceEndShiftEmp(null)}
                 disabled={forceEndingShift}
-                className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1064,20 +1067,22 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => handleForceDisconnectTracker(forceDisconnectEmp)}
                 disabled={revokingSetupCode}
-                className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 {revokingSetupCode ? 'Disconnecting…' : 'Force Disconnect'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => setForceDisconnectEmp(null)}
                 disabled={revokingSetupCode}
-                className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors transition-transform active:scale-97"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -1303,13 +1308,14 @@ AGENT_TOKEN=${settings.agentToken}`}
                   />
                 )}
               </div>
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handleExportZip}
                 disabled={viewerShots.length === 0 || exporting}
-                className="text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
               >
                 <Download className="h-3.5 w-3.5" /> {exporting ? 'Exporting…' : `Export ${viewerShots.length} as ZIP`}
-              </button>
+              </Button>
             </div>
 
             {/* Mouse Inactivity Summary — total idle time + when it happened,
