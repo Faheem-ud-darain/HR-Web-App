@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BellRing, BellOff } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
 
 // Shows a blocking-but-dismissible prompt whenever this device's push
@@ -62,20 +63,24 @@ export function PushPermissionPrompt() {
           </p>
         </div>
         <div className="flex flex-col gap-2 pt-2">
-          <button
+          <Button
+            variant="primary"
+            fullWidth
             onClick={handleEnable}
             disabled={requesting}
-            className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-70 text-white font-semibold px-4 py-2.5 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center justify-center gap-2"
+            className="active:scale-97 transition-transform"
           >
             <BellRing className="h-4 w-4" />
             {requesting ? 'Requesting…' : 'Enable Notifications'}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            fullWidth
             onClick={() => setShow(false)}
-            className="w-full bg-white border border-slate-200 text-slate-600 font-semibold px-4 py-2.5 rounded-lg text-sm active:scale-97 transition-transform"
+            className="active:scale-97 transition-transform"
           >
             Not Now
-          </button>
+          </Button>
         </div>
         <p className="text-[10px] text-slate-400 leading-relaxed">
           If nothing happens when you tap Enable, notifications were likely blocked before — open your phone&apos;s Settings → Apps → DelCargo Internal → Notifications and turn them on there.

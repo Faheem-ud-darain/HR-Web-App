@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { Button } from './Button';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -75,14 +76,15 @@ export function ConfirmDialog({
         )}
 
         <div className="flex gap-2 pt-1">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={onClose}
             disabled={loading}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 transition-shadow active:scale-97 transition-transform"
           >
             {cancelLabel}
-          </button>
+          </Button>
           <button
             type="button"
             disabled={isConfirmDisabled}

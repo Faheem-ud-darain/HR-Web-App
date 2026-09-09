@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from './Card';
+import { Button } from './Button';
 import { hrActions, NotificationPrefs } from '@/lib/hrData';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
 import { Bell, BellRing, BellOff, Megaphone, HelpCircle, AtSign, CalendarClock, Clock } from 'lucide-react';
@@ -111,14 +112,16 @@ export function NotificationPreferencesCard({ email }: { email: string }) {
           </div>
         </div>
         {osPermission !== null && !permissionGranted && (
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={handleEnable}
             disabled={requesting}
-            className="shrink-0 bg-orange-600 hover:bg-orange-700 disabled:opacity-70 text-white font-semibold px-3.5 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform"
+            className="shrink-0 !px-3.5 active:scale-97 transition-transform"
           >
             {requesting ? 'Requesting…' : 'Enable'}
-          </button>
+          </Button>
         )}
       </div>
 
