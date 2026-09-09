@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, AlertTriangle, Calendar, Briefcase, FileText, X, Palmtree, ClipboardList } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { LeaveApplication, Task, Profile } from '@/lib/hrData';
 
 interface CalendarEvent {
@@ -300,12 +301,12 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
             )}
 
             <div className="flex justify-end pt-3 border-t border-slate-200">
-              <button 
-                onClick={() => setModalDay(null)} 
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs transition-colors"
+              <Button
+                variant="secondary"
+                onClick={() => setModalDay(null)}
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
