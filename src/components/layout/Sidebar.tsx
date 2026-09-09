@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download } from 'lucide-react';
+import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download, BarChart3 } from 'lucide-react';
 import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useNotifications, useKVByPrefix, hasUnseenTicketActivity, hasUnseenMessageActivity, hasUnseenHrAdminLineActivity, TrackingSettings } from '@/lib/hrData';
 import { getSessionEmail, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
@@ -196,6 +196,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Attendance', href: '/admin/absences', icon: UserCheck },
     { name: 'Career Board', href: '/admin/careers', icon: Briefcase },
     { name: 'Master Reports', href: '/admin/reports', icon: FileText },
+    { name: 'Insights', href: '/admin/insights', icon: BarChart3 },
     { name: 'Screen Tracking', href: '/admin/tracking', icon: Monitor },
     { name: 'Support Tickets', href: '/admin/tickets', icon: HelpCircle },
     { name: 'Team Chats', href: '/admin/team-chats', icon: MessageSquare },

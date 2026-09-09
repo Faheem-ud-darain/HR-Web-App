@@ -1,6 +1,6 @@
 # 007 — Admin/HR Analytics Insights page
 
-- **Status**: TODO
+- **Status**: DONE (v1: Admin-only, 3 charts — payroll cost, absence/leave trend, headcount — plus a stat row; the stretch "pending arrears" callout was folded into the stat row rather than kept separate. HR mirror deliberately NOT added — see note below.)
 - **Commit**: 59a9c20
 - **Severity**: MEDIUM (feature gap, not a defect)
 - **Category**: Feature / Data visualization (not part of the animation audit — uses the `dataviz` skill, tracked here only because this repo already keeps its planning docs in `plans/`)
@@ -149,3 +149,28 @@ light-mode only today — confirm this hasn't changed before assuming otherwise)
   no console errors, and a non-technical HR/Admin user can answer "is payroll
   trending up this quarter?" by looking at the page for a few seconds,
   without opening a table.
+
+## Implementation note (post-build)
+
+Shipped as `src/app/(dashboard)/admin/insights/page.tsx`, Admin-only for v1
+per the Boundaries section's own fallback ("ship Admin-only first if
+unsure") — HR mirroring is a policy question not resolved here. Nav entry
+added to `adminItems` in `Sidebar.tsx` only.
+
+One correction versus the original Target: charts 1 and 2 render as bar
+charts (grouped bars for payroll-by-region, stacked bars for absence/leave),
+not the "line or area chart" the Target suggested — bars matched this
+codebase's `EmployeeActivityInsights.tsx` precedent more directly and avoid
+building crosshair/multi-point-hover machinery for six data points.
+
+One deliberate deviation from a literal reading of the stretch goal: money
+figures are **never summed across USA and Pakistan** anywhere on this page
+(stat tiles, chart 1) — `formatMoney` treats USA as USD and Pakistan as PKR
+with no conversion between them anywhere in this app, so a blended
+"payroll this month: $X" figure would silently add two different
+currencies together. Every money stat is shown per-region instead
+(reused the same real deduction: `reservedSalaryBalance +
+manualReservedAmount`, per-employee, per-region, matching
+`UserProfileModal.tsx`'s offboarding payout fields).
+
+Verified: `npx tsc --noEmit -p tsconfig.json` — zero errors.
