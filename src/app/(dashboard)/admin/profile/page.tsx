@@ -7,6 +7,7 @@ import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
+import { Button } from '@/components/ui/Button';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Edit2, Camera
 } from 'lucide-react';
@@ -175,15 +176,16 @@ export default function AdminProfilePage() {
           <h1 className="text-2xl font-bold text-slate-900">Admin Profile</h1>
           <p className="text-slate-500 text-sm mt-0.5">Manage your system credentials and preferences.</p>
         </div>
-        <button
+        <Button
+          variant="primary"
           onClick={() => {
             setTargetEmail(profile.email);
             setIsEditOpen(true);
           }}
-          className="flex items-center justify-center gap-1.5 text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl transition-colors transition-transform shadow-md active:scale-97 self-stretch sm:self-auto"
+          className="shadow-md active:scale-97 transition-transform self-stretch sm:self-auto"
         >
           <Edit2 className="h-3.5 w-3.5" /> Edit System Profiles
-        </button>
+        </Button>
       </div>
 
       {/* Avatar + Name card */}
@@ -213,12 +215,14 @@ export default function AdminProfilePage() {
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoInputChange} className="hidden" />
             </div>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setIsResetOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97"
+                className="!py-1.5 border border-slate-200 active:scale-97 transition-transform"
               >
                 <KeyRound className="h-3.5 w-3.5" /> Reset Password
-              </button>
+              </Button>
             </div>
           </div>
 
