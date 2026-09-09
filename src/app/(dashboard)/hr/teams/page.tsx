@@ -9,6 +9,7 @@ import { getSessionEmail } from '@/lib/session';
 import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Edit, Trash, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
 import { UserProfileModal } from '@/components/ui/UserProfileModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/components/ui/Button';
 
 export default function HRTeamsPage() {
   const { data: allProfiles = [], refetch: refetchProfiles } = useProfiles();
@@ -475,12 +476,13 @@ export default function HRTeamsPage() {
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           {pageTab === 'teams' ? (
-            <button
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => setIsTeamLeadOpen(true)}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5 shadow-sm"
             >
               <UserCog className="h-4 w-4" /> Manage Team Leads
-            </button>
+            </Button>
           ) : (
             <button
               onClick={() => setIsWhLeadOpen(true)}
@@ -785,11 +787,11 @@ export default function HRTeamsPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-            <button onClick={() => setIsTeamLeadOpen(false)} disabled={isSavingTeamLead} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
-            <button onClick={handleSaveTeamLead} disabled={!leadEmployeeId || isSavingTeamLead} className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+            <Button variant="outline" size="md" onClick={() => setIsTeamLeadOpen(false)} disabled={isSavingTeamLead}>Cancel</Button>
+            <Button variant="primary" size="md" onClick={handleSaveTeamLead} disabled={!leadEmployeeId || isSavingTeamLead}>
               {isSavingTeamLead && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {isSavingTeamLead ? 'Saving…' : 'Save Changes'}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -860,7 +862,7 @@ export default function HRTeamsPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-            <button onClick={() => setIsWhLeadOpen(false)} disabled={isSavingWhLead} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+            <Button variant="outline" size="md" onClick={() => setIsWhLeadOpen(false)} disabled={isSavingWhLead}>Cancel</Button>
             <button onClick={handleSaveWhLead} disabled={!whLeadEmployeeId || isSavingWhLead} className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
               {isSavingWhLead && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {isSavingWhLead ? 'Saving…' : 'Save Changes'}
@@ -887,24 +889,30 @@ export default function HRTeamsPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <button 
+            <Button
+              variant="outline"
+              size="md"
               onClick={() => setIsPromptOpen(false)}
-              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform order-3 sm:order-1"
+              className="order-3 sm:order-1"
             >
               Cancel Drop
-            </button>
-            <button 
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
               onClick={() => handleConfirmMultiTeam('reassign')}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform order-2 sm:order-2"
+              className="order-2 sm:order-2"
             >
               Reassign Exclusively
-            </button>
-            <button 
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => handleConfirmMultiTeam('both')}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform shadow-sm order-1 sm:order-3"
+              className="order-1 sm:order-3"
             >
               Add to Both Teams
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -916,14 +924,16 @@ export default function HRTeamsPage() {
           <div>
             <p className="text-sm text-slate-500">Configure logistics warehouses and assign them to USA employees for auto check-in geofencing.</p>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="md"
             onClick={handleCleanupStaleWarehouses}
             disabled={cleaningWarehouses}
             title="Remove leftover warehouse IDs from a past migration that no longer match any current warehouse"
-            className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5 disabled:opacity-50 shrink-0"
+            className="shrink-0"
           >
             <Sparkles className="h-3.5 w-3.5 text-orange-600" /> {cleaningWarehouses ? 'Cleaning up…' : 'Clean Up Stale Warehouse Links'}
-          </button>
+          </Button>
         </div>
 
         {whSuccess && (
@@ -1157,7 +1167,7 @@ export default function HRTeamsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-              <button type="button" disabled={isSavingWhEdit} onClick={() => setEditingWhId(null)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+              <Button type="button" variant="outline" size="md" disabled={isSavingWhEdit} onClick={() => setEditingWhId(null)}>Cancel</Button>
               <button type="submit" disabled={isSavingWhEdit} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
                 {isSavingWhEdit && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {isSavingWhEdit ? 'Saving…' : 'Save Changes'}

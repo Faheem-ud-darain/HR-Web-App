@@ -9,6 +9,7 @@ import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
+import { Button } from '@/components/ui/Button';
 
 
 interface AbsenceDetailsViewProps {
@@ -1019,15 +1020,16 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     >
                       Cancel
                     </button>
-                    <button
+                    <Button
                       type="button"
+                      variant="danger"
+                      size="md"
                       onClick={handleBulkDelete}
                       disabled={bulkDeleting}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       {bulkDeleting ? 'Removing…' : `Remove ${empSelectedCount} Record${empSelectedCount > 1 ? 's' : ''}`}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : null;
