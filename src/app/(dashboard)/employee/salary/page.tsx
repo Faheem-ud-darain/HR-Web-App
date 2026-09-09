@@ -5,6 +5,7 @@ import { usePayrollSelf, useMyAbsenceRecords, useLeaves, getApprovedLeaveOnDate,
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { FileText, Download, CheckCircle2, ShieldCheck, Printer, TrendingUp, Calendar, Info, AlertTriangle } from 'lucide-react';
 import { APP_TIMEZONE } from '@/lib/timezone';
 
@@ -494,12 +495,13 @@ export default function EmployeeSalaryPage() {
               <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs">
                 <ShieldCheck className="h-5 w-5 text-emerald-500" /> Dynamic Ledger Double-Verified
               </div>
-              <button 
+              <Button
+                variant="outline"
                 onClick={() => window.print()}
-                className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                className="active:scale-97 transition-transform"
               >
                 <Printer className="h-4 w-4" /> Print Receipt
-              </button>
+              </Button>
             </div>
           </div>
         )}
