@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, TrackingSettings, TrackerHeartbeat, localShiftDate, hasStaleTrackerToken } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
 import { getSessionEmail } from '@/lib/session';
 import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
@@ -312,13 +313,15 @@ export default function TrackerPage() {
                     )}
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleReconnectCheck}
                   disabled={heartbeatChecking}
-                  className="text-[9px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-50 px-2 py-1.5 rounded-md flex items-center gap-1 active:scale-97 transition-colors transition-transform shrink-0"
+                  className="!text-[9px] !px-2 active:scale-97 transition-transform shrink-0"
                 >
                   <RefreshCw className={`h-3 w-3 ${heartbeatChecking ? 'animate-spin' : ''}`} /> Reconnect
-                </button>
+                </Button>
               </div>
               {heartbeatCheckedOnce && !hrActions.isHeartbeatLive(heartbeat) && (
                 <>
