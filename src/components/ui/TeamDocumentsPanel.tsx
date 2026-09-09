@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { Team, TeamDocument, useTeamDocuments, hrActions } from '@/lib/hrData';
 import { formatDateNY } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Button } from '@/components/ui/Button';
 import {
   Upload, FileText, FileImage, FileVideo, Download, Trash2, Loader2,
   X, FolderOpen, File as FileIcon,
@@ -141,12 +142,14 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
           Tag one in Team Chat by typing <span className="font-mono font-bold text-sky-700">#</span> followed by its title.
         </p>
         {canManage && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => setShowUpload(v => !v)}
-            className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition-colors transition-transform transition-shadow shrink-0"
+            className="transition-shadow shrink-0"
           >
             <Upload className="h-3 w-3" /> Upload
-          </button>
+          </Button>
         )}
       </div>
 
@@ -180,20 +183,22 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
             )}
           </div>
           <div className="flex items-center gap-2 justify-end">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => { setShowUpload(false); resetForm(); }}
-              className="text-[10px] font-bold text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleUpload}
               disabled={uploading || !title.trim() || !pendingFile}
-              className="flex items-center gap-1 text-[10px] font-bold text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50 px-3 py-1.5 rounded-lg"
             >
               {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
               Save to team
-            </button>
+            </Button>
           </div>
         </div>
       )}
