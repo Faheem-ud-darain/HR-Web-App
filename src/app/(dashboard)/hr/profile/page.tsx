@@ -11,6 +11,7 @@ import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
+import { Button } from '@/components/ui/Button';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Camera
 } from 'lucide-react';
@@ -160,12 +161,14 @@ export default function HRProfilePage() {
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoInputChange} className="hidden" />
             </div>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setIsResetOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 md:py-1.5 rounded-lg transition-colors transition-transform border border-slate-200 active:scale-97 min-h-[44px] md:min-h-0"
+              className="!py-2 md:!py-1.5 border border-slate-200 active:scale-97 transition-transform min-h-[44px] md:min-h-0"
             >
               <KeyRound className="h-3.5 w-3.5" /> Reset Password
-            </button>
+            </Button>
           </div>
 
           <h2 className="text-lg md:text-xl font-bold text-slate-900">{profile.fullName}</h2>
@@ -217,12 +220,13 @@ export default function HRProfilePage() {
                   <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => setIsResetOpen(true)}
-                className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm min-h-[44px] md:min-h-0"
+                className="flex-shrink-0 !py-2.5 md:!py-2 shadow-sm active:scale-97 transition-transform min-h-[44px] md:min-h-0"
               >
                 Change Password
-              </button>
+              </Button>
             </div>
           </Card>
 
