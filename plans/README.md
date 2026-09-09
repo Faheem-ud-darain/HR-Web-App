@@ -80,12 +80,16 @@ category, different trigger (a product request, not `improve-animations`).
 | 8 | [008-replace-window-confirm.md](./008-replace-window-confirm.md) | MEDIUM | TODO |
 | 9 | [009-unified-action-feedback.md](./009-unified-action-feedback.md) | MEDIUM | TODO |
 | 10 | [010-paginate-large-tables.md](./010-paginate-large-tables.md) | LOW | TODO |
+| 11 | [011-migrate-buttons-to-shared-button-component.md](./011-migrate-buttons-to-shared-button-component.md) | MEDIUM | TODO |
 
-**Suggested order for 8-10**: 8 and 9 are independent of each other and of 7;
-either can go first. 10 is independent of everything else. None of 7-10
-depend on each other's output, though 8 and 9 may end up sharing a single
-root-level provider mount point (see each plan's Steps) without sharing any
-state — check that when implementing whichever comes second.
+**Suggested order for 8-11**: 8 and 9 are independent of each other and of 7;
+either can go first. 10 is independent of everything else. 11 is also
+independent (it only touches JSX/className, not the new hooks/components 8-10
+add) but is the largest in file-count, so it's reasonable to do it last, in
+its own batches (see its own Steps). None of 7-11 depend on each other's
+output, though 8 and 9 may end up sharing a single root-level provider mount
+point (see each plan's Steps) without sharing any state — check that when
+implementing whichever comes second.
 
 ## Not planned (rejected or out of scope)
 
