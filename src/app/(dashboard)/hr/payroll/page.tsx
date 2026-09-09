@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
 import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord, countApprovedLeaveRequestsInMonth } from '@/lib/hrData';
 import { NetPayableModal } from '@/components/ui/NetPayableModal';
+import { PaginationControls } from '@/components/ui/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
@@ -104,6 +106,9 @@ export default function HRPayrollPage() {
     if (activeTab === 'processed') return emp.processed;
     return true;
   });
+
+  const { page, setPage, totalPages, pageItems } = usePagination(filteredData, 25);
+  useEffect(() => { setPage(1); }, [searchQuery, activeTab]);
 
   const totalPayrollUSD = compiledPayrollData
     .filter(emp => emp.region === 'USA')
@@ -246,7 +251,7 @@ export default function HRPayrollPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredData.map(emp => {
+                {pageItems.map(emp => {
                   const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
                   const empProfile = employees.find(e => e.id === emp.employeeId);
                   const reservedBalance = (empProfile?.reservedSalaryBalance || 0) + (empProfile?.manualReservedAmount || 0);
@@ -393,7 +398,7 @@ export default function HRPayrollPage() {
 
       {/* Mobile Card Stack */}
       <div className="md:hidden space-y-3">
-        {filteredData.map(emp => {
+        {pageItems.map(emp => {
           const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
           const urgentCount = countApprovedLeaveRequestsInMonth(leavesList, emp.name, 'Urgent', emp.month);
           const empProfileMobile = employees.find(e => e.id === emp.employeeId);
@@ -504,6 +509,8 @@ export default function HRPayrollPage() {
           <p className="text-xs text-slate-400 font-semibold italic text-center py-8">No records found.</p>
         )}
       </div>
+
+      <PaginationControls page={page} setPage={setPage} totalPages={totalPages} totalCount={filteredData.length} itemLabel="employees" />
 
       <NetPayableModal
         isOpen={isNetPayableOpen}

@@ -12,6 +12,8 @@ import { DocumentsModal } from '@/components/ui/DocumentsModal';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';
+import { PaginationControls } from '@/components/ui/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 export default function ReportsPage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -60,6 +62,9 @@ export default function ReportsPage() {
 
     return matchesSearch && matchesRegion && matchesOnboarding;
   });
+
+  const { page, setPage, totalPages, pageItems } = usePagination(filteredEmployees, 25);
+  useEffect(() => { setPage(1); }, [searchQuery, regionFilter, onboardingFilter]);
 
   const exportCSV = () => {
     const headers = ['Full Name', 'Email', 'Role', 'Region', 'Bank Name', 'Account Number', 'IBAN', 'Onboarding Status', 'Base Salary'];
@@ -223,7 +228,7 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
-              {filteredEmployees.map((emp) => (
+              {pageItems.map((emp) => (
                 <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 cursor-pointer hover:bg-slate-100/70" onClick={() => setSelectedProfileEmail(emp.email)}>
                     <div className="flex items-center gap-3">
@@ -288,7 +293,7 @@ export default function ReportsPage() {
         </div>
         
         <div className="md:hidden space-y-3 p-4">
-          {filteredEmployees.map((emp) => (
+          {pageItems.map((emp) => (
             <div key={emp.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
               <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedProfileEmail(emp.email)}>
                 <Avatar src={emp.profilePicture} name={emp.fullName} size={36} />
@@ -337,6 +342,7 @@ export default function ReportsPage() {
             </p>
           )}
         </div>
+        <PaginationControls page={page} setPage={setPage} totalPages={totalPages} totalCount={filteredEmployees.length} itemLabel="employees" />
       </Card>
 
       {/* Employee Region and Warehouse Assignment Modal */}

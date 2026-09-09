@@ -79,7 +79,7 @@ category, different trigger (a product request, not `improve-animations`).
 | 7 | [007-admin-hr-analytics-insights.md](./007-admin-hr-analytics-insights.md) | MEDIUM | DONE |
 | 8 | [008-replace-window-confirm.md](./008-replace-window-confirm.md) | MEDIUM | DONE |
 | 9 | [009-unified-action-feedback.md](./009-unified-action-feedback.md) | MEDIUM | DONE |
-| 10 | [010-paginate-large-tables.md](./010-paginate-large-tables.md) | LOW | TODO |
+| 10 | [010-paginate-large-tables.md](./010-paginate-large-tables.md) | LOW | DONE |
 | 11 | [011-migrate-buttons-to-shared-button-component.md](./011-migrate-buttons-to-shared-button-component.md) | MEDIUM | TODO |
 
 **Suggested order for 8-11**: 8 and 9 are independent of each other and of 7;

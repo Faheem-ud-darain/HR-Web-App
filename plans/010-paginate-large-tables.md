@@ -1,6 +1,6 @@
 # 010 — Paginate/cap the large, unpaginated tables
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 59a9c20
 - **Severity**: LOW (scales with headcount — not necessarily painful today, but degrades quietly rather than failing loudly)
 - **Category**: Usability / scalability (usability pass, tracked here for the same reason plan 007 is)
@@ -107,3 +107,38 @@ empty list that looks broken.
     the visible page.
 - **Done when**: all 4 lists render a bounded page size regardless of total
   row count, with correct Prev/Next behavior and no export regression.
+
+
+## Implementation note (post-build)
+
+Implemented exactly as scoped — a shared `usePagination<T>(items, pageSize)`
+hook (`src/hooks/usePagination.ts`) and a `<PaginationControls>` component
+(`src/components/ui/PaginationControls.tsx`, styled to match the existing
+tab-pill chrome, Prev/Next + "page X of Y" + total count, returns `null` at
+zero total), applied at page size 25 to all 4 lists:
+
+- `hr/payroll/page.tsx` — `filteredData`, reset-to-page-1 on
+  `searchQuery`/`activeTab`.
+- `admin/payroll/page.tsx` — `payroll` (no filter/search state on this page,
+  so no reset effect is needed — page only changes via Prev/Next). Careful
+  to place `<PaginationControls>` right after this list's own `</Card>` and
+  before the separate, unrelated "Departmental Breakdowns" `summaries` table
+  further down the same file — that table is not one of the 4 lists in
+  scope and was left untouched.
+- `admin/reports/page.tsx` — `filteredEmployees`, reset-to-page-1 on
+  `searchQuery`/`regionFilter`/`onboardingFilter`.
+- `AbsenceDetailsView.tsx` — applied twice, independently, since `role`
+  picks exactly one of two mutually-exclusive branches to render: one
+  `usePagination` instance for `filteredAbsences` (the employee's own flat
+  per-record view) and a second for `employeeAbsenceSummaries` (the
+  HR/Admin per-employee rollup), each with its own page state
+  (`absencePage`/`summaryPage`) and its own `<PaginationControls>`, both
+  reset to page 1 on the shared `selectedDate`/`searchQuery` filter state.
+
+All 4 CSV/export code paths (`exportPayrollCSV` in `hr/payroll/page.tsx`,
+`exportCSV` in `admin/reports/page.tsx`) were confirmed to still map over
+the full filtered array, not `pageItems` — exports are unaffected by
+pagination, per the plan's Boundaries.
+
+Verified with `npx tsc --noEmit -p tsconfig.json` after each file's edit —
+zero errors throughout.

@@ -7,6 +7,8 @@ import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, u
 import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
 import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PaginationControls } from '@/components/ui/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 
 
 interface AbsenceDetailsViewProps {
@@ -297,6 +299,10 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       .map(e => ({ ...e, records: [...e.records].sort((a, b) => b.date.localeCompare(a.date)) }))
       .sort((a, b) => a.employeeName.localeCompare(b.employeeName));
   }, [filteredAbsences, role]);
+
+  const { page: absencePage, setPage: setAbsencePage, totalPages: absenceTotalPages, pageItems: absencePageItems } = usePagination(filteredAbsences, 25);
+  const { page: summaryPage, setPage: setSummaryPage, totalPages: summaryTotalPages, pageItems: summaryPageItems } = usePagination(employeeAbsenceSummaries, 25);
+  useEffect(() => { setAbsencePage(1); setSummaryPage(1); }, [selectedDate, searchQuery]);
 
   const selectedEmployeeAttendance = selectedEmployeeAttendanceEmail
     ? employeeAttendanceSummaries.find(e => e.employeeEmail.toLowerCase() === selectedEmployeeAttendanceEmail.toLowerCase()) || null
@@ -850,7 +856,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {filteredAbsences.map(r => (
+                        {absencePageItems.map(r => (
                           <tr key={r.id} className="hover:bg-slate-50/50">
                             <td className="px-5 py-3 font-mono font-bold text-slate-700">{r.date}</td>
                             <td className="px-5 py-3"><AbsenceReasonLabel r={r} /></td>
@@ -868,7 +874,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
                   {/* Mobile cards */}
                   <div className="md:hidden divide-y divide-slate-100">
-                    {filteredAbsences.map(r => (
+                    {absencePageItems.map(r => (
                       <div key={r.id} className="p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <p className="font-mono text-xs font-bold text-slate-800">{r.date}</p>
@@ -881,6 +887,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                       </div>
                     ))}
                   </div>
+                  <PaginationControls page={absencePage} setPage={setAbsencePage} totalPages={absenceTotalPages} totalCount={filteredAbsences.length} itemLabel="records" />
                 </>
               )
             ) : employeeAbsenceSummaries.length === 0 ? (
@@ -906,7 +913,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {employeeAbsenceSummaries.map(emp => {
+                      {summaryPageItems.map(emp => {
                         const deducted = emp.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
                         const pending = emp.records.filter(r => !r.acknowledged).length;
                         return (
@@ -935,7 +942,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
                 {/* Mobile cards */}
                 <div className="md:hidden divide-y divide-slate-100">
-                  {employeeAbsenceSummaries.map(emp => {
+                  {summaryPageItems.map(emp => {
                     const deducted = emp.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
                     const pending = emp.records.filter(r => !r.acknowledged).length;
                     return (
@@ -960,6 +967,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     );
                   })}
                 </div>
+                <PaginationControls page={summaryPage} setPage={setSummaryPage} totalPages={summaryTotalPages} totalCount={employeeAbsenceSummaries.length} itemLabel="employees" />
               </>
             )}
           </Card>

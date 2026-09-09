@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import { DollarSign, CheckCircle2, TrendingUp } from 'lucide-react';
 import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin } from '@/lib/hrData';
 import { NetPayableModal } from '@/components/ui/NetPayableModal';
+import { PaginationControls } from '@/components/ui/PaginationControls';
+import { usePagination } from '@/hooks/usePagination';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface PayrollSummary {
@@ -46,6 +48,7 @@ export default function AdminPayrollPage() {
   // produce a fresh array reference (and re-trigger the summary effect) on
   // every render.
   const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords), [employees, rawPayroll, leaves, timesheets, absenceRecords]);
+  const { page, setPage, totalPages, pageItems } = usePagination(payroll, 25);
   const [summaries, setSummaries] = useState<PayrollSummary[]>([]);
   const [isReleasing, setIsReleasing] = useState(false);
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
@@ -275,7 +278,7 @@ export default function AdminPayrollPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {payroll.map(p => {
+              {pageItems.map(p => {
                 const netPayable = p.baseSalary + p.bonus - p.deductions + p.incrementAmount;
                 const empProfile = employees.find(e => e.id === p.employeeId);
                 const reservedBalance = (empProfile?.reservedSalaryBalance || 0) + (empProfile?.manualReservedAmount || 0);
@@ -331,7 +334,7 @@ export default function AdminPayrollPage() {
 
         {/* Mobile card stack */}
         <div className="md:hidden space-y-3 p-4">
-          {payroll.map(p => {
+          {pageItems.map(p => {
             const netPayable = p.baseSalary + p.bonus - p.deductions + p.incrementAmount;
             const empProfileMobile = employees.find(e => e.id === p.employeeId);
             const reservedBalanceMobile = (empProfileMobile?.reservedSalaryBalance || 0) + (empProfileMobile?.manualReservedAmount || 0);
@@ -369,6 +372,8 @@ export default function AdminPayrollPage() {
           )}
         </div>
       </Card>
+
+      <PaginationControls page={page} setPage={setPage} totalPages={totalPages} totalCount={payroll.length} itemLabel="employees" />
 
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Departmental Breakdowns</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">
