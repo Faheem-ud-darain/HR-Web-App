@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { TaskBoard } from '@/components/ui/TaskBoard';
 import { TaskModal } from '@/components/ui/TaskModal';
+import { Button } from '@/components/ui/Button';
 import { Task, Profile, useTasks, useProfiles } from '@/lib/hrData';
 import { ClipboardList } from 'lucide-react';
 
@@ -18,12 +19,13 @@ export default function HRTasksPage() {
           <h1 className="text-2xl font-bold text-slate-900">Task Management</h1>
           <p className="text-slate-500">Create, assign, and track tasks across all teams.</p>
         </div>
-        <button
+        <Button
+          variant="primary"
           onClick={() => setIsTaskOpen(true)}
-          className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1.5 shadow-sm"
+          className="transition-shadow shadow-sm active:scale-97 transition-transform"
         >
           <ClipboardList className="h-4 w-4" /> Assign New Task
-        </button>
+        </Button>
       </div>
 
       <TaskBoard
