@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
+import { Button } from '@/components/ui/Button';
 import { GripVertical, Clock, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
@@ -232,13 +233,14 @@ export default function HRLeavesPage() {
           <p className="text-slate-500 text-sm">Drag cards to update status (or use the status dropdown on mobile) · Switch to History for a full audit log.</p>
         </div>
         <div className="flex items-center gap-2">
-        <button
+        <Button
+          variant="outline"
+          size="md"
           onClick={exportLeavesCSV}
           disabled={historyLeaves.length === 0}
-          className="bg-white hover:bg-slate-50 disabled:opacity-50 border border-slate-200 text-slate-700 font-semibold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
         >
           <Download className="h-3.5 w-3.5" /> Export CSV
-        </button>
+        </Button>
         </div>
       </div>
 

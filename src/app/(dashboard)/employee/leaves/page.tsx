@@ -7,6 +7,7 @@ import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { Clock, PlusCircle, AlertCircle, HelpCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
 
 export default function EmployeeLeavesPage() {
@@ -237,12 +238,13 @@ export default function EmployeeLeavesPage() {
           <h1 className="text-lg md:text-2xl font-bold text-slate-900">My Leave Requests</h1>
           <p className="text-xs md:text-sm text-slate-500">View accrued time-off metrics and submit applications.</p>
         </div>
-        <button
+        <Button
+          variant="primary"
+          size="md"
           onClick={() => setIsLeaveOpen(true)}
-          className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm"
         >
           <PlusCircle className="h-4.5 w-4.5" /> Apply for Leave
-        </button>
+        </Button>
       </div>
 
       {/* Dynamic PTO balances */}
@@ -456,7 +458,7 @@ export default function EmployeeLeavesPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <button type="button" disabled={isSubmittingLeave} onClick={() => setIsLeaveOpen(false)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+            <Button type="button" variant="outline" size="md" disabled={isSubmittingLeave} onClick={() => setIsLeaveOpen(false)}>Cancel</Button>
             <button type="submit" disabled={isSubmittingLeave} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
               {isSubmittingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
               {isSubmittingLeave ? 'Submitting…' : 'Submit Request'}
@@ -486,23 +488,25 @@ export default function EmployeeLeavesPage() {
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="md"
               disabled={isDeletingLeave}
               onClick={() => { setDeletingLeaveId(null); setDeleteError(''); }}
-              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="danger"
+              size="md"
               disabled={isDeletingLeave}
               onClick={() => deletingLeaveId && handleDeleteLeave(deletingLeaveId)}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               {isDeletingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
               {isDeletingLeave ? 'Withdrawing…' : 'Withdraw Request'}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

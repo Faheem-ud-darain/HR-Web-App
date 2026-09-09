@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
 import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord, countApprovedLeaveRequestsInMonth } from '@/lib/hrData';
+import { Button } from '@/components/ui/Button';
 import { NetPayableModal } from '@/components/ui/NetPayableModal';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
@@ -153,26 +154,29 @@ export default function HRPayrollPage() {
           <p className="text-xs md:text-sm text-slate-500">Manage base salaries, bonuses, and calculate monthly net payouts.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={async () => {
               setIsSyncing(true);
               await fetchAllData();
               setIsSyncing(false);
             }}
             disabled={isSyncing}
-            className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold px-3 py-2.5 md:py-1.5 rounded-lg text-xs flex items-center gap-1.5 active:scale-97 transition-colors transition-transform shadow-sm"
+            className="shadow-sm"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /> 
             Refresh Ledger
-          </button>
+          </Button>
           
-          <button
+          <Button
+            variant="outline"
+            size="md"
             onClick={exportPayrollCSV}
             disabled={filteredData.length === 0}
-            className="bg-white hover:bg-slate-50 disabled:opacity-50 border border-slate-200 text-slate-700 font-semibold px-3 py-2.5 md:py-1.5 rounded-lg text-xs flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
           >
             <Download className="h-3.5 w-3.5" /> Export CSV
-          </button>
+          </Button>
           
           <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
             <button 
