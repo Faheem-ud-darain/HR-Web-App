@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { TaskBoard } from '@/components/ui/TaskBoard';
 import { TaskModal } from '@/components/ui/TaskModal';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { ClipboardList, Star, CheckCircle2, UserCog, Loader2 } from 'lucide-react';
 import { useTasks, useProfiles, useTeams, hrActions, displayName, setTeamLeadAdmin } from '@/lib/hrData';
 
@@ -48,12 +49,13 @@ export default function AdminTasksPage() {
           >
             <Star className="h-4 w-4" /> Manage Team Leads
           </button>
-          <button
+          <Button
+            variant="primary"
             onClick={() => setIsTaskOpen(true)}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm"
+            className="shadow-sm active:scale-97 transition-transform"
           >
             <ClipboardList className="h-4 w-4" /> Assign New Task
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -133,11 +135,11 @@ export default function AdminTasksPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-            <button onClick={() => setIsLeadOpen(false)} disabled={isSavingLead} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
-            <button onClick={handleSaveLead} disabled={!leadEmpId || isSavingLead} className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+            <Button variant="outline" onClick={() => setIsLeadOpen(false)} disabled={isSavingLead} className="active:scale-97 transition-transform">Cancel</Button>
+            <Button variant="primary" onClick={handleSaveLead} disabled={!leadEmpId || isSavingLead} className="shadow-sm active:scale-97 transition-transform">
               {isSavingLead && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {isSavingLead ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
