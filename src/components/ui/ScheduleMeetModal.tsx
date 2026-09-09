@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { useProfiles, useTeams, hrActions, Profile } from '@/lib/hrData';
-import { Video, Calendar, Clock, Users, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Video, Calendar, Clock, Users, ExternalLink } from 'lucide-react';
 import { getSessionEmail } from '@/lib/session';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 
 interface ScheduleMeetModalProps {
   isOpen: boolean;
@@ -25,16 +26,13 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
   const [description, setDescription] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const { showToast } = useActionToast();
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     setIsSubmitting(true);
-    setErrorMsg('');
-    setSuccessMsg('');
 
     try {
       const currentUserEmail = getSessionEmail() || '';
@@ -83,36 +81,20 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
         `🎥 New Google Meet scheduled: "${title}"`
       );
 
-      setSuccessMsg('Google Meet room generated and invitation sent!');
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setSuccessMsg('');
-        setTitle('');
-        setDescription('');
-        onClose();
-      }, 1500);
+      setIsSubmitting(false);
+      setTitle('');
+      setDescription('');
+      onClose();
+      showToast({ type: 'success', message: 'Google Meet room generated and invitation sent!' });
     } catch (err: any) {
       setIsSubmitting(false);
-      setErrorMsg(err.message || 'Failed to schedule meeting');
+      showToast({ type: 'error', message: err.message || 'Failed to schedule meeting' });
     }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Schedule Google Meet" className="md:max-w-lg">
       <form onSubmit={handleSchedule} className="space-y-4 pt-1">
-        {successMsg && (
-          <div className="p-3 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-            {successMsg}
-          </div>
-        )}
-        {errorMsg && (
-          <div className="p-3 text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-100 rounded-xl flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-            {errorMsg}
-          </div>
-        )}
-
         <div className="space-y-1.5">
           <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Meeting Title *</label>
           <input

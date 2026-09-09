@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { ToastNotification } from "@/components/ui/ToastNotification";
+import { ActionToastHost } from "@/components/ui/ActionToastHost";
 import { PushWebScript } from "@/components/PushWebScript";
 import { SplashScreenOverlay } from "@/components/SplashScreenOverlay";
 import Providers from "./providers";
@@ -85,8 +86,10 @@ export default function RootLayout({
         <SplashScreenOverlay />
         <PushWebScript />
         <Providers>
-          <ToastNotification />
-          {children}
+          <ActionToastHost>
+            <ToastNotification />
+            {children}
+          </ActionToastHost>
         </Providers>
       </body>
     </html>

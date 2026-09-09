@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { Card, CardContent } from './Card';
 import { Modal } from './Modal';
-import { Wrench, PlusCircle, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
+import { Wrench, PlusCircle, Trash2, Loader2 } from 'lucide-react';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { pktLocalToUtcIso, formatInViewerLocalTime } from '@/lib/timezone';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 
 interface MaintenanceNoticeManagerProps {
   createdBy: string;
@@ -28,13 +29,13 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState('');
+  const { showToast } = useActionToast();
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const resetForm = () => {
     setTitle(''); setMessage(''); setDate(''); setStartTime(''); setEndTime('');
-    setSuccess(''); setError('');
+    setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,8 +54,9 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
     try {
       await hrActions.addMaintenanceNotice(title.trim(), message.trim(), startAtIso, endAtIso, createdBy);
       await refetch();
-      setSuccess('Maintenance notice posted — every employee, HR, and Admin will see it.');
-      setTimeout(() => { setIsOpen(false); resetForm(); }, 1200);
+      setIsOpen(false);
+      resetForm();
+      showToast({ type: 'success', message: 'Maintenance notice posted — every employee, HR, and Admin will see it.' });
     } catch (err) {
       console.error('Failed to post maintenance notice:', err);
       setError('Failed to post the notice. Please try again.');
@@ -129,11 +131,6 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
 
       <Modal isOpen={isOpen} onClose={() => { setIsOpen(false); resetForm(); }} title="Post System Maintenance Notice">
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          {success && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {success}
-            </div>
-          )}
           {error && (
             <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-semibold">{error}</div>
           )}

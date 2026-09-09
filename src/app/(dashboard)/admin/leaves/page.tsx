@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { CheckCircle2, ShieldCheck, List, Loader2 } from 'lucide-react';
+import { ShieldCheck, List, Loader2 } from 'lucide-react';
 import { useLeaves, useProfiles, hrActions, LeaveApplication, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 
 const TYPE_COLORS: Record<string, string> = {
   'PTO': 'bg-indigo-100 text-indigo-800',
@@ -27,7 +28,7 @@ export default function AdminLeavesPage() {
   const { data: leaves = [], refetch: refetchLeaves } = useLeaves();
   const { data: employees = [] } = useProfiles();
   const [searchQuery, setSearchQuery] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const { showToast } = useActionToast();
   const [activeTab, setActiveTab] = useState<TabView>('queue');
   const [histFilter, setHistFilter] = useState<LeaveApplication['status'] | 'all'>('all');
 
@@ -64,8 +65,7 @@ export default function AdminLeavesPage() {
       }
 
       refetchLeaves();
-      setSuccessMsg(`Leave ${action === 'approve' ? 'approved' : 'rejected'} by CEO!`);
-      setTimeout(() => setSuccessMsg(''), 1500);
+      showToast({ type: 'success', message: `Leave ${action === 'approve' ? 'approved' : 'rejected'} by CEO!` });
     } finally {
       setProcessingLeaveId(null);
     }
@@ -103,11 +103,6 @@ export default function AdminLeavesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Leave Approvals</h1>
           <p className="text-slate-500 text-sm">Final CEO decisions on HR-approved leaves. See full org history in the History tab.</p>
         </div>
-        {successMsg && (
-          <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 fade-enter shadow-sm">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />{successMsg}
-          </div>
-        )}
       </div>
 
       {/* Stat overview */}

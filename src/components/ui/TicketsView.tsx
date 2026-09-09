@@ -8,11 +8,12 @@ import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenS
 import { TypingIndicator } from './TypingIndicator';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, CheckCircle2, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search, Forward } from 'lucide-react';
+import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search, Forward } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatDateTimeNY, formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { useNativeKeyboard } from '@/hooks/useNativeKeyboard';
@@ -243,7 +244,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [replyMsg, setReplyMsg] = useState('');
-  const [success, setSuccess] = useState('');
+  const { showToast } = useActionToast();
 
   // Attachments
   const [newTicketFile, setNewTicketFile] = useState<File | null>(null);
@@ -506,15 +507,12 @@ export function TicketsView({ role }: TicketsViewProps) {
       }
 
       refetchTickets();
-      setSuccess('Support ticket opened successfully!');
-      setTimeout(() => {
-        setIsNewOpen(false);
-        setTitle('');
-        setDesc('');
-        setDepartment('hr');
-        setNewTicketFile(null);
-        setSuccess('');
-      }, 1200);
+      setIsNewOpen(false);
+      setTitle('');
+      setDesc('');
+      setDepartment('hr');
+      setNewTicketFile(null);
+      showToast({ type: 'success', message: 'Support ticket opened successfully!' });
     } catch (err) {
       // fileToStoredAttachment can now throw (compressImageToWebP rejects
       // instead of silently storing an unusable file — see
@@ -1205,12 +1203,6 @@ export function TicketsView({ role }: TicketsViewProps) {
       {/* New ticket modal */}
       <Modal isOpen={isNewOpen} onClose={() => { setIsNewOpen(false); setNewTicketFile(null); setNewTicketFileError(''); }} title="File Support Ticket">
         <form onSubmit={handleOpenTicket} className="space-y-4">
-          {success && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {success}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Department *</label>
             <select required value={department} onChange={e => setDepartment(e.target.value as 'hr' | 'technical')} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 appearance-none">

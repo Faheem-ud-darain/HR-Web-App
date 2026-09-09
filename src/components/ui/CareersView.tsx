@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 import {
   CareerPosition,
   CareerApplication,
@@ -66,7 +67,7 @@ export function CareersView({ role }: CareersViewProps) {
   const [loc, setLoc] = useState('');
   const [desc, setDesc] = useState('');
   const [reqsText, setReqsText] = useState('');
-  const [success, setSuccess] = useState('');
+  const { showToast } = useActionToast();
 
   const [applicantName, setApplicantName] = useState('');
   const [applicantEmail, setApplicantEmail] = useState('');
@@ -94,15 +95,12 @@ export function CareersView({ role }: CareersViewProps) {
         requirements,
       });
       refetchCareers();
-      setSuccess('Position listed successfully!');
-      setTimeout(() => {
-        setIsAddOpen(false);
-        setTitle('');
-        setLoc('');
-        setDesc('');
-        setReqsText('');
-        setSuccess('');
-      }, 1200);
+      setIsAddOpen(false);
+      setTitle('');
+      setLoc('');
+      setDesc('');
+      setReqsText('');
+      showToast({ type: 'success', message: 'Position listed successfully!' });
     } finally {
       setIsPostingJob(false);
     }
@@ -513,12 +511,6 @@ export function CareersView({ role }: CareersViewProps) {
       {/* Add job listing Modal */}
       <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Create New Job Listing">
         <form onSubmit={handleAddJob} className="space-y-4 pt-1">
-          {success && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {success}
-            </div>
-          )}
-
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Job Title *</label>
             <input 

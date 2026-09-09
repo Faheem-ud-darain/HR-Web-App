@@ -11,6 +11,7 @@ import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Edit2, Camera
 } from 'lucide-react';
 import { useProfiles, hrActions, updateProfileSelf, changeOwnPassword, updateProfileAdmin } from '@/lib/hrData';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
 
@@ -20,8 +21,7 @@ export default function AdminProfilePage() {
   // Profile picture upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
-  const [photoError, setPhotoError] = useState('');
-  const [photoSuccess, setPhotoSuccess] = useState('');
+  const { showToast } = useActionToast();
 
   // Password reset states
   const [isResetOpen, setIsResetOpen] = useState(false);
@@ -29,7 +29,6 @@ export default function AdminProfilePage() {
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
   // Profile Edit states
@@ -38,7 +37,6 @@ export default function AdminProfilePage() {
   const [editName, setEditName] = useState('');
   const [editGender, setEditGender] = useState<'male' | 'female'>('male');
   const [editTitle, setEditTitle] = useState('');
-  const [editSuccess, setEditSuccess] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [email, setEmail] = useState<string | null>(null);
@@ -64,8 +62,7 @@ export default function AdminProfilePage() {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setPhotoError('Please choose an image file.');
-      setTimeout(() => setPhotoError(''), 3000);
+      showToast({ type: 'error', message: 'Please choose an image file.' });
       return;
     }
     setPendingPhotoFile(file);
@@ -77,19 +74,16 @@ export default function AdminProfilePage() {
       await updateProfileSelf({ profilePicture: webpDataUrl });
       await refetchProfiles();
       setPendingPhotoFile(null);
-      setPhotoSuccess('Profile picture updated!');
-      setTimeout(() => setPhotoSuccess(''), 2000);
+      showToast({ type: 'success', message: 'Profile picture updated!' });
     } catch (err) {
       console.error('[Admin Profile] Photo update error:', err);
-      setPhotoError('Failed to save profile picture.');
-      setTimeout(() => setPhotoError(''), 3000);
+      showToast({ type: 'error', message: 'Failed to save profile picture.' });
     }
   };
 
   const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError('');
-    setResetSuccess('');
 
     if (isResetting) return;
     if (!currentPass || !newPass || !confirmPass) {
@@ -112,9 +106,9 @@ export default function AdminProfilePage() {
       try {
         await changeOwnPassword(currentPass, newPass);
         refetchProfiles();
-        setResetSuccess('Password updated successfully!');
         setCurrentPass(''); setNewPass(''); setConfirmPass('');
-        setTimeout(() => { setIsResetOpen(false); setResetSuccess(''); }, 1400);
+        setIsResetOpen(false);
+        showToast({ type: 'success', message: 'Password updated successfully!' });
       } catch (err: any) {
         console.error('[Admin Profile] Password update error:', err);
         setResetError(err?.message || 'Failed to update password. Please try again.');
@@ -144,11 +138,8 @@ export default function AdminProfilePage() {
       }
 
       refetchProfiles();
-      setEditSuccess('Profile updated successfully!');
-      setTimeout(() => {
-        setIsEditOpen(false);
-        setEditSuccess('');
-      }, 1200);
+      setIsEditOpen(false);
+      showToast({ type: 'success', message: 'Profile updated successfully!' });
     } finally {
       setIsSavingEdit(false);
     }
@@ -231,13 +222,6 @@ export default function AdminProfilePage() {
             </div>
           </div>
 
-          {(photoError || photoSuccess) && (
-            <div className={`mb-3 p-2.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${photoError ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-              {photoError ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {photoError || photoSuccess}
-            </div>
-          )}
-
           <h2 className="text-xl font-bold text-slate-900">{profile.fullName}</h2>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full capitalize">
@@ -277,14 +261,8 @@ export default function AdminProfilePage() {
       </div>
 
       {/* Profile Edit Modal */}
-      <Modal isOpen={isEditOpen} onClose={() => { setIsEditOpen(false); setEditSuccess(''); }} title="Edit System Profile">
+      <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit System Profile">
         <form onSubmit={handleEditSubmit} className="space-y-4">
-          {editSuccess && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" />{editSuccess}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Select Profile to Edit</label>
             <select
@@ -343,19 +321,13 @@ export default function AdminProfilePage() {
       </Modal>
 
       {/* Password Reset Modal */}
-      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">
+      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); }} title="Change Password">
         <form onSubmit={handleResetSubmit} className="space-y-4">
           {resetError && (
             <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />{resetError}
             </div>
           )}
-          {resetSuccess && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" />{resetSuccess}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Password</label>
             <PasswordInput

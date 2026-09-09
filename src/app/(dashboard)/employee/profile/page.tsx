@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useProfiles, useProfileSelf, updateProfileSelf, changeOwnPassword, hrActions, Profile, formatMoney } from '@/lib/hrData';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -32,16 +33,13 @@ export default function EmployeeProfilePage() {
   // Profile picture upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
-  const [photoError, setPhotoError] = useState('');
-  const [photoSuccess, setPhotoSuccess] = useState('');
+  const { showToast } = useActionToast();
 
   // Documents (CV, identity docs, passport)
   const cvInputRef = useRef<HTMLInputElement>(null);
   const idInputRef = useRef<HTMLInputElement>(null);
   const passportInputRef = useRef<HTMLInputElement>(null);
   const [docBusy, setDocBusy] = useState<string | null>(null);
-  const [docError, setDocError] = useState('');
-  const [docSuccess, setDocSuccess] = useState('');
 
   // Password reset
   const [isResetOpen, setIsResetOpen] = useState(false);
@@ -49,7 +47,6 @@ export default function EmployeeProfilePage() {
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
   // Bank details self-service edit
@@ -58,7 +55,6 @@ export default function EmployeeProfilePage() {
   const [accountNumberInput, setAccountNumberInput] = useState('');
   const [ibanInput, setIbanInput] = useState('');
   const [bankError, setBankError] = useState('');
-  const [bankSuccess, setBankSuccess] = useState('');
   const [isSavingBank, setIsSavingBank] = useState(false);
 
   // Contact numbers self-service edit
@@ -66,7 +62,6 @@ export default function EmployeeProfilePage() {
   const [personalPhoneInput, setPersonalPhoneInput] = useState('');
   const [companyPhoneInput, setCompanyPhoneInput] = useState('');
   const [phoneError, setPhoneError] = useState('');
-  const [phoneSuccess, setPhoneSuccess] = useState('');
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   // Self-service account deletion request — added 2026-08-18 for App Store
@@ -125,8 +120,7 @@ export default function EmployeeProfilePage() {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setPhotoError('Please choose an image file.');
-      setTimeout(() => setPhotoError(''), 3000);
+      showToast({ type: 'error', message: 'Please choose an image file.' });
       return;
     }
     setPendingPhotoFile(file);
@@ -140,12 +134,10 @@ export default function EmployeeProfilePage() {
       const updatedProfile = refreshed?.find(p => p.id === profile.id);
       if (updatedProfile) setProfile(updatedProfile);
       setPendingPhotoFile(null);
-      setPhotoSuccess('Profile picture updated!');
-      setTimeout(() => setPhotoSuccess(''), 2000);
+      showToast({ type: 'success', message: 'Profile picture updated!' });
     } catch (err) {
       console.error('[Profile] Photo update error:', err);
-      setPhotoError('Failed to save profile picture.');
-      setTimeout(() => setPhotoError(''), 3000);
+      showToast({ type: 'error', message: 'Failed to save profile picture.' });
     }
   };
 
@@ -169,21 +161,19 @@ export default function EmployeeProfilePage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !profile?.id) return;
-    setDocError(''); setDocSuccess('');
     setDocBusy('cv');
     try {
       const { data, error } = await fileToStoredData(file);
-      if (error) { setDocError(error); return; }
+      if (error) { showToast({ type: 'error', message: error }); return; }
       await updateProfileSelf({ cvFileName: file.name, cvFileData: data });
       await refetchDocs();
-      setDocSuccess('CV / Resume uploaded successfully!');
-      setTimeout(() => setDocSuccess(''), 2500);
+      showToast({ type: 'success', message: 'CV / Resume uploaded successfully!' });
     } catch (err) {
       console.error('[Profile] CV upload error:', err);
       // compressImageToWebP now rejects with a specific, actionable message
       // (e.g. HEIC not supported) instead of silently storing an unusable
       // raw file — surface that instead of a generic message when present.
-      setDocError(err instanceof Error ? err.message : 'Failed to upload CV. Please try again.');
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload CV. Please try again.' });
     } finally {
       setDocBusy(null);
     }
@@ -193,19 +183,17 @@ export default function EmployeeProfilePage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !profile?.id) return;
-    setDocError(''); setDocSuccess('');
     setDocBusy('id');
     try {
       const { data, error } = await fileToStoredData(file);
-      if (error) { setDocError(error); return; }
+      if (error) { showToast({ type: 'error', message: error }); return; }
       const existing = myDocs?.identityDocs || [];
       await updateProfileSelf({ identityDocs: [...existing, { name: file.name, data }] });
       await refetchDocs();
-      setDocSuccess('Identity document uploaded successfully!');
-      setTimeout(() => setDocSuccess(''), 2500);
+      showToast({ type: 'success', message: 'Identity document uploaded successfully!' });
     } catch (err) {
       console.error('[Profile] ID doc upload error:', err);
-      setDocError(err instanceof Error ? err.message : 'Failed to upload document. Please try again.');
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload document. Please try again.' });
     } finally {
       setDocBusy(null);
     }
@@ -215,18 +203,16 @@ export default function EmployeeProfilePage() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !profile?.id) return;
-    setDocError(''); setDocSuccess('');
     setDocBusy('passport');
     try {
       const { data, error } = await fileToStoredData(file);
-      if (error) { setDocError(error); return; }
+      if (error) { showToast({ type: 'error', message: error }); return; }
       await updateProfileSelf({ passportFileName: file.name, passportFileData: data });
       await refetchDocs();
-      setDocSuccess('Passport uploaded successfully!');
-      setTimeout(() => setDocSuccess(''), 2500);
+      showToast({ type: 'success', message: 'Passport uploaded successfully!' });
     } catch (err) {
       console.error('[Profile] Passport upload error:', err);
-      setDocError(err instanceof Error ? err.message : 'Failed to upload passport. Please try again.');
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload passport. Please try again.' });
     } finally {
       setDocBusy(null);
     }
@@ -240,14 +226,12 @@ export default function EmployeeProfilePage() {
     setAccountNumberInput(myDocs?.accountNumber || '');
     setIbanInput(myDocs?.iban || '');
     setBankError('');
-    setBankSuccess('');
     setIsBankEditOpen(true);
   };
 
   const handleBankSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBankError('');
-    setBankSuccess('');
 
     if (isSavingBank) return;
     if (!bankNameInput.trim() || !accountNumberInput.trim() || !ibanInput.trim()) {
@@ -266,8 +250,8 @@ export default function EmployeeProfilePage() {
         iban: ibanInput.trim(),
       });
       await refetchDocs();
-      setBankSuccess('Bank details updated successfully!');
-      setTimeout(() => { setIsBankEditOpen(false); setBankSuccess(''); }, 1000);
+      setIsBankEditOpen(false);
+      showToast({ type: 'success', message: 'Bank details updated successfully!' });
     } catch (err) {
       console.error(err);
       setBankError('Failed to save bank details.');
@@ -281,14 +265,12 @@ export default function EmployeeProfilePage() {
     setPersonalPhoneInput(myDocs?.personalPhone || '');
     setCompanyPhoneInput(myDocs?.companyPhone || '');
     setPhoneError('');
-    setPhoneSuccess('');
     setIsPhoneEditOpen(true);
   };
 
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPhoneError('');
-    setPhoneSuccess('');
 
     if (isSavingPhone) return;
     if (!personalPhoneInput.trim()) {
@@ -305,8 +287,8 @@ export default function EmployeeProfilePage() {
         companyPhone: companyPhoneInput.trim(),
       });
       await refetchDocs();
-      setPhoneSuccess('Contact numbers updated successfully!');
-      setTimeout(() => { setIsPhoneEditOpen(false); setPhoneSuccess(''); }, 1000);
+      setIsPhoneEditOpen(false);
+      showToast({ type: 'success', message: 'Contact numbers updated successfully!' });
     } catch (err) {
       console.error(err);
       setPhoneError('Failed to save contact numbers.');
@@ -318,7 +300,6 @@ export default function EmployeeProfilePage() {
   const handleResetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setResetError('');
-    setResetSuccess('');
 
     if (isResetting) return;
     if (!currentPass || !newPass || !confirmPass) {
@@ -351,14 +332,11 @@ export default function EmployeeProfilePage() {
       // changeOwnPassword in hrData.ts.
       changeOwnPassword(currentPass, newPass)
         .then(() => {
-          setResetSuccess('Password updated successfully!');
-          setTimeout(() => {
-            setIsResetOpen(false);
-            setCurrentPass('');
-            setNewPass('');
-            setConfirmPass('');
-            setResetSuccess('');
-          }, 1200);
+          setIsResetOpen(false);
+          setCurrentPass('');
+          setNewPass('');
+          setConfirmPass('');
+          showToast({ type: 'success', message: 'Password updated successfully!' });
         })
         .catch(err => {
           console.error('[Profile] Password update error:', err);
@@ -446,13 +424,6 @@ export default function EmployeeProfilePage() {
               <KeyRound className="h-3.5 w-3.5" /> Reset Password
             </button>
           </div>
-
-          {(photoError || photoSuccess) && (
-            <div className={`mb-3 p-2.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${photoError ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-              {photoError ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {photoError || photoSuccess}
-            </div>
-          )}
 
           <h2 className="text-xl font-bold text-slate-900">{profile.fullName}</h2>
           <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -628,13 +599,6 @@ export default function EmployeeProfilePage() {
               <p className="text-[10px] text-slate-400 mt-1">Images up to 3 MB (auto-converted to WebP), PDFs up to 5 MB. Visible to HR/Admin under Master Reports.</p>
             </div>
 
-            {(docError || docSuccess) && (
-              <div className={`mx-6 mt-4 p-2.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${docError ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                {docError ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                {docError || docSuccess}
-              </div>
-            )}
-
             <div className="divide-y divide-slate-100">
               {/* CV / Resume */}
               <div className="flex items-center justify-between gap-3 px-6 py-4">
@@ -766,19 +730,13 @@ export default function EmployeeProfilePage() {
       </Modal>
 
       {/* Password Reset Modal */}
-      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">
+      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); }} title="Change Password">
         <form onSubmit={handleResetSubmit} className="space-y-4">
           {resetError && (
             <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />{resetError}
             </div>
           )}
-          {resetSuccess && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" />{resetSuccess}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Password</label>
             <PasswordInput
@@ -815,19 +773,13 @@ export default function EmployeeProfilePage() {
       </Modal>
 
       {/* Bank Details Edit Modal */}
-      <Modal isOpen={isBankEditOpen} onClose={() => { setIsBankEditOpen(false); setBankError(''); setBankSuccess(''); }} title="Edit Bank Details">
+      <Modal isOpen={isBankEditOpen} onClose={() => { setIsBankEditOpen(false); setBankError(''); }} title="Edit Bank Details">
         <form onSubmit={handleBankSubmit} className="space-y-4">
           {bankError && (
             <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />{bankError}
             </div>
           )}
-          {bankSuccess && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" />{bankSuccess}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Bank Name</label>
             <input
@@ -873,19 +825,13 @@ export default function EmployeeProfilePage() {
       </Modal>
 
       {/* Contact Numbers Edit Modal */}
-      <Modal isOpen={isPhoneEditOpen} onClose={() => { setIsPhoneEditOpen(false); setPhoneError(''); setPhoneSuccess(''); }} title="Edit Contact Numbers">
+      <Modal isOpen={isPhoneEditOpen} onClose={() => { setIsPhoneEditOpen(false); setPhoneError(''); }} title="Edit Contact Numbers">
         <form onSubmit={handlePhoneSubmit} className="space-y-4">
           {phoneError && (
             <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />{phoneError}
             </div>
           )}
-          {phoneSuccess && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" />{phoneSuccess}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Own Number</label>
             <input

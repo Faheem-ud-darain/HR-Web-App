@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
-import { CheckCircle2, GripVertical, Clock, XCircle, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
+import { useActionToast } from '@/components/ui/ActionToastHost';
+import { GripVertical, Clock, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
   { key: 'pending',     label: 'Pending Review',       headerBg: 'bg-amber-50 border-amber-200'   },
@@ -38,8 +39,7 @@ export default function HRLeavesPage() {
   const { data: employees = [] } = useProfiles();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<LeaveApplication['status'] | null>(null);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const { showToast } = useActionToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabView>('kanban');
 
@@ -67,8 +67,7 @@ export default function HRLeavesPage() {
       // Same gap as the Kanban path — only 'admin' was notified, so HR
       // itself never saw confirmation of its own action in the bell.
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} forwarded to CEO for approval.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
-      setSuccessMsg('Sent to CEO!');
-      setTimeout(() => setSuccessMsg(''), 1500);
+      showToast({ type: 'success', message: 'Sent to CEO!' });
     } finally {
       setProcessingLeaveId(null);
     }
@@ -88,8 +87,7 @@ export default function HRLeavesPage() {
       if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was rejected.`, 'leave_task', 'Leave Rejected', undefined, buildNotificationLink('employee', 'leave', l.id));
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} rejected by HR.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
       refetchLeaves();
-      setSuccessMsg('Rejected!');
-      setTimeout(() => setSuccessMsg(''), 1500);
+      showToast({ type: 'success', message: 'Rejected!' });
     } finally {
       setProcessingLeaveId(null);
     }
@@ -102,8 +100,7 @@ export default function HRLeavesPage() {
       await hrActions.updateLeaveStatus(l.id, 'pending');
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} re-opened for reconsideration.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
       refetchLeaves();
-      setSuccessMsg('Re-opened for review!');
-      setTimeout(() => setSuccessMsg(''), 1500);
+      showToast({ type: 'success', message: 'Re-opened for review!' });
     } finally {
       setProcessingLeaveId(null);
     }
@@ -142,16 +139,14 @@ export default function HRLeavesPage() {
     // fired the exact "fully approved" notification a real CEO decision
     // sends, even though the CEO never approved anything.
     if (targetStatus === 'approved') {
-      setErrorMsg('Only Admin/CEO can grant final approval. Use "Send to CEO" — they\'ll approve or reject it from their dashboard.');
-      setTimeout(() => setErrorMsg(''), 3000);
+      showToast({ type: 'error', message: 'Only Admin/CEO can grant final approval. Use "Send to CEO" — they\'ll approve or reject it from their dashboard.' });
       return;
     }
     // Once it's in the CEO's queue, rejecting it is also the CEO's call —
     // HR can still reject directly from "Pending" (before forwarding), just
     // not override a request that's already awaiting CEO review.
     if (targetStatus === 'rejected' && leaf.status === 'hr_approved') {
-      setErrorMsg('This request is already with the CEO for review — only they can reject it now.');
-      setTimeout(() => setErrorMsg(''), 3000);
+      showToast({ type: 'error', message: 'This request is already with the CEO for review — only they can reject it now.' });
       return;
     }
 
@@ -175,8 +170,7 @@ export default function HRLeavesPage() {
     await hrActions.updateLeaveStatus(leaf.id, targetStatus);
     refetchLeaves();
 
-    setSuccessMsg('Leave status updated!');
-    setTimeout(() => setSuccessMsg(''), 1500);
+    showToast({ type: 'success', message: 'Leave status updated!' });
   };
 
   const handleDrop = async (e: React.DragEvent, targetStatus: LeaveApplication['status']) => {
@@ -245,16 +239,6 @@ export default function HRLeavesPage() {
         >
           <Download className="h-3.5 w-3.5" /> Export CSV
         </button>
-        {successMsg && (
-          <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm fade-enter">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />{successMsg}
-          </div>
-        )}
-        {errorMsg && (
-          <div className="bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm fade-enter max-w-sm">
-            <XCircle className="h-4 w-4 text-rose-600 shrink-0" />{errorMsg}
-          </div>
-        )}
         </div>
       </div>
 

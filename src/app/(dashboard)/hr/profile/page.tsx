@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, useProfiles, hrActions, updateProfileSelf, changeOwnPassword } from '@/lib/hrData';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
 import { PasswordInput } from '@/components/ui/PasswordInput';
@@ -21,8 +22,7 @@ export default function HRProfilePage() {
   // Profile picture upload
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
-  const [photoError, setPhotoError] = useState('');
-  const [photoSuccess, setPhotoSuccess] = useState('');
+  const { showToast } = useActionToast();
 
   // Password reset states
   const [isResetOpen, setIsResetOpen] = useState(false);
@@ -30,7 +30,6 @@ export default function HRProfilePage() {
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [resetError, setResetError] = useState('');
-  const [resetSuccess, setResetSuccess] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
@@ -46,8 +45,7 @@ export default function HRProfilePage() {
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setPhotoError('Please choose an image file.');
-      setTimeout(() => setPhotoError(''), 3000);
+      showToast({ type: 'error', message: 'Please choose an image file.' });
       return;
     }
     setPendingPhotoFile(file);
@@ -59,19 +57,16 @@ export default function HRProfilePage() {
       await updateProfileSelf({ profilePicture: webpDataUrl });
       await refetchProfiles();
       setPendingPhotoFile(null);
-      setPhotoSuccess('Profile picture updated!');
-      setTimeout(() => setPhotoSuccess(''), 2000);
+      showToast({ type: 'success', message: 'Profile picture updated!' });
     } catch (err) {
       console.error('[HR Profile] Photo update error:', err);
-      setPhotoError('Failed to save profile picture.');
-      setTimeout(() => setPhotoError(''), 3000);
+      showToast({ type: 'error', message: 'Failed to save profile picture.' });
     }
   };
 
   const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError('');
-    setResetSuccess('');
 
     if (isResetting) return;
     if (!currentPass || !newPass || !confirmPass) {
@@ -97,9 +92,9 @@ export default function HRProfilePage() {
       try {
         await changeOwnPassword(currentPass, newPass);
         refetchProfiles();
-        setResetSuccess('Password updated successfully!');
         setCurrentPass(''); setNewPass(''); setConfirmPass('');
-        setTimeout(() => { setIsResetOpen(false); setResetSuccess(''); }, 1400);
+        setIsResetOpen(false);
+        showToast({ type: 'success', message: 'Password updated successfully!' });
       } catch (err: any) {
         console.error('[HR Profile] Password update error:', err);
         setResetError(err?.message || 'Failed to update password. Please try again.');
@@ -173,13 +168,6 @@ export default function HRProfilePage() {
             </button>
           </div>
 
-          {(photoError || photoSuccess) && (
-            <div className={`mb-3 p-2.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${photoError ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-              {photoError ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {photoError || photoSuccess}
-            </div>
-          )}
-
           <h2 className="text-lg md:text-xl font-bold text-slate-900">{profile.fullName}</h2>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full capitalize">
@@ -245,19 +233,13 @@ export default function HRProfilePage() {
       </div>
 
       {/* Password Reset Modal */}
-      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); setResetSuccess(''); }} title="Change Password">
+      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); }} title="Change Password">
         <form onSubmit={handleResetSubmit} className="space-y-4">
           {resetError && (
             <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4" />{resetError}
             </div>
           )}
-          {resetSuccess && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4" />{resetSuccess}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Password</label>
             <PasswordInput

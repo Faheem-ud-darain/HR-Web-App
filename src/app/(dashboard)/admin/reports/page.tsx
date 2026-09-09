@@ -11,6 +11,7 @@ import { UserProfileModal } from '@/components/ui/UserProfileModal';
 import { DocumentsModal } from '@/components/ui/DocumentsModal';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 
 export default function ReportsPage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -26,7 +27,7 @@ export default function ReportsPage() {
   const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([]);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [exemptFromAbsenceCheck, setExemptFromAbsenceCheck] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
+  const { showToast } = useActionToast();
   const [isSavingAssignment, setIsSavingAssignment] = useState(false);
 
   // Timesheet Review states
@@ -115,11 +116,8 @@ export default function ReportsPage() {
       });
 
       refetchProfiles();
-      setSuccessMsg(`Successfully updated assignment for ${displayName(selectedEmp, 'admin')}`);
-      setTimeout(() => {
-        setSelectedEmp(null);
-        setSuccessMsg('');
-      }, 1500);
+      setSelectedEmp(null);
+      showToast({ type: 'success', message: `Successfully updated assignment for ${displayName(selectedEmp, 'admin')}` });
     } finally {
       setIsSavingAssignment(false);
     }
@@ -345,11 +343,6 @@ export default function ReportsPage() {
       {selectedEmp && (
         <Modal isOpen onClose={() => setSelectedEmp(null)} title="Modify Regional & Warehouse Assignment">
           <div className="space-y-4 pt-1 font-sans">
-            {successMsg && (
-              <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 p-2.5 rounded-lg text-xs font-semibold">
-                {successMsg}
-              </div>
-            )}
             <div>
               <p className="text-xs text-slate-500 font-semibold mb-1">Employee</p>
               <p className="text-sm font-bold text-slate-800">{displayName(selectedEmp, 'admin')} ({selectedEmp.email})</p>

@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Task, Profile, hrActions, displayName } from '@/lib/hrData';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { useActionToast } from '@/components/ui/ActionToastHost';
+import { Loader2 } from 'lucide-react';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState<Task['priority']>('medium');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { showToast } = useActionToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,18 +56,14 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
       // notification internally (it does not return the created record).
       await hrActions.addTask(newTask);
 
-      setSuccess(`Task "${title}" assigned to ${displayName(emp, createdBy as 'hr' | 'admin')}!`);
       onTaskAdded?.({ id: '', ...newTask });
-
-      setTimeout(() => {
-        setSuccess('');
-        setTitle('');
-        setDescription('');
-        setAssignedEmail('');
-        setDueDate('');
-        setPriority('medium');
-        onClose();
-      }, 1200);
+      setTitle('');
+      setDescription('');
+      setAssignedEmail('');
+      setDueDate('');
+      setPriority('medium');
+      onClose();
+      showToast({ type: 'success', message: `Task "${title}" assigned to ${displayName(emp, createdBy as 'hr' | 'admin')}!` });
     } catch (err) {
       console.error('Task assignment failed:', err);
       setError('Could not assign that task. Please try again.');
@@ -81,12 +78,6 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
         {error && (
           <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold">{error}</div>
         )}
-        {success && (
-          <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4" />{success}
-          </div>
-        )}
-
         <div className="space-y-1">
           <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Task Title *</label>
           <input

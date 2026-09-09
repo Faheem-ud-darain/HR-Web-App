@@ -1,6 +1,6 @@
 # 009 — Unified action feedback (toast) instead of per-page success/error banners
 
-- **Status**: TODO
+- **Status**: DONE (see Implementation note below for the one deliberate scope narrowing)
 - **Commit**: 59a9c20
 - **Severity**: MEDIUM
 - **Category**: Usability / consistency (usability pass, tracked here for the same reason plan 007 is)
@@ -139,3 +139,44 @@ the host owns visibility/auto-dismiss timing.
   banner rendering inline.
 - **Done when**: a repo-wide grep for `successMsg` in `src/` returns zero
   results, and all 12 files call `showToast` instead.
+
+
+## Implementation note (post-build)
+
+Built `src/components/ui/ActionToastHost.tsx` (context + `useActionToast()`
+hook + the toast UI) and mounted it in `src/app/layout.tsx` wrapping
+`{children}` (alongside, not replacing, `ToastNotification`) — so it covers
+every route including the public `/careers` page. Positioned top-center
+(not top-right, to avoid colliding with `ToastNotification`'s own corner)
+and reuses this app's existing emerald/rose success/error colors.
+Auto-dismiss: 1500ms for success, 3000ms for error — the two most common
+existing timeout values across the 12 files, kept as two different
+durations rather than one invented number.
+
+All 12 files migrated their transient `successMsg`-style banners to
+`showToast`. A judgment call was applied per the plan's own Boundaries
+("do NOT remove inline persistent form-validation error messages") on
+which *error* states to migrate versus keep inline:
+
+- Field-validation-style errors that keep a still-open modal/form visible
+  for the user to fix and retry (e.g. "fill in all fields," "passwords
+  don't match," "14 days advance notice required," a still-open confirm
+  dialog's failure message) were left inline exactly as before — these are
+  not the one-shot success/failure toasts this plan targets.
+- Transient, non-form action results (a picked file being the wrong type,
+  a background save failing, a drag-and-drop rule violation) were migrated
+  to `showToast({ type: 'error', ... })` alongside their success
+  counterparts.
+- One deliberate exception beyond error-vs-inline: `CareersView.tsx`'s
+  `applySuccess` state was NOT migrated. It isn't a passive banner — the
+  Apply modal replaces its entire form with a dedicated "application
+  received" screen for an anonymous external job applicant before
+  auto-closing after 2s. Collapsing that into a generic toast would remove
+  a confirmation screen a non-logged-in public user relies on more than
+  the app's other (internal, HR/Admin) toasts. Its sibling `success` state
+  (an HR/Admin posting a new job listing) WAS migrated, since that one is
+  the same plain internal banner pattern as every other file.
+
+Verified: `npx tsc --noEmit -p tsconfig.json` — zero errors. Repo-wide grep
+for `successMsg` in `src/` returns zero results; 12 migrated files plus
+`ActionToastHost.tsx` itself all reference `showToast`.

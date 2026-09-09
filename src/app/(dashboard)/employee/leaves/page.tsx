@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
+import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Clock, PlusCircle, CheckCircle2, AlertCircle, HelpCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
+import { Clock, PlusCircle, AlertCircle, HelpCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
 
 export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
@@ -23,7 +24,7 @@ export default function EmployeeLeavesPage() {
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const { showToast } = useActionToast();
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
 
   // Withdraw-request state — employees can only delete their own leave
@@ -74,7 +75,6 @@ export default function EmployeeLeavesPage() {
   const handleLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
 
     if (isSubmittingLeave) return;
     if (!startDate || !endDate || !reason) {
@@ -159,14 +159,11 @@ export default function EmployeeLeavesPage() {
       await hrActions.addNotification('all', 'admin', `New ${newLeave.type} leave request from ${userProfile?.fullName || 'an employee'}.`, 'leave_task', `${newLeave.type} Leave Request`, userProfile?.email, buildNotificationLink('admin', 'leave', createdLeave.id));
       await refetchLeaves();
 
-      setSuccess('Leave request submitted!');
-      setTimeout(() => {
-        setIsLeaveOpen(false);
-        setSuccess('');
-        setStartDate('');
-        setEndDate('');
-        setReason('');
-      }, 1000);
+      setIsLeaveOpen(false);
+      setStartDate('');
+      setEndDate('');
+      setReason('');
+      showToast({ type: 'success', message: 'Leave request submitted!' });
     } catch (err) {
       console.error('[Leaves] Submit error:', err);
       setError('Failed to submit leave. Please try again.');
@@ -414,13 +411,6 @@ export default function EmployeeLeavesPage() {
               {error}
             </div>
           )}
-          {success && (
-            <div className="p-3 text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              {success}
-            </div>
-          )}
-
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Leave Type</label>
             <select
