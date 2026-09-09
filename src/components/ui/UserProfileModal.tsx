@@ -25,6 +25,7 @@ import { Avatar } from './Avatar';
 import { ImageLightbox } from './ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { X, User, Mail, Shield, ShieldAlert, Key, DollarSign, Calendar, MapPin, Landmark, Briefcase, FileText, CheckSquare, Square, Trash2, Download, Phone, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Button } from './Button';
 
 // Detects the `pbkdf2$<iterations>$<salt>$<hash>` format hashPassword()
 // writes (see serverAuth.ts) — deliberately re-implemented here rather than
@@ -222,9 +223,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
           <p className="text-xs text-slate-500 font-semibold leading-relaxed">
             You do not have permission to view this profile. Profiles can only be viewed by administrators, HR, or team members and team leaders sharing the same department.
           </p>
-          <button onClick={onClose} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2 rounded-xl text-xs">
+          <Button variant="secondary" size="md" fullWidth onClick={onClose}>
             Close Panel
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -723,30 +724,32 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               {canManageThisProfile && (
                 <div className="space-y-2 pt-3 border-t border-slate-100">
                   <div className="flex gap-2">
-                    <button onClick={() => setIsEditing(true)} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform active:scale-97">
+                    <Button variant="primary" size="md" className="flex-1" onClick={() => setIsEditing(true)}>
                       Edit Credentials
-                    </button>
+                    </Button>
                     {profile.offboarded ? (
                       <button onClick={handleReactivate} disabled={isReactivating} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60 disabled:cursor-not-allowed">
                         {isReactivating ? 'Reactivating…' : 'Reactivate Employee'}
                       </button>
                     ) : (
-                      <button onClick={() => setIsOffboarding(true)} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform active:scale-97">
+                      <Button variant="danger" size="md" className="flex-1" onClick={() => setIsOffboarding(true)}>
                         Offboard Account
-                      </button>
+                      </Button>
                     )}
                   </div>
                   {profile.offboarded && (
                     <div className="space-y-1.5 pt-1">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="md"
+                        fullWidth
                         onClick={handleDownloadArchive}
                         disabled={isExportingArchive}
-                        className="w-full flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform active:scale-97 disabled:opacity-60"
                       >
                         <Download className="h-3.5 w-3.5" />
                         {isExportingArchive ? 'Preparing download…' : hasDownloadedArchive ? 'Re-download Employee Data' : 'Download Employee Data First'}
-                      </button>
+                      </Button>
                       <button
                         onClick={() => setShowDeleteConfirm(true)}
                         disabled={!hasDownloadedArchive}
@@ -889,9 +892,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               </div>
 
               <div className="flex gap-2 pt-3 border-t border-slate-100">
-                <button type="button" disabled={isSavingProfile} onClick={() => setIsEditing(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                <Button type="button" variant="secondary" size="md" className="flex-1" disabled={isSavingProfile} onClick={() => setIsEditing(false)}>
                   Cancel
-                </button>
+                </Button>
                 <button type="submit" disabled={isSavingProfile} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs disabled:opacity-60 disabled:cursor-not-allowed">
                   {isSavingProfile ? 'Saving…' : 'Save Changes'}
                 </button>
@@ -983,9 +986,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               </div>
 
               <div className="flex gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsOffboarding(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs">
+                <Button type="button" variant="secondary" size="md" className="flex-1" onClick={() => setIsOffboarding(false)}>
                   Cancel
-                </button>
+                </Button>
                 <button
                   type="submit"
                   disabled={!canSubmitOffboard}
