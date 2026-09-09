@@ -77,7 +77,7 @@ category, different trigger (a product request, not `improve-animations`).
 | # | Plan | Severity | Status |
 | --- | --- | --- | --- |
 | 7 | [007-admin-hr-analytics-insights.md](./007-admin-hr-analytics-insights.md) | MEDIUM | DONE |
-| 8 | [008-replace-window-confirm.md](./008-replace-window-confirm.md) | MEDIUM | TODO |
+| 8 | [008-replace-window-confirm.md](./008-replace-window-confirm.md) | MEDIUM | DONE |
 | 9 | [009-unified-action-feedback.md](./009-unified-action-feedback.md) | MEDIUM | TODO |
 | 10 | [010-paginate-large-tables.md](./010-paginate-large-tables.md) | LOW | TODO |
 | 11 | [011-migrate-buttons-to-shared-button-component.md](./011-migrate-buttons-to-shared-button-component.md) | MEDIUM | TODO |

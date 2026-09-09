@@ -26,6 +26,7 @@ import { pushModal, popModal } from '@/lib/modalStack';
 import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Lock, ImageOff } from 'lucide-react';
 
 interface TrackingViewProps {
@@ -364,11 +365,26 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     await hrActions.writeTrackerCommand(email, 'reload_settings');
   };
 
-  const handleRegenerateToken = async (email: string) => {
-    const confirmed = window.confirm('Regenerating the token will disconnect the currently installed agent until it is reconfigured with the new token. Continue?');
-    if (!confirmed) return;
-    await hrActions.regenerateAgentToken(email);
-    refetchSettings();
+  const [pendingRegenerateTokenEmail, setPendingRegenerateTokenEmail] = useState<string | null>(null);
+  const [regeneratingToken, setRegeneratingToken] = useState(false);
+  const [pendingForceDisconnectEmail, setPendingForceDisconnectEmail] = useState<string | null>(null);
+  const [forceDisconnectingTracker, setForceDisconnectingTracker] = useState(false);
+
+  const handleRegenerateToken = (email: string) => {
+    setPendingRegenerateTokenEmail(email);
+  };
+
+  const confirmRegenerateToken = async () => {
+    if (!pendingRegenerateTokenEmail) return;
+    const email = pendingRegenerateTokenEmail;
+    setPendingRegenerateTokenEmail(null);
+    setRegeneratingToken(true);
+    try {
+      await hrActions.regenerateAgentToken(email);
+      refetchSettings();
+    } finally {
+      setRegeneratingToken(false);
+    }
   };
 
   // HR/Admin-facing escape hatch for the same "another device is active"
@@ -377,11 +393,21 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // a stale heartbeat to expire on its own. Does not change the agent
   // token (unlike Regenerate Token above), so a reconnect works immediately
   // with the same setup code once the new device's tracker is opened again.
-  const handleForceDisconnect = async (email: string) => {
-    const confirmed = window.confirm(`Force-disconnect every tracker (desktop app or Chrome extension) currently linked to ${email}'s account, including one that may genuinely still be running? Use this only to unblock a stuck "device already connected" report.`);
-    if (!confirmed) return;
-    await hrActions.forceDisconnectAllTrackers(email);
-    refetchHeartbeats();
+  const handleForceDisconnect = (email: string) => {
+    setPendingForceDisconnectEmail(email);
+  };
+
+  const confirmForceDisconnect = async () => {
+    if (!pendingForceDisconnectEmail) return;
+    const email = pendingForceDisconnectEmail;
+    setPendingForceDisconnectEmail(null);
+    setForceDisconnectingTracker(true);
+    try {
+      await hrActions.forceDisconnectAllTrackers(email);
+      refetchHeartbeats();
+    } finally {
+      setForceDisconnectingTracker(false);
+    }
   };
 
   const copyConfig = (settings: TrackingSettings) => {
@@ -1596,6 +1622,28 @@ AGENT_TOKEN=${settings.agentToken}`}
         </div>,
         document.body
       )}
+
+      <ConfirmDialog
+        isOpen={pendingRegenerateTokenEmail !== null}
+        onClose={() => setPendingRegenerateTokenEmail(null)}
+        onConfirm={confirmRegenerateToken}
+        title="Regenerate token?"
+        message="Regenerating the token will disconnect the currently installed agent until it is reconfigured with the new token. Continue?"
+        confirmLabel={regeneratingToken ? 'Regenerating…' : 'Regenerate'}
+        variant="warning"
+        loading={regeneratingToken}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingForceDisconnectEmail !== null}
+        onClose={() => setPendingForceDisconnectEmail(null)}
+        onConfirm={confirmForceDisconnect}
+        title="Force-disconnect tracker?"
+        message={`Force-disconnect every tracker (desktop app or Chrome extension) currently linked to ${pendingForceDisconnectEmail}'s account, including one that may genuinely still be running? Use this only to unblock a stuck "device already connected" report.`}
+        confirmLabel={forceDisconnectingTracker ? 'Disconnecting…' : 'Disconnect'}
+        variant="warning"
+        loading={forceDisconnectingTracker}
+      />
     </div>
   );
 }

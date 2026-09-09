@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
 import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
 import { formatTimeNY, getNYDateString } from '@/lib/timezone';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 
 interface AbsenceDetailsViewProps {
@@ -30,6 +31,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [loadingAbsences, setLoadingAbsences] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [pendingDeleteRecord, setPendingDeleteRecord] = useState<AbsenceRecord | null>(null);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const { data: allTimesheets = [], isLoading: loadingTimesheets } = useTimesheets();
   const { data: allProfiles = [] } = useProfiles();
@@ -66,21 +70,31 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     loadAbsenceRecords();
   }, [role, filterEmail]);
 
-  const handleDeleteAbsenceRecord = async (record: AbsenceRecord) => {
+  const handleDeleteAbsenceRecord = (record: AbsenceRecord) => {
     // Never allow deleting an absence record that is actually an approved leave day —
     // show an explanatory popup instead of the normal delete confirmation.
     if (isApprovedLeaveOnDate(leaves, record.employeeName, record.date)) {
       setLeaveBlockedNotice({ employeeName: record.employeeName, date: record.date });
       return;
     }
-    const confirmDelete = window.confirm(`Remove absence record for ${record.employeeName} on ${record.date}? This will remove the 2-days' pay deduction penalty.`);
-    if (!confirmDelete) return;
-    await hrActions.deleteAbsenceRecord(record.id);
-    setSelectedIds(prev => { const next = new Set(prev); next.delete(record.id); return next; });
-    loadAbsenceRecords();
+    setPendingDeleteRecord(record);
   };
 
-  const handleBulkDelete = async () => {
+  const confirmDeleteAbsenceRecord = async () => {
+    if (!pendingDeleteRecord) return;
+    const record = pendingDeleteRecord;
+    setPendingDeleteRecord(null);
+    setDeletingRecordId(record.id);
+    try {
+      await hrActions.deleteAbsenceRecord(record.id);
+      setSelectedIds(prev => { const next = new Set(prev); next.delete(record.id); return next; });
+      loadAbsenceRecords();
+    } finally {
+      setDeletingRecordId(null);
+    }
+  };
+
+  const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
     const selectedRecords = filteredAbsences.filter(r => selectedIds.has(r.id));
     // If ANY selected record is actually an approved leave day, block the whole
@@ -90,11 +104,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       setLeaveBlockedNotice({ employeeName: leaveCovered.employeeName, date: leaveCovered.date });
       return;
     }
-    const total = selectedRecords.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
-    const confirmed = window.confirm(
-      `Remove ${selectedIds.size} absence record${selectedIds.size > 1 ? 's' : ''} and reverse ${formatMoney(total, 'Pakistan')} in deductions? This cannot be undone.`
-    );
-    if (!confirmed) return;
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    setShowBulkDeleteConfirm(false);
     setBulkDeleting(true);
     try {
       await hrActions.bulkDeleteAbsenceRecords(Array.from(selectedIds));
@@ -1064,6 +1078,28 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteRecord !== null}
+        onClose={() => setPendingDeleteRecord(null)}
+        onConfirm={confirmDeleteAbsenceRecord}
+        title="Remove absence record?"
+        message={pendingDeleteRecord ? `Remove absence record for ${pendingDeleteRecord.employeeName} on ${pendingDeleteRecord.date}? This will remove the 2-days' pay deduction penalty.` : ''}
+        confirmLabel={deletingRecordId === pendingDeleteRecord?.id ? 'Removing…' : 'Remove'}
+        variant="danger"
+        loading={deletingRecordId === pendingDeleteRecord?.id}
+      />
+
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={confirmBulkDelete}
+        title="Remove selected absence records?"
+        message={`Remove ${selectedIds.size} absence record${selectedIds.size > 1 ? 's' : ''} and reverse ${formatMoney(filteredAbsences.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} in deductions? This cannot be undone.`}
+        confirmLabel={bulkDeleting ? 'Removing…' : 'Remove'}
+        variant="danger"
+        loading={bulkDeleting}
+      />
     </div>
   );
 }

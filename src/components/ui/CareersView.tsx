@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   CareerPosition,
   CareerApplication,
@@ -58,6 +59,7 @@ export function CareersView({ role }: CareersViewProps) {
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
   const [isPostingJob, setIsPostingJob] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [pendingDeleteJobId, setPendingDeleteJobId] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [dept, setDept] = useState('Engineering');
@@ -106,8 +108,15 @@ export function CareersView({ role }: CareersViewProps) {
     }
   };
 
-  const handleDeleteJob = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this listing?') || deletingJobId) return;
+  const handleDeleteJob = (id: string) => {
+    if (deletingJobId) return;
+    setPendingDeleteJobId(id);
+  };
+
+  const confirmDeleteJob = async () => {
+    if (!pendingDeleteJobId) return;
+    const id = pendingDeleteJobId;
+    setPendingDeleteJobId(null);
     setDeletingJobId(id);
     try {
       await hrActions.deleteCareer(id);
@@ -646,6 +655,17 @@ export function CareersView({ role }: CareersViewProps) {
           )}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingDeleteJobId !== null}
+        onClose={() => setPendingDeleteJobId(null)}
+        onConfirm={confirmDeleteJob}
+        title="Delete listing?"
+        message="Are you sure you want to delete this listing?"
+        confirmLabel={deletingJobId ? 'Deleting…' : 'Delete'}
+        variant="danger"
+        loading={!!deletingJobId}
+      />
     </div>
   );
 }

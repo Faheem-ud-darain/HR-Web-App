@@ -12,6 +12,7 @@ import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcas
 import { Avatar } from '@/components/ui/Avatar';
 import { formatDateTimeNY, formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { useNativeKeyboard } from '@/hooks/useNativeKeyboard';
@@ -598,28 +599,27 @@ export function TicketsView({ role }: TicketsViewProps) {
     sendReply();
   };
 
-  const handleCloseTicket = async (id: string) => {
+  const [pendingTicketStatusAction, setPendingTicketStatusAction] = useState<{ id: string; action: 'closed' | 'open' } | null>(null);
+
+  const handleCloseTicket = (id: string) => {
     if (updatingTicketStatusId) return;
-    if (!window.confirm('Are you sure you want to mark this support ticket as closed?')) return;
-    const ticket = tickets.find(t => t.id === id) || selectedTicket;
-    if (!ticket) return;
-    setUpdatingTicketStatusId(id);
-    try {
-      await hrActions.updateTicketStatus(ticket, 'closed');
-      refetchTickets();
-    } finally {
-      setUpdatingTicketStatusId(null);
-    }
+    setPendingTicketStatusAction({ id, action: 'closed' });
   };
 
-  const handleReopenTicket = async (id: string) => {
+  const handleReopenTicket = (id: string) => {
     if (updatingTicketStatusId) return;
-    if (!window.confirm('Are you sure you want to re-open this ticket?')) return;
+    setPendingTicketStatusAction({ id, action: 'open' });
+  };
+
+  const confirmTicketStatusChange = async () => {
+    if (!pendingTicketStatusAction) return;
+    const { id, action } = pendingTicketStatusAction;
+    setPendingTicketStatusAction(null);
     const ticket = tickets.find(t => t.id === id) || selectedTicket;
     if (!ticket) return;
     setUpdatingTicketStatusId(id);
     try {
-      await hrActions.updateTicketStatus(ticket, 'open');
+      await hrActions.updateTicketStatus(ticket, action);
       refetchTickets();
     } finally {
       setUpdatingTicketStatusId(null);
@@ -1372,6 +1372,19 @@ export function TicketsView({ role }: TicketsViewProps) {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingTicketStatusAction !== null}
+        onClose={() => setPendingTicketStatusAction(null)}
+        onConfirm={confirmTicketStatusChange}
+        title={pendingTicketStatusAction?.action === 'closed' ? 'Close this ticket?' : 'Re-open this ticket?'}
+        message={pendingTicketStatusAction?.action === 'closed'
+          ? 'Are you sure you want to mark this support ticket as closed?'
+          : 'Are you sure you want to re-open this ticket?'}
+        confirmLabel={updatingTicketStatusId ? 'Saving…' : (pendingTicketStatusAction?.action === 'closed' ? 'Close Ticket' : 'Re-open')}
+        variant="warning"
+        loading={!!updatingTicketStatusId}
+      />
     </div>
   );
 }

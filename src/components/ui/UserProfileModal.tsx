@@ -60,6 +60,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   const [hasDownloadedArchive, setHasDownloadedArchive] = useState(false);
   const [isExportingArchive, setIsExportingArchive] = useState(false);
   const [isApplyingIncrement, setIsApplyingIncrement] = useState(false);
+  const [showApplyIncrementConfirm, setShowApplyIncrementConfirm] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isConfirmingOffboard, setIsConfirmingOffboard] = useState(false);
   const [isReactivating, setIsReactivating] = useState(false);
@@ -389,11 +390,16 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   // marked "processed" on the payslip before HR's Payroll page correctly
   // called applyAnniversaryIncrement — those are stuck showing the old base
   // salary and the same pending amount forever otherwise.
-  const handleApplyIncrementNow = async () => {
+  const handleApplyIncrementNow = () => {
     const pending = getPendingIncrement(profile);
     if (pending <= 0) return;
-    const confirmed = window.confirm(`Apply +${formatMoney(pending, profile.region)} to ${profile.fullName}'s base salary now? This updates their real base salary immediately, outside the normal payroll cycle.`);
-    if (!confirmed) return;
+    setShowApplyIncrementConfirm(true);
+  };
+
+  const confirmApplyIncrementNow = async () => {
+    const pending = getPendingIncrement(profile);
+    setShowApplyIncrementConfirm(false);
+    if (pending <= 0) return;
     setIsApplyingIncrement(true);
     try {
       await applyIncrementServer(profile, profile.baseSalary, pending);
@@ -992,6 +998,17 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showApplyIncrementConfirm}
+        onClose={() => setShowApplyIncrementConfirm(false)}
+        onConfirm={confirmApplyIncrementNow}
+        title="Apply increment now?"
+        message={`Apply +${formatMoney(getPendingIncrement(profile), profile.region)} to ${profile.fullName}'s base salary now? This updates their real base salary immediately, outside the normal payroll cycle.`}
+        confirmLabel={isApplyingIncrement ? 'Applying…' : 'Apply Increment Now'}
+        variant="warning"
+        loading={isApplyingIncrement}
+      />
 
       <ConfirmDialog
         isOpen={showOffboardConfirm}

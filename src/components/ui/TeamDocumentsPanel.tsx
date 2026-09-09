@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { Team, TeamDocument, useTeamDocuments, hrActions } from '@/lib/hrData';
 import { formatDateNY } from '@/lib/timezone';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   Upload, FileText, FileImage, FileVideo, Download, Trash2, Loader2,
   X, FolderOpen, File as FileIcon,
@@ -64,6 +65,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteDoc, setPendingDeleteDoc] = useState<TeamDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
@@ -104,8 +106,14 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
     }
   };
 
-  const handleDelete = async (doc: TeamDocument) => {
-    if (!window.confirm(`Remove "${doc.title}" for everyone on this team?`)) return;
+  const handleDelete = (doc: TeamDocument) => {
+    setPendingDeleteDoc(doc);
+  };
+
+  const confirmDeleteDoc = async () => {
+    if (!pendingDeleteDoc) return;
+    const doc = pendingDeleteDoc;
+    setPendingDeleteDoc(null);
     setDeletingId(doc.id);
     try {
       await hrActions.deleteTeamDocument(doc.id);
@@ -249,6 +257,17 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
           })}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={pendingDeleteDoc !== null}
+        onClose={() => setPendingDeleteDoc(null)}
+        onConfirm={confirmDeleteDoc}
+        title="Remove document?"
+        message={`Remove "${pendingDeleteDoc?.title}" for everyone on this team?`}
+        confirmLabel={deletingId === pendingDeleteDoc?.id ? 'Removing…' : 'Remove'}
+        variant="danger"
+        loading={deletingId === pendingDeleteDoc?.id}
+      />
     </div>
   );
 }

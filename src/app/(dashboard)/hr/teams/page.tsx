@@ -8,6 +8,7 @@ import { hrActions, Profile, Team, useProfiles, useTeams, useWarehouses, display
 import { getSessionEmail } from '@/lib/session';
 import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Edit, Trash, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
 import { UserProfileModal } from '@/components/ui/UserProfileModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function HRTeamsPage() {
   const { data: allProfiles = [], refetch: refetchProfiles } = useProfiles();
@@ -64,11 +65,14 @@ export default function HRTeamsPage() {
   const [whLeadSelections, setWhLeadSelections] = useState<string[]>([]);
   const [whLeadSuccess, setWhLeadSuccess] = useState('');
   const [cleaningWarehouses, setCleaningWarehouses] = useState(false);
+  const [pendingWarehouseCleanup, setPendingWarehouseCleanup] = useState<{ staleProfiles: Profile[]; staleTeams: Team[] } | null>(null);
   const [deletingTeamName, setDeletingTeamName] = useState<string | null>(null);
+  const [pendingDeleteTeamName, setPendingDeleteTeamName] = useState<string | null>(null);
   const [isSavingTeamLead, setIsSavingTeamLead] = useState(false);
   const [isSavingWhLead, setIsSavingWhLead] = useState(false);
   const [isCreatingWh, setIsCreatingWh] = useState(false);
   const [deletingWhId, setDeletingWhId] = useState<string | null>(null);
+  const [pendingDeleteWhId, setPendingDeleteWhId] = useState<string | null>(null);
   const [isSavingWhEdit, setIsSavingWhEdit] = useState(false);
 
   useEffect(() => {
@@ -110,11 +114,15 @@ export default function HRTeamsPage() {
     }
   };
 
-  const handleDeleteTeam = async (teamName: string) => {
+  const handleDeleteTeam = (teamName: string) => {
     if (deletingTeamName) return;
-    const confirmDelete = window.confirm(`Are you sure you want to delete the "${teamName}" team? Members will be removed from this team.`);
-    if (!confirmDelete) return;
+    setPendingDeleteTeamName(teamName);
+  };
 
+  const confirmDeleteTeam = async () => {
+    if (!pendingDeleteTeamName) return;
+    const teamName = pendingDeleteTeamName;
+    setPendingDeleteTeamName(null);
     setDeletingTeamName(teamName);
     try {
       const team = findTeamByName(teamName);
@@ -320,11 +328,15 @@ export default function HRTeamsPage() {
     }
   };
 
-  const handleDeleteWarehouse = async (id: string) => {
+  const handleDeleteWarehouse = (id: string) => {
     if (deletingWhId) return;
-    const confirmDelete = window.confirm('Are you sure you want to delete this warehouse? Assignments will be updated.');
-    if (!confirmDelete) return;
+    setPendingDeleteWhId(id);
+  };
 
+  const confirmDeleteWarehouse = async () => {
+    if (!pendingDeleteWhId) return;
+    const id = pendingDeleteWhId;
+    setPendingDeleteWhId(null);
     setDeletingWhId(id);
     try {
       await hrActions.deleteWarehouse(id, allProfiles);
@@ -387,7 +399,7 @@ export default function HRTeamsPage() {
   // current hr_warehouses record — leftovers from the old KV->collection
   // migration (see fix_warehouse_id_mismatch.py) that couldn't be
   // auto-remapped because no matching warehouse name was found.
-  const handleCleanupStaleWarehouses = async () => {
+  const handleCleanupStaleWarehouses = () => {
     const liveIds = new Set(warehouses.map(w => w.id));
     const staleProfiles = employees.filter(emp =>
       (emp.assignedWarehouses || []).some(id => !liveIds.has(id)) ||
@@ -401,13 +413,14 @@ export default function HRTeamsPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `This will remove unrecognized warehouse links from ${staleProfiles.length} employee(s)` +
-      (staleTeams.length > 0 ? ` and ${staleTeams.length} team(s)` : '') +
-      `. Valid warehouse assignments are left untouched. Continue?`
-    );
-    if (!confirmed) return;
+    setPendingWarehouseCleanup({ staleProfiles, staleTeams });
+  };
 
+  const confirmCleanupStaleWarehouses = async () => {
+    if (!pendingWarehouseCleanup) return;
+    const { staleProfiles, staleTeams } = pendingWarehouseCleanup;
+    const liveIds = new Set(warehouses.map(w => w.id));
+    setPendingWarehouseCleanup(null);
     setCleaningWarehouses(true);
     try {
       await Promise.all(staleProfiles.map(emp =>
@@ -1153,6 +1166,43 @@ export default function HRTeamsPage() {
           </form>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteTeamName !== null}
+        onClose={() => setPendingDeleteTeamName(null)}
+        onConfirm={confirmDeleteTeam}
+        title="Delete team?"
+        message={`Are you sure you want to delete the "${pendingDeleteTeamName}" team? Members will be removed from this team.`}
+        confirmLabel={deletingTeamName ? 'Deleting…' : 'Delete'}
+        variant="danger"
+        loading={!!deletingTeamName}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteWhId !== null}
+        onClose={() => setPendingDeleteWhId(null)}
+        onConfirm={confirmDeleteWarehouse}
+        title="Delete warehouse?"
+        message="Are you sure you want to delete this warehouse? Assignments will be updated."
+        confirmLabel={deletingWhId ? 'Deleting…' : 'Delete'}
+        variant="danger"
+        loading={!!deletingWhId}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingWarehouseCleanup !== null}
+        onClose={() => setPendingWarehouseCleanup(null)}
+        onConfirm={confirmCleanupStaleWarehouses}
+        title="Clean up stale warehouse links?"
+        message={pendingWarehouseCleanup
+          ? `This will remove unrecognized warehouse links from ${pendingWarehouseCleanup.staleProfiles.length} employee(s)`
+            + (pendingWarehouseCleanup.staleTeams.length > 0 ? ` and ${pendingWarehouseCleanup.staleTeams.length} team(s)` : '')
+            + `. Valid warehouse assignments are left untouched. Continue?`
+          : ''}
+        confirmLabel={cleaningWarehouses ? 'Cleaning up…' : 'Clean Up'}
+        variant="warning"
+        loading={cleaningWarehouses}
+      />
     </div>
   );
 }

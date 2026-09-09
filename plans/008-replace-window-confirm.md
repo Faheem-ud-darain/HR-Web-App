@@ -1,6 +1,6 @@
 # 008 — Replace `window.confirm()` with the existing `ConfirmDialog` component
 
-- **Status**: TODO
+- **Status**: DONE (all 18 call sites across 12 files migrated to ConfirmDialog; see Implementation note below)
 - **Commit**: 6685ae1
 - **Severity**: MEDIUM
 - **Category**: Usability / consistency (not part of the animation audit — a usability pass, tracked here for the same reason plan 007 is)
@@ -190,3 +190,31 @@ naming conventions for similar state (e.g. if the file already has a
     show `variant="warning"` (amber).
 - **Done when**: a repo-wide grep for `window.confirm` returns zero results
   in `src/`.
+
+
+## Implementation note (post-build)
+
+All 18 sites migrated exactly as scoped — local `useState` for the pending
+action + `ConfirmDialog` rendered near each component's other modals,
+message text preserved verbatim. A few real decisions made along the way:
+
+- Several sites (`hr/teams/page.tsx`'s three, `TicketsView.tsx`'s two,
+  `TrackingView.tsx`'s two) needed a small "which pending action" object
+  instead of a single boolean, since the same handler serves more than one
+  possible target (e.g. `pendingTicketStatusAction: { id, action }` for
+  close vs. reopen) — this is a mechanical consequence of moving from a
+  synchronous `if (!window.confirm(...)) return` guard to an async
+  open-then-confirm flow, not a scope change.
+- None of the 18 used `requireTextMatch` — per the plan's own guidance,
+  every one of these is either reversible (regenerate token, force-
+  disconnect, close/reopen ticket) or already has a distinct, less-
+  destructive character than the one existing `requireTextMatch` use
+  (permanent account deletion in `UserProfileModal.tsx`).
+- `variant`: `danger` for delete-warehouse/team/announcement/document/
+  absence-record/job-listing; `warning` for release-funds, apply-increment,
+  regenerate-token/setup-code, force-disconnect, and ticket close/reopen —
+  matching the plan's own categorization exactly.
+- `ConfirmDialog.tsx` itself was not touched, per Boundaries.
+
+Verified: `npx tsc --noEmit -p tsconfig.json` — zero errors. Repo-wide grep
+for `window.confirm` in `src/` returns zero results.

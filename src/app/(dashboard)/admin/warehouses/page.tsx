@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MapPin, Edit, Trash, CheckCircle2, Loader2 } from 'lucide-react';
 import { useWarehouses, useProfiles, hrActions } from '@/lib/hrData';
 
@@ -21,6 +22,7 @@ export default function AdminWarehousesPage() {
   const [isCreatingWh, setIsCreatingWh] = useState(false);
   const [isSavingWhEdit, setIsSavingWhEdit] = useState(false);
   const [deletingWhId, setDeletingWhId] = useState<string | null>(null);
+  const [pendingDeleteWhId, setPendingDeleteWhId] = useState<string | null>(null);
 
   // Real-world range validation — without this, a mistyped latitude (e.g.
   // 999) silently breaks geofencing for every USA employee assigned to
@@ -79,11 +81,14 @@ export default function AdminWarehousesPage() {
     }
   };
 
-  const handleDeleteWarehouse = async (id: string) => {
+  const handleDeleteWarehouse = (id: string) => {
     if (deletingWhId) return;
-    const confirmDelete = window.confirm('Are you sure you want to delete this warehouse? Assignments will be updated.');
-    if (!confirmDelete) return;
+    setPendingDeleteWhId(id);
+  };
 
+  const confirmDeleteWarehouse = async () => {
+    if (!pendingDeleteWhId) return;
+    const id = pendingDeleteWhId;
     setDeletingWhId(id);
     try {
       await hrActions.deleteWarehouse(id, employees);
@@ -92,6 +97,7 @@ export default function AdminWarehousesPage() {
       setTimeout(() => setWhSuccess(''), 1500);
     } finally {
       setDeletingWhId(null);
+      setPendingDeleteWhId(null);
     }
   };
 
@@ -341,6 +347,17 @@ export default function AdminWarehousesPage() {
           </form>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteWhId !== null}
+        onClose={() => setPendingDeleteWhId(null)}
+        onConfirm={confirmDeleteWarehouse}
+        title="Delete warehouse?"
+        message="Are you sure you want to delete this warehouse? Assignments will be updated."
+        confirmLabel={deletingWhId ? 'Deleting…' : 'Delete'}
+        variant="danger"
+        loading={!!deletingWhId}
+      />
     </div>
   );
 }

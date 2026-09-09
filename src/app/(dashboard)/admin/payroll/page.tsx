@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { DollarSign, CheckCircle2, TrendingUp } from 'lucide-react';
 import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin } from '@/lib/hrData';
 import { NetPayableModal } from '@/components/ui/NetPayableModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface PayrollSummary {
   department: string;
@@ -47,6 +48,7 @@ export default function AdminPayrollPage() {
   const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords), [employees, rawPayroll, leaves, timesheets, absenceRecords]);
   const [summaries, setSummaries] = useState<PayrollSummary[]>([]);
   const [isReleasing, setIsReleasing] = useState(false);
+  const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
   const [isNetPayableOpen, setIsNetPayableOpen] = useState(false);
   const [netPayableRecord, setNetPayableRecord] = useState<PayrollRecord | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -90,10 +92,12 @@ export default function AdminPayrollPage() {
   const isReleased = payroll.length > 0 && payroll.every(p => p.processed);
 
   const handleReleaseMonthlyFunds = async () => {
-    const pending = payroll.filter(p => !p.processed);
-    const confirmed = window.confirm(`This will mark all ${pending.length} pending payroll record(s) as processed. Continue?`);
-    if (!confirmed) return;
+    setShowReleaseConfirm(true);
+  };
 
+  const confirmReleaseMonthlyFunds = async () => {
+    setShowReleaseConfirm(false);
+    const pending = payroll.filter(p => !p.processed);
     setIsReleasing(true);
 
     // Permanently fold any pending anniversary increments into each
@@ -472,6 +476,17 @@ export default function AdminPayrollPage() {
         profile={employees.find(e => e.id === netPayableRecord?.employeeId)}
         onMarkPaid={(employeeId) => handleProcessOne(employeeId)}
         isProcessing={processingId === netPayableRecord?.employeeId}
+      />
+
+      <ConfirmDialog
+        isOpen={showReleaseConfirm}
+        onClose={() => setShowReleaseConfirm(false)}
+        onConfirm={confirmReleaseMonthlyFunds}
+        title="Release monthly funds?"
+        message={`This will mark all ${payroll.filter(p => !p.processed).length} pending payroll record(s) as processed. Continue?`}
+        confirmLabel={isReleasing ? 'Releasing…' : 'Release'}
+        variant="warning"
+        loading={isReleasing}
       />
     </div>
   );

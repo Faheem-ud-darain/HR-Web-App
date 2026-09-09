@@ -9,6 +9,7 @@ import { getSessionEmail } from '@/lib/session';
 import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmployeeActivityInsights } from '@/components/ui/EmployeeActivityInsights';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function TrackerPage() {
   // 'setup' is the existing tab (connection status + shift history) shown by
@@ -31,6 +32,9 @@ export default function TrackerPage() {
   const [heartbeatCheckedOnce, setHeartbeatCheckedOnce] = useState(false);
   const [detectedOS, setDetectedOS] = useState<'windows' | 'mac' | 'cros' | 'other'>('other');
   const [forceDisconnecting, setForceDisconnecting] = useState(false);
+  const [showForceDisconnectConfirm, setShowForceDisconnectConfirm] = useState(false);
+  const [showRegenerateCodeConfirm, setShowRegenerateCodeConfirm] = useState(false);
+  const [regeneratingCode, setRegeneratingCode] = useState(false);
 
   useEffect(() => {
     setDetectedOS(detectOS());
@@ -78,12 +82,14 @@ export default function TrackerPage() {
   // every tracker session key server-side (see forceDisconnectAllTrackers)
   // then resets this page's own connection state so it reflects "not
   // connected" immediately, instead of waiting out any staleness window.
-  const handleForceDisconnectAll = async () => {
+  const handleForceDisconnectAll = () => {
     if (!profile) return;
-    const confirmed = window.confirm(
-      "This disconnects ALL trackers (desktop app or Chrome extension) currently linked to your account, including one that's genuinely still running elsewhere. Use this only if you're switching computers or stuck behind a \"device already connected\" error. Continue?"
-    );
-    if (!confirmed) return;
+    setShowForceDisconnectConfirm(true);
+  };
+
+  const confirmForceDisconnectAll = async () => {
+    if (!profile) return;
+    setShowForceDisconnectConfirm(false);
     setForceDisconnecting(true);
     try {
       await hrActions.forceDisconnectAllTrackers(profile.email);
@@ -117,12 +123,21 @@ export default function TrackerPage() {
     setTimeout(() => setCodeCopied(false), 2000);
   };
 
-  const handleRegenerateOwnCode = async () => {
+  const handleRegenerateOwnCode = () => {
     if (!profile) return;
-    const confirmed = window.confirm('Regenerating your setup code will disconnect the tracker app on any computer currently using your old code, until it is reconnected with the new one. Continue?');
-    if (!confirmed) return;
-    await hrActions.regenerateAgentToken(profile.email);
-    loadOwnTrackingSettings(profile.email);
+    setShowRegenerateCodeConfirm(true);
+  };
+
+  const confirmRegenerateOwnCode = async () => {
+    if (!profile) return;
+    setShowRegenerateCodeConfirm(false);
+    setRegeneratingCode(true);
+    try {
+      await hrActions.regenerateAgentToken(profile.email);
+      loadOwnTrackingSettings(profile.email);
+    } finally {
+      setRegeneratingCode(false);
+    }
   };
 
   const refreshShiftData = async (email: string) => {
@@ -500,6 +515,28 @@ export default function TrackerPage() {
 
       </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showForceDisconnectConfirm}
+        onClose={() => setShowForceDisconnectConfirm(false)}
+        onConfirm={confirmForceDisconnectAll}
+        title="Force-disconnect all trackers?"
+        message={`This disconnects ALL trackers (desktop app or Chrome extension) currently linked to your account, including one that's genuinely still running elsewhere. Use this only if you're switching computers or stuck behind a "device already connected" error. Continue?`}
+        confirmLabel={forceDisconnecting ? 'Disconnecting…' : 'Disconnect All'}
+        variant="warning"
+        loading={forceDisconnecting}
+      />
+
+      <ConfirmDialog
+        isOpen={showRegenerateCodeConfirm}
+        onClose={() => setShowRegenerateCodeConfirm(false)}
+        onConfirm={confirmRegenerateOwnCode}
+        title="Regenerate setup code?"
+        message="Regenerating your setup code will disconnect the tracker app on any computer currently using your old code, until it is reconnected with the new one. Continue?"
+        confirmLabel={regeneratingCode ? 'Regenerating…' : 'Regenerate'}
+        variant="warning"
+        loading={regeneratingCode}
+      />
     </div>
   );
 }

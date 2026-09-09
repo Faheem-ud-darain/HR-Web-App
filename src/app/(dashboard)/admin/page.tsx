@@ -14,6 +14,7 @@ import { getSessionEmail } from '@/lib/session';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
 import { ScheduleMeetModal } from '@/components/ui/ScheduleMeetModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function AdminDashboard() {
   const [annSuccess, setAnnSuccess] = useState('');
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
+  const [pendingDeleteAnnId, setPendingDeleteAnnId] = useState<string | null>(null);
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   // "Viewed by" facepile + modal — see hrActions.getAnnouncementReadMap in
@@ -159,15 +161,21 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteAnnouncement = async (id: string) => {
+  const handleDeleteAnnouncement = (id: string) => {
     if (deletingAnnId) return;
-    if (!window.confirm('Delete this announcement? This cannot be undone, and it will disappear from every employee\'s dashboard immediately.')) return;
+    setPendingDeleteAnnId(id);
+  };
+
+  const confirmDeleteAnnouncement = async () => {
+    if (!pendingDeleteAnnId) return;
+    const id = pendingDeleteAnnId;
     setDeletingAnnId(id);
     try {
       await hrActions.deleteAnnouncement(id);
       refetchAnnouncements();
     } finally {
       setDeletingAnnId(null);
+      setPendingDeleteAnnId(null);
     }
   };
 
@@ -688,6 +696,17 @@ export default function AdminDashboard() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingDeleteAnnId !== null}
+        onClose={() => setPendingDeleteAnnId(null)}
+        onConfirm={confirmDeleteAnnouncement}
+        title="Delete announcement?"
+        message="This cannot be undone, and it will disappear from every employee's dashboard immediately."
+        confirmLabel={deletingAnnId ? 'Deleting…' : 'Delete'}
+        variant="danger"
+        loading={!!deletingAnnId}
+      />
     </div>
   );
 }
