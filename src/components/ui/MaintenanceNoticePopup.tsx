@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Wrench, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { formatInViewerLocalTime } from '@/lib/timezone';
 
@@ -96,13 +97,14 @@ export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
           <p className="text-[10px] text-slate-400 font-semibold">
             This will keep appearing until you acknowledge it
           </p>
-          <button
+          <Button
+            variant="primary"
             onClick={handleMarkRead}
             disabled={marking}
-            className="shrink-0 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform shadow-sm flex items-center gap-1.5"
+            className="shrink-0 shadow-sm active:scale-97 transition-transform"
           >
             <CheckCircle2 className="h-4 w-4" /> {marking ? 'Marking…' : 'Got It'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

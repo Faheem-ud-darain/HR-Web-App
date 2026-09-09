@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate } from '@/lib/hrData';
 
 interface AbsentPopupProps {
@@ -114,13 +115,14 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
           <p className="text-[10px] text-slate-400 font-semibold">
             {pending.length > 1 ? `${pending.length} absences need your acknowledgment` : ' '}
           </p>
-          <button
+          <Button
+            variant="primary"
             onClick={handleAcknowledge}
             disabled={acking}
-            className="shrink-0 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform shadow-sm flex items-center gap-1.5"
+            className="shrink-0 shadow-sm active:scale-97 transition-transform"
           >
             <CheckCircle2 className="h-4 w-4" /> {acking ? 'Saving…' : 'I Understand'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
