@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
+import { Button } from './Button';
 import { compressImageToWebP, MAX_PROFILE_PICTURE_BYTES } from '@/lib/imageCompressor';
 import { RotateCcw, RotateCw, ZoomIn, ZoomOut, Check, X, AlertTriangle } from 'lucide-react';
 
@@ -132,13 +133,15 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
             <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
             <p className="text-xs text-slate-700 font-semibold leading-relaxed">{loadError}</p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            fullWidth
             onClick={onClose}
-            className="w-full flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform"
+            className="active:scale-97 transition-transform"
           >
             <X className="h-3.5 w-3.5" /> Close
-          </button>
+          </Button>
         </div>
       )}
       {imgEl && (
@@ -189,39 +192,43 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
               <ZoomIn className="h-4 w-4 text-slate-400 shrink-0" />
             </div>
             <div className="flex items-center justify-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => setRotation(r => r - 90)}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform active:scale-97"
+                className="!px-3 !py-2 transition-transform active:scale-97"
               >
                 <RotateCcw className="h-3.5 w-3.5" /> Rotate Left
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => setRotation(r => r + 90)}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg transition-colors transition-transform active:scale-97"
+                className="!px-3 !py-2 transition-transform active:scale-97"
               >
                 <RotateCw className="h-3.5 w-3.5" /> Rotate Right
-              </button>
+              </Button>
             </div>
           </div>
 
           <div className="flex gap-2 pt-3 border-t border-slate-200">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform"
+              className="flex-1 active:scale-97 transition-transform"
             >
               <X className="h-3.5 w-3.5" /> Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="primary"
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform"
+              className="flex-1 active:scale-97 transition-transform"
             >
               <Check className="h-3.5 w-3.5" /> {saving ? 'Saving…' : 'Save Photo'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
