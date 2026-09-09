@@ -1,6 +1,6 @@
 # 011 — Migrate raw `<button>` elements to the shared `Button` component
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 68f5c82 (this is the commit that *added* `Button.tsx` — "New Ui Fixes" — it has never been imported anywhere since)
 - **Severity**: MEDIUM (consistency/maintainability debt, not a defect — the app looks and works fine today)
 - **Category**: Refactor / design-system adoption (not part of the animation audit — tracked here for the same reason plan 007 is)
@@ -226,3 +226,126 @@ Not every raw `<button>` is a fit. Explicitly out of scope for a 1:1 swap
   codebase (today: 0), every swapped button is behaviorally identical to
   before, and the only remaining raw `<button>` elements are the
   documented, deliberate skips.
+
+## Implementation note (post-build)
+
+Implemented in full across ~56 files, ~427 original raw `<button>` sites,
+in the batches described above plus a final sweep of the remaining smaller
+files. `Button.tsx` now has **139** JSX usages across the codebase (from 0).
+`npx tsc --noEmit -p tsconfig.json` is clean after every single commit in
+this migration — no batch was allowed to leave a type error for the next
+one to find. Roughly 295 raw `<button>` occurrences remain in `src` after
+the migration; every one of them is a deliberate, documented skip per the
+classification rules below, not a leftover.
+
+### Classification heuristic actually used
+
+The plan's own color→variant table was the starting point, but the real
+work was drawing a hard line between "migrate" and "leave raw" for every
+shape that doesn't map to a fixed Tailwind color. The rules applied
+consistently across all 56 files:
+
+- **Color-family match, standalone button → migrate.** Orange solid →
+  `primary`; slate/white bordered → `outline`; flat slate fill (no border)
+  → `secondary`; rose solid → `danger`; amber solid → `warning`;
+  transparent/no-background → `ghost` (rare — most "plain" buttons turned
+  out to be text links instead, see below).
+- **"Chip" vs "standalone action button."** A small, tinted, inline
+  row-action button living inside a table row, card, or list item (e.g. a
+  `View`/`Download`/`Reactivate` chip, or a colored status-change button
+  next to a record) was always left raw, even when its color matched a
+  variant. These read as part of the row's data density, not as a
+  page-level action, and forcing them into `Button.tsx`'s fixed padding/
+  font-weight/border-radius would visually inflate every table row and
+  card across the app. A "standalone action button" — page header,
+  modal footer, card-level single action — was migrated when the color
+  matched.
+- **Plain text links are not buttons**, even when wrapped in a `<button>`
+  tag and even when they trigger navigation/state changes. If the original
+  classes carried no background and no padding-derived shape (just
+  underline or colored text, e.g. `text-orange-600 hover:text-orange-700`
+  with no `bg-*`/`px-*`), it was left raw. See the self-caught mistake
+  below — this rule was learned mid-session, not started with it.
+- **Icon-only buttons** (a single icon child, `p-*`-only sizing, `title`
+  instead of visible text) were never migrated — `Button.tsx` has no
+  icon-only size/shape, and forcing one in would either add dead
+  horizontal padding or require override classes fighting the component.
+- **Tab/segment toggles** — any button that is one of a fixed set (2+)
+  toggling a view/filter, usually styled with a ternary between an
+  "active" and "inactive" class string — were always left raw. These are
+  a `SegmentedControl`/`Tabs` shape, explicitly out of scope per the
+  plan's own Boundaries.
+- **`type="submit"` buttons were always skipped**, per the plan's own
+  instruction to flag rather than blind-swap. In practice every single
+  one encountered this session was skipped rather than manually reviewed
+  further, since none needed layout changes that would justify the risk.
+- **"Outline-danger hybrid" buttons** (white/bordered background but rose
+  text — e.g. a "Delete Account Permanently" button) were left raw: they
+  don't cleanly match either `outline` (wrong text color) or `danger`
+  (wrong background), and forcing a choice would change their visual
+  weight relative to the other outline/danger buttons on the same page.
+- **Responsive icon↔text-shape buttons** (buttons that render as an
+  icon-only circle on mobile and an icon+label pill on desktop via
+  Tailwind breakpoint classes, seen in `TicketsView.tsx`'s ticket-header
+  actions) were left raw — `Button.tsx` has no responsive-shape support,
+  and the two breakpoints would need genuinely different variants.
+- **Colors with no `Button.tsx` variant** (emerald, sky, indigo, purple,
+  amber-as-background-with-white-bg-hybrid) were left raw rather than
+  approximated to the nearest existing variant — e.g. emerald "Start/End
+  Shift", "Release Monthly Funds", "Approve & Unlock Dashboard"; sky "New
+  Notice"; purple "Manage Warehouse Managers"; amber-bordered "Manage
+  Team Leads". Approximating these to `primary`/`warning` would have
+  changed their actual on-screen color, which the plan's Boundaries
+  explicitly forbid (visual parity only).
+- **A parameterized/dynamically-colored button already living in a
+  shared component** (`ConfirmDialog.tsx`'s confirm button, whose color
+  comes from a `colors` object keyed by the caller's `variant` prop) was
+  left raw — its whole purpose is to expose a color the fixed `Button.tsx`
+  variant set doesn't parameterize the same way, so migrating it would
+  have required either hardcoding one color (breaking other callers) or
+  threading `Button.tsx`'s variant prop through in a way not attempted
+  here.
+- **Where a button used a `className` prop to add non-modeled behavior**
+  (`active:scale-97`, `transition-transform`, exact custom padding that
+  didn't cleanly match a size step, `flex-1`/`order-*`/`shrink-0` layout
+  utilities), the migrated `<Button>` kept those via its own `className`
+  passthrough rather than dropping them — `Button.tsx` appends `className`
+  after its own generated classes, so later-declared Tailwind utilities in
+  the passthrough win the cascade for any overlapping property (used with
+  `!important` overrides only where an exact padding/font-size needed to
+  beat the size step's own class, e.g. `!py-1.5`, `!text-[9px]`).
+- **Zero-migration files are a valid, correct outcome** — `admin/payroll/
+  page.tsx`, `TopNav.tsx`, `Sidebar.tsx`, `admin/leaves/page.tsx`,
+  `employee/tasks/page.tsx`, `DocumentsModal.tsx`, and others were read in
+  full and confirmed to contain no clean-fit buttons (all chips, tab
+  toggles, icon-only controls, or unmatched colors) — these are documented
+  reviews, not skipped work.
+
+### Self-caught mistakes (both fixed before any commit landed in a broken state)
+
+1. **Forced-fit reversal**: in `hr/page.tsx`, the plain text link "Full
+   Kanban board →" was initially migrated into `<Button variant="ghost">`
+   with `!important` overrides fighting the component's built-in padding
+   back to zero. This was exactly the "forced fit" the plan's Boundaries
+   warn against, and was reverted to a raw `<button>` before committing —
+   this is what established the plain-text-link exclusion rule above.
+2. **Recurring stray closing tag**: several `<button>`→`<Button>`
+   replacements that targeted a multi-line button whose last child was a
+   ternary expression (e.g. `{isLoading ? 'Saving…' : 'Save Changes'}`)
+   immediately followed by `</button>` on its own line left that trailing
+   tag unconverted, producing a `tsc` `TS17002` mismatched-JSX-tag error.
+   Caught in every case by either `tsc` directly or a proactive grep
+   before running `tsc`, and fixed with a small targeted follow-up
+   replacement converting the specific stray `</button>` to `</Button>`.
+
+### Final numbers
+
+- `Button.tsx` JSX usages: **139** (target was "non-zero" — met).
+- Remaining raw `<button>` occurrences: **295**, all documented skips per
+  the categories above.
+- `npx tsc --noEmit -p tsconfig.json`: clean after every commit in this
+  migration, no exceptions.
+- No `Button.tsx` changes were needed — every gap encountered (emerald,
+  sky, indigo, purple, dynamic-color, responsive-shape, chip, tab-toggle,
+  text-link, icon-only) was handled by leaving the button raw rather than
+  extending the component, consistent with the plan's Boundaries.
