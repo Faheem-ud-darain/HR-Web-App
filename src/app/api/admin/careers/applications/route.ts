@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { adminListCareerApplications, adminUpdateCareerApplicationStatus } from '@/lib/pbAdmin';
+import { adminListCareerApplications, adminUpdateCareerApplicationStatus, adminListCareerApplicationsForEmail, adminDeleteCareerApplicationsForEmail } from '@/lib/pbAdmin';
 
 export const runtime = 'edge';
 
@@ -20,6 +20,11 @@ function toCareerApplication(a: any) {
 // PocketBase rules were the only thing standing between "logged in as
 // Employee" and "sees every applicant's name, email, and cover letter,"
 // and those rules were public.
+//
+// Optional `?email=` narrows to one applicant's own applications — added
+// for hrData.ts's exportEmployeeArchive ("Download Archive" HR/Admin
+// action), which used to read hr_career_applications directly via the
+// public client before that collection's rules were locked down.
 export async function GET(request: Request) {
   const session = await requireSession(request);
   if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
@@ -28,7 +33,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rows = await adminListCareerApplications();
+    const email = new URL(request.url).searchParams.get('email');
+    const rows = email ? await adminListCareerApplicationsForEmail(email) : await adminListCareerApplications();
     return NextResponse.json({ applications: rows.map(toCareerApplication) });
   } catch (err: any) {
     console.error('[admin/careers/applications GET] error:', err);
@@ -63,5 +69,26 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error('[admin/careers/applications POST] error:', err);
     return NextResponse.json({ error: 'Could not update application status.' }, { status: 500 });
+  }
+}
+
+// Purge every application under one email — used only by hrActions.
+// deleteEmployee's permanent-delete flow (see that function's own
+// comment). ?email= required; there is deliberately no by-id delete here,
+// since nothing else in the app removes a single application.
+export async function DELETE(request: Request) {
+  const session = await requireSession(request);
+  if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+  if (session.role !== 'hr' && session.role !== 'admin') {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 });
+  }
+  const email = new URL(request.url).searchParams.get('email');
+  if (!email) return NextResponse.json({ error: 'email is required.' }, { status: 400 });
+  try {
+    await adminDeleteCareerApplicationsForEmail(email);
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error('[admin/careers/applications DELETE] error:', err);
+    return NextResponse.json({ error: 'Could not delete applications.' }, { status: 500 });
   }
 }

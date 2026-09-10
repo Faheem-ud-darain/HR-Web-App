@@ -1702,6 +1702,45 @@ export async function updateApplicationStatusAdmin(id: string, status: CareerApp
   }
 }
 
+// One employee's own past applications, HR/Admin-session-checked — used by
+// exportEmployeeArchive below (the "Download Archive" action) instead of
+// reading hr_career_applications directly via the public client, which
+// stopped working once that collection's PocketBase rules were locked down
+// (plan 012, Phase 1). Returns [] rather than throwing when not signed in
+// as HR/Admin, or on any error — archive export treats this the same as
+// "no applications on file" rather than failing the whole export.
+export async function getCareerApplicationsForEmailAdmin(email: string): Promise<any[]> {
+  const token = getAuthToken();
+  if (!token) return [];
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/careers/applications?email=${encodeURIComponent(email)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.applications || [];
+  } catch {
+    return [];
+  }
+}
+
+// Purge every application under one email — used only by
+// hrActions.deleteEmployee's permanent-delete flow, replacing the old
+// direct pbList+pbDelete pair that stopped working once
+// hr_career_applications' PocketBase rules were locked down.
+export async function deleteCareerApplicationsForEmailAdmin(email: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) return;
+  try {
+    await fetch(`${API_BASE}/api/admin/careers/applications?email=${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    // best-effort, same as the other independent purge branches in deleteEmployee
+  }
+}
+
 export function useTeams() {
   return useQuery({ queryKey: ['hr_teams'], queryFn: async () => (await pbList('hr_teams', { sort: 'name' })).map(toTeam) });
 }
@@ -2545,8 +2584,7 @@ export const hrActions = {
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_tasks', r.id)))),
         pbListByEmailField('hr_tickets', 'employee_email', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_tickets', r.id)))),
-        pbListByEmailField('hr_career_applications', 'applicant_email', email)
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_career_applications', r.id)))),
+        deleteCareerApplicationsForEmailAdmin(email),
         pbListByEmailField('hr_notifications', 'recipient_email', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_notifications', r.id)))),
       );
@@ -2639,7 +2677,7 @@ export const hrActions = {
       pbListByEmailField('hr_timesheets', 'employee_id', email),
       pbListByEmailField('hr_tasks', 'assigned_email', email),
       pbListByEmailField('hr_tickets', 'employee_email', email),
-      pbListByEmailField('hr_career_applications', 'applicant_email', email),
+      email ? getCareerApplicationsForEmailAdmin(email) : Promise.resolve([]),
       pbListByEmailField('hr_notifications', 'recipient_email', email),
       pbList('hr_leaves', { filter: `employee_name = "${profile.fullName.replace(/"/g, '\\"')}"` }),
       email ? hrActions.getScreenshots({ employeeEmail: email }) : Promise.resolve([]),

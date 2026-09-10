@@ -344,6 +344,27 @@ export async function adminUpdateCareerApplicationStatus(id: string, status: str
   });
 }
 
+// One employee's own past applications (used by exportEmployeeArchive's
+// "Download Archive" HR/Admin action, via /api/admin/careers/applications
+// ?email=... — that route is the only caller). Same case-insensitive `~` +
+// exact-match-filter pattern as adminListAbsenceRecordsForEmail, since
+// PocketBase's `=` filter is case-sensitive.
+export async function adminListCareerApplicationsForEmail(email: string): Promise<any[]> {
+  const encoded = encodeURIComponent(`applicant_email ~ "${email.replace(/"/g, '\\"')}"`);
+  const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?filter=${encoded}&sort=-created`);
+  const wanted = email.trim().toLowerCase();
+  return (list?.items || []).filter((r: any) => (r.applicant_email || '').toLowerCase() === wanted);
+}
+
+// Purge every application submitted under one email — used only by
+// hrActions.deleteEmployee's permanent-delete flow (an ex-employee who
+// once applied through the public Careers form under their own address,
+// before being hired). Best-effort per row, same as adminDeleteRecords.
+export async function adminDeleteCareerApplicationsForEmail(email: string): Promise<void> {
+  const rows = await adminListCareerApplicationsForEmail(email);
+  await Promise.allSettled(rows.map((r: any) => pbAdminFetch(`/api/collections/hr_career_applications/records/${r.id}`, { method: 'DELETE' })));
+}
+
 // Employee's own absence/deduction records (hr_absence_records) — for the
 // authenticated /api/absences/me route. Scoped by employeeEmail using the
 // same case-insensitive `~` + exact-match-filter pattern used elsewhere in
