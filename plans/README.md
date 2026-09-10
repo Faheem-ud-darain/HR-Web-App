@@ -91,6 +91,32 @@ output, though 8 and 9 may end up sharing a single root-level provider mount
 point (see each plan's Steps) without sharing any state — check that when
 implementing whichever comes second.
 
+## Production-hardening plans (from the 10-category audit)
+
+These come from a full-app audit rated against a production-app standard
+across UI, UX, codebase, structure, database, server, security,
+accessibility, usability, and completeness (2026-09-10). Unlike plans 1-11,
+these are almost entirely new work, not corrections to something already
+built. **Plan 012 is CRITICAL and should be done first, ahead of everything
+else in this repo** — it addresses live, unauthenticated public exposure of
+the production database (payroll, screenshots, personal data).
+
+| # | Plan | Severity | Depends on | Status |
+| --- | --- | --- | --- | --- |
+| 12 | [012-pocketbase-security-lockdown.md](./012-pocketbase-security-lockdown.md) | CRITICAL | none | TODO |
+| 13 | [013-harden-authentication.md](./013-harden-authentication.md) | HIGH | none | TODO |
+| 14 | [014-split-hrdata-monolith.md](./014-split-hrdata-monolith.md) | MEDIUM | none | TODO |
+| 15 | [015-add-test-coverage.md](./015-add-test-coverage.md) | MEDIUM | best done after 14 (not blocked by it) | TODO |
+| 16 | [016-accessibility-pass.md](./016-accessibility-pass.md) | MEDIUM | reuses plan 011's file inventory | TODO |
+| 17 | [017-production-hardening.md](./017-production-hardening.md) | MEDIUM | none | TODO |
+
+**Suggested order**: 12 first, alone, given its severity and the fact that
+it's the one item here with active, ongoing real-world exposure. After
+that, 13 (auth hardening) is small and high-value. 14, 15, 16, and 17 are
+independent of each other and of 12/13, and can be done in any order or in
+parallel — 15 is easier to do after 14 lands (testing the new module
+boundaries directly) but isn't blocked by it.
+
 ## Not planned (rejected or out of scope)
 
 - **HR Leaves kanban drag-and-drop** (`src/app/(dashboard)/hr/leaves/page.tsx`) —
