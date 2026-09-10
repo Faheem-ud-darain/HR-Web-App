@@ -138,6 +138,15 @@ export async function adminListPayrollForEmployee(employeeId: string): Promise<a
   return list?.items || [];
 }
 
+// Deletes every hr_payroll row belonging to one employee — used by
+// hrData.ts's deleteEmployee purge flow (was previously a direct public
+// pbList+pbDelete pair; now needed here since hr_payroll's PocketBase rules
+// are locked to admins-only, plan 012 Phase 1).
+export async function adminDeletePayrollForEmployee(employeeId: string): Promise<void> {
+  const rows = await adminListPayrollForEmployee(employeeId);
+  await Promise.allSettled(rows.map((r: any) => pbAdminFetch(`/api/collections/hr_payroll/records/${r.id}`, { method: 'DELETE' })));
+}
+
 // Upsert into the hr_delcargo_store KV collection — mirrors setKvRecord in
 // src/lib/passwordResetOtp.ts, just authenticated with the admin token
 // instead of relying on hr_delcargo_store staying public.

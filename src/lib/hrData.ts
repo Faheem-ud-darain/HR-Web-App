@@ -1190,21 +1190,6 @@ function toCareer(c: any): CareerPosition {
 function toTicket(t: any): Ticket {
   return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
 }
-function toPayroll(p: any): PayrollRecord {
-  return {
-    id: p.id, employeeId: p.employee_id, name: p.employee_name, role: p.role, region: p.region,
-    baseSalary: Number(p.base_salary) || 0, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus: Number(p.bonus) || 0,
-    deductions: Number(p.deductions) || 0, incrementAmount: Number(p.increment_amount) || 0, processed: !!p.processed,
-    month: typeof p.month === 'string' ? p.month : '',
-    // Not a real column — see PayrollRecord.reservedThisMonth's comment.
-    // computePayrollView recomputes the real value fresh; this raw-record
-    // mapper just needs a safe default for any caller reading usePayroll()
-    // output directly without going through computePayrollView.
-    reservedThisMonth: 0,
-    deductionBreakdown: [],
-    pendingArrears: 0,
-  };
-}
 function toTeam(t: any): Team {
   return { id: t.id, name: t.name, leadEmail: t.lead_email || undefined, members: t.members || [], warehouseId: t.warehouse_id || undefined };
 }
@@ -1381,8 +1366,56 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed') {
     refetchInterval: 8000,
   });
 }
+// Migrated off the public pb.collection('hr_payroll').getFullList() call —
+// hr_payroll's PocketBase rules are locked to admins-only (plan 012 Phase
+// 1). The route itself (src/app/api/admin/payroll/route.ts, GET) decides
+// scope from the verified session: HR/Admin get the full company-wide
+// list (unchanged behavior for admin/payroll, hr/payroll, the admin
+// dashboard, and admin/insights — all already role-gated pages), anyone
+// else gets only their OWN records (needed because TopNav's search bar
+// calls this hook unconditionally for every role).
 export function usePayroll() {
-  return useQuery({ queryKey: ['hr_payroll'], queryFn: async () => (await pbList('hr_payroll')).map(toPayroll) });
+  return useQuery({
+    queryKey: ['hr_payroll'],
+    queryFn: async (): Promise<PayrollRecord[]> => {
+      const token = getAuthToken();
+      if (!token) return [];
+      const res = await fetch(`${API_BASE}/api/admin/payroll`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.records || [];
+    },
+  });
+}
+
+// HR/Admin-only: one employee's payroll rows, via the same route's
+// ?employeeId= scope. Used by exportEmployeeArchive's "Download Archive"
+// action (was previously a direct public pbList call against hr_payroll).
+export async function getPayrollForEmployeeAdmin(employeeId: string): Promise<any[]> {
+  const token = getAuthToken();
+  if (!token) return [];
+  const res = await fetch(`${API_BASE}/api/admin/payroll?employeeId=${encodeURIComponent(employeeId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.records || [];
+}
+
+// HR/Admin-only: purges one employee's payroll rows. Used by
+// deleteEmployee's permanent-delete purge flow (was previously a direct
+// public pbList+pbDelete pair against hr_payroll). Best-effort, like the
+// career-applications equivalent — a failed purge here shouldn't abort the
+// rest of deleteEmployee's cleanup.
+export async function deletePayrollForEmployeeAdmin(employeeId: string): Promise<void> {
+  const token = getAuthToken();
+  if (!token) return;
+  await fetch(`${API_BASE}/api/admin/payroll?employeeId=${encodeURIComponent(employeeId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {});
 }
 
 export interface PayrollSelf {
@@ -2576,8 +2609,7 @@ export const hrActions = {
     const deletions: Promise<any>[] = [];
     if (email) {
       deletions.push(
-        pbList('hr_payroll', { filter: `employee_id = "${id}"` })
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_payroll', r.id)))),
+        deletePayrollForEmployeeAdmin(id),
         pbListByEmailField('hr_timesheets', 'employee_id', email)
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_timesheets', r.id)))),
         pbListByEmailField('hr_tasks', 'assigned_email', email)
@@ -2673,7 +2705,7 @@ export const hrActions = {
     });
 
     const [payrollRows, timesheetRows, taskRows, ticketRows, appRows, notifRows, leaveRows, shots] = await Promise.all([
-      pbList('hr_payroll', { filter: `employee_id = "${profile.id}"` }),
+      getPayrollForEmployeeAdmin(profile.id),
       pbListByEmailField('hr_timesheets', 'employee_id', email),
       pbListByEmailField('hr_tasks', 'assigned_email', email),
       pbListByEmailField('hr_tickets', 'employee_email', email),
@@ -3625,18 +3657,10 @@ export const hrActions = {
         };
       });
   },
-  upsertPayrollRecord: async (record: PayrollRecord): Promise<void> => {
-    const fields = {
-      employee_id: record.employeeId, employee_name: record.name, role: record.role, region: record.region || 'Pakistan',
-      base_salary: record.baseSalary, unpaid_leaves: record.unpaidLeaves, bonus: record.bonus, deductions: record.deductions,
-      net_pay: record.baseSalary + record.bonus - record.deductions + record.incrementAmount,
-      increment_amount: record.incrementAmount, processed: record.processed,
-      status: record.processed ? 'paid' : 'pending', paid_date: record.processed ? new Date().toISOString().split('T')[0] : '',
-      month: record.month || '', year: record.month ? Number(record.month.slice(0, 4)) || undefined : undefined,
-    };
-    if (looksLikeRealId(record.id)) await pbUpdate('hr_payroll', record.id, fields);
-    else await pbCreate('hr_payroll', fields);
-  },
+  // upsertPayrollRecord (public pbCreate/pbUpdate write to hr_payroll) removed —
+  // dead code with zero remaining callers (superseded by upsertPayrollRecordAdmin,
+  // the authenticated /api/admin/payroll POST route) before hr_payroll's
+  // PocketBase rules were ever locked, per plan 012 Phase 1.
 
   // ── Tracking settings (hr_tracking_settings — one row per employee) ────
   // Migrated off the old hr_tracking_settings_prod_v1 KV blob (a single

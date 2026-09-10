@@ -208,7 +208,67 @@ the larger Phase 1 items (screenshots, payroll, tracking settings):
 - `hr_careers` (the job *listings*, as opposed to applications) was left
   untouched and still public-read, per this plan's own Target — anyone
   visiting `/careers` with no account still needs to see open positions.
+- **Regression caught and fixed the same day**: two other, unrelated
+  HR/Admin features — `exportEmployeeArchive`'s "Download Archive" action
+  and `deleteEmployee`'s permanent-delete purge flow — independently read
+  and deleted `hr_career_applications` via the old public client, outside
+  the scope originally reviewed for this slice. Both broke silently once
+  the collection was locked. Caught by grepping `hrData.ts` for every other
+  reference to the collection name right after locking, before it could
+  surface as a live bug. Fixed with `adminListCareerApplicationsForEmail` /
+  `adminDeleteCareerApplicationsForEmail` (`pbAdmin.ts`), `?email=` support
+  on the existing GET route plus a new DELETE handler, and matching
+  `hrData.ts` helpers. Live-verified: the GET path returns a real
+  applicant's actual data by email; the DELETE path is a safe no-op against
+  a nonexistent email. **Lesson carried into every later slice below**:
+  before/after locking any collection, grep the whole file for every other
+  call site of that exact collection name, not just the one originally in
+  scope.
 
-Remaining in Phase 1: `hr_screenshots`, `hr_payroll` (extend the existing
-partial migration to the full HR/Admin list view), `hr_tracking_settings` /
+**`hr_payroll` — DONE (2026-09-10).** Extended the existing partial
+migration (the "Process Payroll" / "Release Monthly Funds" write, already
+authenticated) to cover the full-list read path too:
+
+- `src/app/api/admin/payroll/route.ts` gained a `GET` and a `DELETE`
+  alongside its existing `POST`. `GET` is scope-aware from the verified
+  session, not anything the client claims: `?employeeId=<id>` is HR/Admin
+  only (one employee's rows, for `exportEmployeeArchive`); no param and
+  HR/Admin gets the full company-wide list (unchanged behavior for
+  `admin/payroll`, `hr/payroll`, the admin dashboard, and `admin/insights`
+  — all already role-gated pages); no param and any other role gets ONLY
+  their own records — needed because `TopNav`'s global search bar calls
+  the underlying hook unconditionally for every role, and used to fetch
+  everyone's payroll into every employee's browser to do that. `DELETE`
+  (`?employeeId=`, HR/Admin only) purges one employee's rows, for
+  `deleteEmployee`'s purge flow.
+- `pbAdmin.ts` gained `adminDeletePayrollForEmployee`; the full-list and
+  per-employee list helpers (`adminListAllPayroll`, `adminListPayrollForEmployee`)
+  already existed from an earlier, unfinished pass.
+- `hrData.ts`'s `usePayroll()` hook keeps its exact name, shape, and
+  `useQuery` key — only its internals changed, from a public
+  `pb.collection('hr_payroll').getFullList()` call to an authenticated
+  fetch of the route above. This meant its 5 existing callers
+  (`admin/payroll`, `hr/payroll`, the admin dashboard, `admin/insights`,
+  and `TopNav`) needed zero code changes. Added `getPayrollForEmployeeAdmin`
+  / `deletePayrollForEmployeeAdmin` for the two remaining direct-client call
+  sites (`exportEmployeeArchive`, `deleteEmployee`'s purge), matching the
+  same pattern used for career applications.
+- Removed dead code: the old public-write `hrActions.upsertPayrollRecord`
+  (zero remaining callers, superseded by the already-authenticated
+  `upsertPayrollRecordAdmin`/`/api/admin/payroll` POST) and the now-unused
+  `toPayroll` raw-record mapper.
+- Live-tested as HR (full ledger loads correctly on `hr/payroll`; `TopNav`
+  search now correctly returns "Payroll (2)" style scoped matches) and as
+  a real employee (`faheem@delcargo.us`, with the user's permission) —
+  confirmed their Salary page is unaffected (it already went through
+  `/api/payroll/me`) and that `TopNav` search now returns only *their own*
+  payroll record, with "No matching results found" for another employee's
+  name — the exact leak this migration closes.
+- `hr_payroll`'s List/View/Delete rules are now "Admins only" in
+  PocketBase (Create/Update were already effectively admin-only in
+  practice via the existing POST route, and are locked here too for
+  consistency) — confirmed via a live unauthenticated `fetch` to the raw
+  PocketBase REST endpoint returning 403 post-lock.
+
+Remaining in Phase 1: `hr_screenshots`, `hr_tracking_settings` /
 `hr_delcargo_store`.
