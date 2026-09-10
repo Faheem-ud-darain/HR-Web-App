@@ -299,3 +299,13 @@ export function localShiftDate(clockInISO: string | undefined | null, fallbackDa
 // and hasUnseenHrAdminLineActivity use it directly) and neither should
 // depend on the other just for this constant.
 export const HR_ADMIN_LINE_TEAM_ID = 'hr_admin_line';
+
+export const sharedActions = {
+  // ── KV Overlay Helpers ───────────────────────────────────────────────
+  // deleteKV removed (2026-09-10) — its only caller (GoogleIntegrationCard's
+  // disconnect flow) now goes through the authenticated
+  // /api/google/integration route instead (see that route's own comment).
+  getKV: async (key: string): Promise<any | null> => pbGetKV(key),
+  setKV: async (key: string, value: any): Promise<void> => pbSetKV(key, value),
+
+};
