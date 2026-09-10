@@ -1,7 +1,7 @@
 # 013 — Harden authentication (default passwords, rate limiting, security headers)
 
-- **Status**: TODO
-- **Commit**: (none yet — planning only)
+- **Status**: IN PROGRESS (step 1 of 4 done)
+- **Commit**: 13600dc (step 1 — default password literal removed)
 - **Severity**: HIGH
 - **Category**: Security (not part of the animation audit — tracked here for the same reason plans 007-011 are)
 - **Estimated scope**: small-medium. Touches `src/app/api/auth/*`, `src/app/api/admin/profile/route.ts`, and `next.config.ts` (or middleware). No schema changes.
@@ -172,3 +172,42 @@ audit that produced this plan:
   default password, all three auth endpoints throttle excessive attempts,
   and standard security headers are present without breaking any existing
   feature.
+
+## Implementation notes
+
+**Step 1 done (commit 13600dc):** removed the shared default-password
+literal. `admin/profile/route.ts` now generates a random per-account temp
+password (`crypto.getRandomValues`) whenever `addEmployee` isn't given one
+explicitly, instead of hashing the universal `'123'` literal; it's returned
+in the response (`tempPassword`) so the caller can show it to the admin.
+`login/route.ts`'s `password === '123'` fallback for accounts with no
+stored password is removed entirely — checked production first and
+confirmed 0 of 23 `hr_profiles` rows currently have an empty password
+field, so nothing relies on it. Also fixed the same class of bug in both
+onboarding forms client-side (`hr/onboarding/page.tsx`, the live one, and
+`hr/page.tsx`, a second onboarding form that turned out to be dead/
+unreachable code — no button ever opens it): both defaulted a blank
+"Temporary Password" input to the literal `'employee123'`; now they send
+no password when blank and let the server generate one. The live
+onboarding page shows the generated password in its success banner and
+stays open until the admin dismisses it, rather than auto-closing before
+they could copy it down.
+
+Live-verified end-to-end against production with a disposable test
+account (created, tested, deleted immediately): addEmployee with no
+password returns a generated one; logging in with `'123'` for that
+account now 401s; logging in with the generated password succeeds.
+
+**Note found along the way, not yet acted on:** 3 existing production
+`hr_profiles` rows (`Bilal@delcargo.us`, `rahim@delcargo.us`,
+`dadahahbedi@gmail.com`) still have the literal plaintext `'123'` stored
+directly in their `password` field (not even hashed) — pre-dating both
+this fix and the existing plaintext-to-bcrypt migration-on-login path.
+They still work today via `verifyPassword`'s plaintext-compare fallback
+and will self-migrate to a real hash the next time each of them logs in,
+same as any other still-plaintext account — no immediate action needed,
+just flagging since it was surfaced while verifying this step.
+
+**Remaining**: step 2 (forced password-change gate on approval), step 3
+(rate limiting on login/forgot-password/verify-reset-otp), step 4
+(security headers + CSP audit).
