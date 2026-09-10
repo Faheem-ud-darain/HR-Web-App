@@ -34,6 +34,15 @@ import {
 } from './hr/careers';
 import { useTasks, useMyTasks, taskActions } from './hr/tasks';
 export { useTasks, useMyTasks } from './hr/tasks';
+import {
+  useTickets, computeTicketActivitySignature, hasUnseenTicketActivity,
+  markTicketActivitySeen, TICKET_PRESENCE_STALE_MS, TYPING_STALE_MS,
+  ticketActions,
+} from './hr/tickets';
+export {
+  useTickets, computeTicketActivitySignature, hasUnseenTicketActivity,
+  markTicketActivitySeen, TICKET_PRESENCE_STALE_MS, TYPING_STALE_MS,
+} from './hr/tickets';
 export {
   useCareers, getCareerApplicationsAdmin, updateApplicationStatusAdmin,
   getCareerApplicationsForEmailAdmin, deleteCareerApplicationsForEmailAdmin,
@@ -347,37 +356,9 @@ type MessageReadMap = Record<string, string[]>;
 // per-ticket instead of per-employee. HR's TicketsView heartbeats this
 // (see touchTicketPresence) while a ticket is selected; the employee's
 // TicketsView polls getAllTicketPresences/getTicketPresencesForIds and
-// shows a "Live" badge for any ticket whose presence hasn't gone stale.
-// Backed by the dedicated hr_ticket_presence collection (one row per
-// ticket, unique index on ticketId) — migrated off the old
-// hr_ticket_presence_<id> KV-blob-per-ticket pattern, which was prone to
-// duplicate rows for the same ticket (a bug the migration surfaced: one
-// ticket had 41 duplicate KV rows) since a KV write there was a
-// lookup-then-update rather than a database-enforced single row.
-export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
 
 // Durable "the employee has read this ticket as of this time" marker — unlike
 // TicketPresence above (which only lasts ~20s and answers "is HR looking at
-// this right now"), this never expires, so HR/Admin can tell whether a reply
-// they sent has actually been read, same "Seen" convention as most chat
-// apps. Written by the employee/team-lead's own TicketsView whenever they
-// have a ticket selected (touched on an interval so it also advances if a
-// new reply arrives while they're already looking at it), read by HR/Admin's
-// TicketsView for whichever ticket is currently selected.
-const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
-
-// "X is typing…" indicator — same KV-heartbeat idea as TicketPresence above,
-// just keyed per (scope, id, senderEmail) instead of one row per ticket, since
-// multiple people can be typing in the same team chat/ticket at once and we
-// want to show all of them, not just the last one. Very short staleness
-// window (a few seconds) since a typing indicator that lingers after someone
-// actually stops typing reads as a bug, not a feature. Shared by both Team
-// Chat (scope 'chat', id = teamId) and Tickets (scope 'ticket', id =
-// ticketId) — see touchTypingState/clearTypingState/getTypingUsers below.
-export const TYPING_STALE_MS = 5 * 1000;
-const typingKeyFor = (scope: 'chat' | 'ticket', scopeId: string, email: string) =>
-  `hr_typing_${scope}_${scopeId}_${email.toLowerCase()}`;
-const typingPrefixFor = (scope: 'chat' | 'ticket', scopeId: string) => `hr_typing_${scope}_${scopeId}_`;
 
 // Real hr_teams row — adopted structure (lead + members + warehouse).
 
@@ -532,9 +513,6 @@ function toWarehouse(w: any): Warehouse {
 function toLeave(l: any): LeaveApplication {
   return { id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status };
 }
-function toTicket(t: any): Ticket {
-  return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
-}
 function toTeam(t: any): Team {
   return { id: t.id, name: t.name, leadEmail: t.lead_email || undefined, members: t.members || [], warehouseId: t.warehouse_id || undefined };
 }
@@ -640,25 +618,6 @@ export function useWarehouses() {
 // means the 50/Load-More count is always 50 real matches of whichever tab
 // is active. queryKey includes status so switching Open <-> Closed doesn't
 // serve stale cached results from the other tab.
-export function useTickets(limit: number = 50, status?: 'open' | 'closed') {
-  return useQuery({
-    queryKey: ['hr_tickets', limit, status || 'all'],
-    queryFn: async () => {
-      try {
-        const res = await pb.collection('hr_tickets').getList(1, limit, {
-          sort: '-created',
-          requestKey: null,
-          ...(status ? { filter: `status = "${status}"` } : {}),
-        });
-        return res.items.map(toTicket);
-      } catch (err) {
-        console.error('[hrData] getList error in hr_tickets:', err);
-        return [];
-      }
-    },
-    refetchInterval: 8000,
-  });
-}
 // Migrated off the public pb.collection('hr_payroll').getFullList() call —
 // hr_payroll's PocketBase rules are locked to admins-only (plan 012 Phase
 // 1). The route itself (src/app/api/admin/payroll/route.ts, GET) decides
@@ -1484,52 +1443,6 @@ export function getShiftShortfallDeduction(
 
 // A TimesheetEntry's `date` field is fixed to whatever calendar date it
 
-// ---------------------------------------------------------------------------
-// Ticket activity "seen" tracking (client-side only, per role+email) — used
-// to light up a small dot on the Support Tickets nav item when there's a
-// new ticket or reply the viewer hasn't looked at yet.
-// ---------------------------------------------------------------------------
-
-// A single number that changes whenever there's new activity relevant to
-// this viewer: for HR/Admin that's every ticket + every reply on every
-// ticket (they see all of it); for employees/team leads it's just replies
-// from HR/Admin on their own tickets (their own messages don't count).
-export function computeTicketActivitySignature(
-  tickets: Ticket[],
-  role: 'admin' | 'hr' | 'employee' | 'team_lead',
-  email: string,
-): number {
-  if (role === 'admin' || role === 'hr') {
-    return tickets.reduce((sum, t) => sum + 1 + t.replies.length, 0);
-  }
-  const mine = tickets.filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase());
-  return mine.reduce((sum, t) => sum + t.replies.filter(r => r.senderRole === 'hr' || r.senderRole === 'admin').length, 0);
-}
-
-function ticketSeenStorageKey(role: string, email: string): string {
-  return `hr_tickets_seen_v1_${role}_${email.toLowerCase()}`;
-}
-
-export function hasUnseenTicketActivity(
-  tickets: Ticket[],
-  role: 'admin' | 'hr' | 'employee' | 'team_lead',
-  email: string,
-): boolean {
-  if (typeof window === 'undefined' || !email) return false;
-  const current = computeTicketActivitySignature(tickets, role, email);
-  const stored = Number(window.localStorage.getItem(ticketSeenStorageKey(role, email)) || '0');
-  return current > stored;
-}
-
-export function markTicketActivitySeen(
-  tickets: Ticket[],
-  role: 'admin' | 'hr' | 'employee' | 'team_lead',
-  email: string,
-): void {
-  if (typeof window === 'undefined' || !email) return;
-  const current = computeTicketActivitySignature(tickets, role, email);
-  window.localStorage.setItem(ticketSeenStorageKey(role, email), String(current));
-}
 
 // ---------------------------------------------------------------------------
 // Team Chat unseen-activity signature — same "count vs. last-seen count in
@@ -1621,6 +1534,7 @@ export const hrActions = {
   ...notificationActions,
   ...careerActions,
   ...taskActions,
+  ...ticketActions,
   // ── Profiles ──────────────────────────────────────────────────────────
   addEmployee: async (emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<Profile> => {
     const fields = fromProfileFields({ ...emp, onboardingCompleted: false });
@@ -1980,181 +1894,9 @@ export const hrActions = {
 
 
 
-  // ── Tickets ───────────────────────────────────────────────────────────
-  // Returns the created Ticket (previously void) so callers can immediately
-  // attach a file to it via addTicketReply — hr_tickets itself has no file
-  // column, only `replies` does (see TicketReply comment above), so a
-  // ticket-creation-time attachment has to be added as a follow-up reply
-  // rather than a field on the ticket record itself.
-  createTicket: async (ticket: { employeeName: string; employeeEmail: string; title: string; description: string; department: 'hr' | 'technical' }): Promise<Ticket> => {
-    const created = await pbCreate('hr_tickets', {
-      employee_email: ticket.employeeEmail, employee_name: ticket.employeeName, subject: ticket.title,
-      description: ticket.description, department: ticket.department, status: 'open', priority: 'medium', category: 'general', assigned_to: '', resolution: '', replies: [],
-    });
-    // Admin also has a Tickets queue (admin/tickets) — this previously only
-    // notified 'hr', same gap as leave requests.
-    if (ticket.department === 'hr') {
-      await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', created.id));
-    } else if (ticket.department === 'technical') {
-      // Find all profiles on Technical Support / Internal Technical Support teams and notify them directly
-      const profiles = await pbList('hr_profiles');
-      const techEmails = profiles
-        .filter((p: any) => isTechnicalSupportMember(p.teams))
-        .map((p: any) => p.email)
-        .filter(Boolean);
-      for (const email of techEmails) {
-        await hrActions.addNotification(email, 'employee', `New technical support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', created.id));
-      }
-    }
-    // Admin gets the same dashboard notification (Admin's Tickets queue
-    // still shows it), but no push here — whichever department actually
-    // owns the ticket (HR or Technical Support) already got pushed above,
-    // so a duplicate phone buzz to every Admin for every single ticket
-    // event company-wide was pure noise. Dropping the category makes this
-    // a dashboard-only row (push_notifications.pb.js exits before the
-    // hr_profiles role lookup + OneSignal send for non-pushable categories).
-    await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, undefined, undefined, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
-    return toTicket(created);
-  },
-  addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
-    const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toISOString() };
-    await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
-    if (reply.senderRole === 'hr' || reply.senderRole === 'admin' || (ticket.department === 'technical' && reply.senderRole !== 'employee')) {
-      const senderLabel = ticket.department === 'technical' ? 'Technical Support' : (reply.senderRole === 'hr' ? 'HR' : 'Admin');
-      await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from ${senderLabel} regarding ticket "${ticket.title}".`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
-    } else {
-      if (ticket.department === 'hr') {
-        await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', ticket.id));
-      } else if (ticket.department === 'technical') {
-        const profiles = await pbList('hr_profiles');
-        const techEmails = profiles
-          .filter((p: any) => isTechnicalSupportMember(p.teams))
-          .map((p: any) => p.email)
-          .filter(Boolean);
-        for (const email of techEmails) {
-          await hrActions.addNotification(email, 'employee', `New support message from ${ticket.employeeName} on technical ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', ticket.id));
-        }
-      }
-      // Dashboard-only for Admin (see createTicket's admin notification
-      // comment above) — HR or Technical already got the pushable copy.
-      await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, undefined, undefined, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', ticket.id));
-    }
-  },
-  updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
-    await pbUpdate('hr_tickets', ticket.id, { status });
-    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
-    if (ticket.department === 'hr') {
-      await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
-    } else if (ticket.department === 'technical') {
-      const profiles = await pbList('hr_profiles');
-      const techEmails = profiles
-        .filter((p: any) => isTechnicalSupportMember(p.teams))
-        .map((p: any) => p.email)
-        .filter(Boolean);
-      for (const email of techEmails) {
-        await hrActions.addNotification(email, 'employee', `Technical ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
-      }
-    }
-    // Dashboard-only for Admin — same reasoning as the create/reply notifications above.
-    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, undefined, undefined, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
-    // Starts/clears the 15-day attachment-deletion timer (see
-    // checkTicketAttachmentRetention below) — hr_tickets has no closedAt
-    // column of its own, so this is tracked in the KV store the same way
-    // tracking settings/heartbeats are. Re-opening clears the timer so a
-    // ticket closed-then-reopened-then-closed-again gets a fresh 15 days
-    // rather than deleting attachments early based on the first close.
-    const closedAtMap = ((await pbGetKV('hr_ticket_closed_at_v1')) as Record<string, string>) || {};
-    if (status === 'closed') closedAtMap[ticket.id] = new Date().toISOString();
-    else delete closedAtMap[ticket.id];
-    await pbSetKV('hr_ticket_closed_at_v1', closedAtMap);
-  },
-  // Best-effort, client-triggered (no server cron in this app — see
-  // checkScreenshotRetention above for the same pattern) sweep that deletes
-  // any file attachments left on a ticket's replies once the ticket has
-  // been closed for 15+ days. Only strips the attachment fields —
-  // messages/replies themselves stay intact, so the conversation history
-  // remains readable, just without the (potentially sensitive) files.
-  // Called from TicketsView.tsx whenever the Tickets page is open.
-  checkTicketAttachmentRetention: async (): Promise<void> => {
-    const TICKET_ATTACHMENT_RETENTION_MS = 15 * 24 * 60 * 60 * 1000;
-    const closedAtMap = ((await pbGetKV('hr_ticket_closed_at_v1')) as Record<string, string>) || {};
-    const dueIds = Object.keys(closedAtMap).filter(id => {
-      const closedAt = new Date(closedAtMap[id]).getTime();
-      return !isNaN(closedAt) && (Date.now() - closedAt) >= TICKET_ATTACHMENT_RETENTION_MS;
-    });
-    if (dueIds.length === 0) return;
 
-    const tickets = (await pbList('hr_tickets', { filter: dueIds.map(id => `id = "${id}"`).join(' || ') })).map(toTicket);
-    let mapChanged = false;
-    for (const ticket of tickets) {
-      const hasAttachments = ticket.replies.some(r => !!r.attachmentUrl);
-      if (hasAttachments) {
-        const scrubbedReplies = ticket.replies.map(r => {
-          if (!r.attachmentUrl) return r;
-          const { attachmentUrl, attachmentName, attachmentSize, ...rest } = r;
-          return rest as TicketReply;
-        });
-        await pbUpdate('hr_tickets', ticket.id, { replies: scrubbedReplies });
-      }
-      // Whether or not there was anything to scrub (e.g. already cleaned up
-      // by another tab), this ticket is done — stop tracking it.
-      delete closedAtMap[ticket.id];
-      mapChanged = true;
-    }
-    if (mapChanged) await pbSetKV('hr_ticket_closed_at_v1', closedAtMap);
-  },
 
-  // ── Ticket "live" presence (see TicketPresence above) ───────────────────
-  touchTicketPresence: async (ticketId: string, email: string, role: string): Promise<void> => {
-    await pbUpsertByField('hr_ticket_presence', 'ticketId', ticketId, { email, role, lastSeenAt: new Date().toISOString() });
-  },
-  clearTicketPresence: async (ticketId: string): Promise<void> => {
-    const row = await pbFindByField('hr_ticket_presence', 'ticketId', ticketId);
-    if (row) await pbDelete('hr_ticket_presence', row.id);
-  },
-  getAllTicketPresences: async (): Promise<TicketPresence[]> =>
-    await pbList('hr_ticket_presence'),
-  // Scoped variant — fetches presence rows only for the given ticket IDs
-  // (one server-side OR-filter, still a single request) instead of fetching
-  // every row in hr_ticket_presence, which is one row per ticket in the
-  // company that has EVER had a presence heartbeat, not just the ones a
-  // given employee/team-lead actually has open. Pass the caller's own
-  // visible ticket list (already filtered to "my tickets" upstream).
-  getTicketPresencesForIds: async (ticketIds: string[]): Promise<TicketPresence[]> => {
-    if (ticketIds.length === 0) return [];
-    const filter = ticketIds.map(id => `ticketId = "${id.replace(/"/g, '\\"')}"`).join(' || ');
-    return await pbList('hr_ticket_presence', { filter });
-  },
-  isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
-    !!p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) < TICKET_PRESENCE_STALE_MS,
 
-  // ── "X is typing…" indicator (see TypingState above) ────────────────────
-  // Call on every keystroke in a composer (debounce on the caller's side —
-  // TeamChatView/TicketsView call this at most once every ~1.5s while the
-  // field is non-empty, not on every single keypress) while it's non-empty,
-  // and call clearTypingState immediately on send/blur/empty so the
-  // indicator disappears promptly rather than waiting out the stale window.
-  touchTypingState: (scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> =>
-    pbSetKV(typingKeyFor(scope, scopeId, email), { scope, scopeId, email, displayName, lastTypedAt: new Date().toISOString() } as TypingState),
-  clearTypingState: (scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> =>
-    pbDeleteKVByKeys([typingKeyFor(scope, scopeId, email)]),
-  // Returns everyone currently (non-stale) typing in this scope, excluding
-  // the viewer themself — that's the filtering the UI needs directly.
-  getTypingUsers: async (scope: 'chat' | 'ticket', scopeId: string, excludeEmail: string): Promise<TypingState[]> => {
-    const rows = (await pbGetKVByPrefix(typingPrefixFor(scope, scopeId))).map(row => row.value as TypingState);
-    const now = Date.now();
-    return rows.filter(r =>
-      r.email.toLowerCase() !== excludeEmail.toLowerCase() &&
-      !!r.lastTypedAt &&
-      (now - new Date(r.lastTypedAt).getTime()) < TYPING_STALE_MS
-    );
-  },
-
-  // ── Ticket "seen by employee" marker (see TicketSeenState above) ────────
-  touchTicketSeenByEmployee: (ticketId: string): Promise<void> =>
-    pbSetKV(ticketSeenKeyFor(ticketId), { ticketId, employeeSeenAt: new Date().toISOString() } as TicketSeenState),
-  getTicketSeenState: (ticketId: string): Promise<TicketSeenState | null> =>
-    pbGetKV(ticketSeenKeyFor(ticketId)),
 
   // ── Teams (real hr_teams: name + leadEmail + members + warehouseId) ────
   addTeam: (name: string, warehouseId?: string) => pbCreate('hr_teams', { name, lead_email: '', members: [], warehouse_id: warehouseId || '' }),
