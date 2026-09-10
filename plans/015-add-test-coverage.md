@@ -1,7 +1,9 @@
 # 015 — Introduce automated test coverage
 
-- **Status**: TODO
-- **Commit**: (none yet — planning only)
+- **Status**: DONE (all 6 steps)
+- **Commit**: 64e8a53 (step 1: vitest setup), c4c6689 (step 2: payroll),
+  dcbe8af (step 5: timezone), a019ec0 (step 4: leaves), 20c6ed5
+  (step 3: absences), 6be188d (step 6: CI wiring)
 - **Severity**: MEDIUM
 - **Category**: Codebase / completeness (not part of the animation audit — tracked here for the same reason plans 007-011 are)
 - **Estimated scope**: medium to start, open-ended to grow. There are currently zero automated tests anywhere in this repo and no test framework installed. This plan adds the tooling and an initial high-value test set; it deliberately does not attempt full coverage in one pass.
@@ -106,3 +108,119 @@ it before it reaches production, run against real employee pay.
   with tests that would actually catch a realistic regression in each, and
   is either already wired into CI or has a clear, tracked follow-up to do
   so.
+
+## Implementation notes
+
+**All 6 steps done.** `vitest` 3.2.7 + `@vitest/coverage-v8` 3.2.7 (pinned
+below vitest 5, which requires `@types/node` 22+ and conflicts with this
+repo's `@types/node` ^20) installed as dev dependencies; `vitest.config.ts`
+scopes the runner to `src/lib/**/*.test.ts` only, per this plan's own
+boundaries; `npm test` runs `vitest run`. 45 tests across 4 files, all
+green, `npx tsc --noEmit -p tsconfig.json` clean throughout.
+
+**Payroll (`src/lib/hr/payroll.test.ts`, 9 tests)** — full real coverage
+of `computePayrollView`: a normal full-month long-tenured employee; the
+mid-month-joiner proration threshold (`joinDayOfMonth <= 5` = full salary
+vs `> 5` = prorated), including the boundary day itself; the anniversary-
+increment deferral rule (an anniversary event only affects pay starting
+the calendar month AFTER its own month — tested both directly via
+`getPendingIncrementForPayrollMonth` and through `computePayrollView`'s
+own `incrementAmount`); and that USA vs Pakistan payroll records are
+never blended into one cross-region number (each record stays scoped to
+its own employee's own region/native-currency figure; a Pakistan-only
+absence never affects a USA employee's deduction). "Today" is pinned via
+`vi.setSystemTime` so `targetMonthKey` is deterministic.
+
+One real wrinkle surfaced while writing these: `computePayrollView` reads
+`joinDayOfMonth` via `new Date(emp.joinedDate)` + NY-timezone conversion.
+A plain `"YYYY-MM-DD"` string parses as UTC midnight, which rolls back to
+the previous evening once converted to America/New_York (EDT, UTC-4 in
+September) — e.g. `"2026-09-07"` reads back as NY calendar day 6, not 7.
+This is pre-existing production behavior (the exact caveat `absences.ts`
+already documents for its own `joinedStr` handling), not a bug — test
+fixtures' `joinedDate`/leave-`duration` strings are deliberately offset by
+one calendar day from the actual value they're meant to exercise,
+confirmed against real output rather than assumed. Same technique reused
+in `leaves.test.ts` and `absences.test.ts`.
+
+**Timezone (`src/lib/timezone.test.ts`, 14 tests)** — full coverage of
+`getNYDateString`, `formatDateNY`/`formatShortDateNY`, `getNYMidnight`
+(both its EDT and EST guess-then-correct branches, plus a DST-transition
+boundary date), `formatRelativeDateNY`, and `formatTimeNY`.
+
+**Leaves (`src/lib/hr/leaves.test.ts`, 13 tests)** — full coverage of
+`getApprovedLeaveDaysInMonth` splitting a single leave correctly across a
+calendar-month boundary (not double-counted, not all attributed to one
+side), type/status/employee-name filtering, malformed-duration handling,
+`countApprovedLeaveRequestsInMonth`'s per-request (not per-day) counting
+across the same boundary, `getApprovedLeaveOnDate`/`isApprovedLeaveOnDate`'s
+inclusive-range matching, and `isWeekday`.
+
+**Absences (`src/lib/hr/absences.test.ts`, 9 tests)** — `runAbsenceCheck`
+is not a pure function: it does real PocketBase reads (`hrActions`,
+re-exported from `../hrData`) and writes (`pbCreate`, from `./shared`),
+plus sends notifications. Per this plan's boundary against refactoring
+production code for testability, this suite mocks those dependencies with
+`vi.mock` instead: `../hrData`'s `hrActions`/`fetchTimesheetsFresh`/
+`displayName` are stubbed with controllable per-test fixtures, while
+`isWeekday`/`isApprovedLeaveOnDate` are re-exported as their REAL
+implementations (imported from `./leaves`, their actual home) so the
+date/weekday/leave-overlap logic under test stays genuine rather than
+stubbed away. Only `pbCreate` is mocked from `./shared`; every other
+helper there (`getWeekdaysInMonth`, `localShiftDate`, `formatMoney`) is
+kept real since they're pure.
+
+Covered: `no_clock_in` / `under_4_hours` / `inactivity` classification
+(including that inactivity requires ONE continuous 37+ minute run, not
+several shorter gaps summing past it), the Pakistan-only/USA-excluded
+rule, the approved-leave override (suppresses a would-be absence
+regardless of hours worked), the `exemptFromAbsenceCheck` and
+pre-`joinedDate` guards, and dedup against existing absence history
+(active or soft-deleted).
+
+**Not covered, deliberately** (per this plan's own invitation to scope
+narrower and document rather than force something contrived): the
+concurrency/race-condition handling around `runAbsenceCheck`'s fresh
+re-fetch-before-create step (two dashboards racing) — that needs a real
+database's unique index to actually race against, which is an
+integration-test concern, not something a mock-based unit test can
+honestly exercise. Also not covered: the weekend/pre-join self-healing
+cleanup sweeps at the top of `runAbsenceCheck` (secondary safety nets
+reversing already-bad historical data, not the core classification logic
+this plan prioritizes) and `getShiftShortfallDeduction`/
+`getAbsenceDeductionForMonth` in `payroll.ts` (the partial-shift-shortfall
+and absence-dollar-amount math layered on top of `runAbsenceCheck`'s
+reason detection — real logic, but one layer removed from the five named
+areas in this plan's Steps; a reasonable follow-up, not force-fit here).
+
+**Red/green bug-injection proof (mandatory verification step)**: a
+one-line bug was deliberately introduced into `computePayrollView`'s
+mid-month-joiner proration — `daysWorkedInMonth = totalDaysInMonth -
+joinDayOfMonth + 1` changed to `... - joinDayOfMonth` (dropping the `+1`,
+an off-by-one in the day-count). Re-running `npx vitest run
+src/lib/hr/payroll.test.ts` immediately went red — 2 of 9 tests failed
+with the exact expected/received mismatch (`expected 24000 to be 25000`
+and `expected 10000 to be 11000`, both off by exactly one day's pay at the
+daily rate). The change was then reverted (`git checkout --
+src/lib/hr/payroll.ts`) and the full suite (`npm test`, all 4 files) was
+confirmed green again — 45/45 passing — with `npx tsc --noEmit` still
+clean and `git status` showing no leftover diff. This is the concrete
+proof the tests aren't trivially passing.
+
+**CI wiring (step 6): done.** `.github/workflows/run-tests.yml` runs
+`npm ci` -> `tsc --noEmit` -> `npm test` on every push/PR to `main`,
+matching this repo's existing workflow style (plain `actions/checkout` +
+`actions/setup-node`, a comment block explaining what it does and why —
+see `build-tracker-agent.yml`/`deploy-pb-hooks.yml`). Wired in last, only
+after the full suite ran green multiple consecutive times locally and the
+bug-injection proof above held up — judged stable enough to gate merges
+on, not flaky.
+
+**Scope note**: exactly the 5 areas named in this plan's Steps got real
+test coverage (payroll math, absence-reason detection, leave-day math,
+NY-timezone utilities, plus the anniversary-increment/currency-separation
+sub-requirements under payroll). No React component tests, no Playwright/
+end-to-end tests, and no production logic was changed to make anything
+"more testable" — the one honest exception being the absence-detection
+suite's `vi.mock` boundary choices, which are test-side only.
+
