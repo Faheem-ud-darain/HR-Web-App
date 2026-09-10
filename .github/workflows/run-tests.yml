@@ -1,0 +1,36 @@
+name: Run Tests
+
+# Plan 015 step 6: runs the vitest unit-test suite (src/lib/**/*.test.ts —
+# payroll math, absence-reason detection, leave-day math, NY-timezone
+# utilities; see plans/015-add-test-coverage.md) plus a full tsc type
+# check on every push and pull request, so a regression in the highest-
+# risk business logic (or a type error in the test files themselves) is
+# caught before it reaches main, not discovered manually after the fact.
+#
+# Deliberately does NOT deploy or touch production in any way (unlike
+# deploy-pb-hooks.yml) — this is a required check only, no secrets used.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Run tests
+        run: npm test
