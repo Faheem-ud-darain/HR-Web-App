@@ -21,9 +21,12 @@ all).
 ## Target
 
 - **MFA**: TOTP-based (Google Authenticator / Authy compatible) second
-  factor, optional per-account initially, with a path to being enforced
-  per-deployment for admin/HR roles at minimum (the roles with access to
-  payroll and personal data).
+  factor. **Confirmed with the product owner: MFA/OTP is a backup security
+  layer the user controls, not something the app or a deployment enforces
+  on them.** Every user gets a toggle in their own profile settings to
+  enable or disable it at any time — there is no per-deployment
+  "require MFA for this role" setting in this plan; that idea is
+  explicitly dropped per product decision, not deferred.
 - **SSO**: "Sign in with Google Workspace" as the first provider (matches
   the existing Google integration already in the codebase and covers a
   large share of business buyers), added as an *additional* login path
@@ -75,16 +78,38 @@ all).
    verified email and issues this app's own session JWT exactly as the
    password flow does today — from the session's perspective downstream,
    an SSO login and a password login are indistinguishable.
-5. **Per-deployment enforcement setting**: add a deployment-level config
-   flag (see plan 018's config approach) allowing a client to require MFA
-   for admin/HR roles, without forcing it globally for every deployment on
-   day one.
+5. **Google-connection cleanup on offboarding** (confirmed requirement,
+   not previously covered by any plan): today,
+   `UserProfileModal.tsx`'s `confirmOffboard` flips the `offboarded`
+   overlay flag but never touches the employee's Google integration —
+   `google_integration_<email>` (the calendar/Meet connection, stored via
+   `hrActions.getKV`/`saveProfileExtras`) is left untouched regardless of
+   offboarding. Fix: wire offboarding so it always, unconditionally
+   (whether or not the employee ever connected Google):
+   (a) revokes the stored Google OAuth token via Google's token-revocation
+   endpoint if one exists for that email, and clears the
+   `google_integration_<email>` KV entry so no stale grant lingers;
+   (b) sends the employee a notification email confirming their Google
+   account access was disconnected as part of offboarding, via a new
+   function alongside `sendOtpEmail` in `src/lib/serverEmail.ts` (e.g.
+   `sendOffboardingGoogleDisconnectEmail`) — reuse that file's existing
+   mail-sending setup rather than adding a new one. This step runs
+   idempotently: an employee with no Google connection still gets the
+   confirmation email, and a revoke call that finds nothing to revoke is
+   a no-op, not an error that blocks offboarding.
 
 ## Boundaries
 
 - Do NOT replace email+password login — SSO and MFA are additions,
-  existing accounts must keep working exactly as before unless a client
-  explicitly enforces MFA.
+  existing accounts must keep working exactly as before.
+- Do NOT add any deployment- or admin-level setting that forces MFA on a
+  user — per product decision, MFA/OTP stays a purely user-controlled,
+  optional backup layer that each person enables or disables for
+  themselves.
+- Do NOT let the Google-connection cleanup in Step 5 depend on whether
+  the account currently has an active Google connection — it must run
+  the same way (revoke-if-present, always email) for every offboarded
+  employee.
 - Do NOT reuse the existing Google Calendar OAuth grant/token for login
   SSO — separate client registration, separate scopes, to avoid scope
   confusion between "can log in as this person" and "can read/write this
@@ -106,6 +131,12 @@ all).
   account, confirm it issues a normal app session (indistinguishable
   downstream from a password login) and does NOT also grant calendar
   access as a side effect.
-- **Done when**: MFA enrollment/login/recovery all work end-to-end, Google
-  Workspace SSO issues equivalent sessions to password login, and a
-  deployment can optionally enforce MFA for admin/HR roles via config.
+- **Manual**: offboard a test employee who has an active Google
+  connection — confirm the connection is revoked/cleared and they receive
+  the disconnection email; repeat for a test employee who never connected
+  Google and confirm they still receive the email with no error.
+- **Done when**: MFA enrollment/login/recovery all work end-to-end and
+  remain fully user-optional with no enforcement setting anywhere, Google
+  Workspace SSO issues equivalent sessions to password login, and
+  offboarding always disconnects Google access and notifies the employee
+  regardless of prior connection status.

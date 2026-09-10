@@ -15,10 +15,22 @@ audit that produced this plan:
    (line ~230) falls back to the literal string `'123'` when an admin
    creates/edits a profile without setting a password, and
    `src/app/api/auth/login/route.ts` (~line 79) treats `password === '123'`
-   as valid for any account that has no password hash set yet. This means
-   every newly-onboarded employee has a predictable, trivially-guessable
-   password until they happen to change it — and there is currently no
-   forced-change-on-first-login flow that guarantees they ever do.
+   as valid for any account that has no password hash set yet.
+
+   **Confirmed with the product owner: this default-password step is
+   intentional, not accidental.** The real workflow is: HR/Admin creates
+   the account on the employee's behalf (the employee never picks their
+   own initial password); the employee logs in with the shared default
+   during onboarding; HR/Admin reviews and approves the account once
+   onboarding steps are complete; only *after* approval is the employee
+   expected to set their own password. So this plan must not remove or
+   block that flow. What actually needs fixing is narrower: `'123'` is
+   one universal, publicly-known literal shared by every not-yet-approved
+   account across every deployment (rather than a per-account secret),
+   and there is no mechanism that ever forces the password to actually
+   change after approval — an employee who never bothers keeps `123`
+   indefinitely, and the account remains vulnerable to anyone who simply
+   knows the app's own default-password convention.
 2. **No rate limiting anywhere**: `src/app/api/auth/login`,
    `src/app/api/auth/forgot-password`, and
    `src/app/api/auth/verify-reset-otp` have no request throttling of any
@@ -35,12 +47,20 @@ audit that produced this plan:
 
 ## Target
 
-- No account can ever have a literal, predictable default password. New
-  accounts get a securely random temporary password (already partially
-  supported — `admin/onboarding` has a "Temporary Password" field; the fix
-  is removing the `'123'` fallback path entirely so an empty/unset
-  password can never authenticate) and/or a mandatory "set your password"
-  step is enforced before any other action on first login.
+- No account is ever protected only by a single, universal, guessable
+  literal (`'123'`, shared across every pending account in every
+  deployment). New accounts still get an HR/Admin-set temporary password
+  exactly as today — but generated per-account (already partially
+  supported — `admin/onboarding` has a "Temporary Password" field; the
+  fix is removing the shared `'123'` fallback path so no empty/unset
+  password can ever authenticate via a literal every account shares).
+- The existing lifecycle is preserved exactly: account created by
+  HR/Admin with a temp password → employee logs in and completes
+  onboarding using that temp password → HR/Admin reviews and approves →
+  only then is the employee expected/allowed to set their own password.
+  A forced password-change gate belongs **after approval**, not at first
+  login (first login has to work with the temp password *during*
+  onboarding, before approval exists) — see Steps below.
 - Login, forgot-password, and OTP-verification endpoints reject excessive
   attempts from the same identifier (email and/or IP) within a rolling
   window, with a clear "too many attempts, try again in N minutes"
@@ -84,9 +104,16 @@ audit that produced this plan:
    `src/app/api/auth/login/route.ts`, remove the `password === '123'`
    special case entirely — an account with no password hash should never
    be able to authenticate via a magic literal.
-2. **Add a forced password-change gate** (if one doesn't already exist —
-   check `onboarding` flow first) so a temporary/admin-set password can
-   only be used once before the account must set its own.
+2. **Add a forced password-change gate that fires on approval, not on
+   first login.** Check the existing onboarding/approval flow
+   (`UserProfileModal.tsx` / the account-approval action) for where an
+   account transitions from "pending onboarding" to "approved," and hook
+   the gate there: once HR/Admin approves the account, flag it as
+   requiring a password change on its employee's *next* login (a simple
+   `mustChangePassword` overlay flag, same KV/overlay pattern already
+   used for `offboarded`/`offboardingStatus`). The employee must still be
+   able to log in freely with the temp password throughout onboarding,
+   before approval — do not gate that.
 3. **Add rate limiting** to `src/app/api/auth/login/route.ts`,
    `src/app/api/auth/forgot-password/route.ts`, and
    `src/app/api/auth/verify-reset-otp/route.ts`: a small shared helper
@@ -113,6 +140,10 @@ audit that produced this plan:
 - Do NOT change the shape of the JWT session token or its verification
   logic in `serverAuth.ts` — this plan only touches login validation
   (the `'123'` check), not session issuance/verification.
+- Do NOT remove or gate the ability to log in with the HR/Admin-set temp
+  password during onboarding, before approval — that is the intended,
+  confirmed workflow. Only the *shared, universal* nature of the literal
+  and the *lack of a forced change after approval* are the bugs.
 - Do NOT introduce a new external service (Redis, Cloudflare Turnstile,
   etc.) for rate limiting — use the existing KV-store pattern already in
   this codebase, per Repo conventions above.
