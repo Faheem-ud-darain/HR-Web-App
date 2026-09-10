@@ -27,6 +27,15 @@ import {
   isAnnouncementForProfile, buildNotificationLink, useNotifications,
   useAnnouncements, useMaintenanceNotices, notificationActions,
 } from './hr/notifications';
+import {
+  useCareers, getCareerApplicationsAdmin, updateApplicationStatusAdmin,
+  getCareerApplicationsForEmailAdmin, deleteCareerApplicationsForEmailAdmin,
+  careerActions,
+} from './hr/careers';
+export {
+  useCareers, getCareerApplicationsAdmin, updateApplicationStatusAdmin,
+  getCareerApplicationsForEmailAdmin, deleteCareerApplicationsForEmailAdmin,
+} from './hr/careers';
 export {
   isAnnouncementForProfile, buildNotificationLink, useNotifications,
   useAnnouncements, useMaintenanceNotices,
@@ -524,9 +533,6 @@ function toLeave(l: any): LeaveApplication {
 function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
 }
-function toCareer(c: any): CareerPosition {
-  return { id: c.id, title: c.title, department: c.department, location: c.location, description: c.description, requirements: c.requirements || [] };
-}
 function toTicket(t: any): Ticket {
   return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
 }
@@ -644,9 +650,6 @@ export function useMyTasks(email: string | null | undefined) {
   });
 }
 
-export function useCareers() {
-  return useQuery({ queryKey: ['hr_careers'], queryFn: async () => (await pbList('hr_careers')).map(toCareer) });
-}
 // useCareerApplications (public direct-PocketBase read of every applicant's
 // PII) was removed as part of plan 012, Phase 1 — CareersView.tsx now
 // fetches this HR/Admin-only, session-checked, via
@@ -977,30 +980,7 @@ export async function upsertPayrollRecordAdmin(record: PayrollRecord): Promise<v
 // "one-time fetch, not a React Query hook" pattern admin/insights already
 // uses for absence records — CareersView.tsx only calls this at all when
 // role is 'hr' or 'admin'.
-export async function getCareerApplicationsAdmin(): Promise<CareerApplication[]> {
-  const token = getAuthToken();
-  if (!token) return [];
-  const res = await fetch(`${API_BASE}/api/admin/careers/applications`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.applications || []) as CareerApplication[];
-}
 
-export async function updateApplicationStatusAdmin(id: string, status: CareerApplicationStatus): Promise<void> {
-  const token = getAuthToken();
-  if (!token) throw new Error('Not signed in.');
-  const res = await fetch(`${API_BASE}/api/admin/careers/applications`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ id, status }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error || `Request failed: ${res.status}`);
-  }
-}
 
 // One employee's own past applications, HR/Admin-session-checked — used by
 // exportEmployeeArchive below (the "Download Archive" action) instead of
@@ -1009,37 +989,11 @@ export async function updateApplicationStatusAdmin(id: string, status: CareerApp
 // (plan 012, Phase 1). Returns [] rather than throwing when not signed in
 // as HR/Admin, or on any error — archive export treats this the same as
 // "no applications on file" rather than failing the whole export.
-export async function getCareerApplicationsForEmailAdmin(email: string): Promise<any[]> {
-  const token = getAuthToken();
-  if (!token) return [];
-  try {
-    const res = await fetch(`${API_BASE}/api/admin/careers/applications?email=${encodeURIComponent(email)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.applications || [];
-  } catch {
-    return [];
-  }
-}
 
 // Purge every application under one email — used only by
 // hrActions.deleteEmployee's permanent-delete flow, replacing the old
 // direct pbList+pbDelete pair that stopped working once
 // hr_career_applications' PocketBase rules were locked down.
-export async function deleteCareerApplicationsForEmailAdmin(email: string): Promise<void> {
-  const token = getAuthToken();
-  if (!token) return;
-  try {
-    await fetch(`${API_BASE}/api/admin/careers/applications?email=${encodeURIComponent(email)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch {
-    // best-effort, same as the other independent purge branches in deleteEmployee
-  }
-}
 
 export function useTeams() {
   return useQuery({ queryKey: ['hr_teams'], queryFn: async () => (await pbList('hr_teams', { sort: 'name' })).map(toTeam) });
@@ -1687,6 +1641,7 @@ export function hasUnseenHrAdminLineActivity(
 
 export const hrActions = {
   ...notificationActions,
+  ...careerActions,
   // ── Profiles ──────────────────────────────────────────────────────────
   addEmployee: async (emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<Profile> => {
     const fields = fromProfileFields({ ...emp, onboardingCompleted: false });
@@ -2055,36 +2010,6 @@ export const hrActions = {
   updateTaskStatus: (id: string, status: Task['status']) => pbUpdate('hr_tasks', id, { status }),
   deleteTask: (id: string) => pbDelete('hr_tasks', id),
 
-  // ── Careers ───────────────────────────────────────────────────────────
-  addCareer: (position: Omit<CareerPosition, 'id'>) =>
-    pbCreate('hr_careers', { title: position.title, department: position.department, location: position.location, type: '', description: position.description, requirements: position.requirements, status: 'open', created_by: '' }),
-  deleteCareer: (id: string) => pbDelete('hr_careers', id),
-  // hasAppliedForPosition / submitCareerApplication / updateApplicationStatus
-  // (public direct-PocketBase reads/writes of applicant PII) were removed
-  // as part of plan 012, Phase 1 — replaced by submitCareerApplicationPublic,
-  // getCareerApplicationsAdmin, and updateApplicationStatusAdmin below,
-  // matching the same Authorization: Bearer <token> pattern
-  // upsertPayrollRecordAdmin/usePayrollSelf already use.
-
-  // Public, no session — job applicants have no app account (see
-  // CareersView.tsx's `canApply = role === 'public'`). Talks to
-  // src/app/api/careers/apply, the sole writer left for
-  // hr_career_applications once that collection's PocketBase rules are
-  // locked down. Throws with the route's own error message (e.g. the
-  // duplicate-application guard) so the caller can show it inline.
-  submitCareerApplicationPublic: async (app: {
-    positionId: string; positionTitle: string; applicantName: string; applicantEmail: string; coverLetter: string;
-  }): Promise<void> => {
-    const res = await fetch(`${API_BASE}/api/careers/apply`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(app),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data?.error || `Request failed: ${res.status}`);
-    }
-  },
 
   // ── Tickets ───────────────────────────────────────────────────────────
   // Returns the created Ticket (previously void) so callers can immediately
