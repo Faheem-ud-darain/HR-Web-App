@@ -1,7 +1,7 @@
 # 013 — Harden authentication (default passwords, rate limiting, security headers)
 
-- **Status**: IN PROGRESS (steps 1-2 of 4 done)
-- **Commit**: 13600dc (step 1), 7588877 (step 2)
+- **Status**: DONE (all 4 steps)
+- **Commit**: 13600dc (step 1), 7588877 (step 2), 729304d (step 3), 64804f2 (step 4)
 - **Severity**: HIGH
 - **Category**: Security (not part of the animation audit — tracked here for the same reason plans 007-011 are)
 - **Estimated scope**: small-medium. Touches `src/app/api/auth/*`, `src/app/api/admin/profile/route.ts`, and `next.config.ts` (or middleware). No schema changes.
@@ -229,5 +229,34 @@ modal rendered and blocked it, submitted a new password, confirmed the
 flag cleared server-side and the real dashboard appeared. Cleaned up
 immediately after.
 
-**Remaining**: step 3 (rate limiting on login/forgot-password/
-verify-reset-otp), step 4 (security headers + CSP audit).
+**Step 3 done (commit 729304d):** new `src/lib/rateLimit.ts`, a generic
+fixed-window limiter on the same KV pattern `passwordResetOtp.ts` already
+uses. Applied to `/api/auth/login` only — 5 attempts/15min per email,
+checked before any credential comparison, cleared on success.
+`forgot-password`/`verify-reset-otp` were deliberately left untouched:
+they already have their own, more specific limiting (5 OTP requests/24h +
+progressive 30s-5min cooldown; 5 verify-attempts + 10min expiry) that
+predates this plan — wrapping them in a second generic limiter would be
+redundant and could fight the existing progressive cooldown. Live-verified
+against production: 5 rapid wrong-password attempts against a never-used
+test email all 401, the 6th+ get 429 with a clear message; a real
+successful login is unaffected and resets its own counter.
+
+**Step 4 done (commit 64804f2):** `next.config.ts`'s `headers()` now
+applies X-Frame-Options/X-Content-Type-Options/Referrer-Policy
+unconditionally, plus a CSP built from an actual audit of this app's
+browser bundle (next/font self-hosts fonts, Google OAuth/Resend are
+server-only, the only real external destinations are pb.delcargo.us and
+OneSignal's Web Push SDK). Live-verified on the local dev server (same
+production PocketBase/OneSignal config): all 4 headers present, walked
+the dashboard and profile page with console open, zero CSP violations.
+`'unsafe-eval'` is dev-only (confirmed React's dev build needs it, prod
+never does); `'unsafe-inline'` for script/style is flagged as a
+follow-up to tighten to nonces rather than attempted blind here.
+
+Plan 013 is complete. Everything above (all four steps) has been
+live-verified against production, but the CSP specifically was only
+exercised against the local dev server pointed at the same production
+PocketBase/OneSignal — worth a quick sanity check against the actual
+deployed hub.delcargo.us build too after the next deploy, since that's a
+different build (Cloudflare) than the local `next dev` server used here.
