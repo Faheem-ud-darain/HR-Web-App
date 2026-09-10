@@ -44,6 +44,18 @@ import {
   computeMessageActivitySignature, hasUnseenMessageActivity, markMessageActivitySeen,
   hasUnseenHrAdminLineActivity, teamActions,
 } from './hr/teams';
+import {
+  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued,
+  getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,
+  isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
+  countApprovedLeaveRequestsInMonth, getPTOAccrualDate, leaveActions,
+} from './hr/leaves';
+export {
+  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued,
+  getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,
+  isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
+  countApprovedLeaveRequestsInMonth, getPTOAccrualDate,
+} from './hr/leaves';
 export {
   useWarehouses, useTeams, useMessages, useAllMessages, useTeamDocuments,
   computeMessageActivitySignature, hasUnseenMessageActivity, markMessageActivitySeen,
@@ -517,9 +529,6 @@ const OVERLAY_KEYS: (keyof Profile)[] = [
   'exemptFromAbsenceCheck', 'reservedSalaryBalance', 'manualReservedAmount', 'manualReservedNote',
 ];
 
-function toLeave(l: any): LeaveApplication {
-  return { id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status };
-}
 function toTimesheet(t: any): TimesheetEntry {
   const clockOut = t.clock_out || undefined;
   return {
@@ -568,9 +577,6 @@ export function useProfileDocuments(profileId: string | null | undefined) {
     queryFn: () => getProfileDocuments(profileId as string),
     enabled: !!profileId,
   });
-}
-export function useLeaves() {
-  return useQuery({ queryKey: ['hr_leaves'], queryFn: async () => (await pbList('hr_leaves')).map(toLeave) });
 }
 
 // useCareerApplications (public direct-PocketBase read of every applicant's
@@ -965,79 +971,10 @@ export function useTrackingSettings() {
 // PURE BUSINESS LOGIC (unchanged formulas, ported from src/lib/db.ts)
 // ---------------------------------------------------------------------------
 
-export function parseLeaveDates(duration: string): { start: Date; end: Date } | null {
-  try {
-    const parts = duration.split(' - ');
-    if (parts.length < 2) { const d = new Date(parts[0]); return { start: d, end: d }; }
-    return { start: new Date(parts[0]), end: new Date(parts[1]) };
-  } catch { return null; }
-}
 
-export function calculateTenure(joinedDate: string): { years: number; totalMonths: number } {
-  const start = new Date(joinedDate);
-  const today = new Date();
-  let years = today.getFullYear() - start.getFullYear();
-  let months = today.getMonth() - start.getMonth();
-  if (months < 0 || (months === 0 && today.getDate() < start.getDate())) { years--; months += 12; }
-  const totalMonths = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth());
-  return { years: Math.max(0, years), totalMonths: Math.max(0, totalMonths) };
-}
 
-export function calculatePTOAccrued(joinedDate: string): number {
-  const { totalMonths } = calculateTenure(joinedDate);
-  let totalAccrued = 0;
-  for (let m = 0; m < totalMonths; m++) {
-    const yearOfService = Math.floor(m / 12) + 1;
-    let monthlyRate = 0.83;
-    if (yearOfService === 2) monthlyRate = 1.0;
-    else if (yearOfService === 3) monthlyRate = 1.17;
-    else if (yearOfService === 4) monthlyRate = 1.33;
-    else if (yearOfService === 5) monthlyRate = 1.5;
-    else if (yearOfService === 6) monthlyRate = 1.67;
-    else if (yearOfService === 7) monthlyRate = 1.83;
-    else if (yearOfService === 8) monthlyRate = 2.08;
-    else if (yearOfService === 9) monthlyRate = 2.25;
-    else if (yearOfService >= 10) monthlyRate = 2.5;
-    totalAccrued += monthlyRate;
-  }
-  return Math.min(30, Math.round(totalAccrued * 100) / 100);
-}
 
-export function getApprovedLeaveDays(leaves: LeaveApplication[], fullName: string, types: Array<'PTO' | 'Sick Leave'>): number {
-  return leaves
-    .filter(l => l.employeeName === fullName && l.status === 'approved' && types.includes(l.type as any))
-    .reduce((acc, l) => {
-      const dates = parseLeaveDates(l.duration);
-      if (!dates) return acc + 1;
-      const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
-      return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
-    }, 0);
-}
 
-export function getRemainingPTO(leaves: LeaveApplication[], fullName: string, joinedDate: string): number {
-  const accrued = calculatePTOAccrued(joinedDate);
-  const taken = getApprovedLeaveDays(leaves, fullName, ['PTO', 'Sick Leave']);
-  return Math.max(0, Math.round((accrued - taken) * 100) / 100);
-}
-
-// Returns true if `dateStr` (a "YYYY-MM-DD" America/New_York calendar date,
-// same shape as getNYDateString/localShiftDate produce) falls on a Monday
-// through Friday. Parsed at UTC noon specifically so the weekday read back
-// out can't be shifted by a day depending on the runtime's own local
-// timezone — noon UTC is always still the same calendar day in
-// America/New_York (which is never more than 5 hours behind UTC).
-//
-// Exported so any UI that renders a per-day Present/Absent style status
-// (see AbsenceDetailsView.tsx's AttendanceStatusBadges) can apply the same
-// weekend exclusion runAbsenceCheck already enforces for real absence
-// deductions below — without this, a stray/partial timesheet row landing
-// on a Saturday or Sunday (e.g. an accidental clock-in, or a shift auto-
-// closed just after midnight) reads as a missed workday even though the
-// company never expects anyone to work that day at all.
-export function isWeekday(dateStr: string): boolean {
-  const day = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
-  return day >= 1 && day <= 5;
-}
 
 // Approved leave covers a given date if the leave's parsed date range
 // (parseLeaveDates) spans it — compared as NY calendar dates, not raw Date
@@ -1053,21 +990,7 @@ export function isWeekday(dateStr: string): boolean {
 // 'under_4_hours' / 'inactivity' — for a day that turned out to be a real,
 // approved leave day. Every place that shows or charges for that record
 // needs to re-check leave coverage live, not trust the frozen `reason`.
-export function getApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): LeaveApplication | null {
-  for (const l of leaves) {
-    if (l.employeeName !== fullName || l.status !== 'approved') continue;
-    const dates = parseLeaveDates(l.duration);
-    if (!dates) continue;
-    const startStr = getNYDateString(dates.start);
-    const endStr = getNYDateString(dates.end);
-    if (dateStr >= startStr && dateStr <= endStr) return l;
-  }
-  return null;
-}
 
-export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
-  return getApprovedLeaveOnDate(leaves, fullName, dateStr) !== null;
-}
 
 // How many of a SINGLE employee's approved Urgent/Normal leave days
 // (America/New_York calendar days) fall inside one specific payroll month —
@@ -1086,29 +1009,6 @@ export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: stri
 // taken in. A leave that spans a month boundary (e.g. filed Aug 30 - Sep 2)
 // is correctly split — only the days that actually fall in `monthKey` count
 // toward that month's deduction, the rest count toward the other month.
-export function getApprovedLeaveDaysInMonth(
-  leaves: LeaveApplication[],
-  fullName: string,
-  type: LeaveApplication['type'],
-  monthKey: string
-): number {
-  let total = 0;
-  for (const l of leaves) {
-    if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
-    const dates = parseLeaveDates(l.duration);
-    // Malformed/unparseable duration string — there's no date range to walk,
-    // so there's no way to tell which month (if any) this should count
-    // toward. Skip it rather than guessing, which is also what stops a bad
-    // record like this from silently charging every month forever the way
-    // the old unscoped sum did.
-    if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
-    const endStr = getNYDateString(dates.end);
-    for (const cursor = new Date(dates.start); getNYDateString(cursor) <= endStr; cursor.setDate(cursor.getDate() + 1)) {
-      if (getNYDateString(cursor).slice(0, 7) === monthKey) total++;
-    }
-  }
-  return total;
-}
 
 // Same month-scoping as getApprovedLeaveDaysInMonth above, but counts
 // matching REQUESTS (not days) that overlap the given month at all — used
@@ -1118,21 +1018,6 @@ export function getApprovedLeaveDaysInMonth(
 // Leave request this employee had EVER made, all-time, with no month
 // filter — the same unscoped-forever bug as the deduction math above, just
 // in a purely informational badge rather than the actual charge.
-export function countApprovedLeaveRequestsInMonth(
-  leaves: LeaveApplication[],
-  fullName: string,
-  type: LeaveApplication['type'],
-  monthKey: string
-): number {
-  let count = 0;
-  for (const l of leaves) {
-    if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
-    const dates = parseLeaveDates(l.duration);
-    if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
-    if (getNYDateString(dates.start).slice(0, 7) === monthKey || getNYDateString(dates.end).slice(0, 7) === monthKey) count++;
-  }
-  return count;
-}
 
 // Per explicit product decision: only Pakistan-region employees are subject
 // to this check (USA staff clock in/out automatically via GPS geofencing,
@@ -1188,9 +1073,6 @@ export function countAbsentWeekdays(
 // joining date — the two can differ (e.g. account created before/after
 // the actual start date). Falls back to joinedDate for anyone onboarded
 // before accountCreationDate existed, so nothing changes for them.
-export function getPTOAccrualDate(profile: Pick<Profile, 'joinedDate' | 'accountCreationDate'>): string {
-  return profile.accountCreationDate || profile.joinedDate;
-}
 
 // Counts how many anniversary "events" (same month/day as salaryStartDate,
 // one per year) have occurred on or before today, and have not yet been
@@ -1357,6 +1239,7 @@ export const hrActions = {
   ...taskActions,
   ...ticketActions,
   ...teamActions,
+  ...leaveActions,
   // ── Profiles ──────────────────────────────────────────────────────────
   addEmployee: async (emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<Profile> => {
     const fields = fromProfileFields({ ...emp, onboardingCompleted: false });
@@ -1657,39 +1540,6 @@ export const hrActions = {
     }
     await pbUpdate('hr_profiles', profile.id, { base_salary: currentBaseSalary + incrementAmount });
     await saveProfileExtras(profile.id, { lastIncrementProcessedYear: processedThroughYear });
-  },
-
-  // ── Leaves ────────────────────────────────────────────────────────────
-  addLeave: (leave: Omit<LeaveApplication, 'id'>) =>
-    pbCreate('hr_leaves', { employee_name: leave.employeeName, type: leave.type, duration: leave.duration, reason: leave.reason, status: leave.status || 'pending' }),
-  updateLeaveStatus: (id: string, status: LeaveApplication['status']) =>
-    pbUpdate('hr_leaves', id, { status }),
-  // Lets an employee withdraw their OWN leave request, but only while it's
-  // still sitting untouched at 'pending' — the instant HR takes any action
-  // (moves it to 'hr_approved' en route to CEO sign-off, or straight to
-  // 'rejected') or Admin/CEO gives final 'approved', the request becomes
-  // part of the official record (an approved Urgent/Sick/PTO leave already
-  // factors into payroll deductions and PTO-balance math — see
-  // computePayrollView/getRemainingPTO above) and must not be deletable.
-  //
-  // Re-fetches the record fresh from PocketBase rather than trusting
-  // whatever status the caller's already-rendered list has cached, so a
-  // request that HR approves in the few seconds between page load and the
-  // employee clicking Delete can't slip through a stale client-side check.
-  // This is a convenience guard, not a security boundary — like the rest of
-  // this app, there's no server-side rule (RLS/hook) enforcing it yet.
-  deleteLeave: async (id: string): Promise<{ success: boolean; reason?: string }> => {
-    let current: any;
-    try {
-      current = await pb.collection('hr_leaves').getOne(id, { requestKey: null });
-    } catch {
-      return { success: false, reason: 'This leave request no longer exists.' };
-    }
-    if (current.status !== 'pending') {
-      return { success: false, reason: 'This leave request has already been processed and can no longer be deleted.' };
-    }
-    await pbDelete('hr_leaves', id);
-    return { success: true };
   },
 
   // ── Payroll ───────────────────────────────────────────────────────────
