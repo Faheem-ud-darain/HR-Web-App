@@ -117,6 +117,43 @@ independent of each other and of 12/13, and can be done in any order or in
 parallel — 15 is easier to do after 14 lands (testing the new module
 boundaries directly) but isn't blocked by it.
 
+## Enterprise-sellable readiness plans (from the "sell to high-paying clients" decision)
+
+Following the production-hardening plans above, the decision was made to
+sell this product to multiple companies, each deploying their own
+dedicated instance/servers/database (not a shared multi-tenant system).
+These plans get one deployment from "solid for DelCargo" to "credible to
+show and sell to an enterprise buyer." Formal compliance certification
+(SOC 2, ISO 27001, etc.) is explicitly out of scope for all of these — that
+is a separate, non-engineering process (external auditors, months of
+lead time) to pursue once the engineering-side groundwork below is done.
+
+| # | Plan | Severity | Depends on | Status |
+| --- | --- | --- | --- | --- |
+| 18 | [018-white-label-deployment-config.md](./018-white-label-deployment-config.md) | CRITICAL | best after 14 | TODO |
+| 19 | [019-sso-and-mfa.md](./019-sso-and-mfa.md) | HIGH | none | TODO |
+| 20 | [020-audit-logging.md](./020-audit-logging.md) | HIGH | best alongside 12 | TODO |
+| 21 | [021-backup-and-repeatable-deployment.md](./021-backup-and-repeatable-deployment.md) | HIGH | none (can incorporate 18 once it lands) | TODO |
+| 22 | [022-full-accessibility-wcag-aa.md](./022-full-accessibility-wcag-aa.md) | MEDIUM | 16 (do not start before) | TODO |
+| 23 | [023-full-test-coverage-and-ci-gate.md](./023-full-test-coverage-and-ci-gate.md) | MEDIUM | 15 | TODO |
+| 24 | [024-supply-chain-and-schema-integrity.md](./024-supply-chain-and-schema-integrity.md) | MEDIUM | none | TODO |
+| 25 | [025-client-facing-documentation.md](./025-client-facing-documentation.md) | MEDIUM | draws on 18/21/24 | TODO |
+
+**Why 18 is CRITICAL**: the app is hardcoded to one company today (34 files
+reference "DelCargo" directly, region is a hardcoded USA/Pakistan union,
+and — a real bug independent of white-labeling — a few PocketBase calls in
+`hrData.ts` bypass the configurable PB URL entirely and hit
+`pb.delcargo.us` as a literal string). No other company can be sold a
+working, correctly-branded deployment until this is fixed.
+
+**Suggested order**: 12 and 13 (from the section above) first — they're
+still the most urgent regardless of the sales model. Then 18, since
+nothing else here matters if the product still only works for one
+specific company. 19-21 and 24 can proceed in parallel after that. 22 and
+23 are explicitly sequenced after 16 and 15 respectively — do not start
+them first. 25 can start as a draft immediately and fill in as 18/21/24
+land.
+
 ## Not planned (rejected or out of scope)
 
 - **HR Leaves kanban drag-and-drop** (`src/app/(dashboard)/hr/leaves/page.tsx`) —
