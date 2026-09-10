@@ -378,3 +378,87 @@ fixing immediately rather than folding into the larger deferred
 Remaining in Phase 1: `hr_tracking_settings` (rules still fully public),
 the broader `hr_delcargo_store` lockdown (its own larger, separate
 project per the investigation above).
+
+## hr_delcargo_store -> dedicated collections migration (in progress)
+
+Per explicit direction: instead of just auth-wrapping `hr_delcargo_store`,
+split its live concerns into their own properly-schema'd PocketBase
+collections (same pattern already used for `hr_screenshots`,
+`hr_ticket_presence`, `hr_tracking_settings`) — for both security (precise
+per-collection rules instead of one shared public table) and performance
+(PocketBase doesn't have to load/rewrite a giant shared JSON blob for one
+employee's action).
+
+**Step 1 (done, schema-only — no code changed yet, zero effect on
+currently-working employees):** created 17 new collections in production
+PocketBase, all four rules (`list/view/createRule` + `deleteRule`) set to
+`null` (admin-only / inert until wired up), so they sit alongside
+`hr_delcargo_store` unused:
+
+- `hr_google_integration` (email, connected_email, connected_at, tokens,
+  sync_calendar, use_for_2fa, use_for_password_reset) — formalizes the
+  already-fixed Google OAuth flow into its own table instead of
+  `hr_delcargo_store`'s `google_integration_<email>` key.
+- `hr_profile_extra` (profile_id, data) — replaces `hr_profile_extra_<id>`.
+- `hr_profile_docs` (profile_id, data) — replaces `hr_profile_docs_<id>`.
+- `hr_notification_reads` (email, read_ids) / `hr_notification_cleared`
+  (email, cleared_ids) / `hr_notification_prefs` (email, prefs) — replace
+  `hr_notification_reads_prod_v1` / `_cleared_prod_v1` / `_prefs_v1`, each
+  of which today is ONE giant `Record<email, ...>` blob rewritten in full
+  on every single employee's read/toggle. Splitting to one row per email
+  removes both the full-table-load and the write-clobbering risk between
+  concurrent employees.
+- `hr_announcement_reads` (email, read_ids) — replaces
+  `hr_announcement_reads_v1` (same single-blob-for-everyone issue as
+  above).
+- `hr_message_reads` (email, read_ids) — replaces `hr_message_reads_v1`
+  (same issue).
+- `hr_ticket_closed_state` (ticket_id, closed_at) — replaces
+  `hr_ticket_closed_at_v1` (currently one blob keyed by ticket id for
+  every ticket in the system).
+- `hr_typing_indicators` (scope, scope_id, email, updated_at; unique on
+  the triple) — replaces the `hr_typing_${scope}_${scopeId}_${email}` KV
+  key-per-row pattern (chat + ticket typing indicators).
+- `hr_deleted_profiles` (email, deleted_at) — replaces
+  `hr_deleted_profile_emails_v1`, currently a single JSON array blob.
+- `hr_tracker_signals` (email, heartbeat, ping_at, pong_at, quit_intent,
+  stop_cmd, command, diagnostics, shift_stop_signal,
+  shift_tab_heartbeat) — replaces the `tracker_heartbeat_/tracker_ping_/
+  tracker_pong_/tracker_stop_cmd_/tracker_command_/tracker_diagnostics_/
+  shift_stop_signal_/shiftTabHeartbeat_<email>` key family. **Flagged as
+  the highest-risk migration**: the already-deployed Chrome extension and
+  desktop tracker agent binary write/read these keys directly against
+  `hr_delcargo_store`'s public REST endpoint, unauthenticated — migrating
+  the app's own code off these keys is safe, but the collection can't be
+  locked down (and the old keys can't be removed from `hr_delcargo_store`)
+  until those two clients are updated and rolled out to every employee's
+  machine, which can't be verified end-to-end from this session.
+- `hr_user_sessions` (email, data, updated_at) — replaces
+  `userSession_<email>`.
+- `hr_account_deletion_requests` (email, requested_at, data) — replaces
+  `account_deletion_request_<email>`.
+- `hr_password_resets` (email, token, expires_at) — replaces
+  `password_reset_<email>`.
+- `hr_otp_ratelimit` (email, data) — replaces `otp_ratelimit_<email>`.
+- `hr_screenshot_retention_state` (key, data) — replaces
+  `hr_screenshot_retention_state_v1`.
+
+Not migrated to a dedicated collection (already done, or intentionally
+left as-is): `hr_ticket_presence` and `hr_tracking_settings` already
+replaced their KV equivalents in an earlier pass. The legacy
+`screenshot_<id>` prefix stays dead/unused (superseded by the real
+`hr_screenshots` collection already).
+
+**Step 2 (not started — next, one collection at a time per user's
+direction):** for each new collection above, in an order still to be
+finalized (`hr_google_integration` first — smallest, already
+security-fixed, just needs its storage moved — is the natural first
+pick): add `pbAdmin.ts` helpers scoped to that collection, migrate every
+`hr_delcargo_store` call site for that key pattern onto the new
+collection, live-test as every affected role with disposable test data on
+production, delete the test data, then lock the new collection's rules
+down to exactly what's needed (and, only once nothing reads the old key
+pattern anymore, stop writing it in `hr_delcargo_store` — not delete the
+old rows yet, to keep a rollback path). `hr_delcargo_store`'s own rules
+stay untouched (still fully public) until every live key pattern still
+routing through it has been migrated off.
