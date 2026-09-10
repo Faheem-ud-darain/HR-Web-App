@@ -1,7 +1,7 @@
 # 013 — Harden authentication (default passwords, rate limiting, security headers)
 
-- **Status**: IN PROGRESS (step 1 of 4 done)
-- **Commit**: 13600dc (step 1 — default password literal removed)
+- **Status**: IN PROGRESS (steps 1-2 of 4 done)
+- **Commit**: 13600dc (step 1), 7588877 (step 2)
 - **Severity**: HIGH
 - **Category**: Security (not part of the animation audit — tracked here for the same reason plans 007-011 are)
 - **Estimated scope**: small-medium. Touches `src/app/api/auth/*`, `src/app/api/admin/profile/route.ts`, and `next.config.ts` (or middleware). No schema changes.
@@ -208,6 +208,26 @@ and will self-migrate to a real hash the next time each of them logs in,
 same as any other still-plaintext account — no immediate action needed,
 just flagging since it was surfaced while verifying this step.
 
-**Remaining**: step 2 (forced password-change gate on approval), step 3
-(rate limiting on login/forgot-password/verify-reset-otp), step 4
-(security headers + CSP audit).
+**Step 2 done (commit 7588877):** added `mustChangePassword` to the
+Profile overlay type. `admin/profile/route.ts` sets it true both on
+`approveOnboarding` (the case the plan named) and on the admin-triggered
+`resetPassword` action (an HR-issued password is the same situation) — an
+employee's own self-service `changeOwnPassword` clears it. A new
+`ForcedPasswordChangeModal` (non-dismissible, same shape as AbsentPopup/
+AnnouncementPopup) sits in `(dashboard)/layout.tsx` ungated by role and
+blocks the dashboard behind it whenever the flag is set, reusing the
+existing self-service change-password endpoint so the check (does this
+person actually know the temp/reset password) happens server-side. Login
+itself is untouched — the gate fires after login succeeds, exactly as the
+plan specified (never blocking the temp-password login during onboarding
+itself).
+
+Live-verified end-to-end against production with a disposable test
+account: created it, approved it (setting the flag), logged in
+successfully despite the flag, loaded the dashboard and confirmed the
+modal rendered and blocked it, submitted a new password, confirmed the
+flag cleared server-side and the real dashboard appeared. Cleaned up
+immediately after.
+
+**Remaining**: step 3 (rate limiting on login/forgot-password/
+verify-reset-otp), step 4 (security headers + CSP audit).
