@@ -1187,13 +1187,6 @@ function toAnnouncement(a: any): Announcement {
 function toCareer(c: any): CareerPosition {
   return { id: c.id, title: c.title, department: c.department, location: c.location, description: c.description, requirements: c.requirements || [] };
 }
-function toCareerApplication(a: any): CareerApplication {
-  return {
-    id: a.id, positionId: a.position_id, positionTitle: a.position_title, applicantName: a.applicant_name,
-    applicantEmail: a.applicant_email, coverLetter: a.cover_letter, submittedAt: a.submitted_at,
-    status: (a.status || 'pending') as CareerApplicationStatus,
-  };
-}
 function toTicket(t: any): Ticket {
   return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
 }
@@ -1357,9 +1350,10 @@ export function useMaintenanceNotices() {
 export function useCareers() {
   return useQuery({ queryKey: ['hr_careers'], queryFn: async () => (await pbList('hr_careers')).map(toCareer) });
 }
-export function useCareerApplications() {
-  return useQuery({ queryKey: ['hr_career_applications'], queryFn: async () => (await pbList('hr_career_applications', { sort: '-created' })).map(toCareerApplication) });
-}
+// useCareerApplications (public direct-PocketBase read of every applicant's
+// PII) was removed as part of plan 012, Phase 1 — CareersView.tsx now
+// fetches this HR/Admin-only, session-checked, via
+// src/app/api/admin/careers/applications instead.
 // status is applied server-side (PocketBase filter), not just client-side —
 // without this, "50 open tickets" actually meant "the 50 most-recently-
 // created tickets of any status, filtered to open afterward," which could
@@ -1670,6 +1664,37 @@ export async function upsertPayrollRecordAdmin(record: PayrollRecord): Promise<v
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ record }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || `Request failed: ${res.status}`);
+  }
+}
+
+// HR/Admin-only read of every submitted job application (applicant PII) —
+// see src/app/api/admin/careers/applications' own comment. Returns []
+// (rather than throwing) when not signed in as HR/Admin, matching the
+// "one-time fetch, not a React Query hook" pattern admin/insights already
+// uses for absence records — CareersView.tsx only calls this at all when
+// role is 'hr' or 'admin'.
+export async function getCareerApplicationsAdmin(): Promise<CareerApplication[]> {
+  const token = getAuthToken();
+  if (!token) return [];
+  const res = await fetch(`${API_BASE}/api/admin/careers/applications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.applications || []) as CareerApplication[];
+}
+
+export async function updateApplicationStatusAdmin(id: string, status: CareerApplicationStatus): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/admin/careers/applications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ id, status }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -2960,30 +2985,32 @@ export const hrActions = {
   addCareer: (position: Omit<CareerPosition, 'id'>) =>
     pbCreate('hr_careers', { title: position.title, department: position.department, location: position.location, type: '', description: position.description, requirements: position.requirements, status: 'open', created_by: '' }),
   deleteCareer: (id: string) => pbDelete('hr_careers', id),
-  // Anti-spam guard: one submission per (position, email) pair. Returns true
-  // if this email has already applied to this specific posting.
-  hasAppliedForPosition: async (positionId: string, email: string): Promise<boolean> => {
-    const safePos = positionId.replace(/"/g, '\\"');
-    const safeEmail = email.trim().toLowerCase().replace(/"/g, '\\"');
-    try {
-      const matches = await pb.collection('hr_career_applications').getFullList({
-        filter: `position_id = "${safePos}" && applicant_email = "${safeEmail}"`,
-        requestKey: null,
-      });
-      return matches.length > 0;
-    } catch (err) {
-      console.error('[hrData] hasAppliedForPosition error:', err);
-      return false;
+  // hasAppliedForPosition / submitCareerApplication / updateApplicationStatus
+  // (public direct-PocketBase reads/writes of applicant PII) were removed
+  // as part of plan 012, Phase 1 — replaced by submitCareerApplicationPublic,
+  // getCareerApplicationsAdmin, and updateApplicationStatusAdmin below,
+  // matching the same Authorization: Bearer <token> pattern
+  // upsertPayrollRecordAdmin/usePayrollSelf already use.
+
+  // Public, no session — job applicants have no app account (see
+  // CareersView.tsx's `canApply = role === 'public'`). Talks to
+  // src/app/api/careers/apply, the sole writer left for
+  // hr_career_applications once that collection's PocketBase rules are
+  // locked down. Throws with the route's own error message (e.g. the
+  // duplicate-application guard) so the caller can show it inline.
+  submitCareerApplicationPublic: async (app: {
+    positionId: string; positionTitle: string; applicantName: string; applicantEmail: string; coverLetter: string;
+  }): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/careers/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(app),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || `Request failed: ${res.status}`);
     }
   },
-  submitCareerApplication: (app: Omit<CareerApplication, 'id' | 'submittedAt' | 'status'>) =>
-    pbCreate('hr_career_applications', {
-      position_id: app.positionId, position_title: app.positionTitle, applicant_name: app.applicantName,
-      applicant_email: app.applicantEmail.trim().toLowerCase(), phone: '', cover_letter: app.coverLetter, resume_url: '', status: 'pending',
-      submitted_at: formatDateNY(new Date()) + ' ' + formatTimeNY(new Date()),
-    }),
-  updateApplicationStatus: (id: string, status: CareerApplicationStatus) =>
-    pbUpdate('hr_career_applications', id, { status }),
 
   // ── Tickets ───────────────────────────────────────────────────────────
   // Returns the created Ticket (previously void) so callers can immediately

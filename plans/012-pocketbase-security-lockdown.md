@@ -166,3 +166,49 @@ exposure / most sensitive data first):
   intentionally-public exceptions, and every legitimate feature that used
   to depend on that public access still works end-to-end through its new
   API route.
+
+## Implementation note (in progress)
+
+**`hr_career_applications` — DONE (2026-09-10).** First collection migrated
+and locked, as a small, low-risk slice to prove the pattern before tackling
+the larger Phase 1 items (screenshots, payroll, tracking settings):
+
+- Added `adminListCareerApplications` / `adminHasAppliedForPosition` /
+  `adminCreateCareerApplication` / `adminUpdateCareerApplicationStatus` to
+  `src/lib/pbAdmin.ts`.
+- New route `src/app/api/careers/apply` (public, no session — job
+  applicants have no app account) handles the duplicate-application check
+  and the write.
+- New route `src/app/api/admin/careers/applications` (HR/Admin
+  `requireSession()`-gated) handles the list read and status updates.
+- `CareersView.tsx` now calls these routes (via new `hrData.ts` helpers
+  `submitCareerApplicationPublic` / `getCareerApplicationsAdmin` /
+  `updateApplicationStatusAdmin`) instead of talking to PocketBase
+  directly; the old `hasAppliedForPosition` / `submitCareerApplication` /
+  `updateApplicationStatus` / `useCareerApplications` were removed.
+- Live-tested end-to-end against the real production PocketBase (not a
+  staging copy — this app's `localhost` dev server points at the live
+  `pb.delcargo.us` database) using clearly-labeled, then deleted, test
+  records: submitted an application as an anonymous public candidate,
+  confirmed it appeared correctly in the HR/Admin Applications panel,
+  changed its status, then re-tested the same two flows again *after*
+  locking the collection's PocketBase rules to confirm nothing broke.
+- One real bug caught and fixed during live testing: the first version of
+  the two new client-side calls used a plain `fetch()` with no
+  `Authorization` header, so the HR/Admin route 401'd. This app's session
+  isn't a cookie — every authenticated client call has to carry
+  `Authorization: Bearer <getAuthToken()>` (see `usePayrollSelf` /
+  `upsertPayrollRecordAdmin` in `hrData.ts` for the established pattern).
+  Fixed by routing through proper `hrData.ts` helpers using that same
+  pattern instead of raw `fetch()` calls in the component.
+- `hr_career_applications`'s List/View/Create/Update/Delete rules are now
+  all "Admins only" in PocketBase — confirmed via a live unauthenticated
+  `fetch` to the raw PocketBase REST endpoint returning
+  `403 Only admins can perform this action` post-lock.
+- `hr_careers` (the job *listings*, as opposed to applications) was left
+  untouched and still public-read, per this plan's own Target — anyone
+  visiting `/careers` with no account still needs to see open positions.
+
+Remaining in Phase 1: `hr_screenshots`, `hr_payroll` (extend the existing
+partial migration to the full HR/Admin list view), `hr_tracking_settings` /
+`hr_delcargo_store`.

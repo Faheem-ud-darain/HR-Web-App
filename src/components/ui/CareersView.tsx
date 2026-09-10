@@ -10,10 +10,11 @@ import {
   CareerApplication,
   CareerApplicationStatus,
   useCareers,
-  useCareerApplications,
   useWarehouses,
   useTeams,
   hrActions,
+  getCareerApplicationsAdmin,
+  updateApplicationStatusAdmin,
 } from '@/lib/hrData';
 import { MapPin, Plus, Trash2, CheckCircle2, ArrowRight, X, Briefcase, FileText, Users, AlertTriangle, Gift, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -40,13 +41,30 @@ interface CareersViewProps {
 
 export function CareersView({ role }: CareersViewProps) {
   const { data: allCareers, refetch: refetchCareers } = useCareers();
-  const { data: allApplications, refetch: refetchApplications } = useCareerApplications();
   const { data: allWarehouses } = useWarehouses();
   const { data: allTeams } = useTeams();
 
   const positions = allCareers || [];
   const warehouseCount = allWarehouses ? allWarehouses.length : 0;
   const teamCount = allTeams ? allTeams.length : 0;
+
+  // Applications hold applicant PII (name, email, cover letter) — plan 012
+  // moved this off the public `useCareerApplications()` hook onto an
+  // HR/Admin-session-checked API route (src/app/api/admin/careers/
+  // applications), fetched the same "one-time fetch, not a React Query
+  // hook" way admin/insights fetches absence records. Only fetched at all
+  // when the signed-in user is actually HR/Admin — an Employee or Team
+  // Lead never even issues the request.
+  const [allApplications, setAllApplications] = useState<CareerApplication[] | null>(null);
+  const refetchApplications = React.useCallback(async () => {
+    if (role !== 'hr' && role !== 'admin') return;
+    try {
+      setAllApplications(await getCareerApplicationsAdmin());
+    } catch {
+      // best-effort — the Applications modal just shows nothing/stale data
+    }
+  }, [role]);
+  useEffect(() => { refetchApplications(); }, [refetchApplications]);
   const applications = (role === 'hr' || role === 'admin') ? (allApplications || []) : [];
 
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -133,21 +151,23 @@ export function CareersView({ role }: CareersViewProps) {
 
     setIsSubmittingApp(true);
     try {
-      // Anti-spam guard: block a second submission from the same email to
-      // the same posting instead of silently creating duplicate rows.
-      const alreadyApplied = await hrActions.hasAppliedForPosition(selectedJob.id, applicantEmail);
-      if (alreadyApplied) {
-        setApplyError('You have already submitted an application for this position with this email address. Our HR team already has it on file.');
+      // Anti-spam check (same email/position pair) and the actual write
+      // both now happen server-side in one call (src/app/api/careers/
+      // apply) — this route is public/no-session by design since job
+      // applicants have no app account, and it's the sole writer left for
+      // hr_career_applications now that collection's rules are locked down.
+      try {
+        await hrActions.submitCareerApplicationPublic({
+          positionId: selectedJob.id,
+          positionTitle: selectedJob.title,
+          applicantName,
+          applicantEmail,
+          coverLetter,
+        });
+      } catch (err: any) {
+        setApplyError(err?.message || 'Could not submit your application. Please try again.');
         return;
       }
-
-      await hrActions.submitCareerApplication({
-        positionId: selectedJob.id,
-        positionTitle: selectedJob.title,
-        applicantName,
-        applicantEmail,
-        coverLetter,
-      });
       // The Applications review panel is available to HR and Admin alike
       // (see canEdit above) — notify both, not just HR.
       await hrActions.addNotification('all', 'hr', `New application for "${selectedJob?.title}" submitted by ${applicantName} (${applicantEmail})`);
@@ -170,7 +190,7 @@ export function CareersView({ role }: CareersViewProps) {
   const handleStatusChange = async (appId: string, status: CareerApplicationStatus) => {
     setStatusUpdating(appId);
     try {
-      await hrActions.updateApplicationStatus(appId, status);
+      await updateApplicationStatusAdmin(appId, status);
       refetchApplications();
     } finally {
       setStatusUpdating(null);

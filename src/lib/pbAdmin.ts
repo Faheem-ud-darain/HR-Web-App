@@ -22,6 +22,8 @@
 // v0.23, this endpoint becomes /api/collections/_superusers/auth-with-password
 // instead — see https://pocketbase.io/v023upgrade for the full mapping.
 
+import { formatDateNY, formatTimeNY } from '@/lib/timezone';
+
 const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
 // Cached in a module-level variable — on Cloudflare's Edge runtime this can
@@ -295,6 +297,51 @@ export async function adminDeleteKVByKeys(keys: string[]): Promise<void> {
     const row = await adminGetKV(key);
     if (row) await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${row.id}`, { method: 'DELETE' });
   }));
+}
+
+// ── hr_career_applications (plan 012, Phase 1) — applicant PII (name,
+// email, cover letter) that used to be fully public. Job applicants never
+// log in at all, so unlike every other collection here this is fronted by
+// a public (no-session) API route (src/app/api/careers/apply) rather than
+// requireSession() — the route itself is the trust boundary instead, and
+// it's the only caller of adminCreateCareerApplication /
+// adminHasAppliedForPosition. Listing and status changes stay HR/Admin-only
+// via src/app/api/admin/careers/applications, same requireSession()
+// pattern as everything else in this file.
+export async function adminListCareerApplications(): Promise<any[]> {
+  const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?perPage=500&sort=-created`);
+  return list?.items || [];
+}
+
+// Anti-spam guard, same (position, email) pair check the old public client
+// call did — just authenticated now so the collection's List rule can be
+// locked down without breaking this check.
+export async function adminHasAppliedForPosition(positionId: string, email: string): Promise<boolean> {
+  const safePos = positionId.replace(/"/g, '\\"');
+  const safeEmail = email.trim().toLowerCase().replace(/"/g, '\\"');
+  const encoded = encodeURIComponent(`position_id = "${safePos}" && applicant_email = "${safeEmail}"`);
+  const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?filter=${encoded}`);
+  return (list?.items || []).length > 0;
+}
+
+export async function adminCreateCareerApplication(app: {
+  positionId: string; positionTitle: string; applicantName: string; applicantEmail: string; coverLetter: string;
+}): Promise<void> {
+  await pbAdminFetch(`/api/collections/hr_career_applications/records`, {
+    method: 'POST',
+    body: JSON.stringify({
+      position_id: app.positionId, position_title: app.positionTitle, applicant_name: app.applicantName,
+      applicant_email: app.applicantEmail.trim().toLowerCase(), phone: '', cover_letter: app.coverLetter, resume_url: '',
+      status: 'pending', submitted_at: formatDateNY(new Date()) + ' ' + formatTimeNY(new Date()),
+    }),
+  });
+}
+
+export async function adminUpdateCareerApplicationStatus(id: string, status: string): Promise<void> {
+  await pbAdminFetch(`/api/collections/hr_career_applications/records/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
 }
 
 // Employee's own absence/deduction records (hr_absence_records) — for the
