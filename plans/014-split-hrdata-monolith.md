@@ -1,7 +1,9 @@
 # 014 — Split the `hrData.ts` monolith into domain modules
 
-- **Status**: TODO
-- **Commit**: (none yet — planning only)
+- **Status**: DONE (2026-09-10)
+- **Commit**: f4af413..a14c1cd (12 commits: types, shared, notifications,
+  careers, tasks, tickets, teams, leaves, timesheets, absences, profiles,
+  payroll)
 - **Severity**: MEDIUM
 - **Category**: Codebase / structure (not part of the animation audit — tracked here for the same reason plans 007-011 are)
 - **Estimated scope**: large, mechanical-but-risky. `src/lib/hrData.ts` is several thousand lines mixing type definitions, PocketBase fetch functions, React Query hooks, and business logic (payroll math, absence detection, pagination helpers, etc.) for every feature area in the app. This plan splits it by domain without changing any exported behavior.
@@ -119,3 +121,124 @@ not a rewrite of any logic.
 - **Done when**: `hrData.ts` is a pure barrel/re-export file, every domain
   lives in its own focused module under `src/lib/hr/`, and the app behaves
   identically to before the split.
+
+## Implementation notes
+
+Executed as 12 sequential commits, one per domain module, each verified
+with a clean `npx tsc --noEmit -p tsconfig.json` before moving on, exactly
+per this plan's own Steps/Boundaries. Extraction order followed the plan's
+suggested sequence (types -> shared -> notifications -> ... -> payroll
+last), with one addition: `careers.ts` split out separately between
+notifications and tasks, since job postings/applications didn't fit
+naturally into any of the 10 named modules (see judgment calls below).
+
+**Final result**: `src/lib/hrData.ts` went from 4716 lines / 127 exports
+to 147 lines containing only `import`/`export { ... } from './hr/*'`
+statements, an `export * from './hr/types'`, and the reassembled
+`export const hrActions = { ...profileActions, ...notificationActions,
+...careerActions, ...taskActions, ...ticketActions, ...teamActions,
+...leaveActions, ...timesheetActions, ...absenceActions, ...payrollActions,
+...sharedActions }`. Every one of the original 127 exported names was
+diffed against the new barrel's full export surface (types via
+`export * from './hr/types'`, everything else via named re-exports) and
+confirmed present — nothing dropped or duplicated. No importing file
+(the ~100 files across the app that `import ... from '@/lib/hrData'`)
+needed any changes; the final whole-project `tsc --noEmit` (which
+type-checks every one of those call sites) is clean.
+
+**Module layout** (11 files, one more than the plan's 10 — flagged below):
+`types.ts`, `shared.ts`, `notifications.ts`, `careers.ts`, `tasks.ts`,
+`tickets.ts`, `teams.ts`, `leaves.ts`, `timesheets.ts`, `absences.ts`,
+`profiles.ts`, `payroll.ts`.
+
+**Judgment calls made** (per this plan's explicit invitation to use
+judgment where the 10-module list didn't cleanly fit something, and flag
+it):
+
+- **`careers.ts` added as an 11th module.** Job-listing/application logic
+  (`useCareers`, `getCareerApplicationsAdmin`, `updateApplicationStatusAdmin`,
+  `getCareerApplicationsForEmailAdmin`, `deleteCareerApplicationsForEmailAdmin`,
+  `careerActions`) didn't fit naturally into `tasks.ts` or `profiles.ts` —
+  it's its own PocketBase collection pair (`hr_careers` /
+  `hr_career_applications`) with no real overlap with either, so giving it
+  its own small file was clearer than forcing it into an unrelated one.
+- **Warehouses folded into `teams.ts`**, not a separate `warehouses.ts` —
+  the plan's own module list didn't include warehouses at all, and
+  `useWarehouses`/`toWarehouse` are small and only ever consumed alongside
+  Teams (a team's `warehouseId` field), so a dedicated file would have
+  been a near-empty module.
+- **Multi-device session enforcement placed in `profiles.ts`**, not its
+  own module — it's fundamentally about one Profile's login-session state
+  (`userSessionKeyFor`, `MAX_USER_SESSION_DEVICES`), not a separate domain.
+  (This one had a real detection-and-recovery story: seen below.)
+- **`checkScreenshotRetention` grouped into `absences.ts`** alongside
+  Mouse inactivity logs — in the original file it sat directly under the
+  "Mouse inactivity logs" section banner with no divider of its own, and
+  both are downstream of the same tracker-agent capture pipeline.
+- **`isWeekday` landed in `leaves.ts`**, not `payroll.ts` or `absences.ts`
+  — it happened to sit physically between `getRemainingPTO` and
+  `getApprovedLeaveOnDate` in the original file, and it's genuinely
+  cross-domain (both `absences.ts` and `payroll.ts` now import it back
+  from `leaves.ts` via the barrel), so it stayed where it naturally fell
+  rather than being force-placed in whichever domain used it most.
+- **`HR_ADMIN_LINE_TEAM_ID` placed in `shared.ts`**, not `teams.ts` (where
+  it's conceptually closest) — `notifications.ts` also needs it (for the
+  HR & Admin Line forwarding badge) and `notifications.ts`/`teams.ts` have
+  no other reason to import from each other, so putting it in `shared.ts`
+  avoided introducing a circular import between those two for the sake of
+  one constant.
+- **`NotificationReadMap` made exported** (`export type` in `hr/types.ts`)
+  — it was a private, unexported type in the original file, but both
+  `notifications.ts` and `teams.ts` need to reference it now that they're
+  separate modules with their own type-checking, so it moved from
+  file-private to genuinely shared. Visibility-only change, no behavior
+  difference (nothing about the type itself changed).
+- **KV Overlay Helpers (`getKV`/`setKV`) moved into `shared.ts`** as
+  `export const sharedActions = { getKV, setKV }`, spread into `hrActions`
+  alongside every other domain's own actions object — done in the final
+  (payroll) commit, for consistency, rather than leaving one pair of
+  writes inline in the barrel file while everything else was reassembled
+  from domain-specific `*Actions` objects.
+
+**Circular-import pattern used throughout**: many moved functions call
+`hrActions.xxx(...)` (self-reference) or reference a helper that ended up
+in a different domain file than the call site. Rather than rewriting each
+call site, every domain file that needs this does
+`import { hrActions, someHelper } from '../hrData';` — safe because these
+bindings are only read inside function bodies invoked later at runtime,
+never at module-evaluation time, which ES modules handle correctly even
+though `hrData.ts` imports the domain files and the domain files import
+back from `hrData.ts`. This one uniform rule avoided having to individually
+track and rewrite ~90 call sites across the split.
+
+**Bug caught and fixed during the split (not a pre-existing app bug —
+introduced and caught within this same refactor)**: while extracting
+`absences.ts`, the line range initially computed for the "Absence
+records" `hrActions` section accidentally swallowed the entire
+"Multi-device session enforcement" section right after it (the two
+sections run together in the original file with no extraction-order
+grep taken between them). Caught by the brace-balance self-check
+(`sum of '{' minus '}' per file`, run on every new file immediately after
+writing it, before ever running `tsc`) showing a nonzero imbalance, and
+a boundary-scan confirming the unexpected `// ── Multi-device session
+enforcement` banner sitting inside what should have been a pure Absence
+Records object. Fixed by extracting the misplaced ~190-line chunk back
+out of the draft `absences.ts`, re-inserting it into `hrData.ts` in its
+original position, and letting the (later) `profiles.ts` extraction pick
+it up correctly — verified clean both times. Several smaller
+off-by-one-line truncations (a function missing its final closing brace,
+leaving an orphaned duplicate fragment behind in `hrData.ts`) were caught
+and fixed the same way in `notifications.ts`, `tickets.ts`, `teams.ts`,
+`leaves.ts`, `absences.ts`, and `payroll.ts` — always a pure
+line-range-boundary mistake during the move, never a change to any
+function's actual logic.
+
+**Left for human review before pushing** (per this plan's own boundary —
+local commits only, not pushed): all 12 commits are local, unpushed, and
+ready for review. `src/lib/hrData.ts.orig` (a full backup of the original
+4716-line file, used as the extraction source-of-truth and for the final
+export-name diff) and the per-domain `build_*.py` extraction scripts are
+deliberately left untracked in the repo root rather than committed or
+deleted — harmless scratch artifacts, kept around in case anything needs
+re-checking against the original file before push; safe to delete once
+the split is reviewed and accepted.
