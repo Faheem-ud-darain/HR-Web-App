@@ -112,7 +112,8 @@ export default function HROnboardingPage() {
 
     setIsOnboarding(true);
     try {
-      await addEmployeeServer({
+      const typedPassword = tempPassword.trim();
+      const result = await addEmployeeServer({
         fullName,
         email,
         role: role as 'employee' | 'hr' | 'admin' | 'team_lead',
@@ -120,7 +121,7 @@ export default function HROnboardingPage() {
         accountCreationDate,
         baseSalary: Number(salary),
         teams: [team],
-        password: tempPassword || 'employee123',
+        password: typedPassword || undefined,
         jobTitle,
         gender,
         region,
@@ -135,8 +136,29 @@ export default function HROnboardingPage() {
 
       await hrActions.addNotification('all', 'hr', `New employee ${fullName} onboarded onto team ${team}.`);
       await hrActions.addNotification('all', 'admin', `New employee ${fullName} onboarded onto team ${team}.`);
-      setOnboardSuccess('Employee successfully registered!');
       refetchProfiles();
+
+      // When the admin left the temp password field blank, the server
+      // generated a random one (plan 013 step 1 — no shared literal like
+      // 'employee123' anymore) and returned it here. That's the only place
+      // it's ever visible in plaintext, so surface it and don't auto-close
+      // the modal — give the admin a moment to actually copy it down
+      // before it's gone. If the admin typed their own, they already know
+      // it, so the modal can close as before.
+      if (!typedPassword && result?.tempPassword) {
+        setOnboardSuccess(`Employee successfully registered! Temporary password: ${result.tempPassword} — share this with them; it won't be shown again.`);
+        setFullName('');
+        setEmail('');
+        setSalary('');
+        setTeam('Engineering');
+        setTempPassword('');
+        setJobTitle('');
+        setGender('male');
+        setRegion('Pakistan');
+        return;
+      }
+
+      setOnboardSuccess('Employee successfully registered!');
 
       setTimeout(() => {
         setIsOnboardOpen(false);

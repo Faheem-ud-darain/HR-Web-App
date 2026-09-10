@@ -39,6 +39,28 @@ function docsKey(profileId: string) {
   return `hr_profile_docs_${profileId}`;
 }
 
+// Plan 013 step 1: no new account should ever be protected only by a
+// single, universal, guessable literal ('123', 'employee123', ...) shared
+// by every not-yet-approved account across the whole deployment. When the
+// caller doesn't supply an explicit temp password, generate one per
+// account instead — still a temp password the employee logs in with
+// during onboarding (same lifecycle as before), just not a shared secret
+// anyone who knows this codebase could type in. Uses Web Crypto
+// (crypto.getRandomValues) rather than Math.random so it's cryptographically
+// unpredictable and Edge-runtime compatible (same constraint as
+// serverAuth.ts's hashPassword — see that file's header comment).
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; // no 0/O/1/l/I — avoids operator/employee transcription errors
+function generateTempPassword(): string {
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += TEMP_PASSWORD_ALPHABET[bytes[i] % TEMP_PASSWORD_ALPHABET.length];
+    if (i === 4) out += '-';
+  }
+  return out;
+}
+
 async function requireHrOrAdmin(request: Request) {
   const session = await requireSession(request);
   if (!session) return { session: null, error: NextResponse.json({ error: 'Not authenticated.' }, { status: 401 }) };
@@ -224,10 +246,12 @@ export async function PATCH(request: Request) {
 
   try {
     const fields = fromProfileFields(body.profile);
-    // New accounts start with the same plaintext default ('123') convention
-    // used elsewhere pre-migration, unless a password was explicitly given —
-    // hashed either way so no new plaintext rows get created going forward.
-    const rawPassword = typeof body.profile.password === 'string' && body.profile.password ? body.profile.password : '123';
+    // Plan 013 step 1: an explicitly-supplied temp password is honored as
+    // before; when none is given, generate a per-account random one rather
+    // than falling back to a literal every account in every deployment used
+    // to share. Hashed either way — the plaintext only ever exists in this
+    // one response, for the admin to hand to the new hire.
+    const rawPassword = typeof body.profile.password === 'string' && body.profile.password ? body.profile.password : generateTempPassword();
     fields.password = await hashPassword(rawPassword);
 
     const created = await pbAdminFetch(`/api/collections/hr_profiles/records`, {
@@ -253,7 +277,10 @@ export async function PATCH(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, id: profileId });
+    // Return the temp password (whether admin-supplied or generated) so the
+    // caller can display/communicate it — this is the only place it's ever
+    // sent back in plaintext, and only to an already-authenticated HR/Admin.
+    return NextResponse.json({ ok: true, id: profileId, tempPassword: rawPassword });
   } catch (err: any) {
     console.error('[admin/profile PATCH] error:', err);
     return NextResponse.json({ error: 'Could not create employee.' }, { status: 500 });

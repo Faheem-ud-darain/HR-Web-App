@@ -1666,7 +1666,7 @@ export async function applyIncrementServer(profile: Profile, currentBaseSalary: 
 // Creates a new employee via the admin-gated route — server hashes the
 // initial/temp password instead of writing it in plaintext (addEmployee's
 // old client path did fromProfileFields(emp).password = plaintext).
-export async function addEmployeeServer(emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<{ id: string }> {
+export async function addEmployeeServer(emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<{ id: string; tempPassword?: string }> {
   return adminProfileRequest('PATCH', { action: 'addEmployee', profile: emp });
 }
 

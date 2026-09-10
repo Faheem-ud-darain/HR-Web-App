@@ -218,7 +218,7 @@ export default function HRDashboard() {
     if (!fullName || !email || !salary) { setOnboardError('Please fill in all required fields.'); return; }
     if (isNaN(Number(salary)) || Number(salary) <= 0) { setOnboardError('Please enter a valid base salary.'); return; }
 
-    await addEmployeeServer({ fullName, email, role: role as Profile['role'], joinedDate: new Date().toISOString().split('T')[0], baseSalary: Number(salary), teams: [team], password: tempPassword || 'employee123' });
+    await addEmployeeServer({ fullName, email, role: role as Profile['role'], joinedDate: new Date().toISOString().split('T')[0], baseSalary: Number(salary), teams: [team], password: tempPassword || undefined });
     await hrActions.addNotification('all', 'hr', `New employee ${fullName} (${role}) registered.`);
     await hrActions.addNotification('all', 'admin', `New employee ${fullName} (${role}) registered.`);
     setOnboardSuccess('Employee registered!');

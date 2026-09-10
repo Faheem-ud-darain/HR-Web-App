@@ -68,15 +68,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Same "no password set yet = default '123'" behavior as the old
-    // client-side check, for brand-new employees who haven't set a real
-    // password. Once they log in once, the migration step below still
-    // applies — '123' itself gets hashed and stored, exactly like a real
-    // password would, so this default only ever works until first login.
+    // Plan 013 step 1: every account is now given a real (per-account,
+    // randomly generated or HR/Admin-chosen) temp password at creation
+    // time (see src/app/api/admin/profile/route.ts's generateTempPassword),
+    // so an account with no stored password at all is not a valid,
+    // reachable state going forward — there is no universal literal
+    // ('123') that should ever authenticate it. Treat it as a
+    // never-matches case rather than special-casing a shared default.
     const storedPassword: string | undefined = profile.password;
     const matches = storedPassword
       ? await verifyPassword(password, storedPassword)
-      : password === '123';
+      : false;
 
     if (!matches) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
