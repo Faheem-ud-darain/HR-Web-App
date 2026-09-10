@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminFindProfileByEmail, adminGetKV, adminUpdateProfile } from '@/lib/pbAdmin';
 import { signSessionToken, verifyPassword, isBcryptHash, hashPassword } from '@/lib/serverAuth';
+import { checkRateLimit, clearRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'edge';
 
@@ -38,6 +39,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
   }
 
+  // Plan 013 step 3: 5 attempts per 15 minutes per email, before any actual
+  // credential check runs (so an attacker pays the rate-limit cost on every
+  // guess, not just the ones that get past it). Thresholds flagged in the
+  // plan as needing product-owner sign-off, not a hard requirement — easy
+  // to retune here if 5/15min proves too strict or too loose in practice.
+  const rateLimitKey = `login_ratelimit_${email}`;
+  const rl = await checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
+  if (!rl.allowed) {
+    const minutes = Math.ceil((rl.retryAfterSeconds || 0) / 60);
+    return NextResponse.json(
+      { error: `Too many login attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` },
+      { status: 429 }
+    );
+  }
+
   try {
     // ── Super-admin / HR-master aliases ──────────────────────────────────
     // Both optional — if unset, these two special logins are simply
@@ -50,6 +66,7 @@ export async function POST(request: Request) {
       const ok = await verifyPassword(password, superHash);
       if (!ok) return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
       const token = await signSessionToken({ email: superTarget, role: 'admin' });
+      await clearRateLimit(rateLimitKey);
       return NextResponse.json({ role: 'admin', email: superTarget, token });
     }
 
@@ -59,6 +76,7 @@ export async function POST(request: Request) {
       const ok = await verifyPassword(password, hrHash);
       if (!ok) return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
       const token = await signSessionToken({ email: hrEmail, role: 'hr' });
+      await clearRateLimit(rateLimitKey);
       return NextResponse.json({ role: 'hr', email: hrEmail, token });
     }
 
@@ -117,6 +135,7 @@ export async function POST(request: Request) {
     }
 
     const token = await signSessionToken({ email: profile.email, role });
+    await clearRateLimit(rateLimitKey);
     return NextResponse.json({ role, email: profile.email, token });
   } catch (err: any) {
     console.error('[login] error:', err);
