@@ -270,5 +270,49 @@ authenticated) to cover the full-list read path too:
   consistency) — confirmed via a live unauthenticated `fetch` to the raw
   PocketBase REST endpoint returning 403 post-lock.
 
-Remaining in Phase 1: `hr_screenshots`, `hr_tracking_settings` /
-`hr_delcargo_store`.
+**`hr_screenshots` — MOSTLY DONE, one deliberate gap remains.** Turned out
+to already be substantially migrated from an earlier (2026-09-07) pass, not
+started fresh this session:
+
+- List/View/Update/Delete rules were already "Admins only" in PocketBase.
+- `GET /api/tracking/screenshots` (role-scoped: admin/hr see anyone,
+  team_lead only their own team, via `adminListScreenshots` in
+  `pbAdmin.ts`) and `POST /api/tracking/screenshots-retention` (the
+  monthly warn-then-delete sweep, via `adminDeleteRecords`) already existed
+  and already replaced the client-side public-client calls in `hrData.ts`
+  (`getScreenshots`, `checkScreenshotRetention`).
+- Only the **Create** rule was still fully public (empty rule = anyone,
+  not even token-gated) — this is deliberate per this plan's own Target
+  ("agent's Create stays public but gated by an `agentToken` rule"), since
+  the desktop/Chromebook tracker agents write directly to PocketBase's
+  REST API with no app session at all.
+- **Investigated locking Create with an `agentToken` match against
+  `hr_tracking_settings` (`@collection.hr_tracking_settings.employeeEmail
+  = @request.body.employee_email && @collection.hr_tracking_settings.agentToken
+  = @request.body.agent_token`), but did NOT apply it**: the Python
+  desktop agent (`agent_gui.py` / `delcargo_tracker_agent.py`) already
+  sends `agent_token` on every upload, but the Chromebook/Chrome-extension
+  tracker (`chrome-extension/background.js`, `captureAndUploadScreenshot`)
+  does not send `agent_token` at all today — gating Create now would
+  immediately break screenshot capture for every Chromebook/Chrome-extension
+  employee, with no way to verify a fix live in this session (rolling out
+  a new extension version and confirming employees pick it up isn't
+  something this session can do end-to-end). Explicit product decision:
+  left Create public for now rather than break live tracking.
+- `deleteScreenshots` (used only by `deleteEmployee`'s purge flow) is
+  still on the public client — pre-existing, silently-broken already
+  today, since Update/Delete were locked in the earlier pass without this
+  call site being migrated. Documented in `/api/admin/profile/route.ts`'s
+  own standing note as deliberately deferred (`deleteEmployee` and
+  `exportEmployeeArchive` are large, multi-collection actions that need
+  their own careful pass, not a rushed fix here) — left as-is rather than
+  scope-creeping this slice further.
+- **Follow-up needed before Create can be locked**: update
+  `chrome-extension/background.js` to send `agent_token` (reading it the
+  same way the desktop agent does, from its own setup-code-derived
+  config), ship/roll out that extension version, confirm employees are on
+  it, *then* apply the Create rule above and re-verify screenshot capture
+  end-to-end on both Windows/Mac (desktop agent) and Chromebook (extension)
+  before/after the lock.
+
+Remaining in Phase 1: `hr_tracking_settings` / `hr_delcargo_store`.
