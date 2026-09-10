@@ -154,6 +154,19 @@ specific company. 19-21 and 24 can proceed in parallel after that. 22 and
 them first. 25 can start as a draft immediately and fill in as 18/21/24
 land.
 
+## Feature requests (outside the audit, requested directly)
+
+| # | Plan | Severity | Depends on | Status |
+| --- | --- | --- | --- | --- |
+| 26 | [026-attendance-record-retention.md](./026-attendance-record-retention.md) | MEDIUM | none | TODO |
+
+**26** implements "previous month's attendance deletes itself after 10
+days" — the request originally raised and put on hold earlier, because a
+naive version would have broken plan 007's Insights trend chart (which
+reads 6 months of raw absence records). The plan resolves that by
+summarizing each month's counts into a new aggregate collection before
+retiring the raw rows, so Insights keeps showing 6 full months either way.
+
 ## Not planned (rejected or out of scope)
 
 - **HR Leaves kanban drag-and-drop** (`src/app/(dashboard)/hr/leaves/page.tsx`) —
