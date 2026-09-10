@@ -24,6 +24,7 @@ import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
 import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
 import { AbsentPopup } from '@/components/ui/AbsentPopup';
 import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
+import { ForcedPasswordChangeModal } from '@/components/ui/ForcedPasswordChangeModal';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
@@ -1239,6 +1240,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           down as anyone else, so they see the popup too (no "you posted
           it, you're exempt" exception here). */}
       <MaintenanceNoticePopup email={email} />
+
+      {/* Plan 013 step 2 — hard gate after onboarding approval or an
+          admin-triggered password reset (see admin/profile/route.ts's
+          approveOnboarding/resetPassword actions, which set the
+          mustChangePassword overlay flag). Not role-gated, same reasoning
+          as MaintenanceNoticePopup above — HR/Admin accounts go through
+          the exact same approval/reset flow as anyone else. */}
+      <ForcedPasswordChangeModal
+        profile={profile}
+        onChanged={() => {
+          setProfile(prev => (prev ? { ...prev, mustChangePassword: false } : prev));
+          queryClient.invalidateQueries({ queryKey: ['hr_profiles'] });
+        }}
+      />
 
       {/* Checks live OS notification permission on every login (not just
           once) and nags until it's turned back on — see

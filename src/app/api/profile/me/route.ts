@@ -116,6 +116,14 @@ export async function PATCH(request: Request) {
       }
       const hashed = await hashPassword(body.newPassword);
       await adminUpdateProfile(profile.id, { password: hashed });
+      // Plan 013 step 2: a successful self-service password change is
+      // exactly the event mustChangePassword (set on onboarding approval
+      // or an admin-triggered reset — see admin/profile/route.ts) exists
+      // to require, so clear it here rather than leaving it forever true.
+      const existingExtras = (await adminGetKV(extraKey(profile.id)))?.value || {};
+      if (existingExtras.mustChangePassword) {
+        await adminSetKV(extraKey(profile.id), { ...existingExtras, mustChangePassword: false });
+      }
       return NextResponse.json({ ok: true });
     }
 

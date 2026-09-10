@@ -175,6 +175,11 @@ export async function PUT(request: Request) {
         approvalStatus: 'approved',
         approvalReviewedBy: session!.email,
         approvalReviewedAt: new Date().toISOString(),
+        // Plan 013 step 2: approval is the point where the employee is
+        // expected to stop using the HR-issued temp password — force a
+        // change on their next login rather than leaving it open-ended.
+        // Cleared by /api/profile/me's change-password path once they do.
+        mustChangePassword: true,
       });
       return NextResponse.json({ ok: true });
     }
@@ -202,6 +207,12 @@ export async function PUT(request: Request) {
       }
       const hashed = await hashPassword(body.newPassword);
       await adminUpdateProfile(profileId, { password: hashed });
+      // Same reasoning as approveOnboarding above — an admin-issued
+      // password is another temp password by definition, so force a
+      // change on next login rather than leaving it as a long-lived
+      // secret only HR knows.
+      const existingExtras = (await adminGetKV(extraKey(profileId)))?.value || {};
+      await adminSetKV(extraKey(profileId), { ...existingExtras, mustChangePassword: true });
       return NextResponse.json({ ok: true });
     }
 

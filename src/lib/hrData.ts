@@ -342,6 +342,14 @@ export interface Profile {
   approvalReviewedBy?: string;
   approvalReviewedAt?: string;
   approvalRejectionReason?: string;
+  // Plan 013 step 2: set true by HR/Admin's approveOnboarding action (see
+  // admin/profile/route.ts) the moment an account is approved — forces the
+  // employee to set their own password (replacing the HR-issued temp one)
+  // on their next login, via ForcedPasswordChangeModal in
+  // (dashboard)/layout.tsx. Cleared server-side by /api/profile/me's
+  // change-password path once they actually do. Overlay-only, like the
+  // approval fields above — never set from the generic profile-edit UI.
+  mustChangePassword?: boolean;
   // Contact numbers — overlay-only (no hr_profiles columns), self-service
   // edited from the employee's own Profile page (see employee/profile/page.tsx),
   // same pattern as bank details. personalPhone is the employee's own number;
