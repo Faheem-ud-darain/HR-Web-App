@@ -235,10 +235,21 @@ function's actual logic.
 
 **Left for human review before pushing** (per this plan's own boundary —
 local commits only, not pushed): all 12 commits are local, unpushed, and
-ready for review. `src/lib/hrData.ts.orig` (a full backup of the original
-4716-line file, used as the extraction source-of-truth and for the final
-export-name diff) and the per-domain `build_*.py` extraction scripts are
-deliberately left untracked in the repo root rather than committed or
-deleted — harmless scratch artifacts, kept around in case anything needs
-re-checking against the original file before push; safe to delete once
-the split is reviewed and accepted.
+ready for review.
+
+**Post-extraction independent verification** (done in this same session,
+after the extraction subagent reported back): re-ran `tsc --noEmit`
+clean; independently confirmed a real heavy importer
+(`admin/payroll/page.tsx`'s `import { usePayroll, useProfiles, useLeaves,
+useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord,
+applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin } from
+'@/lib/hrData'`) still resolves cleanly against the new barrel; checked
+the 7 domain files that import back from `../hrData` (`absences.ts`,
+`notifications.ts`, `tasks.ts`, `teams.ts`, `tickets.ts`,
+`timesheets.ts`, plus one via a comment only) and confirmed every such
+import is only ever used inside function bodies (never at module-eval
+time), which is what makes the circular `hrData.ts` <-> `hr/*.ts` import
+pattern safe here. The scratch artifacts (`src/lib/hrData.ts.orig`,
+`build_*.py`, `scripts_extract.py`, `__pycache__/`) have been deleted —
+their job (a source-of-truth to diff against) was already done and
+confirmed, and they weren't meant to be permanent.
