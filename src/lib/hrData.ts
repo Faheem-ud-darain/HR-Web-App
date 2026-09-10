@@ -5,6 +5,17 @@ import { pb } from './pocketbase';
 import { getNYDateString, formatTimeNY, formatDateNY } from './timezone';
 import { getOrCreateDeviceId, getAuthToken } from './session';
 import { API_BASE } from './apiBase';
+import type {
+  Profile, Warehouse, Announcement, MaintenanceNotice, LeaveApplication, Task,
+  TimesheetEntry, PayrollRecord, AbsenceRecord, TrackingSettings, TrackerHeartbeat,
+  CaptureHealthStatus, ShiftTabHeartbeat, ShiftStopSignal, TrackerQuitIntent,
+  TrackerPing, TrackerPong, TrackerStopCommand, TrackerCommand, TrackerDiagnostics,
+  UserSessionSlot, Screenshot, InactivityLog, Notification, NotificationCategory,
+  NotificationPrefs, CareerPosition, CareerApplicationStatus, CareerApplication,
+  TicketReply, Ticket, TicketPresence, TicketSeenState, TypingState, Team, Message,
+  TeamDocument, PayrollSelf, MyAbsenceRecord, ProfileSelf, NotificationReadMap,
+} from './hr/types';
+export * from './hr/types';
 
 // ─────────────────────────────────────────────────────────────────────────
 // SINGLE SOURCE OF TRUTH for all PocketBase access in this app.
@@ -253,111 +264,6 @@ async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
 // TYPES (app-shape, camelCase — same shapes pages already expect)
 // ---------------------------------------------------------------------------
 
-export interface Profile {
-  id: string;
-  fullName: string;
-  email: string;
-  role: 'employee' | 'hr' | 'admin' | 'team_lead';
-  joinedDate: string;
-  onboardingCompleted: boolean;
-  baseSalary: number;
-  teams: string[];
-  password?: string;
-  isTeamLead?: boolean;
-  leadTeams?: string[];
-  isWarehouseLead?: boolean;
-  managedWarehouses?: string[];
-  jobTitle?: string;
-  gender?: 'male' | 'female';
-  bankName?: string;
-  accountNumber?: string;
-  iban?: string;
-  profilePicture?: string;
-  region?: 'USA' | 'Pakistan';
-  assignedWarehouses?: string[];
-  trackingEnabled?: boolean;
-  salaryStartDate?: string;
-  // Overlay-only fields, not real hr_profiles columns — see profile extras below.
-  // Date the employee's system/portal account was created. Falls back to
-  // joinedDate for employees onboarded before this field existed. PTO
-  // accrual is keyed off this instead of joinedDate (see getPTOAccrualDate).
-  accountCreationDate?: string;
-  // When true, runAbsenceCheck completely skips this employee — used for
-  // part-time employees, contractors, or anyone whose schedule means the
-  // "no clock-in on a weekday" rule does not apply to them.
-  exemptFromAbsenceCheck?: boolean;
-  offboarded?: boolean;
-  offboardDate?: string;
-  offboardingStatus?: {
-    itClearance: boolean;
-    financeClearance: boolean;
-    hrClearance: boolean;
-    notes?: string;
-    finalLeavePayout?: number;
-    // Reserved-balance payout at resignation/termination (item 3/8 of the
-    // 2026-09-03 payroll overhaul) — reservedSalaryBalance (automatic
-    // first-month withhold) + manualReservedAmount (HR/Admin's manual
-    // record-only annotation) as of the moment offboarding is confirmed.
-    // Like finalLeavePayout, this is a one-time snapshot taken at
-    // confirmOffboard time, not a live-recomputed value.
-    finalReservedPayout?: number;
-    // Only meaningful when this employee had a companyPhone on file — the
-    // company-allocated number must be handed back before offboarding
-    // completes (see confirmOffboard in UserProfileModal.tsx, which blocks
-    // submission on this when applicable).
-    companyNumberReturned?: boolean;
-  };
-  lastIncrementProcessedYear?: number;
-  // ── Reserved salary balance (item 3/8, 2026-09-03 payroll overhaul) ────
-  // Automatic: an employee's first calendar month of pay is always withheld
-  // rather than paid out (see computePayrollView's reservedThisMonth), and
-  // accumulates here at "Process" time. Paid out only at resignation or
-  // termination (offboardingStatus.finalReservedPayout above) — never
-  // deducted from any later month's normal pay.
-  reservedSalaryBalance?: number;
-  // Manual: HR/Admin can record an already-reserved amount for an EXISTING
-  // employee (e.g. carried over from before this system existed) purely as
-  // a tracking annotation — per explicit product decision this does NOT
-  // affect that employee's current/live payroll calculation at all, it
-  // only shows alongside reservedSalaryBalance on the Net Payable view and
-  // gets folded into finalReservedPayout at offboarding.
-  manualReservedAmount?: number;
-  manualReservedNote?: string;
-  cvFileName?: string;
-  cvFileData?: string;
-  identityDocs?: { name: string; data: string }[];
-  passportFileName?: string;
-  passportFileData?: string;
-  // Set by HR/Admin only (see UserProfileModal). Team members / team leads
-  // only ever see this in place of the real name — see displayName() below.
-  // HR/Admin always see the real name, with the alias shown alongside it.
-  alias?: string;
-  // Onboarding approval gate. Undefined/'pending' while the employee's
-  // self-service onboarding stepper has been submitted but not yet reviewed
-  // — the dashboard shows a "waiting for review" screen instead of the real
-  // app. Only flips to 'approved' via HR/Admin action, which is what
-  // actually unlocks the dashboard (separate from onboardingCompleted,
-  // which just means "the stepper was submitted").
-  approvalStatus?: 'pending' | 'approved' | 'rejected';
-  approvalReviewedBy?: string;
-  approvalReviewedAt?: string;
-  approvalRejectionReason?: string;
-  // Plan 013 step 2: set true by HR/Admin's approveOnboarding action (see
-  // admin/profile/route.ts) the moment an account is approved — forces the
-  // employee to set their own password (replacing the HR-issued temp one)
-  // on their next login, via ForcedPasswordChangeModal in
-  // (dashboard)/layout.tsx. Cleared server-side by /api/profile/me's
-  // change-password path once they actually do. Overlay-only, like the
-  // approval fields above — never set from the generic profile-edit UI.
-  mustChangePassword?: boolean;
-  // Contact numbers — overlay-only (no hr_profiles columns), self-service
-  // edited from the employee's own Profile page (see employee/profile/page.tsx),
-  // same pattern as bank details. personalPhone is the employee's own number;
-  // companyPhone is only set if the company has issued them a separate
-  // work/SIM number (optional).
-  personalPhone?: string;
-  companyPhone?: string;
-}
 
 export function isTechnicalSupportMember(teams?: string[] | null): boolean {
   if (!teams || !Array.isArray(teams)) return false;
@@ -382,19 +288,7 @@ export function displayName(profile: { fullName: string; alias?: string } | null
   return profile.alias || profile.fullName;
 }
 
-export interface Warehouse { id: string; name: string; latitude: number; longitude: number; radius: number; }
 
-export interface Announcement {
-  id: string; title: string; content: string; timestamp: string; createdBy: string;
-  target: 'all' | 'usa' | 'pakistan' | string[];
-  // Backed by hr_announcements' pre-existing `pinned` column — that field
-  // already existed in the schema but was always written as `false` and
-  // never read back anywhere (see addAnnouncement below), so repurposing it
-  // as "important" needed no migration. An important announcement is the
-  // one kind that gets a blocking popup (see AnnouncementPopup.tsx) instead
-  // of just sitting quietly in the passive "Recent Announcements" feed.
-  important: boolean;
-}
 
 // Shared "does this announcement apply to this person" check — the exact
 // targeting rule employee/page.tsx's dashboard feed widget already used
@@ -431,88 +325,17 @@ export function isAnnouncementForProfile(ann: Announcement, profile: Profile | n
 // a pre-formatted NY display string baked in at creation time (see
 // addAnnouncement), which can't be un-formatted back into a real instant
 // for per-viewer conversion.
-export interface MaintenanceNotice {
-  id: string;
-  title: string;
-  message: string;
-  startAt: string; // ISO UTC instant
-  endAt: string; // ISO UTC instant
-  createdBy: string;
-  createdAt: string; // ISO UTC — "posted" info only, not the maintenance window itself
-}
 const MAINTENANCE_NOTICES_KEY = 'hr_maintenance_notices_v1';
 const MAINTENANCE_NOTICE_READS_KEY = 'hr_maintenance_notice_reads_v1';
 type MaintenanceNoticeReadMap = Record<string, string[]>;
 
-export interface LeaveApplication {
-  id: string; employeeName: string; type: 'PTO' | 'Sick Leave' | 'Urgent' | 'Parental Leave' | 'Normal';
-  duration: string; reason: string; status: 'pending' | 'hr_approved' | 'approved' | 'rejected';
-}
 
-export interface Task {
-  id: string; title: string; description: string; assignedTo: string; assignedEmail: string;
-  team: string; dueDate: string; priority: 'low' | 'medium' | 'high'; status: 'todo' | 'in_progress' | 'done';
-  createdBy: string;
-}
 
 // hr_timesheets: no in_progress/completed status in the real schema (fixed
 // enum pending|approved|rejected instead). We represent "open shift" as
 // clockOut being empty, and keep `approvalStatus` as a separate HR workflow
 // flag layered on top — see SCHEMA_REFERENCE.md.
-export interface TimesheetEntry {
-  id: string; employeeEmail: string; date: string; clockIn: string; clockOut?: string;
-  duration?: string; status: 'in_progress' | 'completed'; approvalStatus: 'pending' | 'approved' | 'rejected';
-}
 
-export interface PayrollRecord {
-  id: string; employeeId: string; name: string; role: string; region?: 'USA' | 'Pakistan';
-  baseSalary: number; unpaidLeaves: number; bonus: number; deductions: number; processed: boolean;
-  incrementAmount: number;
-  // "YYYY-MM" (America/New_York calendar month this record belongs to) —
-  // uses hr_payroll's pre-existing month/year columns, which the app used
-  // to leave completely unwritten. Without this, every employee had at
-  // most one hr_payroll row ever: computePayrollView's `existing` lookup
-  // matched by employeeId alone, so "processing" September just overwrote
-  // August's row in place instead of creating a new one, and a paid month
-  // could never go back to showing "pending" the following month. Now
-  // each calendar month gets its own row, scoped by this field.
-  month: string;
-  // NOT a persisted hr_payroll column — the live hr_payroll schema has no
-  // slot for it. Deliberately recomputed fresh every time by
-  // computePayrollView (from emp.joinedDate + this record's own `month`),
-  // the same way effectiveBaseSalary's late-joiner proration already is,
-  // rather than requiring a new PocketBase column. Whatever this equals is
-  // ALSO folded straight into `deductions` before it's ever written, so
-  // net pay (baseSalary + bonus - deductions + incrementAmount) already
-  // reflects it being withheld — this field exists purely so the UI can
-  // show it as its own labeled line ("Reserved — paid at resignation")
-  // instead of an opaque generic deduction. See getShiftShortfallDeduction
-  // and the "1. Calculate Base Salary" block's isEmployeesFirstMonth for
-  // where this comes from.
-  reservedThisMonth: number;
-  // NOT a persisted column either (same reasoning as reservedThisMonth) —
-  // the itemized "why was I deducted" list shown on the Net Payable modal
-  // (HR/Admin) and the Employee dashboard. Sums to (at least) `deductions`
-  // — see its own comment in computePayrollView for why it can sum to
-  // MORE when the safety-net cap has kicked in.
-  deductionBreakdown: { label: string; amount: number }[];
-  // NOT a persisted column (same reasoning as reservedThisMonth) — the sum
-  // of this employee's OTHER hr_payroll rows that are still `!processed`
-  // (any month other than this record's own `month`). Purely informational:
-  // it tells HR/Admin "there is still X unpaid from a prior month sitting
-  // out there", but is deliberately NEVER folded into this month's
-  // baseSalary/deductions/net-pay math. It used to be (see
-  // computePayrollView's old totalBaseWithArrears), which silently pulled a
-  // prior month's already-absence-deducted net pay into the CURRENT
-  // month's base salary the moment that prior month rolled past its
-  // processing window without being marked "Complete Payout" — so an
-  // employee's September numbers (and September's own absence deductions)
-  // were quietly inflated by whatever August still owed. Each month's
-  // figures must stand on their own; unpaid prior months are surfaced here
-  // instead, for HR to resolve by actually processing that old record (at
-  // which point it stops counting toward this).
-  pendingArrears: number;
-}
 
 // A single day an employee was auto-marked absent, with a specific reason —
 // stored in the dedicated hr_absence_records PocketBase collection.
@@ -523,49 +346,9 @@ export interface PayrollRecord {
 // Soft-deleted via `deleted`/`deletedAt` (rather than a real row delete) so
 // runAbsenceCheck can tell "never happened" apart from "happened, then HR
 // removed it" and never resurrect a removed record on its next pass.
-export interface AbsenceRecord {
-  id: string; // opaque PocketBase record id
-  employeeEmail: string;
-  employeeName: string;
-  date: string; // "YYYY-MM-DD", America/New_York calendar day
-  reason: 'no_clock_in' | 'inactivity' | 'under_4_hours';
-  inactivityMinutes?: number; // only set when reason === 'inactivity'
-  workedMinutes?: number; // set when reason === 'under_4_hours'
-  deductionAmount: number;
-  createdAt: string; // ISO instant this record was created
-  acknowledged: boolean; // employee has seen/dismissed the explanatory popup
-  deleted?: boolean;
-  deletedAt?: string;
-}
 
-export interface TrackingSettings {
-  id?: string; employeeEmail: string; enabled: boolean; intervalMinutes: number; excludeFromAutoDelete: boolean; agentToken: string;
-}
 
-export interface TrackerHeartbeat {
-  employeeEmail: string; deviceId: string; deviceLabel?: string; connectedAt: string; lastSeenAt: string;
-  /** Written by the desktop agent since v6 — used by the web portal to detect outdated builds. */
-  agentVersion?: string;
-  // ── Capture-health fields, written by the desktop agent since v14 ──────
-  // Added because "Connected" (a live heartbeat) previously meant nothing
-  // about whether screenshots were actually being captured — an employee
-  // could sit at their lock screen (or have screen-recording permission
-  // revoked) for hours while the dashboard kept showing a green "Connected"
-  // badge, since the heartbeat loop and the capture loop were entirely
-  // independent. See getCaptureHealth below for how these are interpreted.
-  /** ISO timestamp of the most recent successful screenshot upload, or null/undefined if none yet this run. */
-  lastCaptureAt?: string | null;
-  /** Human-readable reason the most recent capture attempt didn't produce an uploaded screenshot (e.g. "Screen is locked", a network error) — null once a capture succeeds. */
-  lastCaptureError?: string | null;
-  /** True when the agent detected the OS session was locked on its most recent capture tick (Windows: secure-desktop check; macOS: CGSSessionScreenIsLocked). */
-  isLocked?: boolean;
-  /** How many consecutive capture attempts have failed or been skipped (lock, upload error) — resets to 0 on the next success. */
-  consecutiveCaptureFailures?: number;
-  /** Whether the agent currently believes it *should* be capturing (HR toggle on AND an active shift) — lets the dashboard avoid flagging "not capturing" when there's simply no shift running right now. */
-  captureEnabled?: boolean;
-}
 
-export type CaptureHealthStatus = 'ok' | 'locked' | 'failing' | 'idle' | 'unknown' | 'stale_token';
 
 // Exact substring tracker-agent/agent_gui.py's get_tracking_settings() writes
 // into lastCaptureError when the agent's currently-paired agentToken no
@@ -638,7 +421,6 @@ export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 // safety net for when the pagehide-based immediate stop (best-effort —
 // unload-style handlers never fire on a crash, force-quit, or killed
 // process) never got the chance to run.
-export interface ShiftTabHeartbeat { employeeEmail: string; lastSeenAt: string; }
 // Was 2 minutes — too tight. On the native mobile app, simply locking the
 // phone or switching apps for a couple of minutes (extremely normal during
 // a shift) let this go stale, which closeStaleManualShiftIfAbandoned then
@@ -659,16 +441,6 @@ const shiftTabHeartbeatKeyFor = (email: string) => `shift_tab_heartbeat_${(email
 // it's open in a browser somewhere, on top of (not instead of) the existing
 // shift_auto_stopped_<email> localStorage flag that already covers the
 // "wasn't looking at the dashboard right now" case at next login.
-export interface ShiftStopSignal {
-  // 'inactivity_absence' — written by handle_inactivity_auto_absence() in
-  // tracker-agent/agent_gui.py the instant 35+ continuous idle minutes are
-  // detected during a shift (see AUTO_ABSENT_INACTIVITY_SECONDS there) —
-  // the agent has already ended the shift and created a real AbsenceRecord
-  // by the time this signal lands; employee/page.tsx just needs to show the
-  // right explanatory copy for this reason instead of the generic
-  // "tracker closed" one.
-  employeeEmail: string; timestamp: string; reason: 'tracker_closed' | 'inactivity_absence' | string;
-}
 const shiftStopSignalKeyFor = (email: string) => `shift_stop_signal_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
 // ── 5-Signal Tracker Reliability System ─────────────────────────────────────
@@ -680,38 +452,19 @@ const _slugify = (email: string) => (email || '').toLowerCase().replace(/[^a-z0-
 // Signal 2: Written by tracker agent (with retry) on deliberate quit.
 // Portal checks this to distinguish deliberate quit (clock out immediately)
 // from a server blip (wait TRACKER_HEARTBEAT_GRACE_MS before acting).
-export interface TrackerQuitIntent {
-  employeeEmail: string;
-  timestamp: string; // ISO — portal ignores signals older than 15 min
-}
 const trackerQuitIntentKeyFor = (email: string) => `tracker_quit_intent_${_slugify(email)}`;
 
 // Signal 3: Written by portal when employee clicks "Start Shift". The tracker
 // agent reads this via realtime SSE on hr_delcargo_store and responds with Signal 4.
-export interface TrackerPing {
-  employeeEmail: string;
-  requestId: string;   // random uuid — must match pong's requestId to be valid
-  requestedAt: string; // ISO — agent ignores pings older than 30s
-}
 const trackerPingKeyFor = (email: string) => `tracker_ping_${_slugify(email)}`;
 
 // Signal 4: Written by tracker agent in response to Signal 3.
 // Portal polls for this with matching requestId, then proceeds with clock-in.
-export interface TrackerPong {
-  employeeEmail: string;
-  requestId: string;   // echoed from the ping — portal validates this matches
-  respondedAt: string; // ISO
-}
 const trackerPongKeyFor = (email: string) => `tracker_pong_${_slugify(email)}`;
 
 // Signal 5: Written by portal when employee clicks "End Shift" (via clockOut).
 // Tracker agent reads this via realtime SSE and immediately stops capturing.
 // Agent deletes this key after acting on it.
-export interface TrackerStopCommand {
-  employeeEmail: string;
-  commandId: string;  // random id — agent deletes key after acting on it
-  issuedAt: string;   // ISO — agent ignores commands older than 60s
-}
 const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(email)}`;
 
 // Signal 6: Written by HR/Admin from TrackingView (Run Diagnostics / Reload
@@ -721,11 +474,6 @@ const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(ema
 // one up. Added 2026-08-24 alongside Signal 7 below to give HR a direct
 // remote-command channel instead of guessing what's wrong with a specific
 // employee's tracker from stale heartbeat fields alone.
-export interface TrackerCommand {
-  employeeEmail: string;
-  type: 'diagnostics' | 'reload_settings';
-  issuedAt: string; // ISO — agent ignores commands older than ~60s
-}
 const trackerCommandKeyFor = (email: string) => `tracker_command_${_slugify(email)}`;
 
 // Signal 7: Written by tracker agent in response to a 'diagnostics' command
@@ -735,25 +483,6 @@ const trackerCommandKeyFor = (email: string) => `tracker_command_${_slugify(emai
 // inferring it from stale heartbeat fields. Field names here mirror
 // write_diagnostics()'s payload in agent_gui.py exactly (camelCase on this
 // side, same on that one since PocketBase KV values are opaque JSON).
-export interface TrackerDiagnostics {
-  employeeEmail: string;
-  respondedAt: string; // ISO
-  appVersion: string;
-  platform: string;
-  deviceLabel: string;
-  connected: boolean;
-  connectionStatus?: string;
-  enabled: boolean;
-  enabledByHr: boolean;
-  shiftActive: boolean;
-  isLocked: boolean;
-  lastError?: string;
-  lastCaptureAt?: string;
-  consecutiveCaptureFailures?: number;
-  intervalMinutes?: number;
-  autostart: boolean;
-  updateAvailableVersion?: string;
-}
 const trackerDiagnosticsKeyFor = (email: string) => `tracker_diagnostics_${_slugify(email)}`;
 
 // Grace period before auto-clock-out when heartbeat dies but no quit intent
@@ -780,9 +509,6 @@ export const TRACKER_HEARTBEAT_GRACE_MS = 15 * 60 * 1000;
 // login. This distinction matters: without a stable deviceId, logging out
 // and back in on your own laptop would look like "a new device" and
 // needlessly eat into the 2-device cap.
-export interface UserSessionSlot {
-  deviceId: string; deviceLabel: string; sessionToken: string; loggedInAt: string; lastSeenAt: string;
-}
 export const MAX_USER_SESSION_DEVICES = 2;
 // If a device's slot hasn't heartbeated in this long, it's treated as
 // abandoned (browser/tab closed without hitting Log Out) and doesn't count
@@ -798,46 +524,13 @@ const userSessionKeyFor = (email: string) => `user_session_${(email || '').toLow
 // in migration_data/create_screenshots_collection.py). Either way, `<img
 // src={imageUrl}>` just works — callers don't need to know which source a
 // given screenshot came from.
-export interface Screenshot { id: string; employeeEmail: string; timestamp: string; imageUrl: string; deviceLabel?: string; legacy?: boolean; }
 
 // One contiguous stretch of mouse inactivity (no cursor movement) lasting at
 // least 3 minutes, reported by the desktop tracker agent (see
 // tracker-agent/agent_gui.py's _inactivity_loop). Only recorded while
 // tracking is enabled AND the employee's shift is active — matches the same
 // gating screenshots use, so this never counts idle time outside a shift.
-export interface InactivityLog {
-  id: string; employeeEmail: string; startAt: string; endAt: string; durationSeconds: number; deviceLabel?: string;
-}
 
-export interface Notification {
-  id: string; recipientEmail: string; recipientRole: string; message: string; read: boolean; timestamp: string;
-  // Raw PocketBase system field (auto-set on every record, never written by
-  // this app directly) — added so the bell can show "Today"/"Yesterday"/a
-  // real date next to the time. `timestamp` above is a *display-only*
-  // time-of-day string (e.g. "3:02 AM") written once at creation with no
-  // date component at all (see addNotification below) — there was never a
-  // way to recover the date from it, which is exactly why old notifications
-  // only ever showed a time with no day context. `created` always has the
-  // full date+time regardless, so it's the one to use for that.
-  created?: string;
-  // Where clicking this notification should navigate to (a role-correct
-  // in-app path, e.g. "/hr/tickets?ticketId=abc123") — set by addNotification
-  // for categories that point at a specific record (ticket, leave, chat
-  // mention). Absent for generic/'internal' notifications with nothing to
-  // deep-link to, and for anything created before this field existed.
-  link?: string;
-  // The category this row was created with (see hrActions.addNotification).
-  // Written on every row but, until the HR & Admin Line feature, never read
-  // back into the app — nothing client-side needed it (the per-recipient
-  // opt-out check happens server-side in pb_hooks/push_notifications.pb.js
-  // against the raw record). The HR & Admin Line sidebar unread-dot needs
-  // it to pick 'hr_admin_line' rows out of the notifications feed that's
-  // already loaded app-wide for the bell — see hasUnseenHrAdminLineActivity
-  // below — rather than fetching hr_notifications a second time just for
-  // that.
-  category?: NotificationCategory;
-}
-type NotificationReadMap = Record<string, string[]>;
 type NotificationClearedMap = Record<string, string[]>;
 // Same shape/pattern as NotificationReadMap (announcement id -> emails who've
 // seen it) — kept as its own KV key since hr_announcements is a separate
@@ -864,8 +557,6 @@ type AnnouncementReadMap = Record<string, string[]>;
 // deliberately NOT included in NotificationPrefs/DEFAULT_NOTIFICATION_PREFS
 // below, same reasoning — this is HR and Admin's own direct line to each
 // other, not something either side should be able to silently opt out of.
-export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'maintenance' | 'hr_admin_line' | 'internal';
-export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal' | 'maintenance' | 'hr_admin_line'>, boolean>;
 const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { announcement: true, ticket: true, chat_mention: true, leave_task: true, shift: true };
 
 // Builds the role-correct in-app path for a notification's `link` field.
@@ -914,14 +605,6 @@ export function buildNotificationLink(role: string, kind: 'ticket' | 'leave' | '
 // not needed yet at this app's scale.
 type MessageReadMap = Record<string, string[]>;
 
-export interface CareerPosition {
-  id: string; title: string; department: string; location: string; description: string; requirements: string[];
-}
-export type CareerApplicationStatus = 'pending' | 'reviewed' | 'shortlisted' | 'rejected' | 'hired';
-export interface CareerApplication {
-  id: string; positionId: string; positionTitle: string; applicantName: string; applicantEmail: string;
-  coverLetter: string; submittedAt: string; status: CareerApplicationStatus;
-}
 
 // hr_tickets has no dedicated file-type column (see SCHEMA_REFERENCE.md —
 // only employee_email/employee_name/subject/description/status/priority/
@@ -934,15 +617,6 @@ export interface CareerApplication {
 // therefore always a data: URL, never a real file URL; keep attachments
 // small (see MAX_DOCUMENT_IMAGE_BYTES / MAX_DOCUMENT_PDF_BYTES in
 // imageCompressor.ts) since the whole ticket round-trips on every read/write.
-export interface TicketReply {
-  id: string; senderName: string; senderRole: 'employee' | 'hr' | 'admin' | 'team_lead'; message: string; timestamp: string;
-  attachmentName?: string; attachmentUrl?: string; attachmentSize?: number; senderEmail?: string;
-}
-export interface Ticket {
-  id: string; employeeName: string; employeeEmail: string; title: string; description: string;
-  department: 'hr' | 'technical';
-  status: 'open' | 'closed'; createdAt: string; replies: TicketReply[];
-}
 
 // "Live" presence for a support ticket — lets the employee see when HR
 // currently has their ticket open, same idea as TrackerHeartbeat above but
@@ -956,9 +630,6 @@ export interface Ticket {
 // duplicate rows for the same ticket (a bug the migration surfaced: one
 // ticket had 41 duplicate KV rows) since a KV write there was a
 // lookup-then-update rather than a database-enforced single row.
-export interface TicketPresence {
-  id?: string; ticketId: string; email: string; role: string; lastSeenAt: string;
-}
 export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
 
 // Durable "the employee has read this ticket as of this time" marker — unlike
@@ -969,9 +640,6 @@ export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
 // have a ticket selected (touched on an interval so it also advances if a
 // new reply arrives while they're already looking at it), read by HR/Admin's
 // TicketsView for whichever ticket is currently selected.
-export interface TicketSeenState {
-  ticketId: string; employeeSeenAt: string;
-}
 const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
 
 // "X is typing…" indicator — same KV-heartbeat idea as TicketPresence above,
@@ -982,55 +650,18 @@ const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
 // actually stops typing reads as a bug, not a feature. Shared by both Team
 // Chat (scope 'chat', id = teamId) and Tickets (scope 'ticket', id =
 // ticketId) — see touchTypingState/clearTypingState/getTypingUsers below.
-export interface TypingState {
-  scope: 'chat' | 'ticket'; scopeId: string; email: string; displayName: string; lastTypedAt: string;
-}
 export const TYPING_STALE_MS = 5 * 1000;
 const typingKeyFor = (scope: 'chat' | 'ticket', scopeId: string, email: string) =>
   `hr_typing_${scope}_${scopeId}_${email.toLowerCase()}`;
 const typingPrefixFor = (scope: 'chat' | 'ticket', scopeId: string) => `hr_typing_${scope}_${scopeId}_`;
 
 // Real hr_teams row — adopted structure (lead + members + warehouse).
-export interface Team {
-  id: string; name: string; leadEmail?: string; members: string[]; warehouseId?: string;
-}
 
 // Team Chat — one channel per hr_teams row, no DMs. senderName is a
 // real-name snapshot (see create_messages_collection.py) used only by the
 // Admin oversight view; everywhere else, resolve senderEmail through
 // displayName(profile, viewerRole) so an Alias change also applies
 // retroactively to old messages.
-export interface Message {
-  id: string; teamId: string; senderEmail: string; senderName: string;
-  text?: string; attachmentUrl?: string; attachmentName?: string; attachmentSize?: number;
-  isAnnouncement?: boolean; timestamp: string;
-  // Forward metadata (HR & Admin Line feature) — set only on messages sent
-  // via hrActions.forwardToHrAdminLine, always into the fixed
-  // HR_ADMIN_LINE_TEAM_ID channel. `text` is left empty on a forwarded
-  // message; the forwarded card renders from these fields instead.
-  // Requires the forward_* columns added by
-  // migration_data/add_forward_fields_to_messages.py — NOT YET RUN against
-  // the live PocketBase instance as of this writing (see that script's
-  // header comment). Until it's run, PocketBase silently drops these keys
-  // on write and toMessage's forward_* reads all come back undefined, so
-  // a forwarded message just renders as an empty-looking plain message
-  // with no card — not a crash, just missing the extra styling until the
-  // migration is applied.
-  isForward?: boolean;
-  forwardKind?: 'ticket' | 'announcement' | 'chat';
-  // The source's title (ticket/announcement) or source channel's display
-  // name (chat) — NOT a UI label like "Forwarded → Ticket"; that tag is
-  // derived from forwardKind at render time (see TeamChatView.tsx).
-  forwardLabel?: string;
-  // The source record's raw id (ticket id / announcement id / source
-  // teamId) — deliberately NOT a pre-built path. buildNotificationLink
-  // bakes in a role-specific base path (/hr/... vs /admin/...), but this
-  // channel is read by BOTH hr and admin, so the "View original" link is
-  // resolved at render time from this raw id + forwardKind using the
-  // *viewer's own* role, not the forwarder's.
-  forwardLink?: string;
-  forwardNote?: string;
-}
 
 // Team Documents — per-team onboarding/instructional file library shown
 // alongside Team Chat (see create_team_documents_collection.py). Upload is
@@ -1038,12 +669,6 @@ export interface Message {
 // added later) can view. uploadedByName/Role are snapshots for fallback
 // display only — the UI resolves the live profile first, same pattern as
 // Message.senderName.
-export interface TeamDocument {
-  id: string; teamId: string; title: string; description?: string;
-  fileUrl: string; fileName: string; fileSize?: number;
-  uploadedByEmail: string; uploadedByName: string; uploadedByRole?: string;
-  timestamp: string;
-}
 
 // ---------------------------------------------------------------------------
 // Mappers (PocketBase snake_case record -> app camelCase shape)
@@ -1426,31 +1051,6 @@ export async function deletePayrollForEmployeeAdmin(employeeId: string): Promise
   }).catch(() => {});
 }
 
-export interface PayrollSelf {
-  id: string;
-  fullName: string;
-  teams: string[];
-  baseSalary: number;
-  salaryStartDate?: string;
-  joinedDate: string;
-  lastIncrementProcessedYear?: number;
-  region?: 'USA' | 'Pakistan';
-  pendingIncrement: number;
-  // Reserved-balance fields (item 3/8) — see /api/payroll/me's comment.
-  reservedSalaryBalance?: number;
-  manualReservedAmount?: number;
-  payrollRecord: {
-    bonus: number;
-    deductions: number;
-    processed: boolean;
-    month?: string;
-    // "why was I deducted" — same itemized list HR/Admin see on the Net
-    // Payable modal (PayrollRecord.deductionBreakdown), plus this month's
-    // reserved-salary amount if this was the employee's first month.
-    deductionBreakdown?: { label: string; amount: number }[];
-    reservedThisMonth?: number;
-  } | null;
-}
 
 // Employee/HR/Admin's OWN salary data, via the new server-side
 // /api/payroll/me route (see that route's comment) — replaces the old
@@ -1483,15 +1083,6 @@ export function usePayrollSelf() {
 // (reads the whole company's records, unauthenticated). Used by the
 // employee Salary page to show a running "why was I deducted this month"
 // list, day by day, rather than only the end-of-month total.
-export interface MyAbsenceRecord {
-  id: string;
-  date: string; // "YYYY-MM-DD"
-  reason: 'no_clock_in' | 'inactivity' | 'under_4_hours';
-  inactivityMinutes?: number;
-  workedMinutes?: number;
-  deductionAmount: number;
-  createdAt: string;
-}
 export function useMyAbsenceRecords() {
   return useQuery({
     queryKey: ['absences_me'],
@@ -1506,17 +1097,6 @@ export function useMyAbsenceRecords() {
       return (data.items || []) as MyAbsenceRecord[];
     },
   });
-}
-export interface ProfileSelf {
-  id: string;
-  bankName: string;
-  accountNumber: string;
-  iban: string;
-  personalPhone: string;
-  companyPhone: string;
-  cvFileName: string;
-  identityDocs: { name: string; data: string }[];
-  passportFileName: string;
 }
 
 // Own bank details / contact numbers / document filenames / password, via
