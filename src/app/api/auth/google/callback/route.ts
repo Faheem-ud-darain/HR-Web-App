@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { adminSetKV } from '@/lib/pbAdmin';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -70,28 +71,17 @@ export async function GET(request: Request) {
       useForPasswordReset: true,
     };
 
-    // Save to PocketBase server KV store via internal API
-    const pbUrl = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
+    // Save via the server-only PocketBase admin (superuser) connection —
+    // this used to be a raw, unauthenticated fetch straight to
+    // hr_delcargo_store's public REST endpoint, meaning anyone on the
+    // internet could read (and overwrite) every employee's Google OAuth
+    // access/refresh tokens by listing that collection directly. See plan
+    // 012's hr_delcargo_store investigation notes for the full context —
+    // this route was the single worst exposure found there.
     const storeKey = `google_integration_${String(targetEmail).toLowerCase()}`;
-
-    // Find existing or create
-    const checkRes = await fetch(`${pbUrl}/api/collections/hr_delcargo_store/records?filter=(key='${storeKey}')`);
-    const checkData = await checkRes.json();
-    const existing = checkData.items?.[0];
-
-    if (existing) {
-      await fetch(`${pbUrl}/api/collections/hr_delcargo_store/records/${existing.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ value: kvValue }),
-      });
-    } else {
-      await fetch(`${pbUrl}/api/collections/hr_delcargo_store/records`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key: storeKey, value: kvValue }),
-      });
-    }
+    // adminSetKV itself checks for an existing row (via adminGetKV) and
+    // PATCHes it, or POSTs a new one — no need to duplicate that check here.
+    await adminSetKV(storeKey, kvValue);
 
     return new Response(
       `<html><body><script>

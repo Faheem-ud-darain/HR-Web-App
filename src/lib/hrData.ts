@@ -4700,7 +4700,9 @@ export const hrActions = {
   },
 
   // ── KV Overlay Helpers ───────────────────────────────────────────────
+  // deleteKV removed (2026-09-10) — its only caller (GoogleIntegrationCard's
+  // disconnect flow) now goes through the authenticated
+  // /api/google/integration route instead (see that route's own comment).
   getKV: async (key: string): Promise<any | null> => pbGetKV(key),
   setKV: async (key: string, value: any): Promise<void> => pbSetKV(key, value),
-  deleteKV: async (key: string): Promise<void> => pbDeleteKVByKeys([key]),
 };

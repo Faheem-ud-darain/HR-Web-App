@@ -3,13 +3,52 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { hrActions, Profile } from '@/lib/hrData';
+import { Profile } from '@/lib/hrData';
+import { getAuthToken } from '@/lib/session';
+import { API_BASE } from '@/lib/apiBase';
 import { CheckCircle2, AlertCircle, Calendar, Video, ShieldCheck, Mail, Link as LinkIcon, RefreshCw, Trash2, Smartphone } from 'lucide-react';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 interface GoogleIntegrationCardProps {
   profile: Profile;
   onUpdate?: () => void;
+}
+
+// Authenticated replacement for the old hrActions.getKV/setKV/deleteKV
+// calls against the fully-public hr_delcargo_store collection — see
+// src/app/api/google/integration/route.ts's own comment for why (both an
+// unauthenticated-read exposure of OAuth tokens, and the client never
+// needed those tokens in the first place). The route only ever returns
+// the safe display fields, never the raw tokens.
+async function fetchGoogleIntegration(): Promise<any> {
+  const token = getAuthToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/google/integration`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.data || null;
+}
+async function updateGoogleIntegration(fields: Record<string, boolean>): Promise<any> {
+  const token = getAuthToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/google/integration`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.data || null;
+}
+async function disconnectGoogleIntegration(): Promise<void> {
+  const token = getAuthToken();
+  if (!token) return;
+  await fetch(`${API_BASE}/api/google/integration`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {});
 }
 
 export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCardProps) {
@@ -22,7 +61,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
     let active = true;
     (async () => {
       try {
-        const data = await hrActions.getKV(`google_integration_${profile.email.toLowerCase()}`);
+        const data = await fetchGoogleIntegration();
         if (active) setGoogleData(data);
       } catch (err) {
         // null if never connected
@@ -70,7 +109,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
         popup?.close();
         setConnecting(false);
         setMsg({ type: 'success', text: `Successfully linked ${event.data.email}!` });
-        const updated = await hrActions.getKV(`google_integration_${profile.email.toLowerCase()}`);
+        const updated = await fetchGoogleIntegration();
         setGoogleData(updated);
         if (onUpdate) onUpdate();
       } else if (event.data?.type === 'GOOGLE_AUTH_ERROR') {
@@ -88,13 +127,13 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
     if (!googleData) return;
     const nextData = { ...googleData, [key]: val };
     setGoogleData(nextData);
-    await hrActions.setKV(`google_integration_${profile.email.toLowerCase()}`, nextData);
+    await updateGoogleIntegration({ [key]: val });
   };
 
   const handleDisconnect = async () => {
     if (!confirm('Disconnect your Google account? Calendar sync and Gmail 2FA will be disabled.')) return;
     setLoading(true);
-    await hrActions.deleteKV(`google_integration_${profile.email.toLowerCase()}`);
+    await disconnectGoogleIntegration();
     setGoogleData(null);
     setLoading(false);
     setMsg({ type: 'success', text: 'Google account disconnected.' });

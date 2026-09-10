@@ -315,4 +315,66 @@ started fresh this session:
   end-to-end on both Windows/Mac (desktop agent) and Chromebook (extension)
   before/after the lock.
 
-Remaining in Phase 1: `hr_tracking_settings` / `hr_delcargo_store`.
+**`hr_delcargo_store` investigation + one urgent fix (2026-09-10).** User
+asked whether this KV collection was even still used, on the theory that
+"everything has its own collection now." Investigated exhaustively (every
+call site of `pbGetKV`/`pbSetKV`/`pbGetKVByPrefix`/`pbDeleteKVByKeys` in
+`hrData.ts`, their `pbAdmin.ts` admin-token mirrors, and every direct
+reference to `hr_delcargo_store` across the whole repo including
+`chrome-extension/` and `tracker-agent/`): it is NOT retired — roughly 20
+distinct key/prefix patterns and 100+ call sites are still genuinely live
+(profile overlay data, notification read-state, the entire tracker-agent
+heartbeat/ping/pong protocol, session tracking, password-reset OTPs,
+Google OAuth tokens). Only the legacy `screenshot_<id>` prefix is truly
+dead, superseded by the real `hr_screenshots` collection. Full findings
+kept for reference in this implementation note rather than repeated here.
+
+Of everything found, one was a genuinely severe, standalone bug worth
+fixing immediately rather than folding into the larger deferred
+`hr_delcargo_store` lockdown:
+
+- **`src/app/api/auth/google/callback/route.ts` was writing employees'
+  Google OAuth access/refresh tokens straight to `hr_delcargo_store` via a
+  raw, unauthenticated `fetch()`** — not even through `pbAdmin.ts`. With
+  the collection still fully public, anyone could already read (or
+  overwrite) any employee's Google tokens directly off the PocketBase REST
+  API. Fixed: the route now writes via `adminSetKV` (server-only admin
+  token), same as everywhere else in this codebase.
+- **`GoogleIntegrationCard.tsx` was also fetching the entire KV value —
+  including the raw tokens — into browser state**, just to show a
+  connection badge and three toggle switches; nothing in the app actually
+  consumes those tokens today (Calendar/Meet integration is still just
+  public `meet.google.com`/`calendar.google.com` template links, see
+  `ScheduleMeetModal.tsx`, not an authenticated Google API call). Fixed
+  with a new self-scoped route (`src/app/api/google/integration`, GET/POST/
+  DELETE) that never returns the `tokens` field at all — only
+  `connectedEmail`/`connectedAt`/the three boolean toggles. The card now
+  calls this route instead of the old `hrActions.getKV`/`setKV`/`deleteKV`.
+  `deleteKV` itself is now dead code (only caller was this card) and was
+  removed; `getKV`/`setKV` are kept — `employee/profile/page.tsx`'s
+  account-deletion-request flow still legitimately uses them.
+- Live-verified: no employee has actually connected a Google account yet
+  in production (confirmed via a PocketBase filter search — zero
+  `google_integration_*` rows exist), so there was no live token data
+  actually exposed by this bug yet; the fix is in ahead of anyone using
+  the feature. Verified the new route returns `{data: null}` correctly
+  for a not-yet-connected employee (`faheem@delcargo.us`, live).
+- **Not done**: `hr_delcargo_store`'s PocketBase rules are still fully
+  public — this fix only closed the two worst code-level holes (the
+  unauthenticated write, and the client-side token overexposure). Locking
+  the collection itself needs the full migration described above, plus
+  updating the chrome-extension/tracker-agent binaries that also hit it
+  directly and unauthenticated (same class of problem as
+  `hr_screenshots`' Create rule) — still deferred as its own future plan.
+- `hr_tracking_settings` also remains fully public on all four rules
+  (List/Search/View/Create/Update) — every employee's `agentToken` is
+  currently readable in plain text. The correct List/View fix (an
+  agentToken-based rule, since the desktop tracker's
+  `get_tracking_settings()` reads its own row directly with no app
+  session) needs care to get the PocketBase filter-rule syntax right
+  without breaking the already-deployed tracker binary — investigated but
+  not yet implemented.
+
+Remaining in Phase 1: `hr_tracking_settings` (rules still fully public),
+the broader `hr_delcargo_store` lockdown (its own larger, separate
+project per the investigation above).
