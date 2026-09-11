@@ -13,7 +13,7 @@ import { getOrCreateDeviceId, getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import {
-  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField,
+  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField,
   pbGetKV, pbSetKV, pbDeleteKVByKeys, withTimeout,
   looksLikeRealId,
 } from './shared';
@@ -517,15 +517,19 @@ export const profileActions = {
             .map((t: any) => pbUpdate('hr_teams', t.id, { members: (t.members || []).filter((m: string) => (m || '').toLowerCase() !== lower) }))
         ))
       );
-      // Per-user notification read/cleared map entries.
+      // Per-user notification/announcement/message read-state rows (plan
+      // 027 Phase 3 — hr_notification_reads/hr_notification_cleared/
+      // hr_announcement_reads/hr_message_reads/hr_notification_prefs are
+      // each one row per email) — remove the departing employee's own row
+      // from each so a future re-add with this same email starts clean.
       deletions.push((async () => {
-        const readMap = ((await pbGetKV('hr_notification_reads_prod_v1')) as Record<string, string[]>) || {};
-        const clearedMap = ((await pbGetKV('hr_notification_cleared_prod_v1')) as Record<string, string[]>) || {};
-        let readChanged = false, clearedChanged = false;
-        for (const key of Object.keys(readMap)) if (key.toLowerCase() === lower) { delete readMap[key]; readChanged = true; }
-        for (const key of Object.keys(clearedMap)) if (key.toLowerCase() === lower) { delete clearedMap[key]; clearedChanged = true; }
-        if (readChanged) await pbSetKV('hr_notification_reads_prod_v1', readMap);
-        if (clearedChanged) await pbSetKV('hr_notification_cleared_prod_v1', clearedMap);
+        await Promise.all([
+          pbDeleteByField('hr_notification_reads', 'email', lower),
+          pbDeleteByField('hr_notification_cleared', 'email', lower),
+          pbDeleteByField('hr_announcement_reads', 'email', lower),
+          pbDeleteByField('hr_message_reads', 'email', lower),
+          pbDeleteByField('hr_notification_prefs', 'email', lower),
+        ]);
       })());
     }
     await Promise.allSettled(deletions);
