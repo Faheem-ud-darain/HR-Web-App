@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { pbAdminFetch, adminSetKV, adminListAllPayroll, adminListPayrollForEmployee, adminDeletePayrollForEmployee, adminFindProfileByEmail } from '@/lib/pbAdmin';
+import { pbAdminFetch, adminUpsertByField, adminListAllPayroll, adminListPayrollForEmployee, adminDeletePayrollForEmployee, adminFindProfileByEmail } from '@/lib/pbAdmin';
 
 // Same "why was I deducted" breakdown key scheme /api/payroll/me reads back
 // (see that route's comment) — not a real hr_payroll column (the live
-// schema has none free for it), so it's stored the same way every other
-// non-column profile/payroll extra already is in this app: a KV row,
-// keyed by employeeId + month so each calendar month keeps its own.
+// schema has none free for it). Plan 027 Phase 2: its own
+// hr_payroll_breakdowns collection instead of a hr_delcargo_store row,
+// keyed by employeeId + month (breakdown_key, unique) so each calendar
+// month keeps its own row.
 function payrollBreakdownKey(employeeId: string, month: string) {
-  return `hr_payroll_breakdown_${employeeId}_${month}`;
+  return `${employeeId}_${month}`;
 }
 
 export const runtime = 'edge';
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
     // Edge-safe) already computed both of these; this route just needs to
     // carry them through to storage, not recompute them.
     if (record.employeeId && record.month) {
-      await adminSetKV(payrollBreakdownKey(record.employeeId, record.month), {
+      await adminUpsertByField('hr_payroll_breakdowns', 'breakdown_key', payrollBreakdownKey(record.employeeId, record.month), {
         deductionBreakdown: Array.isArray(record.deductionBreakdown) ? record.deductionBreakdown : [],
         reservedThisMonth: Number(record.reservedThisMonth) || 0,
       });

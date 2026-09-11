@@ -3,9 +3,10 @@ import { requireSession, hashPassword, isBcryptHash } from '@/lib/serverAuth';
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
-  adminGetKV,
-  adminSetKV,
   adminUploadProfilePicture,
+  adminFindByField,
+  adminUpsertByField,
+  adminDeleteByField,
   pbAdminFetch,
 } from '@/lib/pbAdmin';
 import { splitProfileUpdate, fromProfileFields } from '@/lib/profileFields';
@@ -32,11 +33,24 @@ export const runtime = 'edge';
 // broad enough, that they deserve their own careful pass rather than being
 // rushed in alongside this batch of more contained profile-field edits.
 
-function extraKey(profileId: string) {
-  return `hr_profile_extra_${profileId}`;
+// Plan 027 Phase 2: profile overlays moved off hr_delcargo_store onto
+// their own collections (hr_profile_extras/hr_profile_docs — one row per
+// profile, keyed by profile_id, same generic find-or-create-by-field
+// shape as Phase 1's collections). getExtras/mergeExtras below replace
+// every repeated "read existing, spread in a patch, write back" call site
+// in this file with one call each.
+async function getExtras(profileId: string): Promise<Record<string, any>> {
+  const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
+  return row?.data || {};
 }
-function docsKey(profileId: string) {
-  return `hr_profile_docs_${profileId}`;
+async function mergeExtras(profileId: string, patch: Record<string, any>): Promise<void> {
+  const existing = await getExtras(profileId);
+  await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
+}
+async function mergeDocs(profileId: string, patch: Record<string, any>): Promise<void> {
+  const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
+  const existing = row?.data || {};
+  await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
 }
 
 // Plan 013 step 1: no new account should ever be protected only by a
@@ -125,13 +139,11 @@ export async function POST(request: Request) {
     }
 
     if (Object.keys(overlay).length > 0) {
-      const existing = (await adminGetKV(extraKey(profileId)))?.value || {};
-      await adminSetKV(extraKey(profileId), { ...existing, ...overlay });
+      await mergeExtras(profileId, overlay);
     }
 
     if (Object.keys(docs).length > 0) {
-      const existing = (await adminGetKV(docsKey(profileId)))?.value || {};
-      await adminSetKV(docsKey(profileId), { ...existing, ...docs });
+      await mergeDocs(profileId, docs);
     }
 
     if (profilePicture !== undefined) {
@@ -169,9 +181,7 @@ export async function PUT(request: Request) {
 
   try {
     if (action === 'approveOnboarding') {
-      const existing = (await adminGetKV(extraKey(profileId)))?.value || {};
-      await adminSetKV(extraKey(profileId), {
-        ...existing,
+      await mergeExtras(profileId, {
         approvalStatus: 'approved',
         approvalReviewedBy: session!.email,
         approvalReviewedAt: new Date().toISOString(),
@@ -185,9 +195,7 @@ export async function PUT(request: Request) {
     }
 
     if (action === 'rejectOnboarding') {
-      const existing = (await adminGetKV(extraKey(profileId)))?.value || {};
-      await adminSetKV(extraKey(profileId), {
-        ...existing,
+      await mergeExtras(profileId, {
         approvalStatus: 'rejected',
         approvalReviewedBy: session!.email,
         approvalReviewedAt: new Date().toISOString(),
@@ -211,8 +219,7 @@ export async function PUT(request: Request) {
       // password is another temp password by definition, so force a
       // change on next login rather than leaving it as a long-lived
       // secret only HR knows.
-      const existingExtras = (await adminGetKV(extraKey(profileId)))?.value || {};
-      await adminSetKV(extraKey(profileId), { ...existingExtras, mustChangePassword: true });
+      await mergeExtras(profileId, { mustChangePassword: true });
       return NextResponse.json({ ok: true });
     }
 
@@ -225,8 +232,7 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'newBaseSalary and processedYear are required.' }, { status: 400 });
       }
       await adminUpdateProfile(profileId, { base_salary: newBaseSalary });
-      const existing = (await adminGetKV(extraKey(profileId)))?.value || {};
-      await adminSetKV(extraKey(profileId), { ...existing, lastIncrementProcessedYear: processedYear });
+      await mergeExtras(profileId, { lastIncrementProcessedYear: processedYear });
       return NextResponse.json({ ok: true });
     }
 
@@ -272,19 +278,16 @@ export async function PATCH(request: Request) {
 
     const profileId = created?.id;
     if (profileId) {
-      await adminSetKV(extraKey(profileId), { accountCreationDate: new Date().toISOString() });
+      await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { accountCreationDate: new Date().toISOString() });
 
       // Clear any prior deletion tombstone for this email, mirroring
       // hrActions.addEmployee's client-side behavior, so a re-added employee
       // isn't silently treated as still-deleted by whatever reads that list.
-      const tombstoneKey = 'hr_deleted_profile_emails_v1';
-      const tombstones = (await adminGetKV(tombstoneKey))?.value;
-      if (Array.isArray(tombstones) && body.profile.email) {
-        const email = String(body.profile.email).toLowerCase().trim();
-        const filtered = tombstones.filter((e: string) => String(e).toLowerCase().trim() !== email);
-        if (filtered.length !== tombstones.length) {
-          await adminSetKV(tombstoneKey, filtered);
-        }
+      // hr_deleted_profile_emails is one row per email (plan 027) — clearing
+      // a tombstone is now a single delete-if-exists instead of a
+      // read-whole-array/filter/write-whole-array round trip.
+      if (body.profile.email) {
+        await adminDeleteByField('hr_deleted_profile_emails', 'email', String(body.profile.email).toLowerCase().trim());
       }
     }
 

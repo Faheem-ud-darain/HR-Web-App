@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminFindProfileByEmail, adminGetKV, adminUpdateProfile } from '@/lib/pbAdmin';
+import { adminFindProfileByEmail, adminFindByField, adminUpdateProfile } from '@/lib/pbAdmin';
 import { signSessionToken, verifyPassword, isBcryptHash, hashPassword } from '@/lib/serverAuth';
 import { checkRateLimit, clearRateLimit } from '@/lib/rateLimit';
 
@@ -103,11 +103,20 @@ export async function POST(request: Request) {
     }
 
     // Offboarded check — `offboarded` isn't a real hr_profiles column, it
-    // lives in the hr_profile_extra_ KV overlay (see getProfileExtras in
+    // lives in the hr_profile_extras overlay collection (plan 027 —
+    // formerly the hr_profile_extra_ KV row; see getProfileExtras in
     // hrData.ts). Mirrors the exact same check the old client-side flow did
-    // via useProfiles()'s merged overlay.
-    const extras = await adminGetKV(`hr_profile_extra_${profile.id}`);
-    if (extras?.value?.offboarded) {
+    // via useProfiles()'s merged overlay. Fails open (treats as "not
+    // offboarded") on a storage error rather than blocking login entirely —
+    // same reasoning as rateLimit.ts's fail-open fix, this is a secondary
+    // check, not the primary credential check above it.
+    let extras: { data?: any } | null = null;
+    try {
+      extras = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
+    } catch (err) {
+      console.error('[login] offboarded-check storage error, allowing login:', err);
+    }
+    if (extras?.data?.offboarded) {
       return NextResponse.json({ error: 'This account has been deactivated / offboarded.' }, { status: 403 });
     }
 

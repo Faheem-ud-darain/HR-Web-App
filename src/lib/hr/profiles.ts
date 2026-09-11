@@ -14,7 +14,7 @@ import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import {
   pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField,
-  pbGetKV, pbSetKV, pbGetKVByPrefix, pbDeleteKVByKeys, withTimeout,
+  pbGetKV, pbSetKV, pbDeleteKVByKeys, withTimeout,
   looksLikeRealId,
 } from './shared';
 import {
@@ -66,31 +66,38 @@ export const USER_SESSION_STALE_MS = 3 * 60 * 1000; // 3 minutes tolerance for m
 const USER_SESSIONS_COLLECTION = 'hr_user_sessions';
 const userSessionEmailKeyFor = (email: string) => (email || '').toLowerCase().trim();
 
-const profileExtraKey = (profileId: string) => `hr_profile_extra_${profileId}`;
+// Plan 027 Phase 2: profile overlays moved off hr_delcargo_store onto
+// their own hr_profile_extras/hr_profile_docs collections — one row per
+// profile, keyed by profile_id, via pbFindByField/pbUpsertByField (same
+// generic find-or-create-by-field shape already used for
+// hr_tracking_settings/hr_ticket_presence/hr_user_sessions).
+const PROFILE_EXTRAS_COLLECTION = 'hr_profile_extras';
+const PROFILE_DOCS_COLLECTION = 'hr_profile_docs';
 
 export async function getProfileExtras(profileId: string): Promise<Partial<Profile>> {
   if (!profileId) return {};
-  return ((await pbGetKV(profileExtraKey(profileId))) as Partial<Profile>) || {};
+  const row = await pbFindByField(PROFILE_EXTRAS_COLLECTION, 'profile_id', profileId);
+  return (row?.data as Partial<Profile>) || {};
 }
 
 export async function saveProfileExtras(profileId: string, extras: Partial<Profile>): Promise<void> {
   if (!profileId) return;
-  const existing = (await pbGetKV(profileExtraKey(profileId))) || {};
-  await pbSetKV(profileExtraKey(profileId), { ...existing, ...extras });
+  const existing = await getProfileExtras(profileId);
+  await pbUpsertByField(PROFILE_EXTRAS_COLLECTION, 'profile_id', profileId, { data: { ...existing, ...extras } });
 }
 
-const profileDocsKey = (profileId: string) => `hr_profile_docs_${profileId}`;
 const PROFILE_DOC_KEYS: (keyof Profile)[] = ['cvFileName', 'cvFileData', 'identityDocs', 'passportFileName', 'passportFileData'];
 
 export async function getProfileDocuments(profileId: string): Promise<Partial<Profile>> {
   if (!profileId) return {};
-  return ((await pbGetKV(profileDocsKey(profileId))) as Partial<Profile>) || {};
+  const row = await pbFindByField(PROFILE_DOCS_COLLECTION, 'profile_id', profileId);
+  return (row?.data as Partial<Profile>) || {};
 }
 
 export async function saveProfileDocuments(profileId: string, docs: Partial<Profile>): Promise<void> {
   if (!profileId) return;
-  const existing = (await pbGetKV(profileDocsKey(profileId))) || {};
-  await pbSetKV(profileDocsKey(profileId), { ...existing, ...docs });
+  const existing = await getProfileDocuments(profileId);
+  await pbUpsertByField(PROFILE_DOCS_COLLECTION, 'profile_id', profileId, { data: { ...existing, ...docs } });
 }
 
 function toProfile(p: any, extras: Partial<Profile> = {}): Profile {
@@ -191,10 +198,10 @@ export function useProfiles() {
     queryFn: async () => {
       const [records, extraRows] = await Promise.all([
         pbList('hr_profiles', { sort: 'full_name' }),
-        pbGetKVByPrefix('hr_profile_extra_'),
+        pbList(PROFILE_EXTRAS_COLLECTION),
       ]);
       const extrasById: Record<string, Partial<Profile>> = {};
-      extraRows.forEach(row => { extrasById[row.key.replace('hr_profile_extra_', '')] = row.value || {}; });
+      extraRows.forEach((row: any) => { extrasById[row.profile_id] = row.data || {}; });
       return records.map((r: any) => toProfile(r, extrasById[r.id] || {}));
     },
   });
@@ -348,13 +355,14 @@ export const profileActions = {
     if (emp.accountCreationDate) {
       await saveProfileExtras(created.id, { accountCreationDate: emp.accountCreationDate });
     }
-    // clear tombstone if this email was previously deleted
+    // clear tombstone if this email was previously deleted — plan 027:
+    // hr_deleted_profile_emails is one row per email now, so this is a
+    // single find-and-delete instead of a read-whole-array/filter/write
+    // round trip.
     if (emp.email) {
-      const existing = ((await pbGetKV('hr_deleted_profile_emails_v1')) as string[]) || [];
       const lower = emp.email.toLowerCase();
-      if (existing.map(e => e.toLowerCase()).includes(lower)) {
-        await pbSetKV('hr_deleted_profile_emails_v1', existing.filter(e => e.toLowerCase() !== lower));
-      }
+      const tombstone = await pbFindByField('hr_deleted_profile_emails', 'email', lower);
+      if (tombstone) await pbDelete('hr_deleted_profile_emails', tombstone.id);
     }
     return toProfile(created, emp.accountCreationDate ? { accountCreationDate: emp.accountCreationDate } : {});
   },
@@ -527,10 +535,7 @@ export const profileActions = {
     // stale overlay-key assumptions).
     await pbDelete('hr_profiles', id);
     if (email) {
-      const existing = ((await pbGetKV('hr_deleted_profile_emails_v1')) as string[]) || [];
-      if (!existing.map(e => e.toLowerCase()).includes(lower)) {
-        await pbSetKV('hr_deleted_profile_emails_v1', [...existing, lower]);
-      }
+      await pbUpsertByField('hr_deleted_profile_emails', 'email', lower, { deletedAt: new Date().toISOString() });
     }
 
     // Profile-extras overlay (offboarded/offboardDate/offboardingStatus etc.)
@@ -539,7 +544,16 @@ export const profileActions = {
     // anything above throws, the overlay (and therefore the "Offboarded"
     // status) must stay intact so a failed, partial delete doesn't silently
     // revert the employee to "active".
-    await pbDeleteKVByKeys([profileExtraKey(id), profileDocsKey(id)]);
+    {
+      const [extraRow, docRow] = await Promise.all([
+        pbFindByField(PROFILE_EXTRAS_COLLECTION, 'profile_id', id),
+        pbFindByField(PROFILE_DOCS_COLLECTION, 'profile_id', id),
+      ]);
+      await Promise.allSettled([
+        extraRow ? pbDelete(PROFILE_EXTRAS_COLLECTION, extraRow.id) : Promise.resolve(),
+        docRow ? pbDelete(PROFILE_DOCS_COLLECTION, docRow.id) : Promise.resolve(),
+      ]);
+    }
   },
 
   // Bundles everything the app knows about one employee into a downloadable

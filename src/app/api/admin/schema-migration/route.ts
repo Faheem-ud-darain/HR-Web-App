@@ -65,6 +65,56 @@ function baseSchemaFor(keyField: string, extraField: string) {
   ];
 }
 
+// Phase 2 collections — profile overlays (see plan 027). Three of these
+// are reached by client-side code (profiles.ts, anonymous pb client) so
+// they stay public, matching hr_profile_extra_*/hr_profile_docs_*/
+// hr_deleted_profile_emails_v1's own current exposure in hr_delcargo_store
+// today (tightening is plan 012's job). hr_payroll_breakdowns is reached
+// only through requireSession()-gated server routes, so it's admin-only
+// from creation, like the rest of Phase 1's admin-only collections.
+const PHASE_2_COLLECTIONS: Array<{ name: string; keyField: string; extraField: string; extraType: 'json' | 'text'; public: boolean }> = [
+  { name: 'hr_profile_extras', keyField: 'profile_id', extraField: 'data', extraType: 'json', public: true },
+  { name: 'hr_profile_docs', keyField: 'profile_id', extraField: 'data', extraType: 'json', public: true },
+  { name: 'hr_deleted_profile_emails', keyField: 'email', extraField: 'deletedAt', extraType: 'text', public: true },
+  { name: 'hr_payroll_breakdowns', keyField: 'breakdown_key', extraField: 'data', extraType: 'json', public: false },
+];
+
+function phase2SchemaFor(extraField: string, extraType: 'json' | 'text', keyField: string) {
+  return [
+    { name: keyField, type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+    extraType === 'json'
+      ? { name: extraField, type: 'json', required: false, unique: false, options: { maxSize: 2000000 } }
+      : { name: extraField, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+  ];
+}
+
+async function ensurePhase2Collections(): Promise<Record<string, string>> {
+  const results: Record<string, string> = {};
+  for (const { name, keyField, extraField, extraType, public: isPublic } of PHASE_2_COLLECTIONS) {
+    if (await collectionExists(name)) {
+      results[name] = 'already exists';
+      continue;
+    }
+    const rule = isPublic ? '' : '@request.auth.id != ""';
+    await pbAdminFetch('/api/collections', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        type: 'base',
+        schema: phase2SchemaFor(extraField, extraType, keyField),
+        indexes: [`CREATE UNIQUE INDEX idx_${name}_${keyField} ON ${name} (${keyField})`],
+        listRule: rule,
+        viewRule: rule,
+        createRule: rule,
+        updateRule: rule,
+        deleteRule: rule,
+      }),
+    });
+    results[name] = 'created';
+  }
+  return results;
+}
+
 async function ensurePhase1Collections(): Promise<Record<string, string>> {
   const results: Record<string, string> = {};
   for (const { name, keyField } of PHASE_1_COLLECTIONS) {
@@ -141,9 +191,16 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ ok: true });
     }
-    if (body.action === 'describePhase1Collections') {
+    if (body.action === 'ensurePhase2Collections') {
+      const results = await ensurePhase2Collections();
+      return NextResponse.json({ ok: true, results });
+    }
+    if (body.action === 'describePhase1Collections' || body.action === 'describePhase2Collections') {
+      const names = body.action === 'describePhase1Collections'
+        ? PHASE_1_COLLECTIONS.map(c => c.name)
+        : PHASE_2_COLLECTIONS.map(c => c.name);
       const results: Record<string, any> = {};
-      for (const { name } of PHASE_1_COLLECTIONS) {
+      for (const name of names) {
         try {
           const schema = await pbAdminFetch(`/api/collections/${name}`);
           results[name] = {

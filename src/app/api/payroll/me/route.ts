@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { adminFindProfileByEmail, adminListPayrollForEmployee, adminGetKV } from '@/lib/pbAdmin';
+import { adminFindProfileByEmail, adminListPayrollForEmployee, adminFindByField } from '@/lib/pbAdmin';
 import { getPendingIncrement } from '@/lib/incrementMath';
 import { getNYDateString } from '@/lib/timezone';
 import { adminListAbsenceRecordsForEmail } from '@/lib/pbAdmin';
@@ -73,18 +73,20 @@ export async function GET(request: Request) {
     let deductionBreakdown: { label: string; amount: number }[] = [];
     let reservedThisMonth = 0;
     if (payrollRecord?.month) {
-      const breakdownRow = await adminGetKV(`hr_payroll_breakdown_${profile.id}_${payrollRecord.month}`);
-      if (breakdownRow?.value) {
-        deductionBreakdown = Array.isArray(breakdownRow.value.deductionBreakdown) ? breakdownRow.value.deductionBreakdown : [];
-        reservedThisMonth = Number(breakdownRow.value.reservedThisMonth) || 0;
+      // Plan 027 Phase 2: hr_payroll_breakdowns (breakdown_key = employeeId_month, unique) instead of a hr_delcargo_store row per employee-month.
+      const breakdownRow = await adminFindByField('hr_payroll_breakdowns', 'breakdown_key', `${profile.id}_${payrollRecord.month}`);
+      if (breakdownRow?.data) {
+        deductionBreakdown = Array.isArray(breakdownRow.data.deductionBreakdown) ? breakdownRow.data.deductionBreakdown : [];
+        reservedThisMonth = Number(breakdownRow.data.reservedThisMonth) || 0;
       }
     }
 
     // lastIncrementProcessedYear isn't a real hr_profiles column — like
-    // `offboarded`, it lives in the hr_profile_extra_ KV overlay (see
-    // getProfileExtras/saveProfileExtras in hrData.ts). Has to be fetched
-    // separately from the profile record itself.
-    const extras = await adminGetKV(`hr_profile_extra_${profile.id}`);
+    // `offboarded`, it lives in the hr_profile_extras overlay collection
+    // (plan 027; see getProfileExtras/saveProfileExtras in hrData.ts). Has
+    // to be fetched separately from the profile record itself.
+    const extrasRow = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
+    const extras = { value: extrasRow?.data };
 
     // Only the specific fields the Salary page's math (getPendingIncrement/
     // getIncrementHistory) and display actually need — deliberately not the

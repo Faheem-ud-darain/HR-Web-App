@@ -3,8 +3,8 @@ import { requireSession, verifyPassword, hashPassword } from '@/lib/serverAuth';
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
-  adminGetKV,
-  adminSetKV,
+  adminFindByField,
+  adminUpsertByField,
   adminUploadProfilePicture,
 } from '@/lib/pbAdmin';
 
@@ -39,11 +39,24 @@ const REAL_FIELD_MAP: Record<string, string> = {
   onboardingCompleted: 'onboarding_completed',
 };
 
-function extraKey(profileId: string) {
-  return `hr_profile_extra_${profileId}`;
+// Plan 027 Phase 2: same hr_profile_extras/hr_profile_docs collections
+// (profile_id-keyed) admin/profile/route.ts uses — see that file's
+// getExtras/mergeExtras comment for the full rationale.
+async function getExtras(profileId: string): Promise<Record<string, any>> {
+  const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
+  return row?.data || {};
 }
-function docsKey(profileId: string) {
-  return `hr_profile_docs_${profileId}`;
+async function mergeExtras(profileId: string, patch: Record<string, any>): Promise<void> {
+  const existing = await getExtras(profileId);
+  await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
+}
+async function getDocs(profileId: string): Promise<Record<string, any>> {
+  const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
+  return row?.data || {};
+}
+async function mergeDocs(profileId: string, patch: Record<string, any>): Promise<void> {
+  const existing = await getDocs(profileId);
+  await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
 }
 
 export async function GET(request: Request) {
@@ -55,8 +68,8 @@ export async function GET(request: Request) {
     if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
 
     const [extras, docs] = await Promise.all([
-      adminGetKV(extraKey(profile.id)),
-      adminGetKV(docsKey(profile.id)),
+      getExtras(profile.id),
+      getDocs(profile.id),
     ]);
 
     return NextResponse.json({
@@ -64,11 +77,11 @@ export async function GET(request: Request) {
       bankName: profile.bank_name || '',
       accountNumber: profile.account_number || '',
       iban: profile.iban || '',
-      personalPhone: extras?.value?.personalPhone || '',
-      companyPhone: extras?.value?.companyPhone || '',
-      cvFileName: docs?.value?.cvFileName || '',
-      identityDocs: docs?.value?.identityDocs || [],
-      passportFileName: docs?.value?.passportFileName || '',
+      personalPhone: extras?.personalPhone || '',
+      companyPhone: extras?.companyPhone || '',
+      cvFileName: docs?.cvFileName || '',
+      identityDocs: docs?.identityDocs || [],
+      passportFileName: docs?.passportFileName || '',
       // File *data* (base64) is intentionally omitted from the GET response
       // beyond what's needed to show "a document is on file" — the profile
       // page only needs the filenames to render its "Uploaded" state, not
@@ -120,9 +133,9 @@ export async function PATCH(request: Request) {
       // exactly the event mustChangePassword (set on onboarding approval
       // or an admin-triggered reset — see admin/profile/route.ts) exists
       // to require, so clear it here rather than leaving it forever true.
-      const existingExtras = (await adminGetKV(extraKey(profile.id)))?.value || {};
+      const existingExtras = await getExtras(profile.id);
       if (existingExtras.mustChangePassword) {
-        await adminSetKV(extraKey(profile.id), { ...existingExtras, mustChangePassword: false });
+        await mergeExtras(profile.id, { mustChangePassword: false });
       }
       return NextResponse.json({ ok: true });
     }
@@ -140,8 +153,7 @@ export async function PATCH(request: Request) {
       if (body[key] !== undefined) extraUpdates[key] = body[key];
     }
     if (Object.keys(extraUpdates).length > 0) {
-      const existing = (await adminGetKV(extraKey(profile.id)))?.value || {};
-      await adminSetKV(extraKey(profile.id), { ...existing, ...extraUpdates });
+      await mergeExtras(profile.id, extraUpdates);
     }
 
     const docUpdates: Record<string, any> = {};
@@ -149,8 +161,7 @@ export async function PATCH(request: Request) {
       if (body[key] !== undefined) docUpdates[key] = body[key];
     }
     if (Object.keys(docUpdates).length > 0) {
-      const existing = (await adminGetKV(docsKey(profile.id)))?.value || {};
-      await adminSetKV(docsKey(profile.id), { ...existing, ...docUpdates });
+      await mergeDocs(profile.id, docUpdates);
     }
 
     if (body.profilePicture !== undefined) {
