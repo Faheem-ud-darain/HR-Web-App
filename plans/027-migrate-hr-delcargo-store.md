@@ -412,3 +412,44 @@ users since each person only writes their own row) and repointing
 `notifications.ts`/`teams.ts` at it; live-verified fixed by the user
 immediately after. `hr_maintenance_notice_reads` (genuinely new, no
 collision) keeps the original read-receipt helpers.
+
+**Phase 5 (cleanup) — partially done (2026-09-11): the two safe,
+no-external-dependency items only.**
+
+- Migrated `hr_screenshot_retention_state_v1` (a single KV row) to a new
+  `hr_system_state` collection — a small, general-purpose singleton-state
+  collection (one row per `key`, arbitrary `data` json, same shape as
+  Phase 1's collections) — in `screenshots-retention/route.ts`, via the
+  existing `adminFindByField`/`adminUpsertByField` helpers.
+- Migrated `shift_tab_heartbeat_<email>` (the manual-shift abandoned-tab
+  safety net in `timesheets.ts`) to a new `hr_shift_tab_heartbeats`
+  collection (one row per email) — confirmed via
+  `tracker-agent/agent_gui.py` that this key is never touched by the
+  desktop tracker agent, unlike the 5-Signal system, so safe to migrate
+  without any agent-side coordination.
+- Removed two dead imports (`pbGetKVByPrefix`/`pbDeleteKVByKeys`) from
+  `absences.ts` — unused in that file.
+- Extended `schema-migration` route with `ensurePhase5Collections`/
+  `describePhase5Collections` for these two collections.
+- `npx tsc --noEmit` clean. Not yet schema-created in production or
+  live-verified — same next steps as every prior phase: run
+  `ensurePhase5Collections`, then `describePhase5Collections` to check
+  for a pre-existing mismatch (this has now happened on 3 of the last 4
+  phases, so don't skip this step), then live-verify: trigger the
+  monthly screenshot-retention sweep once and confirm it still
+  warns/deletes correctly, and open a manual (non-GPS) shift on the
+  Employee dashboard to confirm the tab-heartbeat safety net still
+  tracks an active tab.
+- **Deliberately NOT done this pass** (per the scope call made with the
+  user before starting): the KV helper functions
+  (`pbGetKV`/`pbSetKV`/`pbGetKVByPrefix`/`pbDeleteKVByKeys`/
+  `adminGetKV`/`adminSetKV`/`adminGetKVByPrefix`/`adminDeleteKVByKeys`)
+  are NOT retired, and `hr_delcargo_store` is NOT locked/retired. Two
+  things still genuinely need them: the 8 tracker-agent signals (Phase 4's
+  deferred item — same external-agent-coordination reason) and the
+  legacy `screenshot_<id>` rows (real leftover data pre-dating
+  `hr_screenshots`, still read for display and cleaned up by the
+  retention sweep itself — not something to silently delete). Full KV
+  retirement can only happen after the tracker-agent migration is done
+  AND the legacy screenshot rows have fully aged out or been explicitly
+  purged.

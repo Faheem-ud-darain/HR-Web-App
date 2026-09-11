@@ -14,7 +14,7 @@ import type {
   TrackerStopCommand, TrackerCommand, TrackerDiagnostics, TrackingSettings,
 } from './types';
 import {
-  pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField,
+  pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
   pbGetKV, pbSetKV, pbGetKVByPrefix, pbDeleteKVByKeys, withTimeout,
   looksLikeRealId, formatDurationBetween,
 } from './shared';
@@ -100,7 +100,15 @@ export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 // window. See also the pagehide-handler native/web split below, the other
 // half of this same fix.
 export const SHIFT_TAB_HEARTBEAT_STALE_MS = 15 * 60 * 1000;
-const shiftTabHeartbeatKeyFor = (email: string) => `shift_tab_heartbeat_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+// hr_shift_tab_heartbeats — one row per email (plan 027 Phase 5),
+// replacing the old shift_tab_heartbeat_<email> hr_delcargo_store key.
+// Purely app-internal (confirmed: tracker-agent/agent_gui.py never
+// references this key), unlike the 5-Signal tracker system above, so
+// safe to migrate without any agent-side coordination.
+async function getShiftTabHeartbeatRow(email: string): Promise<ShiftTabHeartbeat | null> {
+  const row = await pbFindByField('hr_shift_tab_heartbeats', 'email', (email || '').toLowerCase());
+  return row ? { employeeEmail: row.email, lastSeenAt: row.last_seen_at } : null;
+}
 
 // One-shot "your shift was just auto-ended by the desktop tracker" signal
 // (see notify_shift_auto_stopped in tracker-agent/agent_gui.py, written
@@ -412,11 +420,11 @@ export const timesheetActions = {
   // ── Manual-shift tab heartbeat + abandoned-tab safety net ───────────────
   touchShiftTabHeartbeat: async (email: string): Promise<void> => {
     try {
-      await pbSetKV(shiftTabHeartbeatKeyFor(email), { employeeEmail: email, lastSeenAt: new Date().toISOString() } as ShiftTabHeartbeat);
+      await pbUpsertByField('hr_shift_tab_heartbeats', 'email', email.toLowerCase(), { last_seen_at: new Date().toISOString() });
     } catch { /* best-effort — a missed heartbeat just means one earlier stale-check window */ }
   },
   clearShiftTabHeartbeat: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(email)]);
+    await pbDeleteByField('hr_shift_tab_heartbeats', 'email', email.toLowerCase());
   },
   isShiftTabHeartbeatLive: (hb: ShiftTabHeartbeat | null): boolean =>
     !!hb?.lastSeenAt && (Date.now() - new Date(hb.lastSeenAt).getTime()) < SHIFT_TAB_HEARTBEAT_STALE_MS,
@@ -472,7 +480,7 @@ export const timesheetActions = {
     const trackingSettings = await hrActions.getTrackingSettingsFor(profile.email);
     if (trackingSettings.enabled) return false;
     const [tabHb, trackerHb] = await Promise.all([
-      pbGetKV(shiftTabHeartbeatKeyFor(profile.email)) as Promise<ShiftTabHeartbeat | null>,
+      getShiftTabHeartbeatRow(profile.email),
       hrActions.getTrackerHeartbeat(profile.email),
     ]);
     if (hrActions.isShiftTabHeartbeatLive(tabHb) || hrActions.isHeartbeatLive(trackerHb)) return false;
@@ -567,7 +575,7 @@ export const timesheetActions = {
           clock_out: closeAtIso,
           duration: formatDurationBetween(shift.clockIn, closeAtIso),
         });
-        try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(shift.employeeEmail)]); } catch { /* best-effort */ }
+        try { await pbDeleteByField('hr_shift_tab_heartbeats', 'email', shift.employeeEmail.toLowerCase()); } catch { /* best-effort */ }
         const name = displayName({ fullName: shift.employeeEmail }, 'hr');
         await hrActions.addNotification(
           shift.employeeEmail, 'employee',
@@ -626,7 +634,7 @@ export const timesheetActions = {
           clock_out: closeAtIso,
           duration: formatDurationBetween(shift.clockIn, closeAtIso),
         });
-        try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(shift.employeeEmail)]); } catch { /* best-effort */ }
+        try { await pbDeleteByField('hr_shift_tab_heartbeats', 'email', shift.employeeEmail.toLowerCase()); } catch { /* best-effort */ }
 
         const profile = employees.find(e => e.email.toLowerCase() === shift.employeeEmail.toLowerCase());
         const name = displayName(profile || { fullName: shift.employeeEmail }, 'hr');
@@ -679,7 +687,7 @@ export const timesheetActions = {
     // Clean up tab heartbeat (existing) and write Signal 5 stop command so the
     // tracker agent stops capturing immediately via realtime SSE — both are
     // best-effort: a failure here must never block the clock-out itself.
-    try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(employeeEmail)]); } catch { /* best-effort */ }
+    try { await pbDeleteByField('hr_shift_tab_heartbeats', 'email', employeeEmail.toLowerCase()); } catch { /* best-effort */ }
     try { await hrActions.writeTrackerStopCmd(employeeEmail); } catch { /* best-effort */ }
     return toTimesheet(updated);
   },

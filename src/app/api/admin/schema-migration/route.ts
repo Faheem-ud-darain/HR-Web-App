@@ -343,6 +343,60 @@ async function ensurePhase4Collections(): Promise<Record<string, string>> {
   return results;
 }
 
+
+// Phase 5 collections — safe cleanup subset only (see plan 027). Two items
+// with no tracker-agent dependency: hr_system_state (a general-purpose
+// singleton-state collection — one row per `key`, arbitrary `data` json —
+// replacing the single hr_screenshot_retention_state_v1 KV row, using the
+// same shape as Phase 1's baseSchemaFor) and hr_shift_tab_heartbeats (one
+// row per email, replacing the old shift_tab_heartbeat_<email> KV key —
+// confirmed via tracker-agent/agent_gui.py that this key is never touched
+// by the desktop tracker agent, unlike the 5-Signal system). The rest of
+// Phase 5 (retiring the KV helpers entirely, locking/retiring
+// hr_delcargo_store itself) stays blocked on the still-deferred
+// tracker-agent migration and on the legacy screenshot_<id> rows aging
+// out via the existing retention sweep.
+const PHASE_5_COLLECTIONS: Array<{ name: string; keyField: string; extraField: string }> = [
+  { name: 'hr_system_state', keyField: 'key', extraField: 'data' },
+  { name: 'hr_shift_tab_heartbeats', keyField: 'email', extraField: 'last_seen_at' },
+];
+
+async function ensurePhase5Collections(): Promise<Record<string, string>> {
+  const results: Record<string, string> = {};
+  for (const { name, keyField, extraField } of PHASE_5_COLLECTIONS) {
+    if (await collectionExists(name)) {
+      results[name] = 'already exists';
+      continue;
+    }
+    // hr_shift_tab_heartbeats' extraField (last_seen_at) is a plain text
+    // timestamp, not a json blob like every other baseSchemaFor user —
+    // build its schema directly rather than stretching baseSchemaFor to
+    // cover both shapes.
+    const schema = name === 'hr_shift_tab_heartbeats'
+      ? [
+          { name: keyField, type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+          { name: extraField, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+        ]
+      : baseSchemaFor(keyField, extraField);
+    await pbAdminFetch('/api/collections', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        type: 'base',
+        schema,
+        indexes: [`CREATE UNIQUE INDEX idx_${name}_${keyField} ON ${name} (${keyField})`],
+        listRule: '',
+        viewRule: '',
+        createRule: '',
+        updateRule: '',
+        deleteRule: '',
+      }),
+    });
+    results[name] = 'created';
+  }
+  return results;
+}
+
 export async function POST(request: Request) {
   const { error } = await requireAdmin(request);
   if (error) return error;
@@ -402,11 +456,16 @@ export async function POST(request: Request) {
       const results = await ensurePhase4Collections();
       return NextResponse.json({ ok: true, results });
     }
+    if (body.action === 'ensurePhase5Collections') {
+      const results = await ensurePhase5Collections();
+      return NextResponse.json({ ok: true, results });
+    }
     if (
       body.action === 'describePhase1Collections' ||
       body.action === 'describePhase2Collections' ||
       body.action === 'describePhase3Collections' ||
-      body.action === 'describePhase4Collections'
+      body.action === 'describePhase4Collections' ||
+      body.action === 'describePhase5Collections'
     ) {
       const names = body.action === 'describePhase1Collections'
         ? PHASE_1_COLLECTIONS.map(c => c.name)
@@ -414,7 +473,9 @@ export async function POST(request: Request) {
         ? PHASE_2_COLLECTIONS.map(c => c.name)
         : body.action === 'describePhase3Collections'
         ? [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name), ...PHASE_3_PREEXISTING_COLLECTIONS]
-        : PHASE_4_COLLECTIONS.map(c => c.name);
+        : body.action === 'describePhase4Collections'
+        ? PHASE_4_COLLECTIONS.map(c => c.name)
+        : PHASE_5_COLLECTIONS.map(c => c.name);
       const results: Record<string, any> = {};
       for (const name of names) {
         try {

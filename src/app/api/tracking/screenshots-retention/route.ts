@@ -2,8 +2,19 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import {
   adminListScreenshots, adminGetKVByPrefix, adminDeleteRecords, adminDeleteKVByKeys,
-  adminListTrackingSettings, adminAddNotification, adminGetKV, adminSetKV,
+  adminListTrackingSettings, adminAddNotification, adminFindByField, adminUpsertByField,
 } from '@/lib/pbAdmin';
+
+// hr_screenshot_retention_state_v1 (a single hr_delcargo_store KV row) has
+// moved to hr_system_state (plan 027 Phase 5) — a small, general-purpose
+// singleton-state collection (one row per `key`, arbitrary `data` json),
+// the same shape as Phase 1's collections. Purely app-internal (no
+// tracker-agent dependency), unlike the legacy screenshot_<id> rows this
+// same route still reads/deletes below, which are real leftover data from
+// before hr_screenshots existed and can't simply be "migrated" — they stay
+// on adminGetKVByPrefix/adminDeleteKVByKeys until the retention sweep
+// itself has cleared them all out.
+const RETENTION_STATE_KEY = 'screenshot_retention';
 
 export const runtime = 'edge';
 
@@ -27,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const state = ((await adminGetKV('hr_screenshot_retention_state_v1'))?.value) || {};
+    const state = ((await adminFindByField('hr_system_state', 'key', RETENTION_STATE_KEY))?.data) || {};
     const now = new Date();
     const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 3600 * 1000);
     const cutoffISO = cutoff.toISOString();
@@ -65,7 +76,7 @@ export async function POST(request: Request) {
           adminAddNotification('all', 'admin', `${stillDue.length} screenshot(s) older than ${RETENTION_DAYS} days were automatically deleted per the monthly retention policy.`),
         ]);
       }
-      await adminSetKV('hr_screenshot_retention_state_v1', {});
+      await adminUpsertByField('hr_system_state', 'key', RETENTION_STATE_KEY, {});
       return NextResponse.json({ status: 'deleted', count: stillDue.length });
     }
 
@@ -81,7 +92,7 @@ export async function POST(request: Request) {
       adminAddNotification('all', 'hr', `${toDelete.length} screenshot(s) older than ${RETENTION_DAYS} days are scheduled for automatic deletion in ${WARNING_GRACE_DAYS} days. Export or mark specific employees as excluded before then.`),
       adminAddNotification('all', 'admin', `${toDelete.length} screenshot(s) older than ${RETENTION_DAYS} days are scheduled for automatic deletion in ${WARNING_GRACE_DAYS} days. Export or mark specific employees as excluded before then.`),
     ]);
-    await adminSetKV('hr_screenshot_retention_state_v1', { warnedAt: now.toISOString(), pendingDeleteIds: toDelete.map((s) => s.id) });
+    await adminUpsertByField('hr_system_state', 'key', RETENTION_STATE_KEY, { warnedAt: now.toISOString(), pendingDeleteIds: toDelete.map((s) => s.id) });
     return NextResponse.json({ status: 'warned', count: toDelete.length });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
