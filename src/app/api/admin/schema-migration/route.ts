@@ -191,6 +191,23 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ ok: true });
     }
+    if (body.action === 'makeCollectionPublic') {
+      // Generalized version of fixUserSessionsRules above, for any other
+      // pre-existing collection discovered mid-phase with leftover
+      // admin-only rules that actually needs to be reachable by this
+      // app's anonymous client-side code (e.g. hr_profile_docs in Phase 2 —
+      // same root cause as hr_user_sessions in Phase 1).
+      const name = body.collection;
+      if (typeof name !== 'string' || !name) {
+        return NextResponse.json({ error: 'body.collection is required.' }, { status: 400 });
+      }
+      const existing = await pbAdminFetch(`/api/collections/${name}`);
+      await pbAdminFetch(`/api/collections/${existing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '' }),
+      });
+      return NextResponse.json({ ok: true, collection: name });
+    }
     if (body.action === 'ensurePhase2Collections') {
       const results = await ensurePhase2Collections();
       return NextResponse.json({ ok: true, results });
