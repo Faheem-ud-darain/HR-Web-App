@@ -287,6 +287,50 @@ export function useInvalidate() {
 // Read side keeps the exact same `Record<entityId, string[]>` shape every
 // existing `isXRead(entity, email, map)` call site already expects, so
 // nothing above this layer needs to change — only how the map gets built.
+// hr_notification_reads / hr_notification_cleared / hr_announcement_reads /
+// hr_message_reads / hr_notification_prefs pre-existed (from earlier,
+// unrecorded prep work — same root cause as hr_user_sessions/
+// hr_profile_docs elsewhere in this plan) with a DIFFERENT shape than the
+// read-receipt one above: ONE ROW PER EMAIL, holding an array of the ids
+// that person has read/cleared (e.g. { email, read_ids: [...] }), rather
+// than one row per (entity, email) pair. This is actually already
+// race-safe ACROSS users (each person only ever writes their own row), so
+// it doesn't need the read-receipt treatment — it only needs a
+// read-modify-write that's batched per call so marking several ids read
+// in one screen render doesn't race against itself.
+export async function pbGetIdSetMap(collection: string, field: string): Promise<Record<string, string[]>> {
+  const rows = await pb.collection(collection).getFullList({ requestKey: null });
+  const map: Record<string, string[]> = {};
+  (rows as any[]).forEach(r => {
+    const ids: string[] = Array.isArray(r[field]) ? r[field] : [];
+    ids.forEach(id => {
+      if (!map[id]) map[id] = [];
+      map[id].push(r.email);
+    });
+  });
+  return map;
+}
+
+export async function pbMarkIdsInField(collection: string, field: string, entityIds: string[], email: string): Promise<void> {
+  if (!email || entityIds.length === 0) return;
+  const emailLower = email.toLowerCase();
+  const escaped = emailLower.replace(/"/g, '\\"');
+  let existing: any = null;
+  try {
+    existing = await pb.collection(collection).getFirstListItem(`email = "${escaped}"`, { requestKey: null });
+  } catch {
+    existing = null;
+  }
+  const current: string[] = existing && Array.isArray(existing[field]) ? existing[field] : [];
+  const merged = Array.from(new Set([...current, ...entityIds]));
+  if (existing) {
+    if (merged.length === current.length) return; // nothing new to persist
+    await pb.collection(collection).update(existing.id, { [field]: merged }, { requestKey: null });
+  } else {
+    await pb.collection(collection).create({ email: emailLower, [field]: merged }, { requestKey: null });
+  }
+}
+
 export async function pbGetReadMap(collection: string): Promise<Record<string, string[]>> {
   const rows = await pb.collection(collection).getFullList({ requestKey: null });
   const map: Record<string, string[]> = {};

@@ -13,7 +13,7 @@ import type {
   Announcement, Profile, MaintenanceNotice, NotificationCategory,
   NotificationPrefs, Notification, NotificationReadMap,
 } from './types';
-import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead } from './shared';
+import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField } from './shared';
 import { hrActions } from '../hrData';
 
 // Shared "does this announcement apply to this person" check — the exact
@@ -178,15 +178,15 @@ export const notificationActions = {
       timestamp: formatTimeNY(new Date()),
     });
   },
-  getNotificationReadMap: (): Promise<NotificationReadMap> => pbGetReadMap('hr_notification_reads'),
-  getNotificationClearedMap: (): Promise<NotificationClearedMap> => pbGetReadMap('hr_notification_cleared'),
+  getNotificationReadMap: (): Promise<NotificationReadMap> => pbGetIdSetMap('hr_notification_reads', 'read_ids'),
+  getNotificationClearedMap: (): Promise<NotificationClearedMap> => pbGetIdSetMap('hr_notification_cleared', 'cleared_ids'),
   markNotificationsAsRead: async (notifications: Notification[], email: string, role: string): Promise<void> => {
     const personal = notifications.filter(n => n.recipientEmail === email && !n.read);
     await Promise.all(personal.map(n => pbUpdate('hr_notifications', n.id, { read: true })));
 
     const broadcasts = notifications.filter(n => n.recipientRole === role && n.recipientEmail === 'all');
     if (broadcasts.length === 0) return;
-    await Promise.all(broadcasts.map(n => pbMarkRead('hr_notification_reads', n.id, email)));
+    await pbMarkIdsInField('hr_notification_reads', 'read_ids', broadcasts.map(n => n.id), email);
   },
   isNotificationRead: (n: Notification, email: string, readMap: NotificationReadMap): boolean => {
     if (n.recipientEmail === email) return n.read;
@@ -199,7 +199,7 @@ export const notificationActions = {
     await hrActions.markNotificationsAsRead(notifications, email, role);
     const visible = notifications.filter(n => n.recipientEmail.toLowerCase() === email.toLowerCase() || (n.recipientEmail === 'all' && n.recipientRole === role));
     if (visible.length === 0) return;
-    await Promise.all(visible.map(n => pbMarkRead('hr_notification_cleared', n.id, email)));
+    await pbMarkIdsInField('hr_notification_cleared', 'cleared_ids', visible.map(n => n.id), email);
   },
 
   // ── Push notification preferences (hr_notification_prefs_v1) ───────────
@@ -211,10 +211,10 @@ export const notificationActions = {
   // the hook, so someone who's never opened Settings still gets pushes.
   getNotificationPrefs: async (email: string): Promise<NotificationPrefs> => {
     const row = await pbFindByField('hr_notification_prefs', 'email', email.toLowerCase());
-    return { ...DEFAULT_NOTIFICATION_PREFS, ...((row?.data as Partial<NotificationPrefs>) || {}) };
+    return { ...DEFAULT_NOTIFICATION_PREFS, ...((row?.prefs as Partial<NotificationPrefs>) || {}) };
   },
   updateNotificationPrefs: async (email: string, prefs: NotificationPrefs): Promise<void> => {
-    await pbUpsertByField('hr_notification_prefs', 'email', email.toLowerCase(), { data: prefs });
+    await pbUpsertByField('hr_notification_prefs', 'email', email.toLowerCase(), { prefs });
   },
 
   // ── Announcements ─────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ export const notificationActions = {
       target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
       timestamp: formatTimeNY(new Date()) + ' ' + formatDateNY(new Date()),
     }),
-  getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetReadMap('hr_announcement_reads'),
+  getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetIdSetMap('hr_announcement_reads', 'read_ids'),
   isAnnouncementRead: (ann: Announcement, email: string, readMap: AnnouncementReadMap): boolean =>
     (readMap[ann.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
   // Explicit "I acknowledge this" action for AnnouncementPopup's blocking
@@ -243,7 +243,7 @@ export const notificationActions = {
   // read here also clears the passive feed's unread highlight, and vice
   // versa — one unified read-state, not two that could disagree.
   markAnnouncementRead: async (announcementId: string, email: string): Promise<void> => {
-    await pbMarkRead('hr_announcement_reads', announcementId, email);
+    await pbMarkIdsInField('hr_announcement_reads', 'read_ids', [announcementId], email);
   },
   // Called once the announcements a person can currently see have actually
   // been rendered on screen — writes read-state server-side for next visit,
@@ -254,7 +254,7 @@ export const notificationActions = {
   // not seen-on-render).
   markAnnouncementsSeen: async (announcements: Announcement[], email: string): Promise<void> => {
     if (!email || announcements.length === 0) return;
-    await Promise.all(announcements.map(ann => pbMarkRead('hr_announcement_reads', ann.id, email)));
+    await pbMarkIdsInField('hr_announcement_reads', 'read_ids', announcements.map(ann => ann.id), email);
   },
   // Both HR and Admin can post announcements (see admin/page.tsx and
   // hr/page.tsx's Post Announcement forms), and both already see the same

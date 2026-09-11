@@ -13,7 +13,7 @@ import { pb } from '../pocketbase';
 import type {
   Warehouse, Profile, Team, Message, TeamDocument, Notification, NotificationReadMap,
 } from './types';
-import { pbList, pbCreate, pbUpdate, pbDelete, pbGetReadMap, pbMarkRead, HR_ADMIN_LINE_TEAM_ID } from './shared';
+import { pbList, pbCreate, pbUpdate, pbDelete, pbGetIdSetMap, pbMarkIdsInField, HR_ADMIN_LINE_TEAM_ID } from './shared';
 import { hrActions, buildNotificationLink, updateProfileAdmin } from '../hrData';
 
 // Read receipts for regular Team Chat messages — same shape again (message
@@ -373,7 +373,7 @@ export const teamActions = {
   // same read-tracking pattern as getAnnouncementReadMap/markAnnouncementsSeen
   // above, scoped to whichever messages are currently loaded (i.e. the
   // channel someone has open), not the whole message history at once.
-  getMessageReadMap: (): Promise<MessageReadMap> => pbGetReadMap('hr_message_reads'),
+  getMessageReadMap: (): Promise<MessageReadMap> => pbGetIdSetMap('hr_message_reads', 'read_ids'),
   isMessageRead: (msg: Message, email: string, readMap: MessageReadMap): boolean =>
     (readMap[msg.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
   // Called whenever someone has a channel's messages on screen — marks every
@@ -383,7 +383,7 @@ export const teamActions = {
   // "seen-on-arrival, not seen-on-render" reasoning as markAnnouncementsSeen.
   markMessagesSeen: async (messages: Message[], email: string): Promise<void> => {
     if (!email || messages.length === 0) return;
-    await Promise.all(messages.map(m => pbMarkRead('hr_message_reads', m.id, email)));
+    await pbMarkIdsInField('hr_message_reads', 'read_ids', messages.map(m => m.id), email);
   },
 
   // ── Team Documents (hr_team_documents — see migration_data/create_team_documents_collection.py) ──

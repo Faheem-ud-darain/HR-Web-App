@@ -175,11 +175,19 @@ async function ensurePhase1Collections(): Promise<Record<string, string>> {
 // reached by this app's anonymous client-side `pb` calls today (same
 // exposure hr_delcargo_store itself had), so all stay public — tightening
 // is plan 012's job, not this plan's.
+// IMPORTANT (discovered live, 2026-09-11): hr_notification_reads,
+// hr_notification_cleared, hr_announcement_reads, hr_message_reads, and
+// hr_notification_prefs all pre-existed from earlier, unrecorded prep work
+// with a DIFFERENT shape than the read-receipt one below — one row PER
+// EMAIL holding an array of ids (e.g. { email, read_ids: [...] }), not one
+// row per (entity, email) pair. That shape is already race-safe across
+// users (each person only ever writes their own row), so those 5
+// collections were deliberately left as-is rather than migrated — the
+// app code (notifications.ts/teams.ts) was adapted to match their real
+// schema instead (see shared.ts's pbGetIdSetMap/pbMarkIdsInField). Only
+// hr_maintenance_notice_reads is a genuine new read-receipt collection
+// (created fresh by this plan, no pre-existing collision).
 const READ_RECEIPT_COLLECTIONS = [
-  'hr_notification_reads',
-  'hr_notification_cleared',
-  'hr_announcement_reads',
-  'hr_message_reads',
   'hr_maintenance_notice_reads',
 ];
 
@@ -191,15 +199,19 @@ function readReceiptSchema() {
   ];
 }
 
+// Collections that pre-existed (see the comment above READ_RECEIPT_COLLECTIONS)
+// with their own real shape — listed here ONLY so describePhase3Collections
+// can report their actual state; ensurePhase3Collections never tries to
+// create/touch these, since app code already targets their real schema.
+const PHASE_3_PREEXISTING_COLLECTIONS = [
+  'hr_notification_reads',
+  'hr_notification_cleared',
+  'hr_announcement_reads',
+  'hr_message_reads',
+  'hr_notification_prefs',
+];
+
 const PHASE_3_OTHER_COLLECTIONS: Array<{ name: string; schema: any[]; indexes: string[] }> = [
-  {
-    name: 'hr_notification_prefs',
-    schema: [
-      { name: 'email', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
-      { name: 'data', type: 'json', required: false, unique: false, options: { maxSize: 2000000 } },
-    ],
-    indexes: ['CREATE UNIQUE INDEX idx_hr_notification_prefs_email ON hr_notification_prefs (email)'],
-  },
   {
     name: 'hr_maintenance_notices',
     schema: [
@@ -332,7 +344,7 @@ export async function POST(request: Request) {
         ? PHASE_1_COLLECTIONS.map(c => c.name)
         : body.action === 'describePhase2Collections'
         ? PHASE_2_COLLECTIONS.map(c => c.name)
-        : [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name)];
+        : [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name), ...PHASE_3_PREEXISTING_COLLECTIONS];
       const results: Record<string, any> = {};
       for (const name of names) {
         try {
