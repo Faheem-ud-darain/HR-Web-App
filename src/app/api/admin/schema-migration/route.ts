@@ -127,6 +127,36 @@ export async function POST(request: Request) {
       const results = await ensurePhase1Collections();
       return NextResponse.json({ ok: true, results });
     }
+    if (body.action === 'fixUserSessionsRules') {
+      // hr_user_sessions pre-existed this plan with admin-only rules
+      // (listRule: null etc.) — that blocks the anonymous, client-side
+      // calls profiles.ts makes (this app never produces a PocketBase-
+      // recognized login; see plan 012). Bring it to the same public-rule
+      // posture hr_tracking_settings/hr_ticket_presence already have,
+      // rather than leaving a collection nothing can actually reach.
+      const existing = await pbAdminFetch('/api/collections/hr_user_sessions');
+      await pbAdminFetch(`/api/collections/${existing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: '' }),
+      });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === 'describePhase1Collections') {
+      const results: Record<string, any> = {};
+      for (const { name } of PHASE_1_COLLECTIONS) {
+        try {
+          const schema = await pbAdminFetch(`/api/collections/${name}`);
+          results[name] = {
+            fields: (schema?.schema || []).map((f: any) => ({ name: f.name, type: f.type, unique: f.unique, required: f.required })),
+            indexes: schema?.indexes || [],
+            listRule: schema?.listRule,
+          };
+        } catch (err: any) {
+          results[name] = { error: String(err?.message || err) };
+        }
+      }
+      return NextResponse.json({ ok: true, results });
+    }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err: any) {
     console.error('[admin/schema-migration] error:', err);

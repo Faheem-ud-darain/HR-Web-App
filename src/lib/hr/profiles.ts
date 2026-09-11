@@ -57,6 +57,12 @@ export const USER_SESSION_STALE_MS = 3 * 60 * 1000; // 3 minutes tolerance for m
 // today for a brand-new device, so this is a one-time "everyone's already-
 // open sessions look like a fresh device on next check-in" event, not a
 // breaking change.
+//
+// hr_user_sessions already existed in PocketBase before this plan (created
+// ahead of time in earlier prep work, never wired into any app code) —
+// its payload field is `data`, not the `slots` name used elsewhere in this
+// plan's own admin-only collections, so this file follows the collection
+// that's actually there rather than renaming it.
 const USER_SESSIONS_COLLECTION = 'hr_user_sessions';
 const userSessionEmailKeyFor = (email: string) => (email || '').toLowerCase().trim();
 
@@ -644,7 +650,7 @@ export const profileActions = {
   // and force everyone to re-login.
   getUserSessions: async (email: string): Promise<UserSessionSlot[]> => {
     const row = await pbFindByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email));
-    const raw = row?.slots;
+    const raw = row?.data;
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
     return [{
@@ -681,7 +687,7 @@ export const profileActions = {
       { deviceId, deviceLabel, sessionToken, loggedInAt: existing?.loggedInAt || now, lastSeenAt: now },
     ];
     try {
-      await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { slots: next });
+      await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { data: next });
     } catch (err) {
       // Fails OPEN — never block someone's login over a session-tracking
       // storage hiccup (e.g. hr_user_sessions not existing yet mid-
@@ -717,7 +723,7 @@ export const profileActions = {
       }
 
       const next = all.map(s => s.deviceId === deviceId ? { ...s, sessionToken, lastSeenAt: new Date().toISOString() } : s);
-      await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(cleanEmail), { slots: next });
+      await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(cleanEmail), { data: next });
       return true;
     } catch (err) {
       console.warn('[session] touchUserSessionSlot network/server error, maintaining local session:', err);
@@ -730,7 +736,7 @@ export const profileActions = {
   removeUserSessionDevice: async (email: string, deviceId: string): Promise<void> => {
     const all = await hrActions.getUserSessions(email);
     const next = all.filter(s => s.deviceId !== deviceId);
-    await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { slots: next });
+    await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { data: next });
   },
   // Wipes every device slot at once — used by "Log out from everywhere and
   // sign in here" on the login screen when the 2-device cap is already full.
