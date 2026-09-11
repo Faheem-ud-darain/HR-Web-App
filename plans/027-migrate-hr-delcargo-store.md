@@ -220,3 +220,64 @@ collection.
   `pbGetKV`/`pbSetKV`/`pbGetKVByPrefix`/`pbDeleteKVByKeys`/`adminGetKV`/
   `adminSetKV`), and its PocketBase rules are locked/the collection is
   retired.
+
+## Implementation notes (in progress)
+
+**Phase 1 (auth/security singletons) — DONE (2026-09-11).** Commits:
+`21bc13b` (this plan doc), `5219930` (code), `b8bdd4a` (hotfix),
+`06bc71b` (hr_user_sessions reconciliation).
+
+- `hr_rate_limits` (rate_key unique, data json), `hr_password_reset_otps`
+  (email unique, data json), `hr_google_integrations` (email unique, data
+  json) created fresh, admin-only rules from creation. `hr_user_sessions`
+  turned out to already exist from earlier, unrecorded prep work — with a
+  `data` field (not the `slots` name this plan's code first used) and
+  admin-only rules left over from however it was originally set up; code
+  was reconciled to match the collection that's actually there, and its
+  rules were brought to the same public posture hr_tracking_settings/
+  hr_ticket_presence already have (required since this app never produces
+  a PocketBase-recognized login — see plan 012 — so an admin-only rule
+  silently blocks the anonymous client-side calls profiles.ts makes).
+- Added `adminFindByField`/`adminUpsertByField`/`adminDeleteByField` to
+  `pbAdmin.ts` as the server-side mirror of `shared.ts`'s existing
+  `pbFindByField`/`pbUpsertByField`.
+- Collections were created/inspected/rule-patched via a temporary,
+  admin-only `src/app/api/admin/schema-migration` route (neither sandbox
+  this was built in has direct network access to pb.delcargo.us — see that
+  route's own comment) — triggered from the browser console using the
+  user's own real admin session token. Not a permanent part of the API
+  surface; remove once all phases are done.
+- **Real bug caught live**: `checkRateLimit` runs in
+  `auth/login/route.ts` BEFORE that route's own try/catch (deliberately —
+  so a rate-limit rejection happens before any credential check), so the
+  moment it started targeting `hr_rate_limits` — which didn't exist yet at
+  that point — every single login attempt, every account, threw an
+  unhandled error. Fixed by making `checkRateLimit`/`clearRateLimit` fail
+  OPEN on any storage error (rate limiting is defense-in-depth, not core
+  auth — it must never be a single point of failure for login itself).
+  Found the same unguarded-write gap in `claimUserSessionSlot`
+  (hr_user_sessions) and fixed it the same way, matching the fail-open
+  pattern `touchUserSessionSlot` already used.
+- **Existing rows NOT migrated** for `user_session_<slug>` — the key is a
+  lossy slugified email that can't be reversed exactly, and every session
+  function already re-claims a slot from scratch when none is found, so
+  old sessions are simply abandoned rather than migrated (a one-time
+  "looks like a new device on next check-in" event, not a break).
+  `password_reset_<email>`, `otp_ratelimit_<email>`, `login_ratelimit_<email>`,
+  and `google_integration_<email>` rows in `hr_delcargo_store` ARE
+  reversible (their key is just the exact lowercased email/rate-key, no
+  lossy transform) but were also left in place for now rather than
+  migrated — these are all short-lived/self-expiring data (OTPs 10min,
+  rate-limit windows 15min-24h), so the old rows age out naturally; a
+  bulk-copy script was judged not worth the added risk for data that
+  expires on its own within a day.
+- **Live-verified**: Admin login (exercises checkRateLimit/clearRateLimit
+  end-to-end) succeeded cleanly post-fix. A real Employee account
+  (`faheem@delcargo.us`, logged in directly by the user — this session
+  never handles account passwords itself, even when explicitly offered)
+  logged in cleanly, exercising `claimUserSessionSlot`/hr_user_sessions
+  end-to-end with no errors.
+- Forgot-password OTP flow and the Google integration connect/disconnect
+  flow were NOT live-tested this phase (no test trigger available without
+  sending a real email or performing a real Google OAuth round-trip) —
+  flagged as lower-confidence pending a real exercise of those two paths.
