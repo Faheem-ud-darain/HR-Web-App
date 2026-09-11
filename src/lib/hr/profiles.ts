@@ -13,7 +13,7 @@ import { getOrCreateDeviceId, getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import {
-  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField,
+  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField,
   pbGetKV, pbSetKV, pbGetKVByPrefix, pbDeleteKVByKeys, withTimeout,
   looksLikeRealId,
 } from './shared';
@@ -45,7 +45,20 @@ export const MAX_USER_SESSION_DEVICES = 2;
 // against the cap — so an employee whose old laptop just silently died
 // isn't ever permanently locked out of one of their 2 slots.
 export const USER_SESSION_STALE_MS = 3 * 60 * 1000; // 3 minutes tolerance for multi-device heartbeat check
-const userSessionKeyFor = (email: string) => `user_session_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+// Plan 027: multi-device sessions moved off the generic hr_delcargo_store
+// KV table (keyed by a lossy slugified email, `user_session_<slug>`) onto
+// their own hr_user_sessions collection — one row per email (the real,
+// un-slugified address, via pbFindByField/pbUpsertByField's exact-match
+// field lookup), same pattern already proven out for hr_tracking_settings/
+// hr_ticket_presence. Existing hr_delcargo_store session rows are NOT
+// migrated (the slug can't be reversed back to an exact email losslessly);
+// they're simply abandoned — every session function below already
+// re-claims a slot from scratch when none is found, exactly as it does
+// today for a brand-new device, so this is a one-time "everyone's already-
+// open sessions look like a fresh device on next check-in" event, not a
+// breaking change.
+const USER_SESSIONS_COLLECTION = 'hr_user_sessions';
+const userSessionEmailKeyFor = (email: string) => (email || '').toLowerCase().trim();
 
 const profileExtraKey = (profileId: string) => `hr_profile_extra_${profileId}`;
 
@@ -630,7 +643,8 @@ export const profileActions = {
   // in-flight session from right before this shipped doesn't just vanish
   // and force everyone to re-login.
   getUserSessions: async (email: string): Promise<UserSessionSlot[]> => {
-    const raw = await pbGetKV(userSessionKeyFor(email));
+    const row = await pbFindByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email));
+    const raw = row?.slots;
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
     return [{
@@ -666,7 +680,7 @@ export const profileActions = {
       ...others,
       { deviceId, deviceLabel, sessionToken, loggedInAt: existing?.loggedInAt || now, lastSeenAt: now },
     ];
-    await pbSetKV(userSessionKeyFor(email), next);
+    await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { slots: next });
     return { ok: true, liveSessions: next };
   },
   // Called periodically while a dashboard session is open. Returns false if
@@ -694,7 +708,7 @@ export const profileActions = {
       }
 
       const next = all.map(s => s.deviceId === deviceId ? { ...s, sessionToken, lastSeenAt: new Date().toISOString() } : s);
-      await pbSetKV(userSessionKeyFor(cleanEmail), next);
+      await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(cleanEmail), { slots: next });
       return true;
     } catch (err) {
       console.warn('[session] touchUserSessionSlot network/server error, maintaining local session:', err);
@@ -707,12 +721,13 @@ export const profileActions = {
   removeUserSessionDevice: async (email: string, deviceId: string): Promise<void> => {
     const all = await hrActions.getUserSessions(email);
     const next = all.filter(s => s.deviceId !== deviceId);
-    await pbSetKV(userSessionKeyFor(email), next);
+    await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { slots: next });
   },
   // Wipes every device slot at once — used by "Log out from everywhere and
   // sign in here" on the login screen when the 2-device cap is already full.
   clearAllUserSessions: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([userSessionKeyFor(email)]);
+    const row = await pbFindByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email));
+    if (row) await pbDelete(USER_SESSIONS_COLLECTION, row.id);
   },
   // Frees just THIS device's slot on explicit logout — skipped for Admin/HR,
   // who never claim one in the first place.

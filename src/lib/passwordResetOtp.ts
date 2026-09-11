@@ -12,10 +12,17 @@
 // keeps working once those collections' PocketBase rules actually get
 // locked down — and so the new password it sets is hashed rather than
 // written in plaintext, matching every other password-write path in the
-// app (see serverAuth.ts's hashPassword).
+// app (see serverAuth.ts's hashPassword). Plan 027: the OTP record and its
+// rate-limit counter no longer live in the generic hr_delcargo_store KV
+// table — they're their own admin-only collections (hr_password_reset_otps,
+// hr_rate_limits, the latter shared with src/lib/rateLimit.ts's login rate
+// limiting).
 
-import { pbAdminFetch } from './pbAdmin';
+import { pbAdminFetch, adminFindByField, adminUpsertByField, adminDeleteByField } from './pbAdmin';
 import { hashPassword } from './serverAuth';
+
+const OTP_COLLECTION = 'hr_password_reset_otps';
+const RATE_LIMIT_COLLECTION = 'hr_rate_limits';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ATTEMPTS = 5;
@@ -41,41 +48,34 @@ interface RateLimitRecord {
 const COOLDOWN_DELAYS_SEC = [30, 60, 120, 240, 300];
 const MAX_DAILY_OTPS = 5;
 
-function kvKey(email: string): string {
-  return `password_reset_${email.toLowerCase().trim()}`;
+function otpEmailKey(email: string): string {
+  return email.toLowerCase().trim();
 }
 
 function rateLimitKey(email: string): string {
   return `otp_ratelimit_${email.toLowerCase().trim()}`;
 }
 
-async function getKvRecord(key: string): Promise<{ id: string; value: any } | null> {
-  const encoded = encodeURIComponent(`key = "${key}"`);
-  const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=1`);
-  const item = list?.items?.[0];
-  return item ? { id: item.id, value: item.value } : null;
+async function getOtpRecord(email: string): Promise<{ id: string; value: any } | null> {
+  const row = await adminFindByField(OTP_COLLECTION, 'email', otpEmailKey(email));
+  return row ? { id: row.id, value: row.data } : null;
 }
 
-async function setKvRecord(key: string, value: any): Promise<void> {
-  const existing = await getKvRecord(key);
-  if (existing) {
-    await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ value }),
-    });
-  } else {
-    await pbAdminFetch(`/api/collections/hr_delcargo_store/records`, {
-      method: 'POST',
-      body: JSON.stringify({ key, value }),
-    });
-  }
+async function setOtpRecord(email: string, value: any): Promise<void> {
+  await adminUpsertByField(OTP_COLLECTION, 'email', otpEmailKey(email), value);
 }
 
-async function deleteKvRecord(key: string): Promise<void> {
-  const existing = await getKvRecord(key);
-  if (existing) {
-    await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, { method: 'DELETE' });
-  }
+async function deleteOtpRecord(email: string): Promise<void> {
+  await adminDeleteByField(OTP_COLLECTION, 'email', otpEmailKey(email));
+}
+
+async function getRlRecord(rlKey: string): Promise<{ id: string; value: any } | null> {
+  const row = await adminFindByField(RATE_LIMIT_COLLECTION, 'rate_key', rlKey);
+  return row ? { id: row.id, value: row.data } : null;
+}
+
+async function setRlRecord(rlKey: string, value: any): Promise<void> {
+  await adminUpsertByField(RATE_LIMIT_COLLECTION, 'rate_key', rlKey, value);
 }
 
 // Same case-insensitivity fix as adminFindProfileByEmail in pbAdmin.ts: an
@@ -111,7 +111,7 @@ export type CreateOtpResult =
 export async function createAndStoreOtp(email: string): Promise<CreateOtpResult> {
   const now = Date.now();
   const rlKey = rateLimitKey(email);
-  const existingRl = await getKvRecord(rlKey);
+  const existingRl = await getRlRecord(rlKey);
 
   let rl: RateLimitRecord = existingRl?.value || { count: 0, lastSentAt: 0, resetAt: now + 24 * 60 * 60 * 1000 };
 
@@ -138,7 +138,7 @@ export async function createAndStoreOtp(email: string): Promise<CreateOtpResult>
 
   const otp = generateOtp();
   const record: OtpRecord = { otp, expiresAt: now + OTP_TTL_MS, attempts: 0 };
-  await setKvRecord(kvKey(email), record);
+  await setOtpRecord(email, record);
 
   // Update Rate Limit record
   const newCount = rl.count + 1;
@@ -148,7 +148,7 @@ export async function createAndStoreOtp(email: string): Promise<CreateOtpResult>
     lastSentAt: now,
     resetAt: rl.resetAt,
   };
-  await setKvRecord(rlKey, updatedRl);
+  await setRlRecord(rlKey, updatedRl);
 
   return { ok: true, otp, cooldownSec: nextCooldownSec, count: newCount };
 }
@@ -158,24 +158,23 @@ export type VerifyOtpResult =
   | { ok: false; reason: 'not_found' | 'expired' | 'too_many_attempts' | 'incorrect' };
 
 export async function verifyOtp(email: string, submittedOtp: string): Promise<VerifyOtpResult> {
-  const key = kvKey(email);
-  const existing = await getKvRecord(key);
+  const existing = await getOtpRecord(email);
   if (!existing || !existing.value) return { ok: false, reason: 'not_found' };
 
   const record = existing.value as OtpRecord;
 
   if (Date.now() > record.expiresAt) {
-    await deleteKvRecord(key);
+    await deleteOtpRecord(email);
     return { ok: false, reason: 'expired' };
   }
 
   if (record.attempts >= MAX_ATTEMPTS) {
-    await deleteKvRecord(key);
+    await deleteOtpRecord(email);
     return { ok: false, reason: 'too_many_attempts' };
   }
 
   if (record.otp !== submittedOtp.trim()) {
-    await setKvRecord(key, { ...record, attempts: record.attempts + 1 });
+    await setOtpRecord(email, { ...record, attempts: record.attempts + 1 });
     return { ok: false, reason: 'incorrect' };
   }
 
@@ -183,7 +182,7 @@ export async function verifyOtp(email: string, submittedOtp: string): Promise<Ve
 }
 
 export async function consumeOtp(email: string): Promise<void> {
-  await deleteKvRecord(kvKey(email));
+  await deleteOtpRecord(email);
 }
 
 export async function setProfilePassword(profileId: string, newPassword: string): Promise<void> {

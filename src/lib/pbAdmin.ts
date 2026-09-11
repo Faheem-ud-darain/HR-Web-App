@@ -308,6 +308,57 @@ export async function adminDeleteKVByKeys(keys: string[]): Promise<void> {
   }));
 }
 
+// ── Plan 027: server-side upsert-by-field helpers ───────────────────────
+// Admin-authenticated mirror of shared.ts's pbUpsertByField/pbFindByField
+// (same "find the one row where `field` = `value`, update it; otherwise
+// create" shape, same in-memory id cache to skip the lookup round trip on
+// repeat writes), for the real per-entity collections that are replacing
+// hr_delcargo_store's server-only key patterns (sessions, OTPs, rate
+// limits, Google integration tokens — see plan 027). Every one of these
+// new collections uses the same two-column shape (a unique lookup field
+// plus a `data` json column), so one generic pair of helpers covers all
+// of them rather than writing four near-identical ones.
+const adminUpsertIdCache = new Map<string, string>();
+
+export async function adminFindByField(collection: string, field: string, value: string): Promise<{ id: string; data: any } | null> {
+  const escaped = value.replace(/"/g, '\\"');
+  const encoded = encodeURIComponent(`${field} = "${escaped}"`);
+  const list = await pbAdminFetch(`/api/collections/${collection}/records?filter=${encoded}&perPage=1`);
+  const item = list?.items?.[0];
+  return item ? { id: item.id, data: item.data } : null;
+}
+
+export async function adminUpsertByField(collection: string, field: string, value: string, data: any): Promise<void> {
+  const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
+  const cachedId = adminUpsertIdCache.get(cacheKey);
+  if (cachedId) {
+    try {
+      await pbAdminFetch(`/api/collections/${collection}/records/${cachedId}`, { method: 'PATCH', body: JSON.stringify({ data }) });
+      return;
+    } catch {
+      adminUpsertIdCache.delete(cacheKey);
+    }
+  }
+  const existing = await adminFindByField(collection, field, value);
+  if (existing) {
+    adminUpsertIdCache.set(cacheKey, existing.id);
+    await pbAdminFetch(`/api/collections/${collection}/records/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ data }) });
+  } else {
+    const created = await pbAdminFetch(`/api/collections/${collection}/records`, {
+      method: 'POST',
+      body: JSON.stringify({ [field]: value, data }),
+    });
+    adminUpsertIdCache.set(cacheKey, created.id);
+  }
+}
+
+export async function adminDeleteByField(collection: string, field: string, value: string): Promise<void> {
+  const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
+  adminUpsertIdCache.delete(cacheKey);
+  const existing = await adminFindByField(collection, field, value);
+  if (existing) await pbAdminFetch(`/api/collections/${collection}/records/${existing.id}`, { method: 'DELETE' });
+}
+
 // ── hr_career_applications (plan 012, Phase 1) — applicant PII (name,
 // email, cover letter) that used to be fully public. Job applicants never
 // log in at all, so unlike every other collection here this is fronted by

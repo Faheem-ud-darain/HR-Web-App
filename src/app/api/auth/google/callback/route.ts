@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { adminSetKV } from '@/lib/pbAdmin';
+import { adminUpsertByField } from '@/lib/pbAdmin';
+
+const GOOGLE_INTEGRATION_COLLECTION = 'hr_google_integrations';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
@@ -77,11 +79,14 @@ export async function GET(request: Request) {
     // internet could read (and overwrite) every employee's Google OAuth
     // access/refresh tokens by listing that collection directly. See plan
     // 012's hr_delcargo_store investigation notes for the full context —
-    // this route was the single worst exposure found there.
-    const storeKey = `google_integration_${String(targetEmail).toLowerCase()}`;
-    // adminSetKV itself checks for an existing row (via adminGetKV) and
-    // PATCHes it, or POSTs a new one — no need to duplicate that check here.
-    await adminSetKV(storeKey, kvValue);
+    // this route was the single worst exposure found there. Plan 027 moved
+    // this off hr_delcargo_store entirely, onto its own admin-only
+    // hr_google_integrations collection (one row per email, not a shared
+    // KV table anyone could enumerate).
+    const emailKey = String(targetEmail).toLowerCase();
+    // adminUpsertByField itself checks for an existing row and PATCHes it,
+    // or POSTs a new one — no need to duplicate that check here.
+    await adminUpsertByField(GOOGLE_INTEGRATION_COLLECTION, 'email', emailKey, kvValue);
 
     return new Response(
       `<html><body><script>

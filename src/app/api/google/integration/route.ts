@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { adminGetKV, adminSetKV, adminDeleteKVByKeys } from '@/lib/pbAdmin';
+import { adminFindByField, adminUpsertByField, adminDeleteByField } from '@/lib/pbAdmin';
+
+const GOOGLE_INTEGRATION_COLLECTION = 'hr_google_integrations';
 
 export const runtime = 'edge';
 
@@ -25,8 +27,8 @@ export const runtime = 'edge';
 // Always scoped to the CALLER's own row (session.email) — never a
 // client-supplied email — same "self" pattern as /api/payroll/me.
 
-function storeKeyFor(email: string) {
-  return `google_integration_${email.toLowerCase()}`;
+function emailKeyFor(email: string) {
+  return email.toLowerCase();
 }
 
 // Fields safe to send to the browser. Deliberately excludes `tokens`
@@ -47,8 +49,8 @@ export async function GET(request: Request) {
   if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
 
   try {
-    const row = await adminGetKV(storeKeyFor(session.email));
-    return NextResponse.json({ data: toSafeShape(row?.value) });
+    const row = await adminFindByField(GOOGLE_INTEGRATION_COLLECTION, 'email', emailKeyFor(session.email));
+    return NextResponse.json({ data: toSafeShape(row?.data) });
   } catch (err: any) {
     console.error('[google/integration GET] error:', err);
     return NextResponse.json({ error: 'Could not load Google integration status.' }, { status: 500 });
@@ -70,17 +72,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const key = storeKeyFor(session.email);
+  const key = emailKeyFor(session.email);
   try {
-    const existing = await adminGetKV(key);
-    if (!existing?.value) {
+    const existing = await adminFindByField(GOOGLE_INTEGRATION_COLLECTION, 'email', key);
+    if (!existing?.data) {
       return NextResponse.json({ error: 'No connected Google account to update.' }, { status: 404 });
     }
-    const next = { ...existing.value };
+    const next = { ...existing.data };
     if (typeof body.syncCalendar === 'boolean') next.syncCalendar = body.syncCalendar;
     if (typeof body.useFor2FA === 'boolean') next.useFor2FA = body.useFor2FA;
     if (typeof body.useForPasswordReset === 'boolean') next.useForPasswordReset = body.useForPasswordReset;
-    await adminSetKV(key, next);
+    await adminUpsertByField(GOOGLE_INTEGRATION_COLLECTION, 'email', key, next);
     return NextResponse.json({ data: toSafeShape(next) });
   } catch (err: any) {
     console.error('[google/integration POST] error:', err);
@@ -93,7 +95,7 @@ export async function DELETE(request: Request) {
   if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
 
   try {
-    await adminDeleteKVByKeys([storeKeyFor(session.email)]);
+    await adminDeleteByField(GOOGLE_INTEGRATION_COLLECTION, 'email', emailKeyFor(session.email));
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[google/integration DELETE] error:', err);
