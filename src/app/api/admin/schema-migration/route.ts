@@ -459,6 +459,31 @@ export async function POST(request: Request) {
       const record = await pbAdminFetch(`/api/collections/${name}/records/${id}`);
       return NextResponse.json({ ok: true, record });
     }
+    if (body.action === 'addFieldIfMissing') {
+      // Ad-hoc — add one field to an existing collection's schema if it
+      // isn't already there (purely additive; never touches existing
+      // fields/data). Used to reconcile a pre-existing collection
+      // discovered mid-phase that's missing a column this app's code
+      // needs (same root cause/pattern as the rule mismatches elsewhere
+      // in this route — earlier, unrecorded prep work set the collection
+      // up slightly differently than this plan's code expects).
+      const name = body.collection;
+      const field = body.field;
+      if (typeof name !== 'string' || !name || !field || typeof field.name !== 'string') {
+        return NextResponse.json({ error: 'body.collection and body.field ({ name, type, ... }) are required.' }, { status: 400 });
+      }
+      const existing = await pbAdminFetch(`/api/collections/${name}`);
+      const already = (existing.schema || []).some((f: any) => f.name === field.name);
+      if (already) {
+        return NextResponse.json({ ok: true, collection: name, field: field.name, result: 'already exists' });
+      }
+      const newSchema = [...(existing.schema || []), field];
+      await pbAdminFetch(`/api/collections/${existing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ schema: newSchema }),
+      });
+      return NextResponse.json({ ok: true, collection: name, field: field.name, result: 'added' });
+    }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err: any) {
     console.error('[admin/schema-migration] error:', err);

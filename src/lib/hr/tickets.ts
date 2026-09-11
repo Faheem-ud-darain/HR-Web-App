@@ -44,13 +44,43 @@ export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
 export const TYPING_STALE_MS = 5 * 1000;
 // hr_typing_indicators — one row per (scope, scopeId, email) triple (plan
 // 027 Phase 4), replacing the old hr_typing_<scope>_<scopeId>_<email> KV
-// prefix-scan pattern. `typing_key` is the unique composite lookup field;
-// `scope`/`scope_id` are plain columns so getTypingUsers can filter
-// server-side by scope+scopeId instead of a KV-key prefix scan.
-const typingKeyFor = (scope: 'chat' | 'ticket', scopeId: string, email: string) =>
-  `${scope}_${scopeId}_${email.toLowerCase()}`;
+// prefix-scan pattern. This collection pre-existed (earlier, unrecorded
+// prep work — same recurring pattern as elsewhere in this plan) with a
+// composite UNIQUE index on (scope, scope_id, email) already enforcing
+// one row per triple — no separate key column needed — but no
+// display_name column and admin-only rules; code below matches that real
+// schema (display_name added via a one-off addFieldIfMissing call, rules
+// fixed via makeCollectionPublic).
 function toTypingState(row: any): TypingState {
-  return { scope: row.scope, scopeId: row.scope_id, email: row.email, displayName: row.display_name, lastTypedAt: row.last_typed_at };
+  return { scope: row.scope, scopeId: row.scope_id, email: row.email, displayName: row.display_name || row.email, lastTypedAt: row.updated_at };
+}
+async function upsertTypingRow(scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> {
+  const emailLower = email.toLowerCase();
+  const filter = `scope = "${scope}" && scope_id = "${scopeId.replace(/"/g, '\\"')}" && email = "${emailLower.replace(/"/g, '\\"')}"`;
+  const data = { scope, scope_id: scopeId, email: emailLower, display_name: displayName, updated_at: new Date().toISOString() };
+  try {
+    const existing = await pb.collection('hr_typing_indicators').getFirstListItem(filter, { requestKey: null });
+    await pb.collection('hr_typing_indicators').update(existing.id, data, { requestKey: null });
+  } catch {
+    try {
+      await pb.collection('hr_typing_indicators').create(data, { requestKey: null });
+    } catch {
+      // Lost a create race against another tab for the same triple (the
+      // unique index rejected the duplicate) — fall back to update.
+      try {
+        const existing = await pb.collection('hr_typing_indicators').getFirstListItem(filter, { requestKey: null });
+        await pb.collection('hr_typing_indicators').update(existing.id, data, { requestKey: null });
+      } catch { /* best-effort — a missed typing tick is harmless */ }
+    }
+  }
+}
+async function deleteTypingRow(scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> {
+  const emailLower = email.toLowerCase();
+  const filter = `scope = "${scope}" && scope_id = "${scopeId.replace(/"/g, '\\"')}" && email = "${emailLower.replace(/"/g, '\\"')}"`;
+  try {
+    const existing = await pb.collection('hr_typing_indicators').getFirstListItem(filter, { requestKey: null });
+    await pb.collection('hr_typing_indicators').delete(existing.id, { requestKey: null });
+  } catch { /* already gone — fine */ }
 }
 
 function toTicket(t: any): Ticket {
@@ -280,12 +310,10 @@ export const ticketActions = {
   // and call clearTypingState immediately on send/blur/empty so the
   // indicator disappears promptly rather than waiting out the stale window.
   touchTypingState: async (scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> => {
-    await pbUpsertByField('hr_typing_indicators', 'typing_key', typingKeyFor(scope, scopeId, email), {
-      scope, scope_id: scopeId, email: email.toLowerCase(), display_name: displayName, last_typed_at: new Date().toISOString(),
-    });
+    await upsertTypingRow(scope, scopeId, email, displayName);
   },
   clearTypingState: async (scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> => {
-    await pbDeleteByField('hr_typing_indicators', 'typing_key', typingKeyFor(scope, scopeId, email));
+    await deleteTypingRow(scope, scopeId, email);
   },
   // Returns everyone currently (non-stale) typing in this scope, excluding
   // the viewer themself — that's the filtering the UI needs directly.
