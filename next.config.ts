@@ -63,7 +63,17 @@ const nextConfig: NextConfig = {
       // this, `next dev` logs "eval() is not supported... make sure
       // unsafe-eval is included"); React's own docs note it never uses
       // eval() in production, so the real deployed build never needs it.
-      `script-src 'self' 'unsafe-inline' https://cdn.onesignal.com${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
+      // BUGFIX (2026-09-11): OneSignal's Web SDK loads a JSONP sync script
+      // from api.onesignal.com (not just cdn.onesignal.com) as part of its
+      // own internal init/login/logout flow — confirmed live via a real
+      // CSP violation ("Loading the script '...api.onesignal.com/sync/...'
+      // violates ... script-src") immediately followed by OneSignal's
+      // LoginManager throwing on undefined internal state on every
+      // subsequent login()/logout() call, since that sync step never
+      // completed. connect-src already allowed onesignal.com/*.onesignal.com
+      // for fetch/XHR, but script-src (which gates actual <script> tags)
+      // did not.
+      `script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://api.onesignal.com${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
       "style-src 'self' 'unsafe-inline'",
       // data:/blob: cover this app's many inline/base64 avatars, cropper
       // output, and document/screenshot previews (see AvatarCropperModal,

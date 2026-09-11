@@ -430,6 +430,35 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, results });
     }
+    if (body.action === 'describeCollection') {
+      // Ad-hoc, one-off diagnostic — describe any collection by name (not
+      // just the ones this migration plan knows about), for live-debugging
+      // an unexpected write failure against its real schema.
+      const name = body.collection;
+      if (typeof name !== 'string' || !name) {
+        return NextResponse.json({ error: 'body.collection is required.' }, { status: 400 });
+      }
+      const schema = await pbAdminFetch(`/api/collections/${name}`);
+      return NextResponse.json({
+        ok: true,
+        collection: name,
+        fields: (schema?.schema || []).map((f: any) => ({ name: f.name, type: f.type, unique: f.unique, required: f.required, options: f.options })),
+        indexes: schema?.indexes || [],
+        listRule: schema?.listRule,
+        updateRule: schema?.updateRule,
+      });
+    }
+    if (body.action === 'getRecord') {
+      // Ad-hoc — fetch one record's full raw fields by collection+id, for
+      // live-debugging a specific write failure (e.g. a 400 PATCH).
+      const name = body.collection;
+      const id = body.id;
+      if (typeof name !== 'string' || !name || typeof id !== 'string' || !id) {
+        return NextResponse.json({ error: 'body.collection and body.id are required.' }, { status: 400 });
+      }
+      const record = await pbAdminFetch(`/api/collections/${name}/records/${id}`);
+      return NextResponse.json({ ok: true, record });
+    }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err: any) {
     console.error('[admin/schema-migration] error:', err);

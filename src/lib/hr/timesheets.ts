@@ -553,10 +553,19 @@ export const timesheetActions = {
         // heartbeat shouldn't produce a negative-duration shift).
         const closeAtIso = new Date(Math.max(lastSeenMs, clockInMs)).toISOString();
 
+        // BUGFIX (2026-09-11, live): this used to also pass status:
+        // 'completed' — but hr_timesheets.status is a select field
+        // restricted to the APPROVAL workflow values ('pending' |
+        // 'approved' | 'rejected'), not a shift-open/closed state. Every
+        // write here was silently rejected by PocketBase with a 400 (the
+        // 'completed' value isn't in that enum), so this safety net never
+        // actually closed a single stale shift in practice. "Completed"
+        // for a shift is already fully derived from clock_out being
+        // non-empty (see toTimesheet's status: clockOut ? 'completed' :
+        // 'in_progress') — there's nothing else to write here.
         await pbUpdate('hr_timesheets', shift.id, {
           clock_out: closeAtIso,
           duration: formatDurationBetween(shift.clockIn, closeAtIso),
-          status: 'completed',
         });
         try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(shift.employeeEmail)]); } catch { /* best-effort */ }
         const name = displayName({ fullName: shift.employeeEmail }, 'hr');
@@ -610,10 +619,12 @@ export const timesheetActions = {
         }
         const closeAtIso = new Date(closeAtMs).toISOString();
 
+        // See the BUGFIX comment on the equivalent write in
+        // autoCloseOrphanTrackedShifts above — same invalid status:
+        // 'completed' write, same silent-400 failure, same fix.
         await pbUpdate('hr_timesheets', shift.id, {
           clock_out: closeAtIso,
           duration: formatDurationBetween(shift.clockIn, closeAtIso),
-          status: 'completed',
         });
         try { await pbDeleteKVByKeys([shiftTabHeartbeatKeyFor(shift.employeeEmail)]); } catch { /* best-effort */ }
 
