@@ -161,6 +161,113 @@ async function ensurePhase1Collections(): Promise<Record<string, string>> {
   return results;
 }
 
+
+// Phase 3 collections — shared read-state (see plan 027). Five of these
+// are "read receipt" collections (one row per entity+reader — see
+// shared.ts's pbGetReadMap/pbMarkRead for why this shape replaces the old
+// shared-blob-map race): a unique `read_key` composite plus plain
+// `entity_id`/`email` columns so pbGetReadMap can reconstruct the exact
+// `Record<entityId, string[]>` shape every UI call site already expects.
+// The other three are small dedicated collections: hr_notification_prefs
+// (per-email prefs blob), hr_maintenance_notices (now a real one-row-per-
+// notice collection instead of an array blob), and hr_ticket_closed_at
+// (per-ticket closed-at timestamp, replacing the old timer map). All are
+// reached by this app's anonymous client-side `pb` calls today (same
+// exposure hr_delcargo_store itself had), so all stay public — tightening
+// is plan 012's job, not this plan's.
+const READ_RECEIPT_COLLECTIONS = [
+  'hr_notification_reads',
+  'hr_notification_cleared',
+  'hr_announcement_reads',
+  'hr_message_reads',
+  'hr_maintenance_notice_reads',
+];
+
+function readReceiptSchema() {
+  return [
+    { name: 'read_key', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+    { name: 'entity_id', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+    { name: 'email', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+  ];
+}
+
+const PHASE_3_OTHER_COLLECTIONS: Array<{ name: string; schema: any[]; indexes: string[] }> = [
+  {
+    name: 'hr_notification_prefs',
+    schema: [
+      { name: 'email', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+      { name: 'data', type: 'json', required: false, unique: false, options: { maxSize: 2000000 } },
+    ],
+    indexes: ['CREATE UNIQUE INDEX idx_hr_notification_prefs_email ON hr_notification_prefs (email)'],
+  },
+  {
+    name: 'hr_maintenance_notices',
+    schema: [
+      { name: 'title', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'message', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'start_at', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'end_at', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'created_by', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+    ],
+    indexes: [],
+  },
+  {
+    name: 'hr_ticket_closed_at',
+    schema: [
+      { name: 'ticket_id', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+      { name: 'closed_at', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+    ],
+    indexes: ['CREATE UNIQUE INDEX idx_hr_ticket_closed_at_ticket_id ON hr_ticket_closed_at (ticket_id)'],
+  },
+];
+
+async function ensurePhase3Collections(): Promise<Record<string, string>> {
+  const results: Record<string, string> = {};
+  for (const name of READ_RECEIPT_COLLECTIONS) {
+    if (await collectionExists(name)) {
+      results[name] = 'already exists';
+      continue;
+    }
+    await pbAdminFetch('/api/collections', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        type: 'base',
+        schema: readReceiptSchema(),
+        indexes: [`CREATE UNIQUE INDEX idx_${name}_read_key ON ${name} (read_key)`],
+        listRule: '',
+        viewRule: '',
+        createRule: '',
+        updateRule: '',
+        deleteRule: '',
+      }),
+    });
+    results[name] = 'created';
+  }
+  for (const { name, schema, indexes } of PHASE_3_OTHER_COLLECTIONS) {
+    if (await collectionExists(name)) {
+      results[name] = 'already exists';
+      continue;
+    }
+    await pbAdminFetch('/api/collections', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        type: 'base',
+        schema,
+        indexes,
+        listRule: '',
+        viewRule: '',
+        createRule: '',
+        updateRule: '',
+        deleteRule: '',
+      }),
+    });
+    results[name] = 'created';
+  }
+  return results;
+}
+
 export async function POST(request: Request) {
   const { error } = await requireAdmin(request);
   if (error) return error;
@@ -212,10 +319,20 @@ export async function POST(request: Request) {
       const results = await ensurePhase2Collections();
       return NextResponse.json({ ok: true, results });
     }
-    if (body.action === 'describePhase1Collections' || body.action === 'describePhase2Collections') {
+    if (body.action === 'ensurePhase3Collections') {
+      const results = await ensurePhase3Collections();
+      return NextResponse.json({ ok: true, results });
+    }
+    if (
+      body.action === 'describePhase1Collections' ||
+      body.action === 'describePhase2Collections' ||
+      body.action === 'describePhase3Collections'
+    ) {
       const names = body.action === 'describePhase1Collections'
         ? PHASE_1_COLLECTIONS.map(c => c.name)
-        : PHASE_2_COLLECTIONS.map(c => c.name);
+        : body.action === 'describePhase2Collections'
+        ? PHASE_2_COLLECTIONS.map(c => c.name)
+        : [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name)];
       const results: Record<string, any> = {};
       for (const name of names) {
         try {

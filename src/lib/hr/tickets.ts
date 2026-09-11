@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import type { Ticket, TicketPresence, TicketSeenState, TypingState, TicketReply } from './types';
 import {
-  pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField,
+  pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
   pbGetKV, pbSetKV, pbGetKVByPrefix, pbDeleteKVByKeys,
 } from './shared';
 import { hrActions, buildNotificationLink, isTechnicalSupportMember } from '../hrData';
@@ -200,10 +200,11 @@ export const ticketActions = {
     // tracking settings/heartbeats are. Re-opening clears the timer so a
     // ticket closed-then-reopened-then-closed-again gets a fresh 15 days
     // rather than deleting attachments early based on the first close.
-    const closedAtMap = ((await pbGetKV('hr_ticket_closed_at_v1')) as Record<string, string>) || {};
-    if (status === 'closed') closedAtMap[ticket.id] = new Date().toISOString();
-    else delete closedAtMap[ticket.id];
-    await pbSetKV('hr_ticket_closed_at_v1', closedAtMap);
+    if (status === 'closed') {
+      await pbUpsertByField('hr_ticket_closed_at', 'ticket_id', ticket.id, { closed_at: new Date().toISOString() });
+    } else {
+      await pbDeleteByField('hr_ticket_closed_at', 'ticket_id', ticket.id);
+    }
   },
   // Best-effort, client-triggered (no server cron in this app — see
   // checkScreenshotRetention above for the same pattern) sweep that deletes
@@ -214,15 +215,16 @@ export const ticketActions = {
   // Called from TicketsView.tsx whenever the Tickets page is open.
   checkTicketAttachmentRetention: async (): Promise<void> => {
     const TICKET_ATTACHMENT_RETENTION_MS = 15 * 24 * 60 * 60 * 1000;
-    const closedAtMap = ((await pbGetKV('hr_ticket_closed_at_v1')) as Record<string, string>) || {};
-    const dueIds = Object.keys(closedAtMap).filter(id => {
-      const closedAt = new Date(closedAtMap[id]).getTime();
-      return !isNaN(closedAt) && (Date.now() - closedAt) >= TICKET_ATTACHMENT_RETENTION_MS;
-    });
+    const closedRows = await pbList('hr_ticket_closed_at');
+    const dueIds = closedRows
+      .filter(r => {
+        const closedAt = new Date(r.closed_at).getTime();
+        return !isNaN(closedAt) && (Date.now() - closedAt) >= TICKET_ATTACHMENT_RETENTION_MS;
+      })
+      .map(r => r.ticket_id as string);
     if (dueIds.length === 0) return;
 
     const tickets = (await pbList('hr_tickets', { filter: dueIds.map(id => `id = "${id}"`).join(' || ') })).map(toTicket);
-    let mapChanged = false;
     for (const ticket of tickets) {
       const hasAttachments = ticket.replies.some(r => !!r.attachmentUrl);
       if (hasAttachments) {
@@ -235,10 +237,8 @@ export const ticketActions = {
       }
       // Whether or not there was anything to scrub (e.g. already cleaned up
       // by another tab), this ticket is done — stop tracking it.
-      delete closedAtMap[ticket.id];
-      mapChanged = true;
+      await pbDeleteByField('hr_ticket_closed_at', 'ticket_id', ticket.id);
     }
-    if (mapChanged) await pbSetKV('hr_ticket_closed_at_v1', closedAtMap);
   },
 
   // ── Ticket "live" presence (see TicketPresence above) ───────────────────

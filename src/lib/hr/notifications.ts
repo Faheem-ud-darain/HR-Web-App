@@ -13,7 +13,7 @@ import type {
   Announcement, Profile, MaintenanceNotice, NotificationCategory,
   NotificationPrefs, Notification, NotificationReadMap,
 } from './types';
-import { pbCreate, pbUpdate, pbDelete, pbGetKV, pbSetKV, pbList } from './shared';
+import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead } from './shared';
 import { hrActions } from '../hrData';
 
 // Shared "does this announcement apply to this person" check — the exact
@@ -33,8 +33,13 @@ export function isAnnouncementForProfile(ann: Announcement, profile: Profile | n
   return false;
 }
 
-const MAINTENANCE_NOTICES_KEY = 'hr_maintenance_notices_v1';
-const MAINTENANCE_NOTICE_READS_KEY = 'hr_maintenance_notice_reads_v1';
+// Plan 027 Phase 3: hr_maintenance_notices is now a real collection (one
+// row per notice) instead of one array-blob row; hr_maintenance_notice_reads
+// is a read-receipt collection (see shared.ts's pbGetReadMap/pbMarkRead)
+// instead of one shared map row.
+function toMaintenanceNotice(m: any): MaintenanceNotice {
+  return { id: m.id, title: m.title, message: m.message, startAt: m.start_at, endAt: m.end_at, createdBy: m.created_by, createdAt: m.created };
+}
 type MaintenanceNoticeReadMap = Record<string, string[]>;
 
 type NotificationClearedMap = Record<string, string[]>;
@@ -173,22 +178,15 @@ export const notificationActions = {
       timestamp: formatTimeNY(new Date()),
     });
   },
-  getNotificationReadMap: (): Promise<NotificationReadMap> => pbGetKV('hr_notification_reads_prod_v1').then(v => v || {}),
-  getNotificationClearedMap: (): Promise<NotificationClearedMap> => pbGetKV('hr_notification_cleared_prod_v1').then(v => v || {}),
+  getNotificationReadMap: (): Promise<NotificationReadMap> => pbGetReadMap('hr_notification_reads'),
+  getNotificationClearedMap: (): Promise<NotificationClearedMap> => pbGetReadMap('hr_notification_cleared'),
   markNotificationsAsRead: async (notifications: Notification[], email: string, role: string): Promise<void> => {
-    const emailLower = email.toLowerCase();
     const personal = notifications.filter(n => n.recipientEmail === email && !n.read);
     await Promise.all(personal.map(n => pbUpdate('hr_notifications', n.id, { read: true })));
 
     const broadcasts = notifications.filter(n => n.recipientRole === role && n.recipientEmail === 'all');
     if (broadcasts.length === 0) return;
-    const readMap = ((await pbGetKV('hr_notification_reads_prod_v1')) as NotificationReadMap) || {};
-    let changed = false;
-    broadcasts.forEach(n => {
-      const readers = readMap[n.id] || [];
-      if (!readers.map(e => e.toLowerCase()).includes(emailLower)) { readMap[n.id] = [...readers, email]; changed = true; }
-    });
-    if (changed) await pbSetKV('hr_notification_reads_prod_v1', readMap);
+    await Promise.all(broadcasts.map(n => pbMarkRead('hr_notification_reads', n.id, email)));
   },
   isNotificationRead: (n: Notification, email: string, readMap: NotificationReadMap): boolean => {
     if (n.recipientEmail === email) return n.read;
@@ -201,14 +199,7 @@ export const notificationActions = {
     await hrActions.markNotificationsAsRead(notifications, email, role);
     const visible = notifications.filter(n => n.recipientEmail.toLowerCase() === email.toLowerCase() || (n.recipientEmail === 'all' && n.recipientRole === role));
     if (visible.length === 0) return;
-    const clearedMap = ((await pbGetKV('hr_notification_cleared_prod_v1')) as NotificationClearedMap) || {};
-    const emailLower = email.toLowerCase();
-    let changed = false;
-    visible.forEach(n => {
-      const clearers = clearedMap[n.id] || [];
-      if (!clearers.map(e => e.toLowerCase()).includes(emailLower)) { clearedMap[n.id] = [...clearers, email]; changed = true; }
-    });
-    if (changed) await pbSetKV('hr_notification_cleared_prod_v1', clearedMap);
+    await Promise.all(visible.map(n => pbMarkRead('hr_notification_cleared', n.id, email)));
   },
 
   // ── Push notification preferences (hr_notification_prefs_v1) ───────────
@@ -219,13 +210,11 @@ export const notificationActions = {
   // for a given email default to "on" (opt-out model), both here and in
   // the hook, so someone who's never opened Settings still gets pushes.
   getNotificationPrefs: async (email: string): Promise<NotificationPrefs> => {
-    const all = ((await pbGetKV('hr_notification_prefs_v1')) as Record<string, Partial<NotificationPrefs>>) || {};
-    return { ...DEFAULT_NOTIFICATION_PREFS, ...(all[email.toLowerCase()] || {}) };
+    const row = await pbFindByField('hr_notification_prefs', 'email', email.toLowerCase());
+    return { ...DEFAULT_NOTIFICATION_PREFS, ...((row?.data as Partial<NotificationPrefs>) || {}) };
   },
   updateNotificationPrefs: async (email: string, prefs: NotificationPrefs): Promise<void> => {
-    const all = ((await pbGetKV('hr_notification_prefs_v1')) as Record<string, Partial<NotificationPrefs>>) || {};
-    all[email.toLowerCase()] = prefs;
-    await pbSetKV('hr_notification_prefs_v1', all);
+    await pbUpsertByField('hr_notification_prefs', 'email', email.toLowerCase(), { data: prefs });
   },
 
   // ── Announcements ─────────────────────────────────────────────────────
@@ -239,7 +228,7 @@ export const notificationActions = {
       target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
       timestamp: formatTimeNY(new Date()) + ' ' + formatDateNY(new Date()),
     }),
-  getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetKV('hr_announcement_reads_v1').then(v => v || {}),
+  getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetReadMap('hr_announcement_reads'),
   isAnnouncementRead: (ann: Announcement, email: string, readMap: AnnouncementReadMap): boolean =>
     (readMap[ann.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
   // Explicit "I acknowledge this" action for AnnouncementPopup's blocking
@@ -254,14 +243,7 @@ export const notificationActions = {
   // read here also clears the passive feed's unread highlight, and vice
   // versa — one unified read-state, not two that could disagree.
   markAnnouncementRead: async (announcementId: string, email: string): Promise<void> => {
-    if (!email) return;
-    const readMap = ((await pbGetKV('hr_announcement_reads_v1')) as AnnouncementReadMap) || {};
-    const emailLower = email.toLowerCase();
-    const readers = readMap[announcementId] || [];
-    if (!readers.map(e => e.toLowerCase()).includes(emailLower)) {
-      readMap[announcementId] = [...readers, email];
-      await pbSetKV('hr_announcement_reads_v1', readMap);
-    }
+    await pbMarkRead('hr_announcement_reads', announcementId, email);
   },
   // Called once the announcements a person can currently see have actually
   // been rendered on screen — writes read-state server-side for next visit,
@@ -272,14 +254,7 @@ export const notificationActions = {
   // not seen-on-render).
   markAnnouncementsSeen: async (announcements: Announcement[], email: string): Promise<void> => {
     if (!email || announcements.length === 0) return;
-    const emailLower = email.toLowerCase();
-    const readMap = ((await pbGetKV('hr_announcement_reads_v1')) as AnnouncementReadMap) || {};
-    let changed = false;
-    announcements.forEach(ann => {
-      const readers = readMap[ann.id] || [];
-      if (!readers.map(e => e.toLowerCase()).includes(emailLower)) { readMap[ann.id] = [...readers, email]; changed = true; }
-    });
-    if (changed) await pbSetKV('hr_announcement_reads_v1', readMap);
+    await Promise.all(announcements.map(ann => pbMarkRead('hr_announcement_reads', ann.id, email)));
   },
   // Both HR and Admin can post announcements (see admin/page.tsx and
   // hr/page.tsx's Post Announcement forms), and both already see the same
@@ -292,7 +267,7 @@ export const notificationActions = {
   // See MaintenanceNotice above for why this is a separate system from
   // Announcement rather than an "important announcement" variant.
   getMaintenanceNotices: (): Promise<MaintenanceNotice[]> =>
-    pbGetKV(MAINTENANCE_NOTICES_KEY).then(v => (Array.isArray(v) ? v : [])),
+    pbList('hr_maintenance_notices', { sort: '-created' }).then(rows => rows.map(toMaintenanceNotice)),
 
   // Creates the notice AND broadcasts a real hr_notifications row (category
   // 'maintenance') to all four roles so it shows in every dashboard's bell
@@ -312,13 +287,9 @@ export const notificationActions = {
   addMaintenanceNotice: async (
     title: string, message: string, startAtIso: string, endAtIso: string, createdBy: string
   ): Promise<void> => {
-    const existing = await hrActions.getMaintenanceNotices();
-    const notice: MaintenanceNotice = {
-      id: `maint_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-      title, message, startAt: startAtIso, endAt: endAtIso, createdBy,
-      createdAt: new Date().toISOString(),
-    };
-    await pbSetKV(MAINTENANCE_NOTICES_KEY, [...existing, notice]);
+    await pbCreate('hr_maintenance_notices', {
+      title, message, start_at: startAtIso, end_at: endAtIso, created_by: createdBy,
+    });
 
     await Promise.all(
       (['employee', 'team_lead', 'hr', 'admin'] as const).map(role =>
@@ -328,25 +299,17 @@ export const notificationActions = {
   },
 
   deleteMaintenanceNotice: async (id: string): Promise<void> => {
-    const existing = await hrActions.getMaintenanceNotices();
-    await pbSetKV(MAINTENANCE_NOTICES_KEY, existing.filter(n => n.id !== id));
+    await pbDelete('hr_maintenance_notices', id);
   },
 
   getMaintenanceNoticeReadMap: (): Promise<MaintenanceNoticeReadMap> =>
-    pbGetKV(MAINTENANCE_NOTICE_READS_KEY).then(v => v || {}),
+    pbGetReadMap('hr_maintenance_notice_reads'),
 
   isMaintenanceNoticeRead: (notice: MaintenanceNotice, email: string, readMap: MaintenanceNoticeReadMap): boolean =>
     (readMap[notice.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
 
   markMaintenanceNoticeRead: async (noticeId: string, email: string): Promise<void> => {
-    if (!email) return;
-    const readMap = ((await pbGetKV(MAINTENANCE_NOTICE_READS_KEY)) as MaintenanceNoticeReadMap) || {};
-    const emailLower = email.toLowerCase();
-    const readers = readMap[noticeId] || [];
-    if (!readers.map(e => e.toLowerCase()).includes(emailLower)) {
-      readMap[noticeId] = [...readers, email];
-      await pbSetKV(MAINTENANCE_NOTICE_READS_KEY, readMap);
-    }
+    await pbMarkRead('hr_maintenance_notice_reads', noticeId, email);
   },
 
   // Both HR and Admin can post/manage these (per explicit product decision),

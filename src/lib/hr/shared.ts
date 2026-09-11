@@ -148,6 +148,21 @@ export async function pbFindByField(collection: string, field: string, value: st
   }
 }
 
+// Deletes the one row (if any) where `field` = `value` — the delete-side
+// counterpart to pbFindByField/pbUpsertByField, used where a state is
+// cleared entirely rather than updated (e.g. a ticket's closed-at timer
+// clearing on reopen).
+export async function pbDeleteByField(collection: string, field: string, value: string): Promise<void> {
+  const row = await pbFindByField(collection, field, value);
+  if (row) {
+    try {
+      await pb.collection(collection).delete(row.id, { requestKey: null });
+    } catch {
+      // already gone — fine
+    }
+  }
+}
+
 // hr_delcargo_store (KV) helpers — still real server storage, just not a
 // per-entity table. Always fetched fresh; never written to localStorage.
 // In-memory (per browser tab, per session — never persisted) cache of
@@ -253,6 +268,48 @@ export function useKVByPrefix(prefix: string) {
 export function useInvalidate() {
   const qc = useQueryClient();
   return (keys: string[]) => keys.forEach(k => qc.invalidateQueries({ queryKey: [k] }));
+}
+
+// ── Plan 027 Phase 3: "read receipt" collection helpers ─────────────────
+// One row per (entityId, email) pair, replacing a single shared row that
+// held a `{ entityId: [readerEmail, ...] }` map for the WHOLE company —
+// notification/announcement/message/maintenance-notice read & cleared
+// state all used that shape. The problem it had: marking one entity read
+// meant fetch-the-whole-map, mutate one entry, write-the-whole-map-back,
+// so two people marking different entities read at the same moment could
+// silently overwrite each other's change (a real race, not hypothetical —
+// see plan 027's Problem section). A read receipt is naturally a
+// create-once, append-only fact ("this person has seen this thing"), so
+// there's nothing to update-and-possibly-race on: creating a row either
+// succeeds (first time) or fails on the unique index (already read) —
+// either way the caller's "it's read now" postcondition holds.
+//
+// Read side keeps the exact same `Record<entityId, string[]>` shape every
+// existing `isXRead(entity, email, map)` call site already expects, so
+// nothing above this layer needs to change — only how the map gets built.
+export async function pbGetReadMap(collection: string): Promise<Record<string, string[]>> {
+  const rows = await pb.collection(collection).getFullList({ requestKey: null });
+  const map: Record<string, string[]> = {};
+  (rows as any[]).forEach(r => {
+    if (!map[r.entity_id]) map[r.entity_id] = [];
+    map[r.entity_id].push(r.email);
+  });
+  return map;
+}
+
+export async function pbMarkRead(collection: string, entityId: string, email: string): Promise<void> {
+  if (!entityId || !email) return;
+  try {
+    await pb.collection(collection).create({
+      read_key: `${entityId}_${email.toLowerCase()}`,
+      entity_id: entityId,
+      email,
+    }, { requestKey: null });
+  } catch {
+    // Unique index on read_key rejected a duplicate — already read by this
+    // person, which is exactly the postcondition the caller wants, so this
+    // is success, not an error.
+  }
 }
 
 export const formatMoney = (amount: number, region?: 'USA' | 'Pakistan') =>

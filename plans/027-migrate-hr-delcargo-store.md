@@ -281,3 +281,76 @@ collection.
   flow were NOT live-tested this phase (no test trigger available without
   sending a real email or performing a real Google OAuth round-trip) —
   flagged as lower-confidence pending a real exercise of those two paths.
+
+**Phase 2 (profile overlays) — DONE (2026-09-11).**
+
+- `hr_profile_extras` (profile_id unique, data json, public), `hr_profile_docs`
+  (profile_id unique, data json, public), `hr_deleted_profile_emails` (email
+  unique, deletedAt text, public), `hr_payroll_breakdowns` (breakdown_key
+  unique, data json, admin-only) created via `ensurePhase2Collections`.
+  `hr_profile_docs` pre-existed from earlier unrecorded prep work with the
+  right fields but leftover admin-only rules (same root cause as
+  `hr_user_sessions` in Phase 1) — caught via `describePhase2Collections`
+  and fixed with the newly-generalized `makeCollectionPublic` action.
+- Rewrote `profiles.ts` (`getProfileExtras`/`saveProfileExtras`/
+  `getProfileDocuments`/`saveProfileDocuments`, the extras-prefix fetch in
+  `useProfiles()`, and the tombstone add/clear in `addEmployee`/
+  `deleteEmployee`), `admin/profile/route.ts` and `profile/me/route.ts`
+  (both now use small local `getExtras`/`mergeExtras`/`mergeDocs` helpers
+  instead of raw `adminGetKV`/`adminSetKV` calls), `auth/login/route.ts`'s
+  offboarded-status check (rewritten to `adminFindByField` + its own
+  fail-open try/catch, matching Phase 1's `checkRateLimit` reasoning),
+  `payroll/me/route.ts` and `admin/payroll/route.ts` (breakdown lookups/
+  writes against `hr_payroll_breakdowns`).
+- **Live-verified**: real Employee login (`faheem@delcargo.us`, logged in
+  directly by the user) succeeded post-Phase-2 with no errors reported.
+  Profile-edit and document-upload were not explicitly re-confirmed by the
+  user as separately tested beyond that login — worth a spot-check next
+  time either screen is touched, but not blocking further phases.
+
+**Phase 3 (shared-blob read-state) — code done, schema/live-verification
+pending.**
+
+- Added `pbGetReadMap(collection)`/`pbMarkRead(collection, entityId, email)`
+  to `shared.ts` and `pbDeleteByField(collection, field, value)` (the
+  delete-side counterpart to `pbFindByField`/`pbUpsertByField`, needed for
+  `hr_ticket_closed_at`'s clear-on-reopen). A "read receipt" is a
+  create-once, append-only fact — creating a row either succeeds (first
+  read) or fails on the unique `read_key` index (already read), so there's
+  nothing to fetch-mutate-write-back and race on, unlike the old shared
+  `{ entityId: [readerEmail, ...] }` blob rows.
+- Rewrote `notifications.ts` (`getNotificationReadMap`/
+  `getNotificationClearedMap`/`markNotificationsAsRead`/
+  `clearAllNotificationsFor`/`getAnnouncementReadMap`/`markAnnouncementRead`/
+  `markAnnouncementsSeen` against `hr_notification_reads`/
+  `hr_notification_cleared`/`hr_announcement_reads` via `pbGetReadMap`/
+  `pbMarkRead`; `getNotificationPrefs`/`updateNotificationPrefs` against a
+  plain `hr_notification_prefs` collection via `pbFindByField`/
+  `pbUpsertByField`; `getMaintenanceNotices`/`addMaintenanceNotice`/
+  `deleteMaintenanceNotice` against a real `hr_maintenance_notices`
+  collection — one row per notice, via `pbList`/`pbCreate`/`pbDelete` and a
+  new `toMaintenanceNotice` converter, instead of one array-blob row — and
+  `getMaintenanceNoticeReadMap`/`markMaintenanceNoticeRead` against
+  `hr_maintenance_notice_reads`), `teams.ts` (`getMessageReadMap`/
+  `markMessagesSeen` against `hr_message_reads`), and `tickets.ts` (the
+  ticket-closed-at timer in the status-update handler and
+  `checkTicketAttachmentRetention`, against `hr_ticket_closed_at` — a
+  dedicated per-ticket collection, not a read-receipt shape, since it's one
+  timestamp per ticket rather than a set of readers).
+- Extended the temporary `schema-migration` route with
+  `ensurePhase3Collections`/`describePhase3Collections`, covering 5
+  read-receipt collections (`hr_notification_reads`, `hr_notification_cleared`,
+  `hr_announcement_reads`, `hr_message_reads`, `hr_maintenance_notice_reads`
+  — each `read_key` unique/`entity_id`/`email`, public rules) plus
+  `hr_notification_prefs`, `hr_maintenance_notices`, and
+  `hr_ticket_closed_at` — all public, matching this app's existing
+  anonymous-client-reach posture (tightening is plan 012's job).
+- `npx tsc --noEmit` clean.
+- **Not yet done**: the user still needs to run `ensurePhase3Collections`
+  from their own authenticated admin browser console (same pattern as
+  Phases 1-2), then `describePhase3Collections` to check for any
+  pre-existing-but-mismatched collections (caught real issues twice
+  already, in Phases 1 and 2), then live-verify: mark a notification/
+  announcement/message read from two accounts to confirm the race is
+  actually gone, post and read a maintenance notice, and close/reopen a
+  ticket to confirm the attachment-retention timer still tracks correctly.
