@@ -354,3 +354,61 @@ pending.**
   announcement/message read from two accounts to confirm the race is
   actually gone, post and read a maintenance notice, and close/reopen a
   ticket to confirm the attachment-retention timer still tracks correctly.
+
+**Phase 4 (ephemeral signals) — partially done (2026-09-11): typing
+indicators + ticket-seen migrated; tracker signals deliberately deferred.**
+
+- Migrated `hr_typing_indicators` (one row per scope+scopeId+email, unique
+  `typing_key` composite, plain `scope`/`scope_id` columns so
+  `getTypingUsers` can filter server-side instead of a KV-prefix scan) and
+  `hr_ticket_seen` (one row per `ticket_id`) in `tickets.ts`, via the
+  existing `pbUpsertByField`/`pbFindByField`/`pbDeleteByField`/`pbList`
+  helpers — no new generic helper needed.
+- **Deliberately NOT migrated this pass**: `hr_tracker_signals` (the 8
+  tracker-agent keys — heartbeat, quit-intent, ping, pong, stop-cmd,
+  command, diagnostics, plus the earlier shift-tab-heartbeat/shift-stop-
+  signal pair). `tracker-agent/agent_gui.py` — a separate Python program
+  already installed and running on every employee's desktop — hardcodes
+  `PB_COLLECTION = "hr_delcargo_store"` and subscribes to realtime SSE on
+  that exact collection name (not something this Next.js app can
+  hot-patch). Migrating these keys requires a coordinated agent-side code
+  change AND a rollout to every already-running desktop agent; attempting
+  it without room for a proper test/rollout risks breaking Start/Stop
+  Shift, heartbeats, and diagnostics company-wide. Deferred to its own
+  dedicated pass with time for that coordination — not bundled into this
+  session's work given the user's same-day deadline.
+- Extended `schema-migration` route with `ensurePhase4Collections`/
+  `describePhase4Collections` for the two migrated collections only.
+- `npx tsc --noEmit` clean. Not yet schema-created in production or
+  live-verified — same next steps as prior phases (run
+  `ensurePhase4Collections` from an admin browser console, then
+  `describePhase4Collections` to check for any pre-existing mismatch,
+  then live-verify: type in Team Chat/a ticket from two accounts and
+  confirm the indicator appears/clears correctly; open a ticket as
+  employee and confirm HR/Admin's "seen" marker updates).
+
+**Also fixed this session**: `deleteEmployee`'s per-user notification
+read/cleared cleanup (`profiles.ts`) still targeted the old
+`hr_notification_reads_prod_v1`/`hr_notification_cleared_prod_v1` KV keys
+removed in Phase 3, and its map-shape assumption never actually matched
+even before (entityId -> emails, not email -> entity) — rewritten to
+`pbDeleteByField(..., 'email', ...)` against all 5 real per-email
+collections (`hr_notification_reads`, `hr_notification_cleared`,
+`hr_announcement_reads`, `hr_message_reads`, `hr_notification_prefs`).
+
+**Real Phase 3 regression caught and fixed live (2026-09-11)**:
+`hr_notification_reads`, `hr_notification_cleared`, `hr_announcement_reads`,
+`hr_message_reads`, and `hr_notification_prefs` all pre-existed (earlier,
+unrecorded prep work) with a DIFFERENT shape than the read-receipt pattern
+this phase introduced — one row PER EMAIL holding an array of ids (e.g.
+`{ email, read_ids: [...] }`), not one row per (entity, email) pair, and
+`hr_notification_prefs` uses a `prefs` field, not `data`. Writing
+read-receipt-shaped rows against that real schema silently failed every
+time (400 from PocketBase, swallowed by `pbMarkRead`'s catch-all) — user
+reported announcements kept reappearing as unread on every page visit.
+Fixed by adding `pbGetIdSetMap`/`pbMarkIdsInField` in `shared.ts` (reads/
+read-modify-writes the real per-email-row shape, already race-safe across
+users since each person only writes their own row) and repointing
+`notifications.ts`/`teams.ts` at it; live-verified fixed by the user
+immediately after. `hr_maintenance_notice_reads` (genuinely new, no
+collision) keeps the original read-receipt helpers.

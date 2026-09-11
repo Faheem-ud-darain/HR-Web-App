@@ -280,6 +280,69 @@ async function ensurePhase3Collections(): Promise<Record<string, string>> {
   return results;
 }
 
+
+// Phase 4 collections — ephemeral, high-write-frequency signals (see plan
+// 027). ONLY the two items with no external-system dependency are done
+// here: hr_typing_indicators (chat/ticket "X is typing" heartbeat, one row
+// per scope+scopeId+email) and hr_ticket_seen (one row per ticketId, "seen
+// by employee" marker). The other Phase 4 item in the plan —
+// hr_tracker_signals, consolidating the 8 tracker-agent ping/pong/
+// heartbeat/quit-intent/command/diagnostics keys — is deliberately NOT
+// included: tracker-agent/agent_gui.py (a separate Python program already
+// installed and running on every employee's desktop) hardcodes
+// PB_COLLECTION = "hr_delcargo_store" and subscribes to realtime SSE on
+// that exact collection name. Moving those keys requires a coordinated
+// agent-side code change AND a rollout to every already-running desktop
+// agent — done in its own dedicated pass, not bundled in here.
+const PHASE_4_COLLECTIONS: Array<{ name: string; schema: any[]; indexes: string[] }> = [
+  {
+    name: 'hr_typing_indicators',
+    schema: [
+      { name: 'typing_key', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+      { name: 'scope', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'scope_id', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'email', type: 'text', required: true, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'display_name', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+      { name: 'last_typed_at', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+    ],
+    indexes: ['CREATE UNIQUE INDEX idx_hr_typing_indicators_typing_key ON hr_typing_indicators (typing_key)'],
+  },
+  {
+    name: 'hr_ticket_seen',
+    schema: [
+      { name: 'ticket_id', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+      { name: 'employee_seen_at', type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
+    ],
+    indexes: ['CREATE UNIQUE INDEX idx_hr_ticket_seen_ticket_id ON hr_ticket_seen (ticket_id)'],
+  },
+];
+
+async function ensurePhase4Collections(): Promise<Record<string, string>> {
+  const results: Record<string, string> = {};
+  for (const { name, schema, indexes } of PHASE_4_COLLECTIONS) {
+    if (await collectionExists(name)) {
+      results[name] = 'already exists';
+      continue;
+    }
+    await pbAdminFetch('/api/collections', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        type: 'base',
+        schema,
+        indexes,
+        listRule: '',
+        viewRule: '',
+        createRule: '',
+        updateRule: '',
+        deleteRule: '',
+      }),
+    });
+    results[name] = 'created';
+  }
+  return results;
+}
+
 export async function POST(request: Request) {
   const { error } = await requireAdmin(request);
   if (error) return error;
@@ -335,16 +398,23 @@ export async function POST(request: Request) {
       const results = await ensurePhase3Collections();
       return NextResponse.json({ ok: true, results });
     }
+    if (body.action === 'ensurePhase4Collections') {
+      const results = await ensurePhase4Collections();
+      return NextResponse.json({ ok: true, results });
+    }
     if (
       body.action === 'describePhase1Collections' ||
       body.action === 'describePhase2Collections' ||
-      body.action === 'describePhase3Collections'
+      body.action === 'describePhase3Collections' ||
+      body.action === 'describePhase4Collections'
     ) {
       const names = body.action === 'describePhase1Collections'
         ? PHASE_1_COLLECTIONS.map(c => c.name)
         : body.action === 'describePhase2Collections'
         ? PHASE_2_COLLECTIONS.map(c => c.name)
-        : [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name), ...PHASE_3_PREEXISTING_COLLECTIONS];
+        : body.action === 'describePhase3Collections'
+        ? [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name), ...PHASE_3_PREEXISTING_COLLECTIONS]
+        : PHASE_4_COLLECTIONS.map(c => c.name);
       const results: Record<string, any> = {};
       for (const name of names) {
         try {

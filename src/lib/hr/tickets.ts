@@ -10,7 +10,6 @@ import { pb } from '../pocketbase';
 import type { Ticket, TicketPresence, TicketSeenState, TypingState, TicketReply } from './types';
 import {
   pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
-  pbGetKV, pbSetKV, pbGetKVByPrefix, pbDeleteKVByKeys,
 } from './shared';
 import { hrActions, buildNotificationLink, isTechnicalSupportMember } from '../hrData';
 
@@ -29,7 +28,9 @@ export const TICKET_PRESENCE_STALE_MS = 20 * 1000;
 // have a ticket selected (touched on an interval so it also advances if a
 // new reply arrives while they're already looking at it), read by HR/Admin's
 // TicketsView for whichever ticket is currently selected.
-const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
+// hr_ticket_seen — one row per ticketId (plan 027 Phase 4), replacing the
+// old hr_ticket_seen_<id> KV-blob-per-ticket pattern (same shape upgrade
+// hr_ticket_presence got earlier — see its own comment above).
 
 
 // "X is typing…" indicator — same KV-heartbeat idea as TicketPresence above,
@@ -41,9 +42,16 @@ const ticketSeenKeyFor = (ticketId: string) => `hr_ticket_seen_${ticketId}`;
 // Chat (scope 'chat', id = teamId) and Tickets (scope 'ticket', id =
 // ticketId) — see touchTypingState/clearTypingState/getTypingUsers below.
 export const TYPING_STALE_MS = 5 * 1000;
+// hr_typing_indicators — one row per (scope, scopeId, email) triple (plan
+// 027 Phase 4), replacing the old hr_typing_<scope>_<scopeId>_<email> KV
+// prefix-scan pattern. `typing_key` is the unique composite lookup field;
+// `scope`/`scope_id` are plain columns so getTypingUsers can filter
+// server-side by scope+scopeId instead of a KV-key prefix scan.
 const typingKeyFor = (scope: 'chat' | 'ticket', scopeId: string, email: string) =>
-  `hr_typing_${scope}_${scopeId}_${email.toLowerCase()}`;
-const typingPrefixFor = (scope: 'chat' | 'ticket', scopeId: string) => `hr_typing_${scope}_${scopeId}_`;
+  `${scope}_${scopeId}_${email.toLowerCase()}`;
+function toTypingState(row: any): TypingState {
+  return { scope: row.scope, scopeId: row.scope_id, email: row.email, displayName: row.display_name, lastTypedAt: row.last_typed_at };
+}
 
 function toTicket(t: any): Ticket {
   return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
@@ -271,14 +279,19 @@ export const ticketActions = {
   // field is non-empty, not on every single keypress) while it's non-empty,
   // and call clearTypingState immediately on send/blur/empty so the
   // indicator disappears promptly rather than waiting out the stale window.
-  touchTypingState: (scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> =>
-    pbSetKV(typingKeyFor(scope, scopeId, email), { scope, scopeId, email, displayName, lastTypedAt: new Date().toISOString() } as TypingState),
-  clearTypingState: (scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> =>
-    pbDeleteKVByKeys([typingKeyFor(scope, scopeId, email)]),
+  touchTypingState: async (scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> => {
+    await pbUpsertByField('hr_typing_indicators', 'typing_key', typingKeyFor(scope, scopeId, email), {
+      scope, scope_id: scopeId, email: email.toLowerCase(), display_name: displayName, last_typed_at: new Date().toISOString(),
+    });
+  },
+  clearTypingState: async (scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> => {
+    await pbDeleteByField('hr_typing_indicators', 'typing_key', typingKeyFor(scope, scopeId, email));
+  },
   // Returns everyone currently (non-stale) typing in this scope, excluding
   // the viewer themself — that's the filtering the UI needs directly.
   getTypingUsers: async (scope: 'chat' | 'ticket', scopeId: string, excludeEmail: string): Promise<TypingState[]> => {
-    const rows = (await pbGetKVByPrefix(typingPrefixFor(scope, scopeId))).map(row => row.value as TypingState);
+    const escapedScopeId = scopeId.replace(/"/g, '\"');
+    const rows = (await pbList('hr_typing_indicators', { filter: `scope = "${scope}" && scope_id = "${escapedScopeId}"` })).map(toTypingState);
     const now = Date.now();
     return rows.filter(r =>
       r.email.toLowerCase() !== excludeEmail.toLowerCase() &&
@@ -288,8 +301,11 @@ export const ticketActions = {
   },
 
   // ── Ticket "seen by employee" marker (see TicketSeenState above) ────────
-  touchTicketSeenByEmployee: (ticketId: string): Promise<void> =>
-    pbSetKV(ticketSeenKeyFor(ticketId), { ticketId, employeeSeenAt: new Date().toISOString() } as TicketSeenState),
-  getTicketSeenState: (ticketId: string): Promise<TicketSeenState | null> =>
-    pbGetKV(ticketSeenKeyFor(ticketId)),
+  touchTicketSeenByEmployee: async (ticketId: string): Promise<void> => {
+    await pbUpsertByField('hr_ticket_seen', 'ticket_id', ticketId, { employee_seen_at: new Date().toISOString() });
+  },
+  getTicketSeenState: async (ticketId: string): Promise<TicketSeenState | null> => {
+    const row = await pbFindByField('hr_ticket_seen', 'ticket_id', ticketId);
+    return row ? { ticketId: row.ticket_id, employeeSeenAt: row.employee_seen_at } : null;
+  },
 };
