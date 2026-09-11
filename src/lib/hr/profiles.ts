@@ -680,7 +680,16 @@ export const profileActions = {
       ...others,
       { deviceId, deviceLabel, sessionToken, loggedInAt: existing?.loggedInAt || now, lastSeenAt: now },
     ];
-    await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { slots: next });
+    try {
+      await pbUpsertByField(USER_SESSIONS_COLLECTION, 'email', userSessionEmailKeyFor(email), { slots: next });
+    } catch (err) {
+      // Fails OPEN — never block someone's login over a session-tracking
+      // storage hiccup (e.g. hr_user_sessions not existing yet mid-
+      // migration, see plan 027). The 2-device cap simply doesn't get
+      // enforced for this one login attempt; nothing about auth itself
+      // depends on this write succeeding.
+      console.warn('[session] claimUserSessionSlot storage error, allowing login without persisting the slot:', err);
+    }
     return { ok: true, liveSessions: next };
   },
   // Called periodically while a dashboard session is open. Returns false if
