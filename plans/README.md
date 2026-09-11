@@ -159,6 +159,7 @@ land.
 | # | Plan | Severity | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | 26 | [026-attendance-record-retention.md](./026-attendance-record-retention.md) | MEDIUM | none | TODO |
+| 27 | [027-migrate-hr-delcargo-store.md](./027-migrate-hr-delcargo-store.md) | MEDIUM (HIGH for Phase 3) | none (coordinate with 012's hr_delcargo_store item) | TODO |
 
 **26** implements "previous month's attendance deletes itself after 10
 days" — the request originally raised and put on hold earlier, because a
@@ -166,6 +167,16 @@ naive version would have broken plan 007's Insights trend chart (which
 reads 6 months of raw absence records). The plan resolves that by
 summarizing each month's counts into a new aggregate collection before
 retiring the raw rows, so Insights keeps showing 6 full months either way.
+
+**27** splits the generic `hr_delcargo_store` key/value table (~20 unrelated
+data shapes crammed into one collection) into dedicated PocketBase
+collections, phased by risk: auth/security singletons first, then profile
+overlays, then the shared-blob read-state maps that have a real
+read-modify-write race today (Phase 3 — the highest-value fix, since two
+people acting at once can silently clobber each other's read/cleared
+state), then high-frequency tracker/shift/typing signals last. Directly
+unblocks plan 012's own `hr_delcargo_store` lockdown line item — the two
+should be coordinated so the collection is locked/retired once, not twice.
 
 ## Not planned (rejected or out of scope)
 
