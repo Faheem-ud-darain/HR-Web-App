@@ -286,6 +286,36 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     return null;
   };
 
+  // The "is this employee's desktop tracker actually connected right now"
+  // badge — was hand-duplicated between the desktop table row and the
+  // mobile card view below (same markup, only the outer alignment differed)
+  // until this extraction. `align` picks the one difference between the two
+  // call sites: the desktop table centers the stack, the mobile card right-
+  // aligns it against the employee's name/email.
+  const TrackerStatusBadge = ({ hb, settings, align }: { hb: TrackerHeartbeat | null; settings: TrackingSettings; align: 'center' | 'end' }) => {
+    const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
+    if (!isLive) {
+      return (
+        <span className={`inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full ${align === 'end' ? 'shrink-0' : ''}`}>
+          <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
+        </span>
+      );
+    }
+    return (
+      <div className={`flex flex-col ${align === 'end' ? 'items-end shrink-0' : 'items-center'} gap-1`}>
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
+          <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
+        </span>
+        {needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel) && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={`Must update to v${TRACKER_MIN_VERSION}`}>
+            <AlertTriangle className="h-3 w-3" /> Update Required
+          </span>
+        )}
+        <CaptureHealthBadge hb={hb} />
+      </div>
+    );
+  };
+
   const settingsFor = (email: string): TrackingSettings =>
     settingsList.find(s => s.employeeEmail.toLowerCase() === email.toLowerCase())
     || { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
@@ -739,7 +769,6 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               {filteredEmployees.map(emp => {
                 const settings = settingsFor(emp.email);
                 const hb = heartbeatFor(emp.email);
-                const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4">
@@ -748,23 +777,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     </td>
                     <td className="px-6 py-4 text-slate-600 font-semibold">{emp.region || 'Pakistan'}</td>
                     <td className="px-6 py-4 text-center">
-                      {isLive ? (
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
-                            <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
-                          </span>
-                          {needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={`Must update to v${TRACKER_MIN_VERSION}`}>
-                              <AlertTriangle className="h-3 w-3" /> Update Required
-                            </span>
-                          )}
-                          <CaptureHealthBadge hb={hb} />
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                          <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
-                        </span>
-                      )}
+                      <TrackerStatusBadge hb={hb} settings={settings} align="center" />
                     </td>
                     <td className="px-6 py-4 text-center">
                       {canManage ? (
@@ -883,7 +896,6 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
           {filteredEmployees.map(emp => {
             const settings = settingsFor(emp.email);
             const hb = heartbeatFor(emp.email);
-            const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
             return (
               <div key={emp.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <div className="flex items-start justify-between">
@@ -891,23 +903,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     <p className="text-sm font-bold text-slate-900">{displayName(emp, role)}</p>
                     <p className="text-[10px] text-slate-500">{emp.email}</p>
                   </div>
-                  {isLive ? (
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full" title={hb?.deviceLabel || ''}>
-                        <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
-                      </span>
-                      {needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel) && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title={`Must update to v${TRACKER_MIN_VERSION}`}>
-                          <AlertTriangle className="h-3 w-3" /> Update Required
-                        </span>
-                      )}
-                      <CaptureHealthBadge hb={hb} />
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full shrink-0">
-                      <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
-                    </span>
-                  )}
+                  <TrackerStatusBadge hb={hb} settings={settings} align="end" />
                 </div>
                 <div className="grid grid-cols-2 gap-y-3 gap-x-2 mt-2">
                   <div>
