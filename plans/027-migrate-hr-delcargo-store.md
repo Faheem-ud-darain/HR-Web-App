@@ -544,3 +544,37 @@ employee's machine).**
    KV helper functions themselves and locking/retiring
    `hr_delcargo_store`) becomes unblocked on the tracker-signals side —
    still separately blocked on the legacy `screenshot_<id>` rows aging out.
+
+**Phase 4b deployment — live (2026-09-13, ~19:20 UTC).**
+
+- `hr_tracker_signals` collection confirmed live and schema-correct in
+  production (see the code-fix commit `47034f5` for what was wrong and
+  why): keyed on `email`, all 8 signal fields present as json
+  (`heartbeat`/`shift_stop_signal`/`quit_intent`/`ping`/`pong`/`stop_cmd`/
+  `command`/`diagnostics`), public rules, unique index on `email`.
+- `tracker-agent-v24` GitHub Release published successfully — Windows
+  `.exe`, Mac `.zip`, and Mac `.dmg` all built and attached
+  (`.github/workflows/build-tracker-agent.yml` run
+  34777712610, all jobs green).
+- Portal deployed to Cloudflare Pages production (`hub.delcargo.us`) at
+  commit `17afef1` — confirmed via the Cloudflare Pages dashboard
+  (deployment `bb592d54`, status success). This is the actual cutover:
+  from this point on, no already-running (pre-v24) tracker agent can
+  reach `hr_tracker_signals` — matches the version-floor plan agreed with
+  the user, no dual-write period.
+- **Live verification not yet done** — no test machine available at
+  deploy time. Still needed once an agent actually relaunches on v24:
+  Start Shift ping/pong handshake, End Shift stop-cmd, HR's Run
+  Diagnostics / Reload Settings Now buttons in TrackingView, and the
+  heartbeat "Connected" indicator. The user chose to deploy now
+  specifically because today (2026-09-13) is a weekend with the next
+  shift not starting until tomorrow 7pm Pakistan time — every employee's
+  agent has a full day of idle time to naturally relaunch (reboot, normal
+  quit/reopen) and pick up v24 before it matters for a real shift. Watch
+  for the first relaunch (or trigger one deliberately on a reachable
+  machine) to actually run through the verification checklist above
+  before tomorrow's shift start.
+- Once verification passes, the only remaining item in the whole plan is
+  the full Phase 5 retirement: delete the now-dead KV helper functions
+  and lock/retire `hr_delcargo_store` itself (still separately gated on
+  legacy `screenshot_<id>` rows aging out/being purged).
