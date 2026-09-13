@@ -6,7 +6,7 @@ AppName=DelCargo Tracker
 ; (that only ever reads APP_VERSION from the Python source), but a stale
 ; number here used to confuse anyone checking there against what's
 ; actually running.
-AppVersion=16
+AppVersion=24
 AppPublisher=DelCargo
 AppPublisherURL=https://delcargo.example
 DefaultDirName={localappdata}\DelCargo Tracker

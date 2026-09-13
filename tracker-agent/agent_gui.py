@@ -128,7 +128,16 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "23"  # Bumped 22 -> 23 (2026-09-04) to fix screenshots on
+APP_VERSION = "24"  # Bumped 23 -> 24 (2026-09-13): the 8-signal tracker
+# reliability system (heartbeat, shift_stop_signal, quit_intent, ping, pong,
+# stop_cmd, command, diagnostics) moved off 8 separate hr_delcargo_store KV
+# keys per employee onto one row per employee in a new hr_tracker_signals
+# collection, in lockstep with hrData.ts's timesheets.ts (plan 027 "migrate
+# and retire"). MIN_SUPPORTED_VERSION is bumped to match (see below) — a
+# pre-v24 agent still speaks the old hr_delcargo_store keys, which the portal
+# no longer reads or writes at all, so it must be forced onto this build
+# rather than soft-rolled-out.
+# Bumped 22 -> 23 (2026-09-04) to fix screenshots on
 # macOS silently capturing only the bare desktop wallpaper (no windows) --
 # without Screen Recording permission, macOS doesn't reliably hand back a
 # black frame the old heuristic looked for; it can instead return a real,
@@ -163,7 +172,7 @@ APP_VERSION = "23"  # Bumped 22 -> 23 (2026-09-04) to fix screenshots on
 # card. request_mac_permissions() also now returns a same-launch warning
 # instead of only printing to a console the packaged build never shows.
 # Bumped 18 -> 19 (2026-08-24) for the Signal 6/7 remote-command
-# channel (command_key_for/diagnostics_key_for, _handle_command, write_diagnostics)
+# channel (the command/diagnostics fields on hr_tracker_signals, _handle_command, write_diagnostics)
 # — HR's "Run Diagnostics" / "Reload Settings Now" buttons in TrackingView only
 # do anything on a v19+ agent, since older builds never open the new SSE branch.
 # Deliberately NOT bumping MIN_SUPPORTED_VERSION below — this is a soft rollout:
@@ -186,7 +195,12 @@ APP_VERSION = "23"  # Bumped 22 -> 23 (2026-09-04) to fix screenshots on
 # v10 also predates the stop-command signal it relies on.
 # Bumped 14 -> 16 (2026-08-19, explicit request) in lockstep with
 # TRACKER_MIN_VERSION in trackerSetup.ts.
-MIN_SUPPORTED_VERSION = "16"
+# Bumped 16 -> 24 (2026-09-13, explicit request) in lockstep with
+# TRACKER_MIN_VERSION in trackerSetup.ts: the hr_tracker_signals migration
+# above is a hard breaking change for anything older (there is no dual-write
+# transition period — the portal cut over directly), so every already-
+# installed agent must be forced onto v24 rather than soft-rolled-out.
+MIN_SUPPORTED_VERSION = "24"
 GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
@@ -616,6 +630,75 @@ def pb_set_kv(base_url, key, value):
     resp.raise_for_status()
 
 
+# ── hr_tracker_signals helpers (plan 027 Phase 4b) ───────────────────────────
+# One row per employee (unique index on employee_email), 8 named json
+# sub-fields — heartbeat, shift_stop_signal, quit_intent, ping, pong,
+# stop_cmd, command, diagnostics — replacing the 8 separate hr_delcargo_store
+# KV keys the "5-Signal Tracker Reliability System" used to write below.
+# Mirrors pbGetTrackerSignal/pbSetTrackerSignal/pbClearTrackerSignal(Fields)
+# in src/lib/hr/shared.ts on the portal side — same collection, same field
+# names, so a payload built here round-trips through hrData.ts unchanged.
+TRACKER_SIGNALS_COLLECTION = "hr_tracker_signals"
+
+
+def _tracker_signals_get_record(base_url, employee_email):
+    """Fetch this employee's whole hr_tracker_signals row. Returns
+    (record_id, record_dict) or (None, None) if they don't have one yet."""
+    key = (employee_email or "").strip().lower()
+    url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records"
+    params = {"filter": f'(employee_email="{key}")', "perPage": 1}
+    resp = requests.get(url, params=params, timeout=15)
+    resp.raise_for_status()
+    items = resp.json().get("items", [])
+    if not items:
+        return None, None
+    return items[0].get("id"), items[0]
+
+
+def get_tracker_signal_field(base_url, employee_email, field):
+    """Reads one named sub-field off this employee's single
+    hr_tracker_signals row. Returns None if there's no row yet, or the
+    field is unset — same shape pb_get_kv's value half used to have."""
+    _, record = _tracker_signals_get_record(base_url, employee_email)
+    if not record:
+        return None
+    value = record.get(field)
+    # PocketBase can hand json fields back as strings over plain REST too
+    # (definitely over SSE — see _realtime_loop) — decode defensively.
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return None
+    return value
+
+
+def set_tracker_signal_field(base_url, employee_email, field, value):
+    """Upserts one named sub-field on this employee's hr_tracker_signals
+    row, leaving every other field untouched — PocketBase's PATCH only
+    writes the keys present in the payload, so this never clobbers a
+    sibling signal (e.g. writing a fresh heartbeat can't wipe out a still-
+    pending ping)."""
+    key = (employee_email or "").strip().lower()
+    record_id, _ = _tracker_signals_get_record(base_url, employee_email)
+    payload = json.dumps({"employee_email": key, field: value})
+    if record_id:
+        url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records/{record_id}"
+        resp = requests.patch(url, headers=JSON_HEADERS, data=payload, timeout=20)
+    else:
+        url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records"
+        resp = requests.post(url, headers=JSON_HEADERS, data=payload, timeout=20)
+    resp.raise_for_status()
+
+
+def clear_tracker_signal_field(base_url, employee_email, field):
+    """Nulls one named sub-field on this employee's row — does NOT delete
+    the row itself, since sibling signals may still be live on it (this is
+    the semantic change from the old clear_heartbeat, which used to delete
+    the whole tracker_heartbeat_<email> KV row on quit)."""
+    set_tracker_signal_field(base_url, employee_email, field, None)
+
+
 def supabase_headers(anon_key):  # kept as alias so old configs don't break
     return JSON_HEADERS
 
@@ -716,23 +799,20 @@ def auto_clock_out(base_url, employee_email):
     return True
 
 
-def shift_stop_signal_key_for(email):
-    return "shift_stop_signal_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
-
 def notify_shift_auto_stopped(base_url, employee_email, reason="tracker_closed"):
     """Writes a one-shot "your shift was just auto-ended" signal the web
-    dashboard polls for (see shiftStopSignalKeyFor/getShiftStopSignal in
-    hrData.ts). Called right after a successful auto_clock_out() so the
-    Employee dashboard — if it happens to be open in a browser somewhere —
-    can pop up an explanation immediately, instead of the employee only
-    finding out at their next login (see the existing shift_auto_stopped_*
-    localStorage flag, which still covers the "wasn't looking at the
-    dashboard right now" case)."""
+    dashboard polls for (see getShiftStopSignal in hrData.ts — the
+    shift_stop_signal field on this employee's hr_tracker_signals row).
+    Called right after a successful auto_clock_out() so the Employee
+    dashboard — if it happens to be open in a browser somewhere — can pop up
+    an explanation immediately, instead of the employee only finding out at
+    their next login (see the existing shift_auto_stopped_* localStorage
+    flag, which still covers the "wasn't looking at the dashboard right
+    now" case)."""
     if not employee_email:
         return
     try:
-        pb_set_kv(base_url, shift_stop_signal_key_for(employee_email), {
+        set_tracker_signal_field(base_url, employee_email, "shift_stop_signal", {
             "employeeEmail": employee_email,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "reason": reason,
@@ -745,15 +825,12 @@ def notify_shift_auto_stopped(base_url, employee_email, reason="tracker_closed")
 #
 # Lets the web dashboard show a live "app is connected" indicator, and makes
 # connecting from a second computer automatically supersede the first one —
-# without needing a real backend. Each employee gets their own individual
-# delcargo_store row (key: tracker_heartbeat_<slug>), matching db.ts's
-# heartbeatKeyFor() on the web side. Whichever device most recently WROTE
-# its deviceId into this row is the "claimed" device; every other device
-# that later notices a mismatch treats itself as superseded and stops.
-
-def heartbeat_key_for(email):
-    return "tracker_heartbeat_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
+# without needing a real backend. Each employee's heartbeat now lives in the
+# `heartbeat` field of their single hr_tracker_signals row (plan 027 Phase
+# 4b — previously its own tracker_heartbeat_<slug> hr_delcargo_store KV row).
+# Whichever device most recently WROTE its deviceId into this field is the
+# "claimed" device; every other device that later notices a mismatch treats
+# itself as superseded and stops.
 
 def get_device_label():
     try:
@@ -778,9 +855,7 @@ def tray_location_hint():
 
 
 def get_heartbeat(base_url, _unused_key, employee_email):
-    key = heartbeat_key_for(employee_email)
-    _, value = pb_get_kv(base_url, key)
-    return value
+    return get_tracker_signal_field(base_url, employee_email, "heartbeat")
 
 
 def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_label, connected_at=None, capture_health=None):
@@ -795,7 +870,6 @@ def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_la
     locked/permission-revoked machine look identical to a genuinely working
     one. See TrackingView.tsx / hrData.ts's getCaptureHealth for how the
     dashboard now surfaces this."""
-    key = heartbeat_key_for(employee_email)
     now = datetime.now(timezone.utc).isoformat()
     value = {
         "employeeEmail": employee_email,
@@ -810,72 +884,28 @@ def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_la
     }
     if capture_health:
         value.update(capture_health)
-    pb_set_kv(base_url, key, value)
+    set_tracker_signal_field(base_url, employee_email, "heartbeat", value)
 
 
 def clear_heartbeat(base_url, employee_email):
-    """Removes this employee's heartbeat row entirely (rather than just
-    letting it go stale) when the app quits. Without this, the web
-    dashboard's "is the tracker connected" checks — including the Start
-    Shift gate on the Employee dashboard (see isHeartbeatLive/hrData.ts) —
-    would keep reporting the agent as connected for up to
+    """Nulls this employee's heartbeat field (does NOT delete their whole
+    hr_tracker_signals row — sibling signals may still be live on it; this
+    is the semantic change from the old KV-row version, which deleted the
+    entire tracker_heartbeat_<slug> row) when the app quits. Without this,
+    the web dashboard's "is the tracker connected" checks — including the
+    Start Shift gate on the Employee dashboard (see isHeartbeatLive/
+    hrData.ts) — would keep reporting the agent as connected for up to
     TRACKER_HEARTBEAT_STALE_MS (3 minutes) after it was actually closed,
     since nothing had told the server it went away."""
-    key = heartbeat_key_for(employee_email)
-    record_id, _ = pb_get_kv(base_url, key)
-    if not record_id:
-        return
-    url = f"{base_url}/api/collections/{PB_COLLECTION}/records/{record_id}"
-    resp = requests.delete(url, timeout=15)
-    resp.raise_for_status()
+    clear_tracker_signal_field(base_url, employee_email, "heartbeat")
 
 
 # ── 5-Signal Tracker Reliability System ──────────────────────────────────────
-# KV key helpers — slug pattern matches _slugify() in hrData.ts
-# (email lowercased, non-alphanumeric chars replaced with '_').
-
-def quit_intent_key_for(email):
-    """Signal 2 key: written by tracker on deliberate quit, read by portal."""
-    return "tracker_quit_intent_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
-
-def ping_key_for(email):
-    """Signal 3 key: written by portal before Start Shift, read by tracker."""
-    return "tracker_ping_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
-
-def pong_key_for(email):
-    """Signal 4 key: written by tracker in response to a ping, read by portal."""
-    return "tracker_pong_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
-
-def stop_cmd_key_for(email):
-    """Signal 5 key: written by portal on End Shift, read by tracker agent."""
-    return "tracker_stop_cmd_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
-
-def command_key_for(email):
-    """Signal 6 key: written by HR/Admin from TrackingView (Run Diagnostics /
-    Reload Settings Now / Check for Update Now buttons), read by tracker
-    agent over the same realtime SSE subscription as ping/stop_cmd. Added
-    2026-08-24 to give HR a direct remote-command channel instead of having
-    to guess what's wrong with a specific employee's tracker from heartbeat
-    fields alone — see command_key_for's sibling diagnostics_key_for for the
-    response half of the round trip. Deliberately reuses the existing
-    hr_delcargo_store KV pattern rather than a new collection so this ships
-    without waiting on the separate collections-split migration; those rows
-    move over whenever that migration happens."""
-    return "tracker_command_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
-
-def diagnostics_key_for(email):
-    """Signal 7 key: written by tracker agent in response to a 'diagnostics'
-    command, read by portal. Holds a point-in-time health snapshot — agent
-    version, connection/capture state, last error, shift status, OS/platform
-    info — so HR can see what's actually happening on that employee's
-    machine right now instead of inferring it from stale heartbeat fields."""
-    return "tracker_diagnostics_" + re.sub(r"[^a-z0-9]", "_", (email or "").lower())
-
+# Each signal below is now a named sub-field (quit_intent, ping, pong,
+# stop_cmd, command, diagnostics) on this employee's single
+# hr_tracker_signals row (plan 027 Phase 4b) instead of its own
+# hr_delcargo_store KV key — see get_tracker_signal_field/
+# set_tracker_signal_field/clear_tracker_signal_field above.
 
 def write_quit_intent(base_url, employee_email):
     """Signal 2: Writes an explicit 'I am deliberately quitting' signal to
@@ -883,14 +913,13 @@ def write_quit_intent(base_url, employee_email):
     quit (clock out immediately) from a server blip (wait grace period).
     Retried up to 3 times with 3s spacing because the server may be slow
     or timing out right at the moment the employee quits the app."""
-    key = quit_intent_key_for(employee_email)
     payload = {
         "employeeEmail": employee_email,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     for attempt in range(3):
         try:
-            pb_set_kv(base_url, key, payload)
+            set_tracker_signal_field(base_url, employee_email, "quit_intent", payload)
             return True
         except Exception as e:
             if attempt < 2:
@@ -903,42 +932,34 @@ def write_quit_intent(base_url, employee_email):
 
 def write_pong(base_url, employee_email, request_id):
     """Signal 4: Writes the pong response to a portal ping.
-    Called when the realtime SSE loop detects a ping key in hr_delcargo_store.
-    The requestId from the ping is echoed back so the portal can validate it."""
-    key = pong_key_for(employee_email)
+    Called when the realtime SSE loop detects a ping on this employee's
+    hr_tracker_signals row. The requestId from the ping is echoed back so
+    the portal can validate it."""
     payload = {
         "employeeEmail": employee_email,
         "requestId": request_id,
         "respondedAt": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        pb_set_kv(base_url, key, payload)
+        set_tracker_signal_field(base_url, employee_email, "pong", payload)
     except Exception as e:
         print(f"[warn] write_pong failed: {e}")
 
 
 def clear_stop_cmd(base_url, employee_email):
-    """Signal 5 cleanup: Deletes the stop command key after the tracker has
+    """Signal 5 cleanup: Nulls the stop_cmd field after the tracker has
     acted on it, so it does not re-trigger on the next poll cycle."""
-    key = stop_cmd_key_for(employee_email)
     try:
-        record_id, _ = pb_get_kv(base_url, key)
-        if record_id:
-            url = f"{base_url}/api/collections/{PB_COLLECTION}/records/{record_id}"
-            requests.delete(url, timeout=10)
+        clear_tracker_signal_field(base_url, employee_email, "stop_cmd")
     except Exception as e:
         print(f"[warn] clear_stop_cmd failed: {e}")
 
 
 def clear_command(base_url, employee_email):
-    """Signal 6 cleanup: Deletes the command key after the tracker has acted
+    """Signal 6 cleanup: Nulls the command field after the tracker has acted
     on it, so a stale command doesn't re-fire on reconnect/next SSE replay."""
-    key = command_key_for(employee_email)
     try:
-        record_id, _ = pb_get_kv(base_url, key)
-        if record_id:
-            url = f"{base_url}/api/collections/{PB_COLLECTION}/records/{record_id}"
-            requests.delete(url, timeout=10)
+        clear_tracker_signal_field(base_url, employee_email, "command")
     except Exception as e:
         print(f"[warn] clear_command failed: {e}")
 
@@ -949,7 +970,6 @@ def write_diagnostics(base_url, employee_email, state_snapshot, cfg):
     self.state dict (read under state_lock by the caller before this is
     invoked from a background thread) — reusing exactly what the dashboard
     UI already shows rather than a second, possibly-diverging code path."""
-    key = diagnostics_key_for(employee_email)
     payload = {
         "employeeEmail": employee_email,
         "respondedAt": datetime.now(timezone.utc).isoformat(),
@@ -970,7 +990,7 @@ def write_diagnostics(base_url, employee_email, state_snapshot, cfg):
         "updateAvailableVersion": state_snapshot.get("update_available_version"),
     }
     try:
-        pb_set_kv(base_url, key, payload)
+        set_tracker_signal_field(base_url, employee_email, "diagnostics", payload)
     except Exception as e:
         print(f"[warn] write_diagnostics failed: {e}")
 
@@ -2421,7 +2441,7 @@ class TrackerApp:
     def _handle_command(self, command_data):
         """Signal 6 handler: called from _realtime_loop when a
         tracker_command_<email> key is created/updated in hr_delcargo_store.
-        Added 2026-08-24 alongside write_diagnostics/diagnostics_key_for —
+        Added 2026-08-24 alongside write_diagnostics/the diagnostics field —
         gives HR a direct way to ask a specific employee's tracker "what's
         actually going on right now" (Run Diagnostics) or nudge it to
         re-check its settings immediately (Reload Settings Now), instead of
@@ -2738,8 +2758,9 @@ class TrackerApp:
                                     data=json.dumps({
                                         "clientId": client_id,
                                         # Subscribe to both hr_timesheets (shift start/stop)
-                                        # and hr_delcargo_store (ping/pong + stop commands)
-                                        "subscriptions": ["hr_timesheets", "hr_delcargo_store"],
+                                        # and hr_tracker_signals (ping/stop_cmd/command —
+                                        # plan 027 Phase 4b; was hr_delcargo_store)
+                                        "subscriptions": ["hr_timesheets", "hr_tracker_signals"],
                                     }),
                                     timeout=15,
                                 )
@@ -2757,32 +2778,49 @@ class TrackerApp:
                         if record_email and record_email == employee_email:
                             self.wake_event.set()
 
-                    elif event_name == "hr_delcargo_store":
-                        # Filter KV store events for keys relevant to this employee.
+                    elif event_name == "hr_tracker_signals":
+                        # This collection holds ALL employees' rows, so every
+                        # field update on ANYONE's row (including our own
+                        # heartbeat writes) fires an event here — filter to
+                        # this agent's own employee first. Each sub-field's
+                        # own handler already validates employeeEmail + a
+                        # staleness window and no-ops on a null/empty value,
+                        # so re-inspecting an unrelated field change (e.g. a
+                        # heartbeat tick) is harmless: only a field that is
+                        # both non-null AND still recent actually does
+                        # anything.
                         try:
                             record = data.get("record") or {}
-                            kv_key = record.get("key") or ""
-                            kv_value = record.get("value") or {}
-                            
-                            # PocketBase sometimes sends JSON fields as strings over SSE
-                            if isinstance(kv_value, str):
-                                try:
-                                    kv_value = json.loads(kv_value)
-                                except Exception:
-                                    kv_value = {}
+                            record_email = (record.get("employee_email") or "").strip().lower()
+                            if record_email != employee_email:
+                                continue
 
-                            if kv_key == ping_key_for(employee_email):
+                            def _decode(v):
+                                # PocketBase sometimes sends json fields as strings over SSE
+                                if isinstance(v, str):
+                                    try:
+                                        return json.loads(v)
+                                    except Exception:
+                                        return None
+                                return v
+
+                            ping_value = _decode(record.get("ping"))
+                            if ping_value:
                                 # Portal wants to confirm we're alive — respond with a pong (Signal 4)
-                                self._handle_ping(kv_value)
-                            elif kv_key == stop_cmd_key_for(employee_email):
+                                self._handle_ping(ping_value)
+
+                            stop_cmd_value = _decode(record.get("stop_cmd"))
+                            if stop_cmd_value:
                                 # Portal ended the shift — stop capturing immediately (Signal 5)
-                                self._handle_stop_cmd(kv_value)
-                            elif kv_key == command_key_for(employee_email):
+                                self._handle_stop_cmd(stop_cmd_value)
+
+                            command_value = _decode(record.get("command"))
+                            if command_value:
                                 # HR/Admin asked for diagnostics or a settings
                                 # reload from TrackingView (Signal 6)
-                                self._handle_command(kv_value)
+                                self._handle_command(command_value)
                         except Exception as inner_e:
-                            print(f"[warn] Failed to process hr_delcargo_store event: {inner_e}")
+                            print(f"[warn] Failed to process hr_tracker_signals event: {inner_e}")
             except Exception as e:
                 print(f"[info] Realtime connection unavailable ({e}); relying on regular polling.")
             finally:

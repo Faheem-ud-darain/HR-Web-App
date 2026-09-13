@@ -277,35 +277,45 @@ export const absenceActions = {
         if (isNaN(d.getTime())) continue;
         const shiftDate = getNYDateString(d);
         shiftDatesWithShift.add(shiftDate);
-        
+
+        const inTime = d.getTime();
+        // BUGFIX 2026-09-11: an OPEN shift (no clock_out yet) used to skip
+        // the inactivity check entirely — logsForShift/maxSingleInactiveSecs
+        // were only ever computed inside the `if (t.clockOut)` branch below,
+        // while this branch's elapsed-time minutes still counted toward
+        // "worked" time. That let an employee clock in and leave the shift
+        // running (real screen inactivity the whole time, or the whole day
+        // spent doing nothing) show up as a normal, fully-present day with
+        // zero inactivity flag, for as long as the shift stayed open — up to
+        // the 16h autoCloseStaleOpenShifts cap, and only caught retroactively
+        // once that auto-close set clock_out and a LATER absence-check run
+        // happened to re-evaluate the date. Using Date.now() as a synthetic
+        // outTime for still-open shifts means inactivity is now checked on
+        // every run, not just after the shift eventually closes — this
+        // can't change today's own status (the caller's date loop always
+        // skips `dateStr >= nyTodayStr`), it only fixes a PAST day whose
+        // shift is still sitting open.
+        const outTime = t.clockOut ? new Date(t.clockOut).getTime() : Date.now();
         let shiftMins = 0;
-        if (t.clockOut) {
-          const inTime = d.getTime();
-          const outTime = new Date(t.clockOut).getTime();
-          if (!isNaN(outTime) && outTime > inTime) {
-            shiftMins = Math.floor((outTime - inTime) / 60000);
-          }
-          
-          // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
-          // not by summing up multiple smaller inactive periods across the shift.
-          const logsForShift = empInactivity.filter(l => {
-            const lt = new Date(l.startAt).getTime();
-            return lt >= inTime && lt <= outTime;
-          });
-          let maxSingleInactiveSecs = 0;
-          for (const l of logsForShift) {
-            const duration = l.durationSeconds || 0;
-            if (duration > maxSingleInactiveSecs) {
-              maxSingleInactiveSecs = duration;
-            }
-          }
-          const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
-          shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
-        } else {
-          // Active or unclosed shift
-          const inTime = d.getTime();
-          shiftMins = Math.max(0, Math.floor((Date.now() - inTime) / 60000));
+        if (!isNaN(outTime) && outTime > inTime) {
+          shiftMins = Math.floor((outTime - inTime) / 60000);
         }
+
+        // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
+        // not by summing up multiple smaller inactive periods across the shift.
+        const logsForShift = empInactivity.filter(l => {
+          const lt = new Date(l.startAt).getTime();
+          return lt >= inTime && lt <= outTime;
+        });
+        let maxSingleInactiveSecs = 0;
+        for (const l of logsForShift) {
+          const duration = l.durationSeconds || 0;
+          if (duration > maxSingleInactiveSecs) {
+            maxSingleInactiveSecs = duration;
+          }
+        }
+        const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
+        shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
 
         const existingTotal = shiftDatesWithTotalMinutes.get(shiftDate) || 0;
         shiftDatesWithTotalMinutes.set(shiftDate, existingTotal + shiftMins);

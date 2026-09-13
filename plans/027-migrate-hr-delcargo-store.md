@@ -453,3 +453,94 @@ no-external-dependency items only.**
   retirement can only happen after the tracker-agent migration is done
   AND the legacy screenshot rows have fully aged out or been explicitly
   purged.
+
+**Phase 4b (tracker-agent signals migration) — code done (2026-09-13), not
+yet deployed. This is the "migrate and retire" step requested explicitly by
+the user, and the one genuinely risky change in the whole plan (it touches
+a live fleet of desktop tracker agents already installed on every
+employee's machine).**
+
+- New `hr_tracker_signals` collection: one row per employee
+  (`employee_email`, unique index), 8 named json sub-fields — `heartbeat`,
+  `shift_stop_signal`, `quit_intent`, `ping`, `pong`, `stop_cmd`, `command`,
+  `diagnostics` — replacing the 8 separate per-employee `hr_delcargo_store`
+  KV keys the "5-Signal Tracker Reliability System" used (plus the
+  heartbeat and shift-stop-signal keys that predate that name).
+- Portal side (`src/lib/hr/shared.ts`): added
+  `pbGetTrackerSignal`/`pbGetAllTrackerSignals`/`pbSetTrackerSignal`/
+  `pbClearTrackerSignal`/`pbClearTrackerSignalFields` — same
+  lookup/cache/upsert shape as the existing KV helpers, scoped to one row
+  per employee instead of one row per key.
+- Portal side (`src/lib/hr/timesheets.ts`): every one of
+  `getTrackerHeartbeat`/`getAllTrackerHeartbeats`/`getShiftStopSignal`/
+  `getTrackerQuitIntent`/`clearTrackerQuitIntent`/`writeTrackerPing`/
+  `clearTrackerPing`/`getTrackerPong`/`clearTrackerPong`/
+  `writeTrackerStopCmd`/`writeTrackerCommand`/`getTrackerDiagnostics`/
+  `clearTrackerDiagnostics`/`forceDisconnectAllTrackers` now reads/writes
+  `hr_tracker_signals` instead of `hr_delcargo_store`. All the now-unused
+  `*_key_for` slug helpers were removed.
+- `src/lib/hr/profiles.ts`'s `deleteEmployee` cleanup now deletes the
+  departing employee's whole `hr_tracker_signals` row (was targeting the
+  old `tracker_heartbeat_<slug>` KV key only).
+- Agent side (`tracker-agent/agent_gui.py`): added
+  `_tracker_signals_get_record`/`get_tracker_signal_field`/
+  `set_tracker_signal_field`/`clear_tracker_signal_field` mirroring the
+  portal helpers exactly (same collection/field names). Rewired
+  `get_heartbeat`/`upsert_heartbeat`/`clear_heartbeat`,
+  `notify_shift_auto_stopped`, and all of `write_quit_intent`/`write_pong`/
+  `clear_stop_cmd`/`clear_command`/`write_diagnostics` to use them.
+  **Semantic change**: `clear_heartbeat` now nulls just the `heartbeat`
+  field instead of deleting the whole row (other signals may still be live
+  on it). Redesigned the realtime SSE loop: subscribes to
+  `["hr_timesheets", "hr_tracker_signals"]` instead of
+  `["hr_timesheets", "hr_delcargo_store"]`, and dispatch now matches
+  `record.employee_email` against this agent's own email first, then
+  inspects the `ping`/`stop_cmd`/`command` sub-fields directly (each
+  handler already validated `employeeEmail` + a staleness window and
+  no-ops on empty/null, a property this redesign depends on and confirmed
+  by reading `_handle_ping`/`_handle_stop_cmd`/`_handle_command` closely
+  before relying on it).
+- **Version floor bump — the actual rollout mechanism** (per the user's
+  explicit choice of "force update via version floor" over a dual-write
+  transition period): `APP_VERSION` 23→24 and `MIN_SUPPORTED_VERSION`
+  16→24 in `agent_gui.py`; `TRACKER_MIN_VERSION` 16→24 in
+  `src/lib/trackerSetup.ts`; `AppVersion` in `setup.iss` 16→24 (cosmetic,
+  Windows Add/Remove Programs display only). There is deliberately NO
+  dual-write/transition period — this is a hard cutover, matching the
+  user's explicit choice.
+- **Known, surfaced-to-the-user timing gap**: `_check_and_prompt_update()`
+  only runs at agent *startup*, never live mid-session. The moment the
+  portal side of this migration is deployed, every currently-running
+  tracker instance (v23 or earlier) loses its connection to the portal —
+  heartbeat, ping/pong, diagnostics all stop working — until that specific
+  employee quits and relaunches the app, which is also the only moment
+  they'll see the forced-update prompt. The user explicitly chose to
+  deploy now rather than wait for/announce a maintenance window, on the
+  grounds that today (2026-09-13) is a weekend with the next shift not
+  starting until tomorrow 7pm Pakistan time — giving every agent a full
+  day of idle time to naturally relaunch (reboot, normal quit/reopen)
+  before it matters.
+- Extended `schema-migration` route with `ensurePhase4bCollections`/
+  `describePhase4bCollections` (dispatches on `hr_tracker_signals`).
+- `npx tsc --noEmit` and `python3 -m py_compile agent_gui.py` both clean.
+
+**Still to actually ship this** (none of this has happened yet):
+1. Run `ensurePhase4bCollections` against the live PocketBase (same
+   fetch()-from-the-browser pattern as every prior phase), then
+   `describePhase4bCollections` to rule out a pre-existing-schema surprise
+   (this has now bitten 3 of the last 4 phases — always check).
+2. Build and tag a new tracker-agent release: bump is already done in the
+   source, so this is `git tag tracker-agent-v24 && git push --tags`
+   (or a manual `workflow_dispatch` run) to trigger
+   `.github/workflows/build-tracker-agent.yml` and publish the new
+   Windows/Mac builds to GitHub Releases — the actual deployment step,
+   not something this code change does by itself.
+3. Deploy the portal changes (user pushes; this session never pushes).
+4. Live-verify: Start Shift ping/pong handshake, End Shift stop-cmd,
+   HR's Run Diagnostics/Reload Settings buttons in TrackingView, and the
+   heartbeat "Connected" indicator, all against a freshly-updated v24
+   agent.
+5. Once confirmed stable, the last blocked piece of Phase 5 (retiring the
+   KV helper functions themselves and locking/retiring
+   `hr_delcargo_store`) becomes unblocked on the tracker-signals side —
+   still separately blocked on the legacy `screenshot_<id>` rows aging out.

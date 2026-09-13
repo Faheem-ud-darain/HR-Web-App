@@ -47,7 +47,12 @@ export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 // non-dismissible hard floor (sys.exit(1) below it), this one is what
 // gates the web portal (Start Shift block in employee/page.tsx and the
 // "Update Required" banners in TrackingView.tsx / employee/tracker/page.tsx).
-export const TRACKER_MIN_VERSION = '16';
+// Bumped 16 -> 24 (2026-09-13, explicit request, plan 027 "migrate and
+// retire"): the 8-signal tracker system moved from 8 hr_delcargo_store KV
+// keys per employee onto one hr_tracker_signals row per employee — a hard
+// breaking change with no dual-write transition period, so every agent
+// below v24 must be forced to update rather than soft-rolled-out.
+export const TRACKER_MIN_VERSION = '24';
 
 // Device label the Chromebook/Chrome extension reports in its heartbeat
 // (see chrome-extension/background.js's handleHeartbeatTick) — used below

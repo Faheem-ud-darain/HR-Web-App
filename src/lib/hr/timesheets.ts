@@ -15,7 +15,8 @@ import type {
 } from './types';
 import {
   pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
-  pbGetKV, pbSetKV, pbGetKVByPrefix, pbDeleteKVByKeys, withTimeout,
+  withTimeout,
+  pbGetTrackerSignal, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields,
   looksLikeRealId, formatDurationBetween,
 } from './shared';
 import { hrActions, displayName } from '../hrData';
@@ -110,57 +111,49 @@ async function getShiftTabHeartbeatRow(email: string): Promise<ShiftTabHeartbeat
   return row ? { employeeEmail: row.email, lastSeenAt: row.last_seen_at } : null;
 }
 
-// One-shot "your shift was just auto-ended by the desktop tracker" signal
-// (see notify_shift_auto_stopped in tracker-agent/agent_gui.py, written
-// right after quitting the app auto-clocks someone out). The Employee
-// dashboard polls for this so it can pop up an explanation immediately if
-// it's open in a browser somewhere, on top of (not instead of) the existing
-// shift_auto_stopped_<email> localStorage flag that already covers the
-// "wasn't looking at the dashboard right now" case at next login.
-const shiftStopSignalKeyFor = (email: string) => `shift_stop_signal_${(email || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-
 // ── 5-Signal Tracker Reliability System ─────────────────────────────────────
-// All signals use hr_delcargo_store KV as the message bus. Key slug pattern
-// matches heartbeat_key_for() in tracker-agent/agent_gui.py (email lowercased,
-// non-alphanumeric chars replaced with '_').
-const _slugify = (email: string) => (email || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
-
-// Signal 2: Written by tracker agent (with retry) on deliberate quit.
-// Portal checks this to distinguish deliberate quit (clock out immediately)
-// from a server blip (wait TRACKER_HEARTBEAT_GRACE_MS before acting).
-const trackerQuitIntentKeyFor = (email: string) => `tracker_quit_intent_${_slugify(email)}`;
-
-// Signal 3: Written by portal when employee clicks "Start Shift". The tracker
-// agent reads this via realtime SSE on hr_delcargo_store and responds with Signal 4.
-const trackerPingKeyFor = (email: string) => `tracker_ping_${_slugify(email)}`;
-
-// Signal 4: Written by tracker agent in response to Signal 3.
-// Portal polls for this with matching requestId, then proceeds with clock-in.
-const trackerPongKeyFor = (email: string) => `tracker_pong_${_slugify(email)}`;
-
-// Signal 5: Written by portal when employee clicks "End Shift" (via clockOut).
-// Tracker agent reads this via realtime SSE and immediately stops capturing.
-// Agent deletes this key after acting on it.
-const trackerStopCmdKeyFor = (email: string) => `tracker_stop_cmd_${_slugify(email)}`;
-
-// Signal 6: Written by HR/Admin from TrackingView (Run Diagnostics / Reload
-// Settings Now buttons). Tracker agent reads this via the same realtime SSE
-// subscription as ping/stop_cmd and deletes the key itself once acted on
-// (see clear_command in agent_gui.py) — the portal never has to clean this
-// one up. Added 2026-08-24 alongside Signal 7 below to give HR a direct
-// remote-command channel instead of guessing what's wrong with a specific
-// employee's tracker from stale heartbeat fields alone.
-const trackerCommandKeyFor = (email: string) => `tracker_command_${_slugify(email)}`;
-
-// Signal 7: Written by tracker agent in response to a 'diagnostics' command
-// (Signal 6) — a point-in-time health snapshot (agent version, connection/
-// capture state, last error, shift status, OS/platform info) so HR can see
-// what's actually happening on that employee's machine right now instead of
-// inferring it from stale heartbeat fields. Field names here mirror
-// write_diagnostics()'s payload in agent_gui.py exactly (camelCase on this
-// side, same on that one since PocketBase KV values are opaque JSON).
-const trackerDiagnosticsKeyFor = (email: string) => `tracker_diagnostics_${_slugify(email)}`;
-
+// Plan 027 Phase 4b: all 8 signals below (heartbeat included) now live as
+// named json sub-fields on one hr_tracker_signals row per employee
+// (employee_email unique index) instead of 8 separate hr_delcargo_store KV
+// keys — see pbGetTrackerSignal/pbSetTrackerSignal/pbClearTrackerSignal(Fields)
+// in shared.ts. tracker-agent/agent_gui.py was updated in lockstep (its own
+// _get_tracker_signal_field/_set_tracker_signal_field helpers, same
+// collection/field names) and the version floor (MIN_SUPPORTED_VERSION /
+// TRACKER_MIN_VERSION) was bumped so every already-installed agent is
+// forced onto the new build before it can talk to this collection — see
+// plans/027-migrate-hr-delcargo-store.md for the rollout notes. Field name
+// reference:
+//   heartbeat         — Signal 1, written by the agent every capture tick.
+//   shift_stop_signal — one-shot "your shift was just auto-ended by the
+//                        desktop tracker" (see notify_shift_auto_stopped in
+//                        agent_gui.py). Employee dashboard polls this to pop
+//                        up an explanation immediately if open in a browser,
+//                        on top of (not instead of) the existing
+//                        shift_auto_stopped_<email> localStorage flag that
+//                        covers the "wasn't looking at the dashboard" case.
+//   quit_intent        — Signal 2: written by the agent (with retry) on
+//                        deliberate quit. Portal checks this to distinguish
+//                        deliberate quit (clock out immediately) from a
+//                        server blip (wait TRACKER_HEARTBEAT_GRACE_MS).
+//   ping               — Signal 3: written by portal on "Start Shift". Agent
+//                        reads via realtime SSE and responds with pong.
+//   pong               — Signal 4: written by agent in response to ping.
+//                        Portal polls with matching requestId, then proceeds.
+//   stop_cmd           — Signal 5: written by portal on "End Shift" (via
+//                        clockOut). Agent reads via realtime SSE, stops
+//                        capturing immediately, then nulls this field itself.
+//   command            — Signal 6: written by HR/Admin from TrackingView
+//                        (Run Diagnostics / Reload Settings Now). Agent reads
+//                        via the same realtime SSE subscription as
+//                        ping/stop_cmd and nulls the field itself once acted
+//                        on (see clear_command in agent_gui.py).
+//   diagnostics        — Signal 7: written by the agent in response to a
+//                        'diagnostics' command — a point-in-time health
+//                        snapshot (agent version, connection/capture state,
+//                        last error, shift status, OS/platform info). Field
+//                        names mirror write_diagnostics()'s payload in
+//                        agent_gui.py exactly.
+//
 // Grace period before auto-clock-out when heartbeat dies but no quit intent
 // signal is present. Protects active shifts from transient server timeouts
 // (screenshot uploads blocking heartbeat writes). After 15 min continuously
@@ -297,9 +290,9 @@ export const timesheetActions = {
     return token;
   },
   getTrackerHeartbeat: (email: string): Promise<TrackerHeartbeat | null> =>
-    pbGetKV(`tracker_heartbeat_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}`),
+    pbGetTrackerSignal(email, 'heartbeat'),
   getAllTrackerHeartbeats: async (): Promise<TrackerHeartbeat[]> =>
-    (await pbGetKVByPrefix('tracker_heartbeat_')).map(row => row.value as TrackerHeartbeat),
+    (await pbGetAllTrackerSignals('heartbeat')).map(row => row.value as TrackerHeartbeat),
   // See ShiftStopSignal above — the tracker agent writes this the instant it
   // auto-clocks someone out from quitting. Never deleted server-side (the
   // agent just overwrites it on the next occurrence); the caller is
@@ -307,7 +300,7 @@ export const timesheetActions = {
   // (see the localStorage check in employee/page.tsx) so the same signal
   // doesn't re-trigger the modal on every poll.
   getShiftStopSignal: (email: string): Promise<ShiftStopSignal | null> =>
-    pbGetKV(shiftStopSignalKeyFor(email)),
+    pbGetTrackerSignal(email, 'shift_stop_signal'),
   isHeartbeatLive: (hb: TrackerHeartbeat | null, intervalMinutes: number = 3): boolean => {
     if (!hb?.lastSeenAt) return false;
     // Extended from (interval+2) to (interval+10) minutes. The extra 8 min
@@ -323,9 +316,9 @@ export const timesheetActions = {
   // Portal reads this to distinguish "deliberate quit" (clock out immediately)
   // from "server blip" (wait TRACKER_HEARTBEAT_GRACE_MS grace period).
   getTrackerQuitIntent: (email: string): Promise<TrackerQuitIntent | null> =>
-    pbGetKV(trackerQuitIntentKeyFor(email)),
+    pbGetTrackerSignal(email, 'quit_intent'),
   clearTrackerQuitIntent: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([trackerQuitIntentKeyFor(email)]);
+    await pbClearTrackerSignal(email, 'quit_intent');
   },
 
   // Signal 3: Ping — portal writes this before allowing shift start.
@@ -344,29 +337,29 @@ export const timesheetActions = {
   // network conditions — the loop's own 8s budget (now fixed to track real
   // wall-clock time, see employee/page.tsx) takes over from there.
   writeTrackerPing: async (email: string, requestId: string): Promise<void> => {
-    await withTimeout(pbSetKV(trackerPingKeyFor(email), {
+    await withTimeout(pbSetTrackerSignal(email, 'ping', {
       employeeEmail: email,
       requestId,
       requestedAt: new Date().toISOString(),
     } as TrackerPing), 4000, 'writeTrackerPing');
   },
   clearTrackerPing: async (email: string): Promise<void> => {
-    await withTimeout(pbDeleteKVByKeys([trackerPingKeyFor(email)]), 4000, 'clearTrackerPing');
+    await withTimeout(pbClearTrackerSignal(email, 'ping'), 4000, 'clearTrackerPing');
   },
 
   // Signal 4: Pong — tracker agent writes this in response to a ping.
   // Portal polls for this with matching requestId (500ms interval, 8s timeout).
   getTrackerPong: (email: string): Promise<TrackerPong | null> =>
-    withTimeout(pbGetKV(trackerPongKeyFor(email)), 4000, 'getTrackerPong').catch(() => null),
+    withTimeout(pbGetTrackerSignal(email, 'pong'), 4000, 'getTrackerPong').catch(() => null),
   clearTrackerPong: async (email: string): Promise<void> => {
-    await withTimeout(pbDeleteKVByKeys([trackerPongKeyFor(email)]), 4000, 'clearTrackerPong');
+    await withTimeout(pbClearTrackerSignal(email, 'pong'), 4000, 'clearTrackerPong');
   },
 
   // Signal 5: Stop command — portal writes this when shift ends (via clockOut).
   // Tracker agent reads via realtime SSE, stops capturing immediately, then
   // deletes this key. Also written by clockOut() directly — see below.
   writeTrackerStopCmd: async (email: string): Promise<void> => {
-    await pbSetKV(trackerStopCmdKeyFor(email), {
+    await pbSetTrackerSignal(email, 'stop_cmd', {
       employeeEmail: email,
       commandId: Math.random().toString(36).slice(2) + Date.now().toString(36),
       issuedAt: new Date().toISOString(),
@@ -378,7 +371,7 @@ export const timesheetActions = {
   // reads via realtime SSE, acts on it, and deletes the key itself
   // (clear_command in agent_gui.py) — nothing to clean up on this side.
   writeTrackerCommand: async (email: string, type: 'diagnostics' | 'reload_settings'): Promise<void> => {
-    await pbSetKV(trackerCommandKeyFor(email), {
+    await pbSetTrackerSignal(email, 'command', {
       employeeEmail: email,
       type,
       issuedAt: new Date().toISOString(),
@@ -391,9 +384,9 @@ export const timesheetActions = {
   // an agent older than v19 (or one that's offline) never responds at all,
   // which is the expected/common case during the soft rollout, not a bug.
   getTrackerDiagnostics: (email: string): Promise<TrackerDiagnostics | null> =>
-    pbGetKV(trackerDiagnosticsKeyFor(email)),
+    pbGetTrackerSignal(email, 'diagnostics'),
   clearTrackerDiagnostics: async (email: string): Promise<void> => {
-    await pbDeleteKVByKeys([trackerDiagnosticsKeyFor(email)]);
+    await pbClearTrackerSignal(email, 'diagnostics');
   },
 
   // Employee/HR self-service escape hatch for the "another device is
@@ -409,12 +402,7 @@ export const timesheetActions = {
   // Safe/idempotent to call even when nothing is actually stuck.
   forceDisconnectAllTrackers: async (email: string): Promise<void> => {
     await hrActions.writeTrackerStopCmd(email).catch(() => { /* best-effort */ });
-    await pbDeleteKVByKeys([
-      `tracker_heartbeat_${_slugify(email)}`,
-      trackerPingKeyFor(email),
-      trackerPongKeyFor(email),
-      trackerQuitIntentKeyFor(email),
-    ]);
+    await pbClearTrackerSignalFields(email, ['heartbeat', 'ping', 'pong', 'quit_intent']);
   },
 
   // ── Manual-shift tab heartbeat + abandoned-tab safety net ───────────────

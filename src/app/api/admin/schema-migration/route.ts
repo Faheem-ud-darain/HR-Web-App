@@ -344,6 +344,47 @@ async function ensurePhase4Collections(): Promise<Record<string, string>> {
 }
 
 
+// Phase 4b — the 8-signal tracker-agent migration (plan 027 "migrate and
+// retire"). Consolidates 8 previously-separate hr_delcargo_store KV keys
+// per employee (tracker_heartbeat_<email>, shift_stop_signal_<email>,
+// tracker_quit_intent_<email>, tracker_ping_<email>, tracker_pong_<email>,
+// tracker_stop_cmd_<email>, tracker_command_<email>,
+// tracker_diagnostics_<email>) into ONE row per employee with 8 named json
+// sub-fields. Requires the tracker-agent (agent_gui.py) to be updated in
+// lockstep — see its _get_tracker_signal_field/_set_tracker_signal_field
+// helpers and the version-floor bump that forces every already-installed
+// agent onto the new build before this collection matters to it.
+const TRACKER_SIGNAL_FIELDS = [
+  'heartbeat', 'shift_stop_signal', 'quit_intent', 'ping', 'pong', 'stop_cmd', 'command', 'diagnostics',
+];
+
+async function ensurePhase4bCollections(): Promise<Record<string, string>> {
+  const name = 'hr_tracker_signals';
+  if (await collectionExists(name)) {
+    return { [name]: 'already exists' };
+  }
+  const schema = [
+    { name: 'employee_email', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+    ...TRACKER_SIGNAL_FIELDS.map(f => ({ name: f, type: 'json', required: false, unique: false, options: {} })),
+  ];
+  await pbAdminFetch('/api/collections', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      type: 'base',
+      schema,
+      indexes: [`CREATE UNIQUE INDEX idx_${name}_employee_email ON ${name} (employee_email)`],
+      listRule: '',
+      viewRule: '',
+      createRule: '',
+      updateRule: '',
+      deleteRule: '',
+    }),
+  });
+  return { [name]: 'created' };
+}
+
+
 // Phase 5 collections — safe cleanup subset only (see plan 027). Two items
 // with no tracker-agent dependency: hr_system_state (a general-purpose
 // singleton-state collection — one row per `key`, arbitrary `data` json —
@@ -460,12 +501,17 @@ export async function POST(request: Request) {
       const results = await ensurePhase5Collections();
       return NextResponse.json({ ok: true, results });
     }
+    if (body.action === 'ensurePhase4bCollections') {
+      const results = await ensurePhase4bCollections();
+      return NextResponse.json({ ok: true, results });
+    }
     if (
       body.action === 'describePhase1Collections' ||
       body.action === 'describePhase2Collections' ||
       body.action === 'describePhase3Collections' ||
       body.action === 'describePhase4Collections' ||
-      body.action === 'describePhase5Collections'
+      body.action === 'describePhase5Collections' ||
+      body.action === 'describePhase4bCollections'
     ) {
       const names = body.action === 'describePhase1Collections'
         ? PHASE_1_COLLECTIONS.map(c => c.name)
@@ -475,7 +521,9 @@ export async function POST(request: Request) {
         ? [...READ_RECEIPT_COLLECTIONS, ...PHASE_3_OTHER_COLLECTIONS.map(c => c.name), ...PHASE_3_PREEXISTING_COLLECTIONS]
         : body.action === 'describePhase4Collections'
         ? PHASE_4_COLLECTIONS.map(c => c.name)
-        : PHASE_5_COLLECTIONS.map(c => c.name);
+        : body.action === 'describePhase5Collections'
+        ? PHASE_5_COLLECTIONS.map(c => c.name)
+        : ['hr_tracker_signals'];
       const results: Record<string, any> = {};
       for (const name of names) {
         try {

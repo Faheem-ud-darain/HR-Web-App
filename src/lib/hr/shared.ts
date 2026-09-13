@@ -245,6 +245,100 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
   }));
 }
 
+// hr_tracker_signals — one row per employee (plan 027 Phase 4b), consolidating
+// the 8 per-employee "5-Signal Tracker Reliability System" hr_delcargo_store
+// KV keys (tracker_heartbeat_<email>, shift_stop_signal_<email>,
+// tracker_quit_intent_<email>, tracker_ping_<email>, tracker_pong_<email>,
+// tracker_stop_cmd_<email>, tracker_command_<email>, tracker_diagnostics_<email>)
+// into named json sub-fields (heartbeat, shift_stop_signal, quit_intent, ping,
+// pong, stop_cmd, command, diagnostics) on a single row keyed by
+// employee_email. tracker-agent/agent_gui.py was updated in lockstep to
+// read/write this same collection/fields — see its own
+// _get_tracker_signal_field/_set_tracker_signal_field helpers. Small
+// in-memory id cache (mirrors kvIdCache above) lets repeat writes for the
+// same employee skip the lookup round trip.
+const trackerSignalIdCache = new Map<string, string>();
+
+export async function pbGetTrackerSignal(email: string, field: string): Promise<any | null> {
+  const key = (email || '').toLowerCase();
+  if (!key) return null;
+  try {
+    const row = await pb.collection('hr_tracker_signals').getFirstListItem(`employee_email = "${key}"`, { requestKey: null });
+    trackerSignalIdCache.set(key, row.id);
+    return (row as any)[field] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Returns { email, value } for every employee that currently has a non-null
+// value in `field` — used by getAllTrackerHeartbeats (dashboard-wide sweep),
+// the one caller that needs everyone's signal at once instead of a single
+// employee's.
+export async function pbGetAllTrackerSignals(field: string): Promise<{ email: string; value: any }[]> {
+  try {
+    const rows = await pb.collection('hr_tracker_signals').getFullList({ requestKey: null });
+    return (rows as any[])
+      .filter(r => r[field] != null)
+      .map(r => ({ email: r.employee_email, value: r[field] }));
+  } catch (err) {
+    console.error('[hrData] getFullList error in hr_tracker_signals:', err);
+    return [];
+  }
+}
+
+export async function pbSetTrackerSignal(email: string, field: string, value: any): Promise<void> {
+  const key = (email || '').toLowerCase();
+  if (!key) return;
+  const cachedId = trackerSignalIdCache.get(key);
+  if (cachedId) {
+    try {
+      await pb.collection('hr_tracker_signals').update(cachedId, { [field]: value });
+      return;
+    } catch {
+      trackerSignalIdCache.delete(key);
+    }
+  }
+  try {
+    const existing = await pb.collection('hr_tracker_signals').getFirstListItem(`employee_email = "${key}"`, { requestKey: null });
+    trackerSignalIdCache.set(key, existing.id);
+    await pb.collection('hr_tracker_signals').update(existing.id, { [field]: value });
+  } catch {
+    const created = await pb.collection('hr_tracker_signals').create({ employee_email: key, [field]: value });
+    trackerSignalIdCache.set(key, created.id);
+  }
+}
+
+export async function pbClearTrackerSignal(email: string, field: string): Promise<void> {
+  await pbSetTrackerSignal(email, field, null);
+}
+
+// Clears several fields on the same employee's row in one write (used by
+// forceDisconnectAllTrackers, which used to fire off several separate
+// hr_delcargo_store deletes).
+export async function pbClearTrackerSignalFields(email: string, fields: string[]): Promise<void> {
+  const key = (email || '').toLowerCase();
+  if (!key) return;
+  const patch: Record<string, null> = {};
+  fields.forEach(f => { patch[f] = null; });
+  const cachedId = trackerSignalIdCache.get(key);
+  if (cachedId) {
+    try {
+      await pb.collection('hr_tracker_signals').update(cachedId, patch);
+      return;
+    } catch {
+      trackerSignalIdCache.delete(key);
+    }
+  }
+  try {
+    const existing = await pb.collection('hr_tracker_signals').getFirstListItem(`employee_email = "${key}"`, { requestKey: null });
+    trackerSignalIdCache.set(key, existing.id);
+    await pb.collection('hr_tracker_signals').update(existing.id, patch);
+  } catch {
+    // no row for this employee at all — nothing to clear
+  }
+}
+
 export function useKVByPrefix(prefix: string) {
   return useQuery({
     queryKey: ['hr_kv', prefix],

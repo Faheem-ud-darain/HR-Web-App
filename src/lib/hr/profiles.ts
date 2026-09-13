@@ -465,7 +465,7 @@ export const profileActions = {
         ?? (await pbList('hr_tracking_settings', { filter: `employeeEmail ~ "${lower.replace(/"/g, '\\"')}"` }))
           .find((r: any) => (r.employeeEmail || '').toLowerCase() === lower);
       if (settingsRow) await pbDelete('hr_tracking_settings', settingsRow.id);
-      await pbDeleteKVByKeys([`tracker_heartbeat_${lower.replace(/[^a-z0-9]/g, '_')}`]);
+      await pbDeleteByField('hr_tracker_signals', 'employee_email', lower);
     }
 
     // Screenshots — both the real hr_screenshots collection and any
