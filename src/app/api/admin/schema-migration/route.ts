@@ -383,7 +383,7 @@ async function ensurePhase4bCollections(): Promise<Record<string, string>> {
   // comment above). Uses `email` as the key field to match that real shape.
   const schema = [
     { name: 'email', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
-    ...TRACKER_SIGNAL_FIELDS.map(f => ({ name: f, type: 'json', required: false, unique: false, options: {} })),
+    ...TRACKER_SIGNAL_FIELDS.map(f => ({ name: f, type: 'json', required: false, unique: false, options: { maxSize: 2000000 } })),
   ];
   await pbAdminFetch('/api/collections', {
     method: 'POST',
