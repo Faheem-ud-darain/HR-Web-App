@@ -114,7 +114,7 @@ async function getShiftTabHeartbeatRow(email: string): Promise<ShiftTabHeartbeat
 // ── 5-Signal Tracker Reliability System ─────────────────────────────────────
 // Plan 027 Phase 4b: all 8 signals below (heartbeat included) now live as
 // named json sub-fields on one hr_tracker_signals row per employee
-// (employee_email unique index) instead of 8 separate hr_delcargo_store KV
+// (email unique index) instead of 8 separate hr_delcargo_store KV
 // keys — see pbGetTrackerSignal/pbSetTrackerSignal/pbClearTrackerSignal(Fields)
 // in shared.ts. tracker-agent/agent_gui.py was updated in lockstep (its own
 // _get_tracker_signal_field/_set_tracker_signal_field helpers, same

@@ -354,6 +354,21 @@ async function ensurePhase4Collections(): Promise<Record<string, string>> {
 // lockstep — see its _get_tracker_signal_field/_set_tracker_signal_field
 // helpers and the version-floor bump that forces every already-installed
 // agent onto the new build before this collection matters to it.
+//
+// hr_tracker_signals turned out to ALREADY EXIST from earlier, unrecorded
+// prep work (discovered 2026-09-13 via describePhase4bCollections) — same
+// recurring pattern as hr_notification_reads/hr_typing_indicators etc.
+// earlier in this plan. Its real shape: keyed on `email` (not
+// `employee_email`), most signal fields already present as json
+// (heartbeat, quit_intent, stop_cmd, command, diagnostics,
+// shift_stop_signal), but `ping`/`pong` existed as `date` fields
+// (ping_at/pong_at) which can't hold the {employeeEmail, requestId,
+// requestedAt} payload the Start Shift handshake needs — added as new
+// `ping`/`pong` json fields via addFieldIfMissing instead (the old
+// ping_at/pong_at/shift_tab_heartbeat fields are left alone, unused). Also
+// had admin-only rules (listRule: null) — fixed via makeCollectionPublic.
+// All code below (shared.ts/timesheets.ts/profiles.ts/agent_gui.py) reads
+// this real shape (the `email` field), not the originally-assumed one.
 const TRACKER_SIGNAL_FIELDS = [
   'heartbeat', 'shift_stop_signal', 'quit_intent', 'ping', 'pong', 'stop_cmd', 'command', 'diagnostics',
 ];
@@ -363,8 +378,11 @@ async function ensurePhase4bCollections(): Promise<Record<string, string>> {
   if (await collectionExists(name)) {
     return { [name]: 'already exists' };
   }
+  // Only reached if this collection doesn't exist yet somewhere else this
+  // app gets deployed against (it already existed in production — see the
+  // comment above). Uses `email` as the key field to match that real shape.
   const schema = [
-    { name: 'employee_email', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
+    { name: 'email', type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
     ...TRACKER_SIGNAL_FIELDS.map(f => ({ name: f, type: 'json', required: false, unique: false, options: {} })),
   ];
   await pbAdminFetch('/api/collections', {
@@ -373,7 +391,7 @@ async function ensurePhase4bCollections(): Promise<Record<string, string>> {
       name,
       type: 'base',
       schema,
-      indexes: [`CREATE UNIQUE INDEX idx_${name}_employee_email ON ${name} (employee_email)`],
+      indexes: [`CREATE UNIQUE INDEX idx_${name}_email ON ${name} (email)`],
       listRule: '',
       viewRule: '',
       createRule: '',

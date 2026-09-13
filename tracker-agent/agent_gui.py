@@ -643,10 +643,15 @@ TRACKER_SIGNALS_COLLECTION = "hr_tracker_signals"
 
 def _tracker_signals_get_record(base_url, employee_email):
     """Fetch this employee's whole hr_tracker_signals row. Returns
-    (record_id, record_dict) or (None, None) if they don't have one yet."""
+    (record_id, record_dict) or (None, None) if they don't have one yet.
+    Keyed on the collection's real "email" field (this collection
+    pre-existed this migration with that name, not "employee_email" —
+    confirmed via describeCollection before relying on it, same as the
+    hr_notification_reads/hr_typing_indicators schema surprises earlier in
+    plan 027)."""
     key = (employee_email or "").strip().lower()
     url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records"
-    params = {"filter": f'(employee_email="{key}")', "perPage": 1}
+    params = {"filter": f'(email="{key}")', "perPage": 1}
     resp = requests.get(url, params=params, timeout=15)
     resp.raise_for_status()
     items = resp.json().get("items", [])
@@ -681,7 +686,7 @@ def set_tracker_signal_field(base_url, employee_email, field, value):
     pending ping)."""
     key = (employee_email or "").strip().lower()
     record_id, _ = _tracker_signals_get_record(base_url, employee_email)
-    payload = json.dumps({"employee_email": key, field: value})
+    payload = json.dumps({"email": key, field: value})
     if record_id:
         url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records/{record_id}"
         resp = requests.patch(url, headers=JSON_HEADERS, data=payload, timeout=20)
@@ -2791,7 +2796,7 @@ class TrackerApp:
                         # anything.
                         try:
                             record = data.get("record") or {}
-                            record_email = (record.get("employee_email") or "").strip().lower()
+                            record_email = (record.get("email") or "").strip().lower()
                             if record_email != employee_email:
                                 continue
 

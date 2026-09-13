@@ -252,7 +252,7 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
 // tracker_stop_cmd_<email>, tracker_command_<email>, tracker_diagnostics_<email>)
 // into named json sub-fields (heartbeat, shift_stop_signal, quit_intent, ping,
 // pong, stop_cmd, command, diagnostics) on a single row keyed by
-// employee_email. tracker-agent/agent_gui.py was updated in lockstep to
+// email. tracker-agent/agent_gui.py was updated in lockstep to
 // read/write this same collection/fields — see its own
 // _get_tracker_signal_field/_set_tracker_signal_field helpers. Small
 // in-memory id cache (mirrors kvIdCache above) lets repeat writes for the
@@ -263,7 +263,7 @@ export async function pbGetTrackerSignal(email: string, field: string): Promise<
   const key = (email || '').toLowerCase();
   if (!key) return null;
   try {
-    const row = await pb.collection('hr_tracker_signals').getFirstListItem(`employee_email = "${key}"`, { requestKey: null });
+    const row = await pb.collection('hr_tracker_signals').getFirstListItem(`email = "${key}"`, { requestKey: null });
     trackerSignalIdCache.set(key, row.id);
     return (row as any)[field] ?? null;
   } catch {
@@ -280,7 +280,7 @@ export async function pbGetAllTrackerSignals(field: string): Promise<{ email: st
     const rows = await pb.collection('hr_tracker_signals').getFullList({ requestKey: null });
     return (rows as any[])
       .filter(r => r[field] != null)
-      .map(r => ({ email: r.employee_email, value: r[field] }));
+      .map(r => ({ email: r.email, value: r[field] }));
   } catch (err) {
     console.error('[hrData] getFullList error in hr_tracker_signals:', err);
     return [];
@@ -300,11 +300,11 @@ export async function pbSetTrackerSignal(email: string, field: string, value: an
     }
   }
   try {
-    const existing = await pb.collection('hr_tracker_signals').getFirstListItem(`employee_email = "${key}"`, { requestKey: null });
+    const existing = await pb.collection('hr_tracker_signals').getFirstListItem(`email = "${key}"`, { requestKey: null });
     trackerSignalIdCache.set(key, existing.id);
     await pb.collection('hr_tracker_signals').update(existing.id, { [field]: value });
   } catch {
-    const created = await pb.collection('hr_tracker_signals').create({ employee_email: key, [field]: value });
+    const created = await pb.collection('hr_tracker_signals').create({ email: key, [field]: value });
     trackerSignalIdCache.set(key, created.id);
   }
 }
@@ -331,7 +331,7 @@ export async function pbClearTrackerSignalFields(email: string, fields: string[]
     }
   }
   try {
-    const existing = await pb.collection('hr_tracker_signals').getFirstListItem(`employee_email = "${key}"`, { requestKey: null });
+    const existing = await pb.collection('hr_tracker_signals').getFirstListItem(`email = "${key}"`, { requestKey: null });
     trackerSignalIdCache.set(key, existing.id);
     await pb.collection('hr_tracker_signals').update(existing.id, patch);
   } catch {

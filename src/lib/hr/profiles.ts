@@ -465,7 +465,7 @@ export const profileActions = {
         ?? (await pbList('hr_tracking_settings', { filter: `employeeEmail ~ "${lower.replace(/"/g, '\\"')}"` }))
           .find((r: any) => (r.employeeEmail || '').toLowerCase() === lower);
       if (settingsRow) await pbDelete('hr_tracking_settings', settingsRow.id);
-      await pbDeleteByField('hr_tracker_signals', 'employee_email', lower);
+      await pbDeleteByField('hr_tracker_signals', 'email', lower);
     }
 
     // Screenshots — both the real hr_screenshots collection and any
