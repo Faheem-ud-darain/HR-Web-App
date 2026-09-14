@@ -6,26 +6,6 @@ const DEFAULT_SERVER_URL = 'https://pb.delcargo.us';
 const INACTIVITY_REPORT_SECONDS = 180; // 3 minutes — loggable idle threshold
 const AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60; // 37 minutes — continuous idle auto clock-out
 
-function getHeartbeatKey(email) {
-  return 'tracker_heartbeat_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-}
-
-function pingKeyFor(email) {
-  return 'tracker_ping_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-}
-
-function pongKeyFor(email) {
-  return 'tracker_pong_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-}
-
-function stopCmdKeyFor(email) {
-  return 'tracker_stop_cmd_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-}
-
-function quitIntentKeyFor(email) {
-  return 'tracker_quit_intent_' + (email || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-}
-
 // Initial Alarm Setup (Default: 1 minute screenshot interval)
 try {
   chrome.idle.setDetectionInterval(180);
@@ -90,14 +70,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (data.employeeEmail) {
         const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
         const email = data.employeeEmail.trim().toLowerCase();
-        // Signal 2: Write explicit quit intent before deleting heartbeat
+        // Signal 2: Write explicit quit intent before clearing heartbeat
         try {
-          await pbSetKV(serverUrl, quitIntentKeyFor(email), {
+          await setTrackerSignalField(serverUrl, email, 'quit_intent', {
             employeeEmail: email,
             timestamp: new Date().toISOString()
           });
         } catch {}
-        await pbDeleteKV(serverUrl, getHeartbeatKey(email));
+        await clearTrackerSignalField(serverUrl, email, 'heartbeat');
       }
       sendResponse({ success: true });
     });
@@ -135,51 +115,81 @@ async function getStorageData() {
   });
 }
 
-// ── PocketBase KV Store Helpers ─────────────────────────────────────────────
-async function pbGetKV(serverUrl, key) {
+// ── hr_tracker_signals helpers (plan 027 Phase 4b) ──────────────────────────
+// One row per employee (unique index on "email"), 8 named json sub-fields —
+// heartbeat, shift_stop_signal, quit_intent, ping, pong, stop_cmd, command,
+// diagnostics — replacing the 8 separate hr_delcargo_store KV keys this
+// extension used to read/write directly (tracker_heartbeat_<email>,
+// tracker_ping_<email>, tracker_pong_<email>, tracker_stop_cmd_<email>,
+// tracker_quit_intent_<email>, shift_stop_signal_<email>). Mirrors
+// pbGetTrackerSignal/pbSetTrackerSignal/pbClearTrackerSignal in
+// src/lib/hr/shared.ts (web portal) and get_tracker_signal_field/
+// set_tracker_signal_field/clear_tracker_signal_field in
+// tracker-agent/agent_gui.py (Windows/Mac desktop agent) — same collection,
+// same field names, so a payload built here round-trips through hrData.ts
+// unchanged. Added when the extension was found to still be talking to the
+// now-dead hr_delcargo_store collection after Phase 4b's hard cutover
+// (2026-09-13), which silently broke Start Shift / the "App Connected"
+// heartbeat badge for every Chromebook — see the ChromeOS tracker
+// investigation in Notes/PROJECT_HISTORY.md around 2026-09-14.
+const TRACKER_SIGNALS_COLLECTION = 'hr_tracker_signals';
+
+async function getTrackerSignalRecord(serverUrl, email) {
+  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const key = (email || '').trim().toLowerCase();
   try {
-    const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-    const res = await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const res = await fetch(
+      `${cleanUrl}/api/collections/${TRACKER_SIGNALS_COLLECTION}/records?filter=${encodeURIComponent(`email="${key}"`)}&perPage=1`,
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+    );
     if (!res.ok) return null;
     const data = await res.json();
-    return data?.items?.[0]?.value ?? null;
+    return data?.items?.[0] || null;
   } catch (e) {
     return null;
   }
 }
 
-async function pbSetKV(serverUrl, key, value) {
-  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const filterUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`;
-  
-  let existingRecord = null;
-  try {
-    const res = await fetch(filterUrl, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      existingRecord = data?.items?.[0] || null;
+async function getTrackerSignalField(serverUrl, email, field) {
+  const record = await getTrackerSignalRecord(serverUrl, email);
+  if (!record) return null;
+  let value = record[field];
+  // PocketBase can hand json fields back as strings over plain REST —
+  // decode defensively (same caution as agent_gui.py's own helper).
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
     }
-  } catch (e) {}
+  }
+  return value ?? null;
+}
 
-  if (existingRecord?.id) {
-    await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
+async function setTrackerSignalField(serverUrl, email, field, value) {
+  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
+  const key = (email || '').trim().toLowerCase();
+  const existing = await getTrackerSignalRecord(cleanUrl, key);
+  const payload = JSON.stringify({ email: key, [field]: value });
+  if (existing?.id) {
+    await fetch(`${cleanUrl}/api/collections/${TRACKER_SIGNALS_COLLECTION}/records/${existing.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value })
+      body: payload
     });
   } else {
-    await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records`, {
+    await fetch(`${cleanUrl}/api/collections/${TRACKER_SIGNALS_COLLECTION}/records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, value })
+      body: payload
     });
   }
+}
+
+async function clearTrackerSignalField(serverUrl, email, field) {
+  // Nulls the field rather than deleting the row — sibling signals may
+  // still be live on it (same semantic as the desktop agent/portal).
+  await setTrackerSignalField(serverUrl, email, field, null);
 }
 
 // ── Real hr_tracking_settings lookup ────────────────────────────────────────
@@ -201,6 +211,9 @@ async function pbSetKV(serverUrl, key, value) {
 // effect on a connected Chromebook; it kept capturing for as long as a shift
 // was open. Returns the settings record (with `enabled`, `intervalMinutes`,
 // `employeeEmail`) or null if the token isn't recognized by the server.
+//
+// Unaffected by the Phase 4b hr_tracker_signals migration below —
+// hr_tracking_settings is a separate, unmigrated collection.
 async function getTrackingSettingsByToken(serverUrl, agentToken) {
   if (!agentToken) return null;
   try {
@@ -215,29 +228,6 @@ async function getTrackingSettingsByToken(serverUrl, agentToken) {
   } catch (e) {
     console.warn('[Delcargo Tracker] getTrackingSettingsByToken failed:', e);
     return null;
-  }
-}
-
-async function pbDeleteKV(serverUrl, key) {
-  const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
-  const filterUrl = `${cleanUrl}/api/collections/hr_delcargo_store/records?filter=${encodeURIComponent(`key = "${key}"`)}&perPage=1`;
-  
-  let existingRecord = null;
-  try {
-    const res = await fetch(filterUrl, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      existingRecord = data?.items?.[0] || null;
-    }
-  } catch (e) {}
-
-  if (existingRecord?.id) {
-    await fetch(`${cleanUrl}/api/collections/hr_delcargo_store/records/${existingRecord.id}`, {
-      method: 'DELETE'
-    }).catch(() => null);
   }
 }
 
@@ -266,12 +256,11 @@ async function handleHeartbeatTick() {
   const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const email = data.employeeEmail.trim().toLowerCase();
   const nowIso = new Date().toISOString();
-  const heartbeatKey = getHeartbeatKey(email);
   const deviceId = data.deviceId || ('chromebook_' + email.replace(/[^a-z0-9]/g, '_'));
 
   // 1. ALWAYS upload live tracker heartbeat while extension is connected (v11)
   try {
-    const existingHb = await pbGetKV(serverUrl, heartbeatKey);
+    const existingHb = await getTrackerSignalField(serverUrl, email, 'heartbeat');
 
     // Check if superseded by another device — but only act on it if that
     // other device's heartbeat is actually recent. Without a staleness
@@ -304,12 +293,7 @@ async function handleHeartbeatTick() {
 
     const connectedAt = existingHb?.connectedAt || nowIso;
 
-    // Previously hardcoded as the literal string '11' — permanently stale
-    // and already out of step with the popup footer's own hardcoded
-    // "v1.0.0" and manifest.json's real "1.0.12". Reading the manifest's
-    // actual version means HR/Admin (TrackingView.tsx) and the employee's
-    // own Tracker Setup page always see what's really installed. Note:
-    // this extension's version numbers (Chrome's required semver-style
+    // Note: this extension's version numbers (Chrome's required semver-style
     // x.y.z) aren't comparable to the desktop agent's flat incrementing
     // APP_VERSION integer, so needsTrackerUpdate() in trackerSetup.ts
     // deliberately skips the update-required check for this device type —
@@ -323,7 +307,7 @@ async function handleHeartbeatTick() {
       agentVersion: chrome.runtime.getManifest().version
     };
 
-    await pbSetKV(serverUrl, heartbeatKey, hbValue);
+    await setTrackerSignalField(serverUrl, email, 'heartbeat', hbValue);
     console.log(`[Delcargo Tracker] Heartbeat sent for ${email} (${nowIso})`);
   } catch (e) {
     console.error('[Delcargo Tracker] Heartbeat upload failed:', e);
@@ -331,32 +315,89 @@ async function handleHeartbeatTick() {
 
   // 1b. Signal 3 & 4: Ping / Pong Handshake (Respond immediately to portal pings)
   try {
-    const pingData = await pbGetKV(serverUrl, pingKeyFor(email));
+    const pingData = await getTrackerSignalField(serverUrl, email, 'ping');
     if (pingData && pingData.requestId) {
-      console.log('[Delcargo Tracker] Portal ping detected, responding with pong:', pingData.requestId);
-      await pbSetKV(serverUrl, pongKeyFor(email), {
-        employeeEmail: email,
-        requestId: pingData.requestId,
-        respondedAt: new Date().toISOString()
-      });
-      await pbDeleteKV(serverUrl, pingKeyFor(email));
+      // Ignore stale pings (> 30 seconds old) to avoid responding to a
+      // leftover ping from a previous failed start-shift attempt — mirrors
+      // agent_gui.py's _handle_ping staleness guard.
+      let isStale = false;
+      if (pingData.requestedAt) {
+        const ageSeconds = (Date.now() - new Date(pingData.requestedAt).getTime()) / 1000;
+        isStale = ageSeconds > 30;
+      }
+      if (!isStale) {
+        console.log('[Delcargo Tracker] Portal ping detected, responding with pong:', pingData.requestId);
+        await setTrackerSignalField(serverUrl, email, 'pong', {
+          employeeEmail: email,
+          requestId: pingData.requestId,
+          respondedAt: new Date().toISOString()
+        });
+      }
+      await clearTrackerSignalField(serverUrl, email, 'ping');
     }
   } catch (e) {
     console.warn('[Delcargo Tracker] Ping/pong check error:', e);
   }
 
-  // 1c. Signal 5: Realtime Stop Command from web portal
+  // 1c. Signal 5: Stop Command from web portal
   try {
-    const stopCmd = await pbGetKV(serverUrl, stopCmdKeyFor(email));
+    const stopCmd = await getTrackerSignalField(serverUrl, email, 'stop_cmd');
     if (stopCmd) {
       console.log('[Delcargo Tracker] Stop command received from portal.');
-      await pbDeleteKV(serverUrl, stopCmdKeyFor(email));
+      await clearTrackerSignalField(serverUrl, email, 'stop_cmd');
       if (data.shiftActive) {
         await autoClockOut(serverUrl, email, 'portal_stop_cmd');
       }
     }
   } catch (e) {
     console.warn('[Delcargo Tracker] Stop cmd check error:', e);
+  }
+
+  // 1d. Signal 6 & 7: Remote command channel (HR's "Run Diagnostics" /
+  // "Reload Settings Now" buttons in TrackingView.tsx). Added alongside
+  // the Phase 4b migration above — this extension previously had no
+  // handling for the command/diagnostics fields at all, so those buttons
+  // silently did nothing for a Chromebook even before the KV-collection
+  // break. Mirrors agent_gui.py's _handle_command.
+  try {
+    const commandData = await getTrackerSignalField(serverUrl, email, 'command');
+    if (commandData && commandData.type) {
+      let isStale = false;
+      if (commandData.issuedAt) {
+        const ageSeconds = (Date.now() - new Date(commandData.issuedAt).getTime()) / 1000;
+        isStale = ageSeconds > 60;
+      }
+      if (!isStale) {
+        if (commandData.type === 'diagnostics') {
+          console.log('[Delcargo Tracker] Diagnostics command received from portal.');
+          await setTrackerSignalField(serverUrl, email, 'diagnostics', {
+            employeeEmail: email,
+            respondedAt: new Date().toISOString(),
+            appVersion: chrome.runtime.getManifest().version,
+            platform: 'ChromeOS',
+            deviceLabel: 'Chromebook / Chrome OS',
+            connected: true,
+            connectionStatus: 'connected',
+            enabled: !!data.shiftActive,
+            enabledByHr: !!data.shiftActive,
+            shiftActive: !!data.shiftActive,
+            isLocked: false,
+            lastError: null,
+            lastCaptureAt: data.lastScreenshotTime ? new Date(data.lastScreenshotTime).toISOString() : null,
+            consecutiveCaptureFailures: 0,
+            intervalMinutes: data.screenshotIntervalMinutes || 1,
+            autostart: true,
+            updateAvailableVersion: null
+          });
+        }
+        // 'reload_settings' needs no extra action — this tick already just
+        // re-fetched tracking settings fresh (see step 3 below), and the
+        // next tick (<=15s away) will too. Just acknowledge by clearing it.
+      }
+      await clearTrackerSignalField(serverUrl, email, 'command');
+    }
+  } catch (e) {
+    console.warn('[Delcargo Tracker] Command check error:', e);
   }
 
   // 2. Query real shift status on PocketBase (matches desktop tracker)
@@ -474,8 +515,7 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSec
     }
 
     // 2. Write shift_stop_signal for live web dashboard notification
-    const signalKey = 'shift_stop_signal_' + email.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    await pbSetKV(cleanUrl, signalKey, {
+    await setTrackerSignalField(cleanUrl, email, 'shift_stop_signal', {
       employeeEmail: email,
       timestamp: new Date().toISOString(),
       reason
