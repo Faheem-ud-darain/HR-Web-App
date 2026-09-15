@@ -602,6 +602,76 @@ export async function POST(request: Request) {
       const result = await pbAdminFetch(`/api/collections/${name}/records?${params.toString()}`);
       return NextResponse.json({ ok: true, collection: name, totalItems: result?.totalItems, items: result?.items || [] });
     }
+    if (body.action === 'backfillProfileExtrasFromKV') {
+      // One-off remediation for the Sep 2026 "employees see real names
+      // instead of aliases" regression: ensurePhase2Collections created
+      // hr_profile_extras but never copied forward the real HR-entered
+      // overlay data (alias, approval history, phone numbers, etc.) that
+      // was still sitting in the old hr_delcargo_store KV rows
+      // (hr_profile_extra_<profileId>). This copies those rows over, one
+      // time, without touching hr_delcargo_store itself.
+      //
+      // Idempotent — safe to re-run: existing hr_profile_extras data
+      // always wins over the old KV value on any field conflict, so a
+      // newer HR edit is never clobbered by stale pre-migration data.
+      // Pass { dryRun: true } to preview the merge without writing.
+      const dryRun = body.dryRun === true;
+      const kvRows = await pbAdminFetch(
+        `/api/collections/hr_delcargo_store/records?perPage=200&filter=${encodeURIComponent('key ~ "hr_profile_extra_"')}`
+      );
+      const results: Array<Record<string, any>> = [];
+      for (const row of kvRows?.items || []) {
+        const profileId = String(row.key || '').replace(/^hr_profile_extra_/, '');
+        if (!profileId) continue;
+
+        // Skip rows for profiles that no longer exist (e.g. an offboarded/
+        // deleted employee) — nothing in hr_profile_extras to attach this to.
+        let profileExists = true;
+        try {
+          await pbAdminFetch(`/api/collections/hr_profiles/records/${profileId}`);
+        } catch {
+          profileExists = false;
+        }
+        if (!profileExists) {
+          results.push({ profileId, action: 'skipped', reason: 'profile no longer exists' });
+          continue;
+        }
+
+        let kvData: Record<string, any> = {};
+        try {
+          kvData = typeof row.value === 'string' ? JSON.parse(row.value) : (row.value || {});
+        } catch {
+          results.push({ profileId, action: 'skipped', reason: 'unparseable KV value' });
+          continue;
+        }
+
+        const existingList = await pbAdminFetch(
+          `/api/collections/hr_profile_extras/records?filter=${encodeURIComponent(`profile_id = "${profileId}"`)}`
+        );
+        const existing = (existingList?.items || [])[0];
+        const merged = { ...kvData, ...(existing?.data || {}) };
+
+        if (dryRun) {
+          results.push({ profileId, action: existing ? 'would_patch' : 'would_create', merged });
+          continue;
+        }
+
+        if (existing) {
+          await pbAdminFetch(`/api/collections/hr_profile_extras/records/${existing.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ data: merged }),
+          });
+          results.push({ profileId, action: 'patched' });
+        } else {
+          await pbAdminFetch(`/api/collections/hr_profile_extras/records`, {
+            method: 'POST',
+            body: JSON.stringify({ profile_id: profileId, data: merged }),
+          });
+          results.push({ profileId, action: 'created' });
+        }
+      }
+      return NextResponse.json({ ok: true, dryRun, count: results.length, results });
+    }
     if (body.action === 'addFieldIfMissing') {
       // Ad-hoc — add one field to an existing collection's schema if it
       // isn't already there (purely additive; never touches existing

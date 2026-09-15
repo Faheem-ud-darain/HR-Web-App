@@ -578,3 +578,52 @@ employee's machine).**
   the full Phase 5 retirement: delete the now-dead KV helper functions
   and lock/retire `hr_delcargo_store` itself (still separately gated on
   legacy `screenshot_<id>` rows aging out/being purged).
+
+## Post-deploy incident (2026-09-15): alias/tracking-status/PTO regressions
+
+After the Phase 4b tracker-signals cutover above went live, three issues
+were reported in production:
+
+1. Employees seeing each other's real names instead of their Alias.
+2. HR/Admin unable to see employee tracker connected-status/version on
+   the Tracking page.
+3. PTO balances not reading as 0 (new policy: PTO frozen until 2027-01-01).
+
+**#2 fix:** `TrackingView.tsx` had a separate, un-migrated
+`useKVByPrefix('tracker_heartbeat_')` query left over from before this
+plan's Phase 4b cutover — missed during the shared-component extraction
+because that pass only touched the badge-rendering JSX, not this
+data-fetching call site. Replaced with the already-migrated
+`useAllTrackerHeartbeats()` hook.
+
+**#3 fix:** added `PTO_FREEZE_UNTIL = '2027-01-01'` in
+`src/lib/hr/leaves.ts`; `getRemainingPTO` and the payroll cashout
+(`getFinalLeavePayout`) both return 0 while frozen.
+
+**#1 root cause (unrelated to Phase 4b — a Phase 2 gap):**
+`ensurePhase2Collections` created `hr_profile_extras` (where `alias`
+lives, via `OVERLAY_KEYS`) but never copied forward the real HR-entered
+data that was still sitting in the old `hr_delcargo_store` KV rows
+(`hr_profile_extra_<profileId>`). Confirmed via direct PocketBase
+inspection: 20 such KV rows still exist with real alias/approval/phone
+data; `hr_profile_extras` had only 1 unrelated row. The admin edit form
+and its write path were never broken — this was purely a missing
+backfill step from the original Phase 2 migration.
+
+**Fix:** added a one-off `backfillProfileExtrasFromKV` action to
+`/api/admin/schema-migration` (admin-only). Copies every
+`hr_profile_extra_<profileId>` row from `hr_delcargo_store` into
+`hr_profile_extras`, skipping profiles that no longer exist (e.g. an
+already-offboarded employee) and merging so any data already present in
+`hr_profile_extras` wins over the stale KV value on conflict. Idempotent
+— safe to re-run. Supports `{ dryRun: true }` to preview the merge
+without writing. Does not touch/delete `hr_delcargo_store` itself.
+
+To run once deployed (as an authenticated admin, via the browser
+console or curl with the `auth_jwt` bearer token):
+
+```
+POST /api/admin/schema-migration
+{ "action": "backfillProfileExtrasFromKV", "dryRun": true }   // preview first
+{ "action": "backfillProfileExtrasFromKV" }                   // then apply
+```
