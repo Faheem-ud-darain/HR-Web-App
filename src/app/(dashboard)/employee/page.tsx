@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTeams,
-  useTrackingSettings, hrActions, calculatePTOAccrued, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
+  useTrackingSettings, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry,
   TrackerHeartbeat, localShiftDate, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS,
   hasStaleTrackerToken, usePayrollSelf, formatMoney,
 } from '@/lib/hrData';
@@ -996,7 +996,7 @@ export default function EmployeeDashboard() {
                   <div>
                     <p className="text-[10px] md:text-xs font-semibold text-slate-500">Accrued</p>
                     <p className="text-xl md:text-2xl font-bold text-slate-900 mt-0.5 md:mt-1 tracking-tight">
-                      {userProfile ? calculatePTOAccrued(getPTOAccrualDate(userProfile)) : 0} <span className="text-xs md:text-base font-medium">Days</span>
+                      {userProfile ? getAccruedPTOForDisplay(getPTOAccrualDate(userProfile)) : 0} <span className="text-xs md:text-base font-medium">Days</span>
                     </p>
                   </div>
                   <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 self-end md:self-auto">

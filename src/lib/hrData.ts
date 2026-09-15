@@ -31,7 +31,7 @@ import {
   hasUnseenHrAdminLineActivity, teamActions,
 } from './hr/teams';
 import {
-  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued,
+  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued, getAccruedPTOForDisplay,
   getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,
   isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
   countApprovedLeaveRequestsInMonth, getPTOAccrualDate, leaveActions,
@@ -81,7 +81,7 @@ export {
   setTeamLeadAdmin,
 } from './hr/profiles';
 export {
-  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued,
+  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued, getAccruedPTOForDisplay,
   getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,
   isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
   countApprovedLeaveRequestsInMonth, getPTOAccrualDate,

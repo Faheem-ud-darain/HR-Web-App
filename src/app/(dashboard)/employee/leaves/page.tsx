@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useProfiles, useLeaves, hrActions, calculatePTOAccrued, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
+import { useProfiles, useLeaves, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -220,7 +220,7 @@ export default function EmployeeLeavesPage() {
   );
 
   // Accurate combined PTO + Sick Leave bank stats
-  const accruedPTO = userProfile ? calculatePTOAccrued(getPTOAccrualDate(userProfile)) : 0;
+  const accruedPTO = userProfile ? getAccruedPTOForDisplay(getPTOAccrualDate(userProfile)) : 0;
   const takenPTO = userProfile ? ((allLeaves || []).filter(l => l.employeeName === userProfile.fullName && l.status === 'approved' && ['PTO', 'Sick Leave'].includes(l.type)).length) : 0;
 
   // Settlement computations. Profile.baseSalary already reflects every

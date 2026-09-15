@@ -92,6 +92,17 @@ export function getRemainingPTO(leaves: LeaveApplication[], fullName: string, jo
   return Math.max(0, Math.round((accrued - taken) * 100) / 100);
 }
 
+// Display-only variant of calculatePTOAccrued for the two Accrued stat
+// tiles (employee dashboard + leaves page): by follow-up request
+// (2026-09-15), those should also read 0 while the freeze is on, not just
+// the Remaining Bank tile. calculatePTOAccrued itself stays untouched —
+// real accrual keeps counting in the background underneath this, so
+// nothing is lost once the freeze lifts (see PTO_FREEZE_UNTIL above); this
+// wrapper only suppresses what's shown on screen in the meantime.
+export function getAccruedPTOForDisplay(joinedDate: string): number {
+  return isPTOFrozen() ? 0 : calculatePTOAccrued(joinedDate);
+}
+
 // Returns true if `dateStr` (a "YYYY-MM-DD" America/New_York calendar date,
 // same shape as getNYDateString/localShiftDate produce) falls on a Monday
 // through Friday. Parsed at UTC noon specifically so the weekday read back
