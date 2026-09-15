@@ -586,6 +586,22 @@ export async function POST(request: Request) {
       const record = await pbAdminFetch(`/api/collections/${name}/records/${id}`);
       return NextResponse.json({ ok: true, record });
     }
+    if (body.action === 'listRecords') {
+      // Ad-hoc — dump up to `perPage` raw records from any collection
+      // (optionally filtered), for live-debugging whether rows actually
+      // exist / are shaped as expected. Same spirit as getRecord/
+      // describeCollection above, just for a batch of rows instead of a
+      // known single id or the schema alone.
+      const name = body.collection;
+      if (typeof name !== 'string' || !name) {
+        return NextResponse.json({ error: 'body.collection is required.' }, { status: 400 });
+      }
+      const perPage = typeof body.perPage === 'number' ? body.perPage : 20;
+      const params = new URLSearchParams({ perPage: String(perPage) });
+      if (typeof body.filter === 'string' && body.filter) params.set('filter', body.filter);
+      const result = await pbAdminFetch(`/api/collections/${name}/records?${params.toString()}`);
+      return NextResponse.json({ ok: true, collection: name, totalItems: result?.totalItems, items: result?.items || [] });
+    }
     if (body.action === 'addFieldIfMissing') {
       // Ad-hoc — add one field to an existing collection's schema if it
       // isn't already there (purely additive; never touches existing
