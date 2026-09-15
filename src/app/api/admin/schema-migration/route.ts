@@ -615,10 +615,24 @@ export async function POST(request: Request) {
       // always wins over the old KV value on any field conflict, so a
       // newer HR edit is never clobbered by stale pre-migration data.
       // Pass { dryRun: true } to preview the merge without writing.
+      //
+      // Batches the existence/lookup checks into two list calls up front
+      // (instead of one request per profile) to stay well under
+      // Cloudflare Workers' per-invocation subrequest limit — the first
+      // version of this action did a profile-exists check + an extras
+      // lookup per row and blew past that limit with ~20 profiles.
       const dryRun = body.dryRun === true;
       const kvRows = await pbAdminFetch(
         `/api/collections/hr_delcargo_store/records?perPage=200&filter=${encodeURIComponent('key ~ "hr_profile_extra_"')}`
       );
+      const allProfiles = await pbAdminFetch('/api/collections/hr_profiles/records?perPage=200&fields=id');
+      const profileIds = new Set<string>((allProfiles?.items || []).map((p: any) => p.id));
+      const allExtras = await pbAdminFetch('/api/collections/hr_profile_extras/records?perPage=200');
+      const extrasByProfileId = new Map<string, any>();
+      for (const rec of allExtras?.items || []) {
+        if (rec.profile_id) extrasByProfileId.set(rec.profile_id, rec);
+      }
+
       const results: Array<Record<string, any>> = [];
       for (const row of kvRows?.items || []) {
         const profileId = String(row.key || '').replace(/^hr_profile_extra_/, '');
@@ -626,13 +640,7 @@ export async function POST(request: Request) {
 
         // Skip rows for profiles that no longer exist (e.g. an offboarded/
         // deleted employee) — nothing in hr_profile_extras to attach this to.
-        let profileExists = true;
-        try {
-          await pbAdminFetch(`/api/collections/hr_profiles/records/${profileId}`);
-        } catch {
-          profileExists = false;
-        }
-        if (!profileExists) {
+        if (!profileIds.has(profileId)) {
           results.push({ profileId, action: 'skipped', reason: 'profile no longer exists' });
           continue;
         }
@@ -645,10 +653,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const existingList = await pbAdminFetch(
-          `/api/collections/hr_profile_extras/records?filter=${encodeURIComponent(`profile_id = "${profileId}"`)}`
-        );
-        const existing = (existingList?.items || [])[0];
+        const existing = extrasByProfileId.get(profileId);
         const merged = { ...kvData, ...(existing?.data || {}) };
 
         if (dryRun) {
