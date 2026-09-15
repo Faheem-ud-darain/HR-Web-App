@@ -15,7 +15,7 @@ import {
   TimesheetEntry,
   useProfiles,
   useTrackingSettings,
-  useKVByPrefix,
+  useAllTrackerHeartbeats,
   useTimesheets,
   hrActions,
   displayName,
@@ -133,7 +133,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // Heartbeats are one KV row per device: tracker_heartbeat_<slug>. React
   // Query's own refetchInterval/staleness handles freshness here; no manual
   // refetch trigger is needed since this view doesn't mutate heartbeats.
-  const { data: heartbeatRows, refetch: refetchHeartbeats } = useKVByPrefix('tracker_heartbeat_');
+  const { data: heartbeats = [], refetch: refetchHeartbeats } = useAllTrackerHeartbeats();
   // Needed to compute "Shift Time" / "Active Time" (shift minus inactivity)
   // in the Mouse Activity modal below, and (refetch) to find + force-close
   // an employee's currently open shift — see handleForceEndShift below.
@@ -151,8 +151,6 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     if (e.email.toLowerCase() === (viewerEmail || '').toLowerCase()) return false; // teammates only, not self
     return e.teams?.some(t => viewerProfile.leadTeams?.includes(t));
   });
-  const heartbeats = (heartbeatRows || []).map(r => r.value as TrackerHeartbeat);
-
   useEffect(() => {
     // Monthly retention sweep — fire-and-forget, runs once per HR/Admin
     // dashboard visit. Safe to call repeatedly; it no-ops once this month

@@ -220,6 +220,27 @@ export function useTrackingSettings() {
   });
 }
 
+// Plan 027 Phase 4b regression fix (2026-09-15): TrackingView.tsx was still
+// calling useKVByPrefix('tracker_heartbeat_') directly against the now-dead
+// hr_delcargo_store collection instead of going through
+// hrActions.getAllTrackerHeartbeats() (which was correctly migrated to
+// hr_tracker_signals) — missed because that call site queried
+// hr_delcargo_store directly rather than through hrActions. Since the
+// cutover, that query always returned an empty list, so HR/Admin's
+// Tracking page showed every employee as "Not installed"/"Disconnected"
+// regardless of their actual tracker status. This hook is the proper
+// react-query wrapper TrackingView should have been using all along —
+// same polling cadence as useTrackingSettings above, which it's always
+// displayed alongside.
+export function useAllTrackerHeartbeats() {
+  return useQuery({
+    queryKey: ['hr_tracker_signals', 'heartbeat'],
+    queryFn: () => hrActions.getAllTrackerHeartbeats(),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+  });
+}
+
 export const timesheetActions = {
   // ── Tracking settings (hr_tracking_settings — one row per employee) ────
   // Migrated off the old hr_tracking_settings_prod_v1 KV blob (a single

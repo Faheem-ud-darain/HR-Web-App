@@ -67,7 +67,26 @@ export function getApprovedLeaveDays(leaves: LeaveApplication[], fullName: strin
     }, 0);
 }
 
+// Company-wide PTO freeze (explicit request, 2026-09-15): every employee's
+// USABLE PTO+Sick bank shows/pays out as 0 until this date, regardless of
+// what they've actually accrued — matches the existing "PTO / Sick Leave /
+// Parental Leave are all disabled for new requests" block in
+// employee/leaves/page.tsx (this is the other half of the same policy: not
+// just "can't spend it," but "the bank reads as empty" too). calculatePTOAccrued
+// is deliberately untouched — accrual keeps counting in the background so
+// nothing is lost once the freeze lifts; only the USABLE remaining balance
+// is suppressed. Applied at the source here (not just in the UI) so
+// getFinalLeavePayout in payroll.ts — offboarding PTO cashout — is frozen
+// the same way, by explicit request, rather than only hiding the number on
+// screen while payroll still paid out the real balance underneath.
+export const PTO_FREEZE_UNTIL = '2027-01-01';
+
+function isPTOFrozen(): boolean {
+  return getNYDateString(new Date()) < PTO_FREEZE_UNTIL;
+}
+
 export function getRemainingPTO(leaves: LeaveApplication[], fullName: string, joinedDate: string): number {
+  if (isPTOFrozen()) return 0;
   const accrued = calculatePTOAccrued(joinedDate);
   const taken = getApprovedLeaveDays(leaves, fullName, ['PTO', 'Sick Leave']);
   return Math.max(0, Math.round((accrued - taken) * 100) / 100);

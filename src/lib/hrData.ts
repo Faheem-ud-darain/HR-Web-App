@@ -39,13 +39,13 @@ import {
 import {
   hasStaleTrackerToken, getCaptureHealth, TRACKER_HEARTBEAT_STALE_MS,
   SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
-  useTimesheets, useTrackingSettings, timesheetActions,
+  useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, timesheetActions,
   fetchTimesheetsFresh,
 } from './hr/timesheets';
 export {
   hasStaleTrackerToken, getCaptureHealth, TRACKER_HEARTBEAT_STALE_MS,
   SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
-  useTimesheets, useTrackingSettings, fetchTimesheetsFresh,
+  useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, fetchTimesheetsFresh,
 } from './hr/timesheets';
 import { useMyAbsenceRecords, countAbsentWeekdays, absenceActions } from './hr/absences';
 export { useMyAbsenceRecords, countAbsentWeekdays } from './hr/absences';
