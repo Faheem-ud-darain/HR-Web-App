@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download, BarChart3 } from 'lucide-react';
-import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useNotifications, useKVByPrefix, hasUnseenTicketActivity, hasUnseenMessageActivity, hasUnseenHrAdminLineActivity, TrackingSettings } from '@/lib/hrData';
+import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useNotifications, useTrackingSettings, hasUnseenTicketActivity, hasUnseenMessageActivity, hasUnseenHrAdminLineActivity, TrackingSettings } from '@/lib/hrData';
 import { getSessionEmail, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 import { useAnyModalOpen } from '@/lib/modalStack';
@@ -93,7 +93,7 @@ export function Sidebar({ role }: SidebarProps) {
   // instead. Checking both means employees whose tracking was turned on
   // via the Tracking Monitor page before the two flags were kept in sync
   // still see the link, without HR/Admin needing to re-toggle anything.
-  const { data: trackingSettingsRows } = useKVByPrefix('hr_tracking_settings_prod_v1');
+  const { data: trackingSettingsRows } = useTrackingSettings();
   // Polls (see POLL_MS in lib/hr/polling.ts) via useTickets' own refetchInterval, so the dot can
   // light up without the user needing to be on the tickets page.
   const { data: allTickets } = useTickets();
@@ -123,7 +123,7 @@ export function Sidebar({ role }: SidebarProps) {
       const profile = profiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
       setIsTeamLead(!!(profile?.isTeamLead && (profile.leadTeams?.length ?? 0) > 0));
 
-      const settingsList = ((trackingSettingsRows || []).find(r => r.key === 'hr_tracking_settings_prod_v1')?.value as TrackingSettings[]) || [];
+      const settingsList: TrackingSettings[] = trackingSettingsRows || [];
       const mySettings = settingsList.find(s => s.employeeEmail?.toLowerCase() === email.toLowerCase());
       setTrackingEnabled(!!profile?.trackingEnabled || !!mySettings?.enabled);
 

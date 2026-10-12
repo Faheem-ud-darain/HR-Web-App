@@ -34,7 +34,7 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
   // this popup explaining a stale no-show/under-4h/inactivity reason for a
   // day that is really now an approved leave day. See
   // getApprovedLeaveOnDate's comment in hrData.ts.
-  const { data: leaves = [] } = useLeaves();
+  const { data: leaves = [] } = useLeaves({ employeeName: records[0]?.employeeName ?? null });
 
   useEffect(() => {
     if (!email) return;

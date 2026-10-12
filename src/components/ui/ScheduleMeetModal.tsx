@@ -8,6 +8,7 @@ import { Video, Calendar, Clock, Users, ExternalLink } from 'lucide-react';
 import { getSessionEmail } from '@/lib/session';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';
+import { Input, Select, Textarea } from '@/components/ui/Input';
 
 interface ScheduleMeetModalProps {
   isOpen: boolean;
@@ -98,98 +99,98 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
     <Modal isOpen={isOpen} onClose={onClose} title="Schedule Google Meet" className="md:max-w-lg">
       <form onSubmit={handleSchedule} className="space-y-4 pt-1">
         <FormField label="Meeting Title *">
-          <input
+          <Input
             type="text"
             required
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g. Weekly Operations Sync"
-            className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900"
+            fieldSize="lg"
           />
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Date *">
-            <input
+            <Input
               type="date"
               required
               value={meetingDate}
               onChange={e => setMeetingDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             />
           </FormField>
           <FormField label="Start Time *">
-            <input
+            <Input
               type="time"
               required
               value={startTime}
               onChange={e => setStartTime(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             />
           </FormField>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Duration">
-            <select
+            <Select
               value={durationMinutes}
               onChange={e => setDurationMinutes(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>
               <option value="45">45 minutes</option>
               <option value="60">1 hour</option>
               <option value="90">1.5 hours</option>
-            </select>
+            </Select>
           </FormField>
 
           <FormField label="Invite Audience">
-            <select
+            <Select
               value={targetType}
               onChange={e => setTargetType(e.target.value as any)}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             >
               <option value="team">Whole Team</option>
               <option value="individual">Specific Employee</option>
-            </select>
+            </Select>
           </FormField>
         </div>
 
         {targetType === 'team' ? (
           <FormField label="Select Team">
-            <select
+            <Select
               value={selectedTeam}
               onChange={e => setSelectedTeam(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             >
               {teamsData.map(t => (
                 <option key={t.id} value={t.name}>{t.name}</option>
               ))}
-            </select>
+            </Select>
           </FormField>
         ) : (
           <FormField label="Select Employee">
-            <select
+            <Select
               value={selectedEmployeeEmail}
               onChange={e => setSelectedEmployeeEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             >
               <option value="">Select Employee…</option>
               {employees.map((emp: Profile) => (
                 <option key={emp.id} value={emp.email}>{emp.fullName} ({emp.email})</option>
               ))}
-            </select>
+            </Select>
           </FormField>
         )}
 
         <FormField label="Agenda / Notes">
-          <textarea
+          <Textarea
             rows={2}
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Brief meeting description or topics to discuss…"
-            className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900"
+            fieldSize="lg"
           />
         </FormField>
 

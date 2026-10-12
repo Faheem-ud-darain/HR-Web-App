@@ -16,10 +16,12 @@ import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Ta
 import { StatCard } from '@/components/ui/StatCard';
 import { TableSkeletonRows } from '@/components/ui/Skeleton';
 import { ListSkeleton } from '@/components/ui/Skeleton';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
-  const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
+  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
+  const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
 
   const [leaves, setLeaves] = useState<LeaveApplication[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -275,8 +277,8 @@ export default function EmployeeLeavesPage() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold">
             <div className="space-y-1">
-              <label className="text-slate-500 uppercase tracking-wider text-[10px]">Cash Out Days</label>
-              <input
+              <FieldLabel size="sm">Cash Out Days</FieldLabel>
+              <Input
                 type="number"
                 min={0}
                 max={Math.floor(remainingPTO)}
@@ -286,17 +288,17 @@ export default function EmployeeLeavesPage() {
                   setCashoutDays(val);
                   setSimRollover(Math.max(0, Math.min(5, Math.floor(remainingPTO - val))));
                 }}
-                className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-slate-800"
+                fieldSize="md"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-slate-500 uppercase tracking-wider text-[10px]">Rolled Over Days</label>
+              <FieldLabel size="sm">Rolled Over Days</FieldLabel>
               <p className="bg-white border border-slate-200 rounded-lg py-2 px-3 text-slate-800 font-mono">
                 {simRollover} Days (Max 5)
               </p>
             </div>
             <div className="space-y-1">
-              <label className="text-slate-500 uppercase tracking-wider text-[10px]">Calculated Payout</label>
+              <FieldLabel size="sm">Calculated Payout</FieldLabel>
               <p className="bg-white border border-slate-200 rounded-lg py-2 px-3 text-emerald-800 font-mono font-bold">
                 {formatMoney(potentialCashoutVal, userProfile?.region)}
               </p>

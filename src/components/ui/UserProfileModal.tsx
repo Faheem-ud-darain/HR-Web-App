@@ -27,6 +27,7 @@ import { pushModal, popModal } from '@/lib/modalStack';
 import { X, User, Mail, Shield, ShieldAlert, Key, DollarSign, Calendar, MapPin, Landmark, Briefcase, FileText, CheckSquare, Square, Trash2, Download, Phone, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from './Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 // Detects the `pbkdf2$<iterations>$<salt>$<hash>` format hashPassword()
 // writes (see serverAuth.ts) — deliberately re-implemented here rather than
@@ -107,7 +108,8 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
   const { data: allWarehouses } = useWarehouses();
-  const { data: allLeaves } = useLeaves();
+  // This employee's own leaves (all of them) — drives their PTO bank / payout.
+  const { data: allLeaves } = useLeaves({ employeeName: profile?.fullName ?? null });
   const warehouses = allWarehouses || [];
   const leaves = allLeaves || [];
 
@@ -640,22 +642,22 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                   ) : (
                     <div className="space-y-2 pt-1">
                       <div>
-                        <label className="text-[9px] font-bold text-indigo-400 uppercase">Amount</label>
-                        <input
+                        <FieldLabel size="tiny">Amount</FieldLabel>
+                        <Input
                           type="text"
                           value={reserveAmountInput}
                           onChange={(e) => setReserveAmountInput(e.target.value)}
-                          className="w-full bg-white border border-indigo-200 rounded-md py-1.5 px-2 text-xs focus:border-indigo-500 outline-none"
+                          fieldSize="md"
                           placeholder="0"
                         />
                       </div>
                       <div>
-                        <label className="text-[9px] font-bold text-indigo-400 uppercase">Note (optional)</label>
-                        <input
+                        <FieldLabel size="tiny">Note (optional)</FieldLabel>
+                        <Input
                           type="text"
                           value={reserveNoteInput}
                           onChange={(e) => setReserveNoteInput(e.target.value)}
-                          className="w-full bg-white border border-indigo-200 rounded-md py-1.5 px-2 text-xs focus:border-indigo-500 outline-none"
+                          fieldSize="md"
                           placeholder="e.g. carried over from before this system"
                         />
                       </div>
@@ -775,48 +777,48 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
           {isEditing && (
             <form onSubmit={handleSaveChanges} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Full Name *</label>
+                <FieldLabel size="sm">Full Name *</FieldLabel>
                 <Input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} fieldSize="sm" />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Alias <span className="normal-case font-medium text-slate-400">(shown to their team instead of their real name)</span></label>
+                <FieldLabel size="sm">Alias <span className="normal-case font-medium text-slate-400">(shown to their team instead of their real name)</span></FieldLabel>
                 <Input type="text" value={alias} onChange={e => setAlias(e.target.value)} placeholder="e.g. Falcon, Agent-07, Employee 14" fieldSize="sm" />
                 <p className="text-[10px] text-slate-400 font-medium">Only HR/Admin ever see the real name. Leave blank to show the real name to everyone (not recommended once this is enforced in production).</p>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Email Address *</label>
+                <FieldLabel size="sm">Email Address *</FieldLabel>
                 <Input type="email" required value={email} onChange={e => setEmail(e.target.value)} fieldSize="sm" />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Account Password</label>
+                <FieldLabel size="sm">Account Password</FieldLabel>
                 <Input type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep the current password" minLength={6} fieldSize="sm" />
                 <p className="text-[10px] text-slate-400 font-medium">Their current password is never shown here for security. Only fill this in to set a new one (at least 6 characters) — otherwise leave it blank.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Job Title / Designation</label>
+                  <FieldLabel size="sm">Job Title / Designation</FieldLabel>
                   <Input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)} fieldSize="sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Base Salary</label>
+                  <FieldLabel size="sm">Base Salary</FieldLabel>
                   <Input type="number" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} fieldSize="sm" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Region / Base Location</label>
+                  <FieldLabel size="sm">Region / Base Location</FieldLabel>
                   <Select value={region} onChange={e => setRegion(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
                     <option value="Pakistan">Pakistan</option>
                     <option value="USA">USA</option>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Gender</label>
+                  <FieldLabel size="sm">Gender</FieldLabel>
                   <Select value={gender} onChange={e => setGender(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
                     <option value="male">Male</option>
                     <option value="female">Female</option>
@@ -825,7 +827,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               </div>
               
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">System Role *</label>
+                <FieldLabel size="sm">System Role *</FieldLabel>
                 <Select value={role} onChange={e => setRole(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
                   <option value="employee">Employee</option>
                   <option value="team_lead">Team Lead</option>
@@ -836,7 +838,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Joining Date *</label>
+                  <FieldLabel size="sm">Joining Date *</FieldLabel>
                   <Input
                     type="date"
                     required
@@ -846,7 +848,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase" title="Salary tracking starts from this month">Salary Track Month *</label>
+                  <FieldLabel size="sm" title="Salary tracking starts from this month">Salary Track Month *</FieldLabel>
                   <Input
                     type="date"
                     required
@@ -858,9 +860,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase" title="PTO accrual is calculated from this date instead of the joining date">
+                <FieldLabel size="sm" title="PTO accrual is calculated from this date instead of the joining date">
                   Account Creation Date *
-                </label>
+                </FieldLabel>
                 <Input
                   type="date"
                   required
@@ -873,7 +875,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
               {/* Warehouse selector */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Assigned Warehouses</label>
+                <FieldLabel size="plain">Assigned Warehouses</FieldLabel>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50/50">
                   {warehouses.map(wh => (
                     <label key={wh.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
@@ -976,7 +978,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               )}
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Offboarding Notes / Reason</label>
+                <FieldLabel size="sm">Offboarding Notes / Reason</FieldLabel>
                 <Textarea
                   rows={3}
                   value={notes}

@@ -28,6 +28,7 @@ import { OtpInput } from '@/components/ui/OtpInput';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function AuthPage() {
   // Same cold-start problem as the root page: if the WebView happens to
@@ -492,7 +493,7 @@ export default function AuthPage() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Email Address</label>
+                <FieldLabel size="md">Email Address</FieldLabel>
                 <Input 
                   type="email" 
                   value={email}
@@ -503,7 +504,7 @@ export default function AuthPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Password</label>
+                <FieldLabel size="md">Password</FieldLabel>
                 <div className="relative">
                   <Input
                     type={showPassword ? 'text' : 'password'}
@@ -582,13 +583,13 @@ export default function AuthPage() {
                 </p>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-700 mb-1 block">Email</label>
-                <input
+                <FieldLabel size="plain">Email</FieldLabel>
+                <Input
                   type="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
                   placeholder="you@delcargo.us"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  fieldSize="md"
                 />
               </div>
               {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
@@ -674,7 +675,7 @@ export default function AuthPage() {
                 </p>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-700 mb-1 block">New password</label>
+                <FieldLabel size="plain">New password</FieldLabel>
                 <div className="relative">
                   <input
                     type={forgotShowPassword ? 'text' : 'password'}
@@ -692,12 +693,12 @@ export default function AuthPage() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-700 mb-1 block">Confirm new password</label>
-                <input
+                <FieldLabel size="plain">Confirm new password</FieldLabel>
+                <Input
                   type={forgotShowPassword ? 'text' : 'password'}
                   value={forgotConfirmPassword}
                   onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  fieldSize="md"
                 />
               </div>
               {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}

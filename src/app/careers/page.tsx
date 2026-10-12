@@ -3,6 +3,7 @@
 import React from 'react';
 import { CareersView } from '@/components/ui/CareersView';
 import Link from 'next/link';
+import { Input } from '@/components/ui/Input';
 
 export default function PublicCareersPage() {
   return (
@@ -45,11 +46,11 @@ export default function PublicCareersPage() {
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-widest text-orange-600">Career Alerts</h4>
             <p className="text-slate-500 font-medium leading-relaxed">Subscribe to get notifications about new job openings at DelCargo.</p>
             <form onSubmit={(e) => { e.preventDefault(); alert('Subscribed to career alerts!'); }} className="flex gap-2">
-              <input 
+              <Input 
                 type="email" 
                 required 
                 placeholder="Enter email..." 
-                className="bg-slate-50 border border-slate-200 focus:border-orange-500 outline-none rounded-lg px-2.5 py-1.5 text-[11px] font-medium flex-1 text-slate-800"
+                fieldSize="md" className="flex-1"
               />
               <button 
                 type="submit" 

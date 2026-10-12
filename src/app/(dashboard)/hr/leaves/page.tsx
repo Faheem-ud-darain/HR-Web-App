@@ -11,6 +11,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { Select } from '@/components/ui/Input';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
   { key: 'pending',     label: 'Pending Review',       headerBg: 'bg-amber-50 border-amber-200'   },
@@ -25,7 +27,8 @@ const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: strin
 type TabView = 'kanban' | 'history';
 
 export default function HRLeavesPage() {
-  const { data: leaves = [], isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
+  const [leaveWindowDays, setLeaveWindowDays] = useState(365);
+  const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
   const { data: employees = [] } = useProfiles();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<LeaveApplication['status'] | null>(null);
@@ -263,6 +266,14 @@ export default function HRLeavesPage() {
         ]}
       />
 
+      <LoadMoreHistory
+        days={leaveWindowDays}
+        maxDays={365 * 5}
+        loading={leavesFetching}
+        noun="leaves"
+        onLoadMore={() => setLeaveWindowDays(d => d + 365)}
+      />
+
       {/* ── KANBAN VIEW ── */}
       {activeTab === 'kanban' && leavesLoading && <ListSkeleton rows={4} />}
       {activeTab === 'kanban' && !leavesLoading && (
@@ -323,17 +334,17 @@ export default function HRLeavesPage() {
                           This calls the exact same moveLeaveTo() path the
                           desktop drag-and-drop uses, giving touch users a
                           working equivalent action instead of a dead gesture. */}
-                      <select
+                      <Select
                         value={leave.status}
                         onChange={e => moveLeaveTo(leave, e.target.value as LeaveApplication['status'])}
                         onClick={e => e.stopPropagation()}
                         disabled={COLUMNS.find(c => c.key === leave.status)?.locked}
-                        className="md:hidden mt-2.5 w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-bold text-slate-700 outline-none focus:border-orange-500 disabled:opacity-60"
+                        fieldSize="md" className="md:hidden mt-2.5 disabled:opacity-60"
                       >
                         {COLUMNS.filter(c => !c.locked || c.key === leave.status).map(c => (
                           <option key={c.key} value={c.key}>{c.label}</option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                   ))}
                   {cards.length === 0 && (
@@ -357,21 +368,21 @@ export default function HRLeavesPage() {
         <div className="space-y-4">
           {/* Filters */}
           <div className="flex flex-wrap gap-3">
-            <select
+            <Select
               value={histFilter}
               onChange={e => setHistFilter(e.target.value as LeaveApplication['status'] | 'all')}
-              className="bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
               <option value="hr_approved">HR Approved</option>
               <option value="approved">CEO Approved</option>
               <option value="rejected">Rejected</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={histType}
               onChange={e => setHistType(e.target.value as typeof histType)}
-              className="bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="all">All Types</option>
               <option value="PTO">PTO</option>
@@ -379,7 +390,7 @@ export default function HRLeavesPage() {
               <option value="Urgent">Urgent</option>
               <option value="Normal">Normal</option>
               <option value="Parental Leave">Parental Leave</option>
-            </select>
+            </Select>
             <span className="text-xs text-slate-400 font-semibold self-center">{historyLeaves.length} records</span>
           </div>
 

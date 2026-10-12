@@ -7,12 +7,14 @@ import React from 'react';
 //   sm   — compact (rounded-xl, text-xs, semibold)
 //   lg   — roomy (rounded-xl, py-2.5, text-xs, semibold)
 //   soft — roomy with hover/focus ring (newer onboarding/profile style)
-export type FieldSize = 'md' | 'sm' | 'lg' | 'soft';
+//   pill — rounded-full grey search field (top bar)
+export type FieldSize = 'md' | 'sm' | 'lg' | 'soft' | 'pill';
 
 export const FIELD_STYLES: Record<FieldSize, string> = {
   md: 'w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900',
   sm: 'w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold',
   lg: 'w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold',
+  pill: 'w-full bg-slate-100/80 border border-transparent rounded-full py-1.5 pr-4 text-sm focus:border-orange-500 focus:bg-white outline-none text-slate-900 transition-colors font-semibold',
   soft: 'w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold',
 };
 

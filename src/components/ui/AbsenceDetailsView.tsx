@@ -3,9 +3,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
+import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
 import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
-import { formatTimeNY, getNYDateString } from '@/lib/timezone';
+import { formatTimeNY } from '@/lib/timezone';
+import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
@@ -16,6 +17,8 @@ import { Tabs } from '@/components/ui/Tabs';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { daysAgoNYDateString } from '@/lib/timezone';
+import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 
 interface AbsenceDetailsViewProps {
@@ -215,12 +218,10 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       const empEmail = (empProfile?.email || '').toLowerCase();
       if (role === 'employee' && filterEmail && empEmail !== filterEmail.toLowerCase()) continue;
 
-      const dates = parseLeaveDates(l.duration);
-      if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
-      const endStr = getNYDateString(dates.end);
+      const range = getLeaveRange(l);
+      if (!range) continue;
 
-      for (const cursor = new Date(dates.start); getNYDateString(cursor) <= endStr; cursor.setDate(cursor.getDate() + 1)) {
-        const dateKey = getNYDateString(cursor);
+      for (const dateKey of eachLeaveDay(range)) {
         if (selectedDate && dateKey !== selectedDate) continue;
 
         if (searchQuery.trim()) {
@@ -439,13 +440,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             {/* Date Selector Filter */}
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
               <Calendar className="h-4 w-4 text-slate-400" />
-              <label htmlFor="attendance-date-filter" className="text-[10px] font-bold text-slate-500 uppercase">Date:</label>
-              <input
+              <FieldLabel htmlFor="attendance-date-filter" size="sm">Date:</FieldLabel>
+              <Input
                 id="attendance-date-filter"
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-800 outline-none cursor-pointer"
+                fieldSize="md" className="cursor-pointer"
               />
               {selectedDate && (
                 <button

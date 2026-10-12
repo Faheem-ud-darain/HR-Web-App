@@ -6,10 +6,13 @@ import { getSessionEmail } from '@/lib/session';
 import { TaskBoard } from '@/components/ui/lazy';
 import { Badge } from '@/components/ui/Badge';
 import { Users, Star } from 'lucide-react';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function TeamLeadTasksPage() {
   const { data: allProfiles = [] } = useProfiles();
-  const { data: allTasks = [], refetch: refetchTasks } = useTasks();
+  const [doneDays, setDoneDays] = useState(30);
+  const { data: allTasks = [], isLoading: tasksLoading, isFetching: tasksFetching, refetch: refetchTasks } = useTasks({ doneWithinDays: doneDays });
 
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [teamFilter, setTeamFilter] = useState<'all' | 'my' | string>('all');
@@ -94,12 +97,16 @@ export default function TeamLeadTasksPage() {
         ))}
       </div>
 
+      <LoadMoreHistory days={doneDays} maxDays={365} loading={tasksFetching} noun="completed tasks" onLoadMore={() => setDoneDays(d => d + 60)} />
+
+      {tasksLoading ? <ListSkeleton rows={5} /> : (
       <TaskBoard
-        tasks={displayTasks}
-        onUpdate={() => refetchTasks()}
-        canDelete={false}
-        readOnly={false}
-      />
+          tasks={displayTasks}
+          onUpdate={() => refetchTasks()}
+          canDelete={false}
+          readOnly={false}
+        />
+      )}
     </div>
   );
 }

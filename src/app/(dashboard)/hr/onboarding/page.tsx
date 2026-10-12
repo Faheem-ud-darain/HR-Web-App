@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, useProfiles, useProfileDocuments, useTeams, displayName, approveOnboardingServer, rejectOnboardingServer, addEmployeeServer } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { UserPlus, CheckCircle2, AlertCircle, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
+import { UserPlus, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
 import { DocumentPreviewModal } from '@/components/ui/lazy';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function HROnboardingPage() {
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
@@ -130,8 +131,7 @@ export default function HROnboardingPage() {
         password: typedPassword || undefined,
         jobTitle,
         gender,
-        region,
-      });
+        region });
 
       // Mirror membership onto the authoritative hr_teams.members list.
       const targetTeam = teamsData.find(t => t.name === team);
@@ -525,9 +525,9 @@ export default function HROnboardingPage() {
               />
             </FormField>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider" title="PTO accrual is calculated from this date, not the joining date">
+              <FieldLabel size="sm" title="PTO accrual is calculated from this date, not the joining date">
                 Account Creation Date *
-              </label>
+              </FieldLabel>
               <Input
                 type="date"
                 required
@@ -687,7 +687,7 @@ export default function HROnboardingPage() {
 
             {showRejectForm ? (
               <div className="space-y-3 pt-3 border-t border-slate-200">
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Reason for rejection *</label>
+                <FieldLabel size="sm">Reason for rejection *</FieldLabel>
                 <Textarea
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}

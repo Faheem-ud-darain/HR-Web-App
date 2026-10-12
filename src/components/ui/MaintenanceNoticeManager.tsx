@@ -10,6 +10,7 @@ import { pktLocalToUtcIso, formatInViewerLocalTime } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input, Textarea } from '@/components/ui/Input';
 
 interface MaintenanceNoticeManagerProps {
   createdBy: string;
@@ -139,54 +140,54 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
           )}
 
           <FormField label="Title *">
-            <input
+            <Input
               type="text"
               required
               value={title}
               onChange={e => setTitle(e.target.value)}
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
+              fieldSize="lg"
               placeholder="e.g. Scheduled App Update"
             />
           </FormField>
 
           <FormField label="Message *">
-            <textarea
+            <Textarea
               required
               rows={3}
               value={message}
               onChange={e => setMessage(e.target.value)}
-              className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold resize-none"
+              fieldSize="lg" className="resize-none"
               placeholder="e.g. The website and apps will be briefly unavailable while we push an update."
             />
           </FormField>
 
           <FormField label="Maintenance Date *">
-            <input
+            <Input
               type="date"
               required
               value={date}
               onChange={e => setDate(e.target.value)}
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
+              fieldSize="lg"
             />
           </FormField>
 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Start Time (Pakistan) *">
-              <input
+              <Input
                 type="time"
                 required
                 value={startTime}
                 onChange={e => setStartTime(e.target.value)}
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
+                fieldSize="lg"
               />
             </FormField>
             <FormField label="End Time (Pakistan) *">
-              <input
+              <Input
                 type="time"
                 required
                 value={endTime}
                 onChange={e => setEndTime(e.target.value)}
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
+                fieldSize="lg"
               />
             </FormField>
           </div>

@@ -3,8 +3,65 @@
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import { getNYDateString } from '../timezone';
 import type { LeaveApplication, Profile } from '../hr/types';
-import { isWeekday } from './dates';
+import { isWeekday, eachDay } from './dates';
 export { isWeekday };
+
+// ── Leave date ranges ───────────────────────────────────────────────────────
+// A leave covers whole CALENDAR days, so its dates are handled as plain
+// "YYYY-MM-DD" strings end to end — never as Date instants. The old approach
+// parsed "Sep 03, 2026" into a local-midnight Date and then converted it to a
+// New York day, which slid a day earlier whenever the code ran in a timezone
+// ahead of New York (e.g. a Pakistan browser).
+//
+// Rows store the range as `start_date` / `end_date` ("YYYY-MM-DD") so it can
+// be filtered server-side; older rows only have the free-text `duration`
+// ("Sep 03, 2026 - Sep 04, 2026"), which parseLeaveDateStrings reads.
+
+const MONTHS: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Parses one day ("Sep 03, 2026", "September 3 2026" or "2026-09-03") to "YYYY-MM-DD", or null. */
+export function parseLeaveDay(text: string): string | null {
+  const t = (text || '').trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const named = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(t);
+  if (named) {
+    const month = MONTHS[named[1].slice(0, 3).toLowerCase()];
+    const day = Number(named[2]);
+    if (month && day >= 1 && day <= 31) return `${named[3]}-${pad2(month)}-${pad2(day)}`;
+  }
+  return null;
+}
+
+export interface LeaveDateRange { start: string; end: string }
+
+/** Reads a free-text duration ("Sep 03, 2026 - Sep 04, 2026", or a single day) into day strings. */
+export function parseLeaveDateStrings(duration: string): LeaveDateRange | null {
+  const parts = (duration || '').split(/\s+[-–]\s+/);
+  const start = parseLeaveDay(parts[0]);
+  if (!start) return null;
+  const end = parts.length > 1 ? parseLeaveDay(parts[1]) : start;
+  if (!end) return null;
+  return end < start ? { start: end, end: start } : { start, end };
+}
+
+/** The leave's day range: stored start/end if present, else parsed from `duration`. */
+export function getLeaveRange(l: Pick<LeaveApplication, 'duration'> & Partial<Pick<LeaveApplication, 'startDate' | 'endDate'>>): LeaveDateRange | null {
+  if (l.startDate && l.endDate) return { start: l.startDate, end: l.endDate };
+  return parseLeaveDateStrings(l.duration);
+}
+
+/** Every calendar day in the range, inclusive, as "YYYY-MM-DD". */
+export const eachLeaveDay = (range: LeaveDateRange): string[] => eachDay(range.start, range.end);
+
+/** Inclusive number of calendar days (weekends included). */
+export function leaveDayCount(range: LeaveDateRange): number {
+  return eachDay(range.start, range.end).length;
+}
 
 export function parseLeaveDates(duration: string): { start: Date; end: Date } | null {
   try {
@@ -47,10 +104,8 @@ export function getApprovedLeaveDays(leaves: LeaveApplication[], fullName: strin
   return leaves
     .filter(l => l.employeeName === fullName && l.status === 'approved' && (types as string[]).includes(l.type))
     .reduce((acc, l) => {
-      const dates = parseLeaveDates(l.duration);
-      if (!dates) return acc + 1;
-      const diff = Math.abs(dates.end.getTime() - dates.start.getTime());
-      return acc + Math.ceil(diff / (1000 * 3600 * 24)) + 1;
+      const range = getLeaveRange(l);
+      return acc + (range ? leaveDayCount(range) : 1);
     }, 0);
 }
 
@@ -93,11 +148,9 @@ export function getAccruedPTOForDisplay(joinedDate: string, now: Date = new Date
 export function getApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): LeaveApplication | null {
   for (const l of leaves) {
     if (l.employeeName !== fullName || l.status !== 'approved') continue;
-    const dates = parseLeaveDates(l.duration);
-    if (!dates) continue;
-    const startStr = getNYDateString(dates.start);
-    const endStr = getNYDateString(dates.end);
-    if (dateStr >= startStr && dateStr <= endStr) return l;
+    const range = getLeaveRange(l);
+    if (!range) continue;
+    if (dateStr >= range.start && dateStr <= range.end) return l;
   }
   return null;
 }
@@ -115,17 +168,14 @@ export function getApprovedLeaveDaysInMonth(
   let total = 0;
   for (const l of leaves) {
     if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
-    const dates = parseLeaveDates(l.duration);
-    // Malformed/unparseable duration string — there's no date range to walk,
-    // so there's no way to tell which month (if any) this should count
-    // toward. Skip it rather than guessing, which is also what stops a bad
-    // record like this from silently charging every month forever the way
-    // the old unscoped sum did.
-    if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
-    const endStr = getNYDateString(dates.end);
-    for (const cursor = new Date(dates.start); getNYDateString(cursor) <= endStr; cursor.setDate(cursor.getDate() + 1)) {
-      if (getNYDateString(cursor).slice(0, 7) === monthKey) total++;
-    }
+    // Malformed/unparseable duration — there's no date range to walk, so
+    // there's no way to tell which month (if any) this should count toward.
+    // Skip it rather than guessing, which is also what stops a bad record
+    // from silently charging every month forever the way the old unscoped
+    // sum did.
+    const range = getLeaveRange(l);
+    if (!range) continue;
+    total += eachLeaveDay(range).filter(d => d.slice(0, 7) === monthKey).length;
   }
   return total;
 }
@@ -139,9 +189,9 @@ export function countApprovedLeaveRequestsInMonth(
   let count = 0;
   for (const l of leaves) {
     if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
-    const dates = parseLeaveDates(l.duration);
-    if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
-    if (getNYDateString(dates.start).slice(0, 7) === monthKey || getNYDateString(dates.end).slice(0, 7) === monthKey) count++;
+    const range = getLeaveRange(l);
+    if (!range) continue;
+    if (range.start.slice(0, 7) === monthKey || range.end.slice(0, 7) === monthKey) count++;
   }
   return count;
 }

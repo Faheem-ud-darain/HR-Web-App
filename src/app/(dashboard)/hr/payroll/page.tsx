@@ -16,6 +16,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { TableSkeletonRows } from '@/components/ui/Skeleton';
 import { ListSkeleton, StatCardSkeletonGrid } from '@/components/ui/Skeleton';
 import { daysAgoNYDateString } from '@/lib/timezone';
+import { Input } from '@/components/ui/Input';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
@@ -296,11 +297,11 @@ export default function HRPayrollPage() {
                         {emp.processed ? (
                           <span className="text-slate-900 font-medium">{formatMoney(emp.bonus || 0, emp.region)}</span>
                         ) : (
-                          <input 
+                          <Input 
                             type="text" 
                             value={emp.bonus || ''} 
                             onChange={(e) => handleUpdateAmount(emp.employeeId, 'bonus', e.target.value)}
-                            className="w-20 bg-slate-50 border border-slate-200 rounded-md py-1 px-2 text-right text-xs focus:border-orange-500 outline-none"
+                            fieldSize="md" className="w-20 text-right"
                             placeholder="0"
                           />
                         )}
@@ -309,11 +310,11 @@ export default function HRPayrollPage() {
                         {emp.processed ? (
                           <span className="text-slate-900 font-medium">{formatMoney(emp.deductions || 0, emp.region)}</span>
                         ) : (
-                          <input
+                          <Input
                             type="text"
                             value={emp.deductions || ''}
                             onChange={(e) => handleUpdateAmount(emp.employeeId, 'deductions', e.target.value)}
-                            className="w-20 bg-slate-50 border border-slate-200 rounded-md py-1 px-2 text-right text-xs focus:border-orange-500 outline-none"
+                            fieldSize="md" className="w-20 text-right"
                             placeholder="0"
                           />
                         )}
@@ -465,21 +466,21 @@ export default function HRPayrollPage() {
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
                     <p className="text-[10px] text-slate-400 font-semibold uppercase mb-1">Bonus ($)</p>
-                    <input 
+                    <Input 
                       type="text" 
                       value={emp.bonus || ''} 
                       onChange={(e) => handleUpdateAmount(emp.employeeId, 'bonus', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs focus:border-orange-500 outline-none"
+                      fieldSize="md"
                       placeholder="0"
                     />
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-semibold uppercase mb-1">Deductions ($)</p>
-                    <input
+                    <Input
                       type="text"
                       value={emp.deductions || ''}
                       onChange={(e) => handleUpdateAmount(emp.employeeId, 'deductions', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-xs focus:border-orange-500 outline-none"
+                      fieldSize="md"
                       placeholder="0"
                     />
                   </div>

@@ -136,6 +136,10 @@ export interface MaintenanceNotice {
 export interface LeaveApplication {
   id: string; employeeName: string; type: 'PTO' | 'Sick Leave' | 'Urgent' | 'Parental Leave' | 'Normal';
   duration: string; reason: string; status: 'pending' | 'hr_approved' | 'approved' | 'rejected';
+  // "YYYY-MM-DD" calendar days (stored as start_date / end_date). Absent on old
+  // rows until backfilled — use getLeaveRange() (core/leaves) rather than reading
+  // these directly so both cases work.
+  startDate?: string; endDate?: string;
 }
 
 export interface Task {
@@ -362,6 +366,8 @@ export interface CareerApplication {
 export interface TicketReply {
   id: string; senderName: string; senderRole: 'employee' | 'hr' | 'admin' | 'team_lead'; message: string; timestamp: string;
   attachmentName?: string; attachmentUrl?: string; attachmentSize?: number; senderEmail?: string;
+  /** Set on system entries recording who closed/reopened the ticket (no message body). */
+  event?: 'closed' | 'reopened';
 }
 
 export interface Ticket {

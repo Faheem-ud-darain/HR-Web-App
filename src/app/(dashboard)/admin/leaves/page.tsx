@@ -10,11 +10,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { Select } from '@/components/ui/Input';
 
 type TabView = 'queue' | 'history';
 
 export default function AdminLeavesPage() {
-  const { data: leaves = [], isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
+  const [leaveWindowDays, setLeaveWindowDays] = useState(365);
+  const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
   const { data: employees = [] } = useProfiles();
   const [searchQuery, setSearchQuery] = useState('');
   const { showToast } = useActionToast();
@@ -122,6 +125,14 @@ export default function AdminLeavesPage() {
         ]}
       />
 
+      <LoadMoreHistory
+        days={leaveWindowDays}
+        maxDays={365 * 5}
+        loading={leavesFetching}
+        noun="leaves"
+        onLoadMore={() => setLeaveWindowDays(d => d + 365)}
+      />
+
       {/* ── CEO QUEUE TAB ── */}
       {activeTab === 'queue' && (
         <Card className="overflow-hidden p-0 border border-slate-200">
@@ -213,21 +224,21 @@ export default function AdminLeavesPage() {
       {activeTab === 'history' && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
-            <select
+            <Select
               value={histFilter}
               onChange={e => setHistFilter(e.target.value as LeaveApplication['status'] | 'all')}
-              className="bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
               <option value="hr_approved">HR Approved</option>
               <option value="approved">CEO Approved</option>
               <option value="rejected">Rejected</option>
-            </select>
-            <select
+            </Select>
+            <Select
               value={histType}
               onChange={e => setHistType(e.target.value as typeof histType)}
-              className="bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="all">All Types</option>
               <option value="PTO">PTO</option>
@@ -235,7 +246,7 @@ export default function AdminLeavesPage() {
               <option value="Urgent">Urgent</option>
               <option value="Normal">Normal</option>
               <option value="Parental Leave">Parental Leave</option>
-            </select>
+            </Select>
             <span className="text-xs text-slate-400 font-semibold self-center">{historyLeaves.length} records</span>
           </div>
 

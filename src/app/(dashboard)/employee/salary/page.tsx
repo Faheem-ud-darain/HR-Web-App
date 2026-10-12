@@ -42,7 +42,7 @@ export default function EmployeeSalaryPage() {
   // (see reasonLabel's comment) — a leave approved AFTER runAbsenceCheck
   // already scanned that day leaves a stale no-show/under-4h/inactivity
   // record behind for what is really now an approved leave day.
-  const { data: leaves = [] } = useLeaves();
+  const { data: leaves = [] } = useLeaves({ employeeName: payrollSelf?.fullName ?? null });
   const userProfile = payrollSelf
     ? {
         id: payrollSelf.id,
