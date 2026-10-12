@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Team, Profile, Message, hrActions } from '@/lib/hrData';
+import { Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
-import { Crown, Headset, Star, Forward } from 'lucide-react';
+import { Crown, Headset, Star } from 'lucide-react';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
@@ -166,8 +166,7 @@ export function sizeBucket(bytes?: number): SizeFilter {
 export const FORWARD_KIND_LABEL: Record<'ticket' | 'announcement' | 'chat', string> = {
   ticket: 'Forwarded → Ticket',
   announcement: 'Forwarded → Announcement',
-  chat: 'Forwarded → Message',
-};
+  chat: 'Forwarded → Message' };
 
 export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

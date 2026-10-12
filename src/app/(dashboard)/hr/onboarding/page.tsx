@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, useProfiles, useProfileDocuments, useTeams, displayName, approveOnboardingServer, rejectOnboardingServer, addEmployeeServer } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { UserPlus, CheckCircle2, AlertCircle, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
+import { UserPlus, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
 import { DocumentPreviewModal } from '@/components/ui/lazy';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -131,8 +131,7 @@ export default function HROnboardingPage() {
         password: typedPassword || undefined,
         jobTitle,
         gender,
-        region,
-      });
+        region });
 
       // Mirror membership onto the authoritative hr_teams.members list.
       const targetTeam = teamsData.find(t => t.name === team);

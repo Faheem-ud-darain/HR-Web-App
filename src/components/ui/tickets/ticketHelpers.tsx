@@ -1,6 +1,6 @@
 'use client';
 
-import { useTickets, Ticket } from '@/lib/hrData';
+import { Ticket } from '@/lib/hrData';
 import { formatDateTimeNY } from '@/lib/timezone';
 
 export function isImageAttachment(name?: string): boolean {

@@ -50,9 +50,8 @@ export function OnboardingFlow({ profile, email, role }: { profile: Profile; ema
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [iban, setIban] = useState('');
-  const [region, setRegion] = useState<'USA' | 'Pakistan'>('Pakistan');
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
-  const [uploadingPic, setUploadingPic] = useState(false);
+  const [uploadingPic] = useState(false);
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
 
   // Real document upload state — filename + base64 data for each file.
