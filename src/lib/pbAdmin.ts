@@ -23,6 +23,7 @@
 // instead — see https://pocketbase.io/v023upgrade for the full mapping.
 
 import { formatDateNY, formatTimeNY } from '@/lib/timezone';
+import { pbFilter } from '@/lib/pbFilter';
 
 const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
@@ -111,15 +112,14 @@ export async function pbAdminFetch(path: string, init?: RequestInit): Promise<an
 // contains this address as a substring.
 export async function adminFindProfileByEmail(email: string): Promise<any | null> {
   const clean = email.toLowerCase().trim();
-  const escaped = clean.replace(/"/g, '\\"');
-  const encoded = encodeURIComponent(`email ~ "${escaped}"`);
+  const encoded = encodeURIComponent(pbFilter('email ~ {:email}', { email: clean }));
   const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=20`);
   const items: any[] = list?.items || [];
   return items.find((p) => (p.email || '').toLowerCase().trim() === clean) || null;
 }
 
 export async function adminGetKV(key: string): Promise<{ id: string; value: any } | null> {
-  const encoded = encodeURIComponent(`key = "${key.replace(/"/g, '\\"')}"`);
+  const encoded = encodeURIComponent(pbFilter('key = {:key}', { key }));
   const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, value: item.value } : null;
@@ -133,7 +133,7 @@ export async function adminUpdateProfile(profileId: string, fields: Record<strin
 }
 
 export async function adminListPayrollForEmployee(employeeId: string): Promise<any[]> {
-  const encoded = encodeURIComponent(`employee_id = "${employeeId.replace(/"/g, '\\"')}"`);
+  const encoded = encodeURIComponent(pbFilter('employee_id = {:employeeId}', { employeeId }));
   const list = await pbAdminFetch(`/api/collections/hr_payroll/records?filter=${encoded}&perPage=50&sort=-created`);
   return list?.items || [];
 }
@@ -214,9 +214,10 @@ export async function adminListAllPayroll(): Promise<any[]> {
 // locked down without breaking the Tracking page or the retention sweep.
 export async function adminListScreenshots(filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<any[]> {
   const filterParts: string[] = [];
-  if (filters?.employeeEmail) filterParts.push(`employee_email ~ "${filters.employeeEmail.replace(/"/g, '\\"')}"`);
-  if (filters?.sinceISO) filterParts.push(`captured_at >= "${filters.sinceISO.replace('T', ' ').replace('Z', '')}"`);
-  if (filters?.untilISO) filterParts.push(`captured_at <= "${filters.untilISO.replace('T', ' ').replace('Z', '')}"`);
+  const toPbDate = (iso: string) => iso.replace('T', ' ').replace('Z', '');
+  if (filters?.employeeEmail) filterParts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
+  if (filters?.sinceISO) filterParts.push(pbFilter('captured_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
+  if (filters?.untilISO) filterParts.push(pbFilter('captured_at <= {:until}', { until: toPbDate(filters.untilISO) }));
   const query = filterParts.length ? `?filter=${encodeURIComponent(filterParts.join(' && '))}&perPage=500&sort=-captured_at` : '?perPage=500&sort=-captured_at';
   const list = await pbAdminFetch(`/api/collections/hr_screenshots/records${query}`);
   let items: any[] = list?.items || [];
@@ -233,7 +234,7 @@ export async function adminListScreenshots(filters?: { employeeEmail?: string; s
 // so the authenticated route below can return the exact same combined
 // result the old public client-side call used to.
 export async function adminGetKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
-  const encoded = encodeURIComponent(`key ~ "${prefix}"`);
+  const encoded = encodeURIComponent(pbFilter('key ~ {:prefix}', { prefix }));
   const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=500`);
   return (list?.items || []).map((r: any) => ({ key: r.key, value: r.value, id: r.id }));
 }
@@ -321,8 +322,7 @@ export async function adminDeleteKVByKeys(keys: string[]): Promise<void> {
 const adminUpsertIdCache = new Map<string, string>();
 
 export async function adminFindByField(collection: string, field: string, value: string): Promise<{ id: string; data: any } | null> {
-  const escaped = value.replace(/"/g, '\\"');
-  const encoded = encodeURIComponent(`${field} = "${escaped}"`);
+  const encoded = encodeURIComponent(pbFilter(`${field} = {:value}`, { value }));
   const list = await pbAdminFetch(`/api/collections/${collection}/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, data: item.data } : null;
@@ -377,9 +377,7 @@ export async function adminListCareerApplications(): Promise<any[]> {
 // call did — just authenticated now so the collection's List rule can be
 // locked down without breaking this check.
 export async function adminHasAppliedForPosition(positionId: string, email: string): Promise<boolean> {
-  const safePos = positionId.replace(/"/g, '\\"');
-  const safeEmail = email.trim().toLowerCase().replace(/"/g, '\\"');
-  const encoded = encodeURIComponent(`position_id = "${safePos}" && applicant_email = "${safeEmail}"`);
+  const encoded = encodeURIComponent(pbFilter('position_id = {:positionId} && applicant_email = {:email}', { positionId, email: email.trim().toLowerCase() }));
   const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?filter=${encoded}`);
   return (list?.items || []).length > 0;
 }
@@ -410,7 +408,7 @@ export async function adminUpdateCareerApplicationStatus(id: string, status: str
 // exact-match-filter pattern as adminListAbsenceRecordsForEmail, since
 // PocketBase's `=` filter is case-sensitive.
 export async function adminListCareerApplicationsForEmail(email: string): Promise<any[]> {
-  const encoded = encodeURIComponent(`applicant_email ~ "${email.replace(/"/g, '\\"')}"`);
+  const encoded = encodeURIComponent(pbFilter('applicant_email ~ {:email}', { email }));
   const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?filter=${encoded}&sort=-created`);
   const wanted = email.trim().toLowerCase();
   return (list?.items || []).filter((r: any) => (r.applicant_email || '').toLowerCase() === wanted);
@@ -431,7 +429,7 @@ export async function adminDeleteCareerApplicationsForEmail(email: string): Prom
 // this file (see adminListScreenshots), since PocketBase's `=` filter is
 // case-sensitive and emails have drifted in casing before.
 export async function adminListAbsenceRecordsForEmail(email: string): Promise<any[]> {
-  const encoded = encodeURIComponent(`employeeEmail ~ "${email.replace(/"/g, '\\"')}" && deleted = false`);
+  const encoded = encodeURIComponent(pbFilter('employeeEmail ~ {:email} && deleted = false', { email }));
   const list = await pbAdminFetch(`/api/collections/hr_absence_records/records?filter=${encoded}&perPage=200&sort=-date`);
   const wanted = email.toLowerCase();
   return (list?.items || []).filter((r: any) => (r.employeeEmail || '').toLowerCase() === wanted);

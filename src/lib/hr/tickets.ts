@@ -12,6 +12,8 @@ import {
   pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
 } from './shared';
 import { hrActions, buildNotificationLink, isTechnicalSupportMember } from '../hrData';
+import { pbFilter } from '../pbFilter';
+import { POLL_MS, POLL_OPTIONS } from './polling';
 
 // shows a "Live" badge for any ticket whose presence hasn't gone stale.
 // Backed by the dedicated hr_ticket_presence collection (one row per
@@ -51,12 +53,22 @@ export const TYPING_STALE_MS = 5 * 1000;
 // display_name column and admin-only rules; code below matches that real
 // schema (display_name added via a one-off addFieldIfMissing call, rules
 // fixed via makeCollectionPublic).
+// Technical Support membership lives in a JSON `teams` column, so it can't be
+// filtered server-side — but only `email` + `teams` are needed, not every
+// profile column (bank details, documents, etc.).
+async function getTechnicalSupportEmails(): Promise<string[]> {
+  const profiles = await pbList('hr_profiles', { fields: 'email,teams' });
+  return profiles
+    .filter((p: any) => isTechnicalSupportMember(p.teams))
+    .map((p: any) => p.email)
+    .filter(Boolean);
+}
 function toTypingState(row: any): TypingState {
   return { scope: row.scope, scopeId: row.scope_id, email: row.email, displayName: row.display_name || row.email, lastTypedAt: row.updated_at };
 }
 async function upsertTypingRow(scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> {
   const emailLower = email.toLowerCase();
-  const filter = `scope = "${scope}" && scope_id = "${scopeId.replace(/"/g, '\\"')}" && email = "${emailLower.replace(/"/g, '\\"')}"`;
+  const filter = pbFilter('scope = {:scope} && scope_id = {:scopeId} && email = {:email}', { scope, scopeId, email: emailLower });
   const data = { scope, scope_id: scopeId, email: emailLower, display_name: displayName, updated_at: new Date().toISOString() };
   try {
     const existing = await pb.collection('hr_typing_indicators').getFirstListItem(filter, { requestKey: null });
@@ -76,7 +88,7 @@ async function upsertTypingRow(scope: 'chat' | 'ticket', scopeId: string, email:
 }
 async function deleteTypingRow(scope: 'chat' | 'ticket', scopeId: string, email: string): Promise<void> {
   const emailLower = email.toLowerCase();
-  const filter = `scope = "${scope}" && scope_id = "${scopeId.replace(/"/g, '\\"')}" && email = "${emailLower.replace(/"/g, '\\"')}"`;
+  const filter = pbFilter('scope = {:scope} && scope_id = {:scopeId} && email = {:email}', { scope, scopeId, email: emailLower });
   try {
     const existing = await pb.collection('hr_typing_indicators').getFirstListItem(filter, { requestKey: null });
     await pb.collection('hr_typing_indicators').delete(existing.id, { requestKey: null });
@@ -95,7 +107,7 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed') {
         const res = await pb.collection('hr_tickets').getList(1, limit, {
           sort: '-created',
           requestKey: null,
-          ...(status ? { filter: `status = "${status}"` } : {}),
+          ...(status ? { filter: pbFilter('status = {:status}', { status }) } : {}),
         });
         return res.items.map(toTicket);
       } catch (err) {
@@ -103,7 +115,8 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed') {
         return [];
       }
     },
-    refetchInterval: 8000,
+    refetchInterval: POLL_MS.tickets,
+    ...POLL_OPTIONS,
   });
 }
 
@@ -172,11 +185,7 @@ export const ticketActions = {
       await hrActions.addNotification('all', 'hr', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', created.id));
     } else if (ticket.department === 'technical') {
       // Find all profiles on Technical Support / Internal Technical Support teams and notify them directly
-      const profiles = await pbList('hr_profiles');
-      const techEmails = profiles
-        .filter((p: any) => isTechnicalSupportMember(p.teams))
-        .map((p: any) => p.email)
-        .filter(Boolean);
+      const techEmails = await getTechnicalSupportEmails();
       for (const email of techEmails) {
         await hrActions.addNotification(email, 'employee', `New technical support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', created.id));
       }
@@ -201,11 +210,7 @@ export const ticketActions = {
       if (ticket.department === 'hr') {
         await hrActions.addNotification('all', 'hr', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('hr', 'ticket', ticket.id));
       } else if (ticket.department === 'technical') {
-        const profiles = await pbList('hr_profiles');
-        const techEmails = profiles
-          .filter((p: any) => isTechnicalSupportMember(p.teams))
-          .map((p: any) => p.email)
-          .filter(Boolean);
+        const techEmails = await getTechnicalSupportEmails();
         for (const email of techEmails) {
           await hrActions.addNotification(email, 'employee', `New support message from ${ticket.employeeName} on technical ticket "${ticket.title}".`, 'ticket', ticket.title, ticket.employeeEmail, buildNotificationLink('employee', 'ticket', ticket.id));
         }
@@ -221,11 +226,7 @@ export const ticketActions = {
     if (ticket.department === 'hr') {
       await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
     } else if (ticket.department === 'technical') {
-      const profiles = await pbList('hr_profiles');
-      const techEmails = profiles
-        .filter((p: any) => isTechnicalSupportMember(p.teams))
-        .map((p: any) => p.email)
-        .filter(Boolean);
+      const techEmails = await getTechnicalSupportEmails();
       for (const email of techEmails) {
         await hrActions.addNotification(email, 'employee', `Technical ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
       }
@@ -253,7 +254,7 @@ export const ticketActions = {
   // Called from TicketsView.tsx whenever the Tickets page is open.
   checkTicketAttachmentRetention: async (): Promise<void> => {
     const TICKET_ATTACHMENT_RETENTION_MS = 15 * 24 * 60 * 60 * 1000;
-    const closedRows = await pbList('hr_ticket_closed_at');
+    const closedRows = await pbList('hr_ticket_closed_at', { fields: 'ticket_id,closed_at' });
     const dueIds = closedRows
       .filter(r => {
         const closedAt = new Date(r.closed_at).getTime();
@@ -262,7 +263,7 @@ export const ticketActions = {
       .map(r => r.ticket_id as string);
     if (dueIds.length === 0) return;
 
-    const tickets = (await pbList('hr_tickets', { filter: dueIds.map(id => `id = "${id}"`).join(' || ') })).map(toTicket);
+    const tickets = (await pbList('hr_tickets', { filter: dueIds.map((id, i) => pbFilter(`id = {:id${i}}`, { [`id${i}`]: id })).join(' || ') })).map(toTicket);
     for (const ticket of tickets) {
       const hasAttachments = ticket.replies.some(r => !!r.attachmentUrl);
       if (hasAttachments) {
@@ -297,7 +298,7 @@ export const ticketActions = {
   // visible ticket list (already filtered to "my tickets" upstream).
   getTicketPresencesForIds: async (ticketIds: string[]): Promise<TicketPresence[]> => {
     if (ticketIds.length === 0) return [];
-    const filter = ticketIds.map(id => `ticketId = "${id.replace(/"/g, '\\"')}"`).join(' || ');
+    const filter = ticketIds.map((id, i) => pbFilter(`ticketId = {:id${i}}`, { [`id${i}`]: id })).join(' || ');
     return await pbList('hr_ticket_presence', { filter });
   },
   isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
@@ -318,8 +319,7 @@ export const ticketActions = {
   // Returns everyone currently (non-stale) typing in this scope, excluding
   // the viewer themself — that's the filtering the UI needs directly.
   getTypingUsers: async (scope: 'chat' | 'ticket', scopeId: string, excludeEmail: string): Promise<TypingState[]> => {
-    const escapedScopeId = scopeId.replace(/"/g, '\"');
-    const rows = (await pbList('hr_typing_indicators', { filter: `scope = "${scope}" && scope_id = "${escapedScopeId}"` })).map(toTypingState);
+    const rows = (await pbList('hr_typing_indicators', { filter: pbFilter('scope = {:scope} && scope_id = {:scopeId}', { scope, scopeId }) })).map(toTypingState);
     const now = Date.now();
     return rows.filter(r =>
       r.email.toLowerCase() !== excludeEmail.toLowerCase() &&

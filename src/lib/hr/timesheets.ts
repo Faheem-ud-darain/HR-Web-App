@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDateNY, getNYDateString } from '../timezone';
 import { pb } from '../pocketbase';
 import type {
-  Profile, TimesheetEntry, TrackerHeartbeat, CaptureHealthStatus, ShiftTabHeartbeat,
+  Profile, TimesheetEntry, TrackerHeartbeat, ShiftTabHeartbeat,
   ShiftStopSignal, TrackerQuitIntent, TrackerPing, TrackerPong,
   TrackerStopCommand, TrackerCommand, TrackerDiagnostics, TrackingSettings,
 } from './types';
@@ -20,87 +20,21 @@ import {
   looksLikeRealId, formatDurationBetween,
 } from './shared';
 import { hrActions, displayName } from '../hrData';
+import { pbFilter } from '../pbFilter';
+import {
+  hasStaleTrackerToken, getCaptureHealth, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
+  TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
+} from '../core/timesheets';
 
-// longer matches any row in hr_tracking_settings — i.e. HR/Admin (or the
-// employee) regenerated the setup code, but this specific already-running
-// desktop agent hasn't been given the new code yet. Keep this in sync with
-// the literal string in agent_gui.py's get_tracking_settings()/settings-poll
-// loop if that message ever changes.
-const STALE_TOKEN_ERROR_MARKER = 'Setup token not recognized';
+// Pure tracker-health / heartbeat / timesheet-mapping logic lives in
+// ../core/timesheets (shared with the server); re-exported so existing
+// imports from this module and ../hrData keep working.
+export {
+  hasStaleTrackerToken, getCaptureHealth,
+  TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
+};
 
-// True when a heartbeat's own error field says the agent can't find its
-// settings row anymore — added 2026-08-19 after zara@delcargo.us and
-// alex@delcargo.us silently stopped capturing for over an hour with
-// hr_tracking_settings.enabled genuinely true the whole time: someone had
-// regenerated their setup codes (agentToken) to fix an earlier issue, but
-// their already-running desktop agents kept authenticating with the OLD
-// token, which no longer matched anything, so get_tracking_settings()
-// returned null and the agent silently reported captureEnabled: false with
-// this specific error — indistinguishable from "not on shift" unless this
-// exact error string is checked for. Exported so both the Start Shift gate
-// (employee/page.tsx) and getCaptureHealth below can use the same check.
-export function hasStaleTrackerToken(hb: TrackerHeartbeat | null): boolean {
-  return !!hb && hb.captureEnabled === false && (hb.lastCaptureError || '').includes(STALE_TOKEN_ERROR_MARKER);
-}
 
-/**
- * Classifies whether a live tracker heartbeat is actually producing usable
- * screenshots, distinct from isHeartbeatLive (which only proves the agent
- * process is running and can reach the server). Call this ONLY when
- * isHeartbeatLive(hb, ...) is already true and captureEnabled is expected
- * (i.e. the employee has an active shift) — otherwise every offline/no-
- * shift employee would show as "failing" for no reason.
- *
- * - 'idle'        — agent connected but not currently supposed to be
- *                    capturing (no active shift, or HR has tracking off).
- * - 'locked'      — agent detected the OS session was locked on its last tick.
- * - 'stale_token' — agent's setup code was regenerated but this device
- *                    hasn't been reconnected with the new one yet (see
- *                    hasStaleTrackerToken above). Checked BEFORE the
- *                    generic captureEnabled===false→'idle' case below,
- *                    since otherwise this looked identical to "not on
- *                    shift" and silently hid a real problem from HR.
- * - 'failing'     — 3+ consecutive capture/upload failures (not lock- or
- *                    token-related — e.g. permission revoked, disk full,
- *                    a genuine screen-grab/OS API error, persistent network
- *                    error).
- * - 'ok'          — capturing normally.
- * - 'unknown'     — pre-v14 agent build, no capture-health fields reported yet.
- */
-export function getCaptureHealth(hb: TrackerHeartbeat | null): { status: CaptureHealthStatus; detail?: string } {
-  if (!hb) return { status: 'unknown' };
-  if (hb.isLocked) return { status: 'locked', detail: hb.lastCaptureError || 'Screen is locked' };
-  if (hasStaleTrackerToken(hb)) return { status: 'stale_token', detail: hb.lastCaptureError || undefined };
-  if (hb.captureEnabled === false) return { status: 'idle' };
-  if (hb.captureEnabled === undefined) return { status: 'unknown' };
-  if ((hb.consecutiveCaptureFailures ?? 0) >= 3) {
-    return { status: 'failing', detail: hb.lastCaptureError || 'Screenshot capture is failing' };
-  }
-  return { status: 'ok' };
-}
-export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
-
-// A short-lived "this browser tab is actively viewing an in-progress manual
-// shift" heartbeat (Employee dashboard, non-USA/manual Start-Shift flow
-// only — USA employees are governed by GPS geofencing instead, which has
-// its own foreground/background lifecycle). Refreshed every ~20s while a
-// manual shift is active. Lets the app tell a genuinely still-running
-// shift apart from "the tab was closed N days/weeks ago and the shift just
-// never got told to stop" — see closeStaleManualShiftIfAbandoned below, the
-// safety net for when the pagehide-based immediate stop (best-effort —
-// unload-style handlers never fire on a crash, force-quit, or killed
-// process) never got the chance to run.
-// Was 2 minutes — too tight. On the native mobile app, simply locking the
-// phone or switching apps for a couple of minutes (extremely normal during
-// a shift) let this go stale, which closeStaleManualShiftIfAbandoned then
-// read as "the app was closed" and auto-ended the shift — reported by
-// employees as being randomly logged out / shift-ended mid-shift with a
-// "closed the app" push notification, even though they hadn't closed
-// anything. 15 minutes gives real backgrounding room to breathe while still
-// catching a genuinely abandoned/crashed session within a reasonable
-// window. See also the pagehide-handler native/web split below, the other
-// half of this same fix.
-export const SHIFT_TAB_HEARTBEAT_STALE_MS = 15 * 60 * 1000;
 // hr_shift_tab_heartbeats — one row per email (plan 027 Phase 5),
 // replacing the old shift_tab_heartbeat_<email> hr_delcargo_store key.
 // Purely app-internal (confirmed: tracker-agent/agent_gui.py never
@@ -154,56 +88,55 @@ async function getShiftTabHeartbeatRow(email: string): Promise<ShiftTabHeartbeat
 //                        names mirror write_diagnostics()'s payload in
 //                        agent_gui.py exactly.
 //
-// Grace period before auto-clock-out when heartbeat dies but no quit intent
-// signal is present. Protects active shifts from transient server timeouts
-// (screenshot uploads blocking heartbeat writes). After 15 min continuously
-// dead with no quit signal, the shift is treated as a crash and ended.
-export const TRACKER_HEARTBEAT_GRACE_MS = 15 * 60 * 1000;
 // ────────────────────────────────────────────────────────────────────────────
 
-function toTimesheet(t: any): TimesheetEntry {
-  const clockOut = t.clock_out || undefined;
-  return {
-    id: t.id, employeeEmail: t.employee_id, date: t.date, clockIn: t.clock_in, clockOut,
-    duration: t.duration || undefined,
-    status: clockOut ? 'completed' : 'in_progress',
-    approvalStatus: t.status || 'pending',
-  };
+
+// Columns the app actually reads (see toTimesheet) — skips everything else on
+// the row so each fetched shift is smaller.
+const TIMESHEET_FIELDS = 'id,employee_id,date,clock_in,clock_out,duration,status';
+
+export interface TimesheetQuery {
+  /** Only this employee's shifts (server-side) — employees never need the whole roster. */
+  email?: string;
+  /** How far back closed shifts go. Open shifts are always included. Default 60. */
+  days?: number;
 }
 
 // Shared by useTimesheets (below) AND runAbsenceCheck, which must never
 // trust a caller-supplied, possibly-stale React Query cache for this data
 // (see the BUGFIX comment on runAbsenceCheck's own fetchFreshTimesheets
 // call for the full story) — always does a real network round trip.
-export async function fetchTimesheetsFresh(): Promise<TimesheetEntry[]> {
+//
+// The filter keeps a "recent history" window (`days`) for closed shifts but
+// ALWAYS includes any shift that's still open (clock_out empty) no matter
+// how old: runAbsenceCheck/autoCloseStaleOpenShifts/
+// autoCloseOrphanTrackedShifts depend on seeing every currently open shift,
+// so a busy roster can't silently lose track of a stuck-open one.
+export async function fetchTimesheetsFresh(opts: TimesheetQuery = {}): Promise<TimesheetEntry[]> {
   try {
-    // Was a flat getList(1, 500) with no date filter — once the company
-    // accumulates more than 500 recent rows (sorted by -created), OLDER
-    // still-open shifts silently fall outside that window. That matters
-    // a lot here: runAbsenceCheck/autoCloseStaleOpenShifts/
-    // autoCloseOrphanTrackedShifts all depend on seeing every currently
-    // open shift to work correctly, regardless of how old its clock-in
-    // was. The filter below keeps the same "recent history" scope
-    // (last 60 days) for closed shifts, but ALWAYS includes any shift
-    // that's still open (clock_out empty) no matter how old, so a
-    // busy roster can't silently lose track of a stuck-open shift.
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 3600 * 1000);
-    const cutoff = sixtyDaysAgo.toISOString().replace('T', ' ').replace('Z', '');
-    const items = await pbList('hr_timesheets', {
-      sort: '-created',
-      filter: `clock_out = "" || date >= "${cutoff}"`,
-    });
-    return items.map(toTimesheet);
+    const days = opts.days ?? 60;
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const cutoff = since.toISOString().replace('T', ' ').replace('Z', '');
+    const windowFilter = pbFilter('clock_out = "" || date >= {:cutoff}', { cutoff });
+    const filter = opts.email
+      ? `(${windowFilter}) && ${pbFilter('employee_id ~ {:email}', { email: opts.email })}`
+      : windowFilter;
+    const items = await pbList('hr_timesheets', { sort: '-created', filter, fields: TIMESHEET_FIELDS });
+    const wanted = opts.email?.toLowerCase();
+    // `~` is a case-insensitive "contains" — drop substring false-matches.
+    return items.map(toTimesheet).filter(t => !wanted || (t.employeeEmail || '').toLowerCase() === wanted);
   } catch (err) {
     console.error('[hrData] getList error in hr_timesheets:', err);
     return [];
   }
 }
 
-export function useTimesheets() {
+export function useTimesheets(opts: TimesheetQuery & { enabled?: boolean } = {}) {
+  const { enabled = true, email, days } = opts;
   return useQuery({
-    queryKey: ['hr_timesheets'],
-    queryFn: fetchTimesheetsFresh,
+    queryKey: ['hr_timesheets', email?.toLowerCase() ?? 'all', days ?? 60],
+    queryFn: () => fetchTimesheetsFresh({ email, days }),
+    enabled,
   });
 }
 
@@ -250,8 +183,7 @@ export const timesheetActions = {
   // legitimately need everyone's settings at once (the dashboard-mount
   // safety-net sweeps); this one is for a single employee's settings.
   getTrackingSettingsFor: async (email: string): Promise<TrackingSettings> => {
-    const escaped = email.replace(/"/g, '\\"');
-    const matches = await pbList('hr_tracking_settings', { filter: `employeeEmail ~ "${escaped}"` });
+    const matches = await pbList('hr_tracking_settings', { filter: pbFilter('employeeEmail ~ {:email}', { email }) });
     const found = matches.find((t: any) => (t.employeeEmail || '').toLowerCase() === email.toLowerCase());
     return found
       ? { employeeEmail: found.employeeEmail, enabled: !!found.enabled, intervalMinutes: found.intervalMinutes, excludeFromAutoDelete: !!found.excludeFromAutoDelete, agentToken: found.agentToken, id: found.id }
@@ -322,14 +254,7 @@ export const timesheetActions = {
   // doesn't re-trigger the modal on every poll.
   getShiftStopSignal: (email: string): Promise<ShiftStopSignal | null> =>
     pbGetTrackerSignal(email, 'shift_stop_signal'),
-  isHeartbeatLive: (hb: TrackerHeartbeat | null, intervalMinutes: number = 3): boolean => {
-    if (!hb?.lastSeenAt) return false;
-    // Extended from (interval+2) to (interval+10) minutes. The extra 8 min
-    // buffer absorbs transient PocketBase timeouts (screenshot uploads blocking
-    // heartbeat writes) so a slow server never falsely appears as "tracker gone".
-    const toleranceMs = (Math.max(3, intervalMinutes) + 10) * 60 * 1000;
-    return (Date.now() - new Date(hb.lastSeenAt).getTime()) < toleranceMs;
-  },
+  isHeartbeatLive: (hb: TrackerHeartbeat | null, intervalMinutes: number = 3): boolean => isHeartbeatLive(hb, intervalMinutes),
 
   // ── 5-Signal System — new hrActions (Signals 2–5) ────────────────────────
 
@@ -435,8 +360,7 @@ export const timesheetActions = {
   clearShiftTabHeartbeat: async (email: string): Promise<void> => {
     await pbDeleteByField('hr_shift_tab_heartbeats', 'email', email.toLowerCase());
   },
-  isShiftTabHeartbeatLive: (hb: ShiftTabHeartbeat | null): boolean =>
-    !!hb?.lastSeenAt && (Date.now() - new Date(hb.lastSeenAt).getTime()) < SHIFT_TAB_HEARTBEAT_STALE_MS,
+  isShiftTabHeartbeatLive: (hb: ShiftTabHeartbeat | null): boolean => isShiftTabHeartbeatLive(hb),
 
   // Fire-and-forget clock-out sent from a `pagehide` handler as the tab is
   // actually closing. A normal awaited hrActions.clockOut() call has no
@@ -670,8 +594,7 @@ export const timesheetActions = {
   // shift here, leaving clockIn/clockOut looking broken for that employee.
   getOpenShift: async (employeeEmail: string): Promise<TimesheetEntry | null> => {
     const wanted = employeeEmail.toLowerCase();
-    const escaped = employeeEmail.replace(/"/g, '\\"');
-    const matches = (await pbList('hr_timesheets', { filter: `employee_id ~ "${escaped}" && clock_out = ""` })).map(toTimesheet);
+    const matches = (await pbList('hr_timesheets', { filter: pbFilter('employee_id ~ {:email} && clock_out = ""', { email: employeeEmail }) })).map(toTimesheet);
     return matches.find(t => (t.employeeEmail || '').toLowerCase() === wanted) || null;
   },
   clockIn: async (employeeEmail: string): Promise<TimesheetEntry> => {

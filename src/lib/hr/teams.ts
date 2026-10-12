@@ -15,6 +15,8 @@ import type {
 } from './types';
 import { pbList, pbCreate, pbUpdate, pbDelete, pbGetIdSetMap, pbMarkIdsInField, HR_ADMIN_LINE_TEAM_ID } from './shared';
 import { hrActions, buildNotificationLink, updateProfileAdmin } from '../hrData';
+import { pbFilter } from '../pbFilter';
+import { POLL_MS, POLL_OPTIONS } from './polling';
 
 // Read receipts for regular Team Chat messages — same shape again (message
 // id -> emails who've viewed it). Kept as its own KV key/blob rather than
@@ -69,8 +71,8 @@ function toTeamDocument(d: any): TeamDocument {
   };
 }
 
-export function useWarehouses() {
-  return useQuery({ queryKey: ['hr_warehouses'], queryFn: async () => (await pbList('hr_warehouses')).map(toWarehouse) });
+export function useWarehouses(options: { enabled?: boolean } = {}) {
+  return useQuery({ enabled: options.enabled ?? true, queryKey: ['hr_warehouses'], queryFn: async () => (await pbList('hr_warehouses')).map(toWarehouse) });
 }
 
 export function useTeams() {
@@ -107,7 +109,7 @@ export function useMessages(teamId: string | null | undefined, limit: number = 5
     queryFn: async () => {
       if (!teamId) return [];
       const rows = await pb.collection('hr_messages').getList(1, limit, {
-        filter: `team_id = "${teamId}"`,
+        filter: pbFilter('team_id = {:teamId}', { teamId }),
         sort: '-created',
         requestKey: null,
       });
@@ -115,8 +117,9 @@ export function useMessages(teamId: string | null | undefined, limit: number = 5
       return rows.items.map(toMessage).reverse();
     },
     enabled: !!teamId,
-    refetchInterval: 8000,
-    staleTime: 4000,
+    refetchInterval: POLL_MS.openChat,
+    staleTime: 5000,
+    ...POLL_OPTIONS,
   });
 }
 
@@ -132,7 +135,8 @@ export function useAllMessages() {
         return [];
       }
     },
-    refetchInterval: 20000,
+    refetchInterval: POLL_MS.allMessages,
+    ...POLL_OPTIONS,
   });
 }
 
@@ -141,11 +145,12 @@ export function useTeamDocuments(teamId: string | null | undefined) {
     queryKey: ['hr_team_documents', teamId],
     queryFn: async () => {
       if (!teamId) return [];
-      const rows = await pbList('hr_team_documents', { filter: `team_id = "${teamId}"`, sort: '-created' });
+      const rows = await pbList('hr_team_documents', { filter: pbFilter('team_id = {:teamId}', { teamId }), sort: '-created' });
       return rows.map(toTeamDocument);
     },
     enabled: !!teamId,
-    refetchInterval: 15000,
+    refetchInterval: POLL_MS.teamDocuments,
+    ...POLL_OPTIONS,
   });
 }
 

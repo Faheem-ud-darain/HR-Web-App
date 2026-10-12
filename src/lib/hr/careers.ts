@@ -17,8 +17,8 @@ function toCareer(c: any): CareerPosition {
   return { id: c.id, title: c.title, department: c.department, location: c.location, description: c.description, requirements: c.requirements || [] };
 }
 
-export function useCareers() {
-  return useQuery({ queryKey: ['hr_careers'], queryFn: async () => (await pbList('hr_careers')).map(toCareer) });
+export function useCareers(options: { enabled?: boolean } = {}) {
+  return useQuery({ enabled: options.enabled ?? true, queryKey: ['hr_careers'], queryFn: async () => (await pbList('hr_careers')).map(toCareer) });
 }
 
 export async function getCareerApplicationsAdmin(): Promise<CareerApplication[]> {
