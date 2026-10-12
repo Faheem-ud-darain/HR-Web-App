@@ -122,3 +122,23 @@ export function DashboardSkeleton() {
     </LoadingRegion>
   );
 }
+
+// Message-bubble placeholders for a chat pane that is fetching its history.
+export function ChatSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <LoadingRegion label="Loading messages" className="space-y-4 py-4">
+      {Array.from({ length: rows }, (_, i) => {
+        const mine = i % 3 === 1;
+        return (
+          <div key={i} className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
+            <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+            <div className={`space-y-1.5 ${mine ? 'items-end' : ''}`}>
+              <Skeleton className="h-2.5 w-20" />
+              <Skeleton className={`h-9 rounded-2xl ${['w-48', 'w-64', 'w-40'][i % 3]}`} />
+            </div>
+          </div>
+        );
+      })}
+    </LoadingRegion>
+  );
+}

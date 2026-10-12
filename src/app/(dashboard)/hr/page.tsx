@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ListSkeleton, StatCardSkeletonGrid, TableSkeletonRows } from '@/components/ui/Skeleton';
 
 export default function HRDashboard() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function HRDashboard() {
     return emp ? displayName(emp, 'hr') : employeeName;
   };
   const teams = teamsData.map(t => t.name); // extract names
-  const { data: announcements = [], refetch: refetchAnnouncements } = useAnnouncements();
+  const { data: announcements = [], isLoading: announcementsLoading, refetch: refetchAnnouncements } = useAnnouncements();
   const { data: warehouses = [], refetch: refetchWarehouses } = useWarehouses();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -279,6 +280,9 @@ export default function HRDashboard() {
       </div>
 
       {/* Stats */}
+      {(isEmployeesLoading || isLeavesLoading) ? (
+        <StatCardSkeletonGrid count={4} className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" />
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Card
           onClick={() => router.push('/hr/teams')}
@@ -321,6 +325,7 @@ export default function HRDashboard() {
         <AvgHoursWorkedCard employees={employees} timesheets={timesheets} viewerRole="hr" />
         <ActiveEmployeesCard employees={employees} timesheets={timesheets} viewerRole="hr" />
       </div>
+      )}
 
       {/* Pending Leave Requests — the primary actionable item for HR, surfaced
           immediately after stats rather than buried below passive widgets. */}
@@ -338,7 +343,8 @@ export default function HRDashboard() {
           </button>
         </div>
         <CardContent className="p-0 divide-y divide-slate-100">
-          {leaves.filter(l => l.status === 'pending').slice(0, 5).map(l => (
+          {isLeavesLoading && <div className="p-4"><ListSkeleton rows={3} /></div>}
+          {!isLeavesLoading && leaves.filter(l => l.status === 'pending').slice(0, 5).map(l => (
             <div key={l.id} className="p-4 md:px-6 flex items-center justify-between gap-4">
               <div>
                 <div className="font-semibold text-slate-900 text-sm">{nameFor(l.employeeName)}</div>
@@ -347,7 +353,7 @@ export default function HRDashboard() {
               <Badge variant="warning">Pending</Badge>
             </div>
           ))}
-          {leaves.filter(l => l.status === 'pending').length === 0 && (
+          {!isLeavesLoading && leaves.filter(l => l.status === 'pending').length === 0 && (
             <div className="text-xs text-slate-400 font-medium italic text-center py-6">No pending leave requests.</div>
           )}
         </CardContent>
@@ -373,7 +379,8 @@ export default function HRDashboard() {
           </div>
         </div>
         <CardContent className="p-0 divide-y divide-slate-100">
-          {announcements.map(ann => (
+          {announcementsLoading && <div className="p-4"><ListSkeleton rows={3} /></div>}
+          {!announcementsLoading && announcements.map(ann => (
             <div key={ann.id} className="p-4 md:px-6 flex flex-col justify-between">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div>
@@ -441,7 +448,7 @@ export default function HRDashboard() {
               })()}
             </div>
           ))}
-          {announcements.length === 0 && (
+          {!announcementsLoading && announcements.length === 0 && (
             <EmptyState py={6} size="xs">No announcements posted yet.</EmptyState>
           )}
         </CardContent>

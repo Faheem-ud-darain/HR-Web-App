@@ -16,6 +16,8 @@ import type {
 import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField } from './shared';
 import { hrActions } from '../hrData';
 import { POLL_MS, POLL_OPTIONS } from './polling';
+import { getSessionEmail, getSessionRole } from '../session';
+import { pbFilter } from '../pbFilter';
 
 // Shared "does this announcement apply to this person" check — the exact
 // targeting rule employee/page.tsx's dashboard feed widget already used
@@ -107,12 +109,24 @@ function toAnnouncement(a: any): Announcement {
   return { id: a.id, title: a.title, content: a.content, timestamp: a.timestamp, createdBy: a.created_by, target: a.target || a.target_role || 'all', important: !!a.pinned };
 }
 
-export function useNotifications() {
+// The signed-in user only ever sees notifications addressed to their email or
+// broadcast to their role (see TopNav's own filter), so ask the server for just
+// those instead of the whole table's latest rows and filtering client-side —
+// which also stops other people's traffic from pushing your own older
+// notifications out of the page. `limit` is the page size ("Load older" raises it).
+export const DEFAULT_NOTIFICATION_LIMIT = 50;
+
+export function useNotifications(limit: number = DEFAULT_NOTIFICATION_LIMIT) {
+  const email = getSessionEmail();
+  const role = getSessionRole();
   return useQuery({
-    queryKey: ['hr_notifications'],
+    queryKey: ['hr_notifications', (email || '').toLowerCase(), role || '', limit],
     queryFn: async () => {
       try {
-        const res = await pb.collection('hr_notifications').getList(1, 50, { sort: '-created', requestKey: null });
+        const filter = email && role
+          ? pbFilter('recipient_email = {:email} || (recipient_role = {:role} && recipient_email = "all")', { email, role })
+          : undefined;
+        const res = await pb.collection('hr_notifications').getList(1, limit, { sort: '-created', requestKey: null, ...(filter ? { filter } : {}) });
         return res.items.map(toNotification);
       } catch (err) {
         console.error('[hrData] getList error in hr_notifications:', err);

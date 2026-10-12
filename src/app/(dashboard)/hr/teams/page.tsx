@@ -12,10 +12,11 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function HRTeamsPage() {
-  const { data: allProfiles = [], refetch: refetchProfiles } = useProfiles();
-  const { data: allTeams = [], refetch: refetchTeams } = useTeams();
+  const { data: allProfiles = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
+  const { data: allTeams = [], isLoading: teamsLoading, refetch: refetchTeams } = useTeams();
   const { data: allWarehouses = [], refetch: refetchWarehouses } = useWarehouses();
   
   const employees = allProfiles;
@@ -566,7 +567,8 @@ export default function HRTeamsPage() {
             <Users className="h-4 w-4 text-orange-600" /> Employee List
           </h3>
           <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-            {filteredEmployees.map(emp => (
+            {profilesLoading && <ListSkeleton rows={5} />}
+            {!profilesLoading && filteredEmployees.map(emp => (
               <div 
                 key={emp.id}
                 draggable
@@ -646,7 +648,8 @@ export default function HRTeamsPage() {
             Departments / Dropzones
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {allTeams.map((team: Team) => {
+            {teamsLoading && <ListSkeleton rows={3} />}
+            {!teamsLoading && allTeams.map((team: Team) => {
               const teamName = team.name;
               const members = employees.filter((e: Profile) => team.members.includes(e.email));
               return (

@@ -5,9 +5,12 @@ import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Button } from '@/components/ui/Button';
 import { Task, Profile, useTasks, useProfiles } from '@/lib/hrData';
 import { ClipboardList } from 'lucide-react';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function HRTasksPage() {
-  const { data: tasks = [], refetch: refetchTasks } = useTasks();
+  const [doneDays, setDoneDays] = useState(30);
+  const { data: tasks = [], isLoading: tasksLoading, isFetching: tasksFetching, refetch: refetchTasks } = useTasks({ doneWithinDays: doneDays });
   const { data: employees = [] } = useProfiles();
   const [isTaskOpen, setIsTaskOpen] = useState(false);
 
@@ -27,12 +30,16 @@ export default function HRTasksPage() {
         </Button>
       </div>
 
+      <LoadMoreHistory days={doneDays} maxDays={365} loading={tasksFetching} noun="completed tasks" onLoadMore={() => setDoneDays(d => d + 60)} />
+
+      {tasksLoading ? <ListSkeleton rows={5} /> : (
       <TaskBoard
-        tasks={tasks}
-        onUpdate={() => refetchTasks()}
-        canDelete={true}
-        readOnly={false}
-      />
+          tasks={tasks}
+          onUpdate={() => refetchTasks()}
+          canDelete={true}
+          readOnly={false}
+        />
+      )}
 
       <TaskModal
         isOpen={isTaskOpen}

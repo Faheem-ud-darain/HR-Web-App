@@ -32,6 +32,7 @@ import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, Shiel
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Switch } from '@/components/ui/Switch';
+import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 
 interface TrackingViewProps {
   role: 'admin' | 'hr' | 'team_lead';
@@ -129,7 +130,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   const [mouseLogs, setMouseLogs] = useState<InactivityLog[]>([]);
   const [mouseLoading, setMouseLoading] = useState(false);
 
-  const { data: allProfiles } = useProfiles();
+  const { data: allProfiles, isLoading: profilesLoading } = useProfiles();
   // Tracking settings live in the dedicated hr_tracking_settings collection
   // (one row per employee) — see useTrackingSettings in hrData.ts.
   const { data: settingsList = [], refetch: refetchSettings } = useTrackingSettings();
@@ -767,6 +768,10 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               </tr>
             </THead>
             <TBody>
+{profilesLoading ? (
+  <TableSkeletonRows rows={6} cols={canManage ? 7 : 5} />
+) : (
+<>
               {filteredEmployees.map(emp => {
                 const settings = settingsFor(emp.email);
                 const hb = heartbeatFor(emp.email);
@@ -883,7 +888,9 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                   </EmptyState>
                 </Tr>
               )}
-            </TBody>
+            </>
+)}
+</TBody>
           </Table>
         </TableScroll>
         
@@ -994,7 +1001,8 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               </div>
             );
           })}
-          {filteredEmployees.length === 0 && (
+          {profilesLoading && <ListSkeleton rows={3} />}
+          {!profilesLoading && filteredEmployees.length === 0 && (
             <EmptyState py={8} size="sm">No employees found.</EmptyState>
           )}
         </div>

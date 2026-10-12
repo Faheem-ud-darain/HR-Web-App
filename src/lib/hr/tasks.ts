@@ -7,13 +7,34 @@ import { useQuery } from '@tanstack/react-query';
 import type { Task } from './types';
 import { pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete } from './shared';
 import { hrActions, buildNotificationLink } from '../hrData';
+import { pbFilter } from '../pbFilter';
 
 function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
 }
 
-export function useTasks(options: { enabled?: boolean } = {}) {
-  return useQuery({ enabled: options.enabled ?? true, queryKey: ['hr_tasks'], queryFn: async () => (await pbList('hr_tasks', { sort: '-created' })).map(toTask) });
+// Columns toTask reads.
+const TASK_FIELDS = 'id,title,description,assigned_to,assigned_email,team,due_date,priority,status,created_by';
+export const DEFAULT_DONE_TASK_DAYS = 30;
+
+export interface TaskQuery {
+  /** Completed tasks are only loaded when created within this many days (open tasks always load). Default 30; 0 = all. */
+  doneWithinDays?: number;
+}
+
+function openOrRecentFilter(days: number): string | undefined {
+  if (days <= 0) return undefined;
+  const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString().replace('T', ' ').replace('Z', '');
+  return pbFilter('status != "done" || created >= {:cutoff}', { cutoff });
+}
+
+export function useTasks(options: { enabled?: boolean } & TaskQuery = {}) {
+  const days = options.doneWithinDays ?? DEFAULT_DONE_TASK_DAYS;
+  return useQuery({
+    enabled: options.enabled ?? true,
+    queryKey: ['hr_tasks', days],
+    queryFn: async () => (await pbList('hr_tasks', { sort: '-created', filter: openOrRecentFilter(days), fields: TASK_FIELDS })).map(toTask),
+  });
 }
 // Scoped variant for an employee's OWN dashboard — useTasks() above fetches
 // every task assigned to everyone in the company, which the employee
@@ -23,12 +44,13 @@ export function useTasks(options: { enabled?: boolean } = {}) {
 // pattern useMyAbsenceRecords-style helpers elsewhere in this file already
 // use. HR/Admin task-management pages that legitimately need the whole
 // roster's tasks should keep using useTasks().
-export function useMyTasks(email: string | null | undefined) {
+export function useMyTasks(email: string | null | undefined, query: TaskQuery = {}) {
+  const days = query.doneWithinDays ?? DEFAULT_DONE_TASK_DAYS;
   return useQuery({
-    queryKey: ['hr_tasks_mine', (email || '').toLowerCase()],
+    queryKey: ['hr_tasks_mine', (email || '').toLowerCase(), days],
     queryFn: async () => {
       if (!email) return [];
-      return (await pbListByEmailField('hr_tasks', 'assigned_email', email, { sort: '-created' })).map(toTask);
+      return (await pbListByEmailField('hr_tasks', 'assigned_email', email, { sort: '-created', extraFilter: openOrRecentFilter(days) ? `(${openOrRecentFilter(days)})` : undefined })).map(toTask);
     },
     enabled: !!email,
   });

@@ -83,7 +83,8 @@ export function TopNav() {
   const searchEnabled = { enabled: searchActive };
   const { data: allTasks } = useTasks(searchEnabled);
   const { data: allTickets } = useTickets();
-  const { data: allNotifications, refetch: refetchNotifications } = useNotifications();
+  const [notificationLimit, setNotificationLimit] = useState(50);
+  const { data: allNotifications, isFetching: fetchingNotifications, refetch: refetchNotifications } = useNotifications(notificationLimit);
   const { data: allTeams } = useTeams();
   const { data: allWarehouses } = useWarehouses(searchEnabled);
   const { data: allPayroll } = usePayroll(searchEnabled);
@@ -639,6 +640,15 @@ export function TopNav() {
                   })}
                   {notifications.length === 0 && (
                     <div className="p-8 text-center text-slate-400 font-medium text-xs">No alerts active</div>
+                  )}
+                  {(allNotifications?.length ?? 0) >= notificationLimit && (
+                    <button
+                      onClick={() => setNotificationLimit(n => n + 50)}
+                      disabled={fetchingNotifications}
+                      className="w-full p-3 text-[11px] font-bold text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-60"
+                    >
+                      {fetchingNotifications ? 'Loading…' : 'Load older alerts'}
+                    </button>
                   )}
                 </div>
               </div>

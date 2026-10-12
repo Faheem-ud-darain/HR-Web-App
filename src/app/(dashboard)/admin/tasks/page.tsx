@@ -8,9 +8,12 @@ import { ClipboardList, Star, CheckCircle2, UserCog, Loader2 } from 'lucide-reac
 import { useTasks, useProfiles, useTeams, hrActions, displayName, setTeamLeadAdmin } from '@/lib/hrData';
 import { Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function AdminTasksPage() {
-  const { data: tasks = [], refetch: refetchTasks } = useTasks();
+  const [doneDays, setDoneDays] = useState(30);
+  const { data: tasks = [], isLoading: tasksLoading, isFetching: tasksFetching, refetch: refetchTasks } = useTasks({ doneWithinDays: doneDays });
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
   const { data: teams = [] } = useTeams();
   const [isTaskOpen, setIsTaskOpen] = useState(false);
@@ -60,12 +63,16 @@ export default function AdminTasksPage() {
         </div>
       </div>
 
+      <LoadMoreHistory days={doneDays} maxDays={365} loading={tasksFetching} noun="completed tasks" onLoadMore={() => setDoneDays(d => d + 60)} />
+
+      {tasksLoading ? <ListSkeleton rows={5} /> : (
       <TaskBoard
-        tasks={tasks}
-        onUpdate={() => refetchTasks()}
-        canDelete={true}
-        readOnly={false}
-      />
+          tasks={tasks}
+          onUpdate={() => refetchTasks()}
+          canDelete={true}
+          readOnly={false}
+        />
+      )}
 
       <TaskModal
         isOpen={isTaskOpen}

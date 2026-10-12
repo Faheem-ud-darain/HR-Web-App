@@ -15,6 +15,7 @@ import { Button } from './Button';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { ChatSkeleton } from '@/components/ui/Skeleton';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -954,7 +955,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               </button>
             </div>
           )}
-          {isLoading && <p className="text-xs text-slate-400 text-center font-semibold py-6">Loading messages…</p>}
+          {isLoading && <ChatSkeleton />}
           {!isLoading && messages.length === 0 && (
             <EmptyState py={6} size="xs">No messages yet — say hi 👋</EmptyState>
           )}

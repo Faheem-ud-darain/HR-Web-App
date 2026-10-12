@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { ListSkeleton, StatCardSkeletonGrid, TableSkeletonRows } from '@/components/ui/Skeleton';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function AdminDashboard() {
   const [isTaskOpen, setIsTaskOpen] = useState(false);
   const [isScheduleMeetOpen, setIsScheduleMeetOpen] = useState(false);
 
-  const { data: announcements = [], refetch: refetchAnnouncements } = useAnnouncements();
+  const { data: announcements = [], isLoading: announcementsLoading, refetch: refetchAnnouncements } = useAnnouncements();
   const { data: warehouses = [] } = useWarehouses();
   const [isAnnounceOpen, setIsAnnounceOpen] = useState(false);
 
@@ -267,6 +268,9 @@ export default function AdminDashboard() {
           Employees" tile used to be an arbitrary Tailwind blue that matched
           nothing else in the system; indigo is DESIGN.md's actual
           documented secondary accent. */}
+      {(isEmployeesLoading || isLeavesLoading) ? (
+        <StatCardSkeletonGrid count={4} className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" />
+      ) : (
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Card>
           <CardContent className="pt-4 md:pt-5">
@@ -322,6 +326,7 @@ export default function AdminDashboard() {
         </Card>
         <AvgHoursWorkedCard employees={employees} timesheets={timesheets} viewerRole="admin" />
       </div>
+      )}
 
       {/* CEO Leave Approval Queue — moved up to directly follow the stats.
           This is the one thing on this page that actually requires the
@@ -352,6 +357,10 @@ export default function AdminDashboard() {
                 </tr>
               </THead>
               <TBody>
+{isLeavesLoading ? (
+  <TableSkeletonRows rows={4} cols={5} />
+) : (
+<>
                 {hrApprovedLeaves.map(l => (
                   <Tr key={l.id}>
                     <Td className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
@@ -377,7 +386,9 @@ export default function AdminDashboard() {
                     </EmptyState>
                   </Tr>
                 )}
-              </TBody>
+              </>
+)}
+</TBody>
             </Table>
           </TableScroll>
 
@@ -440,7 +451,8 @@ export default function AdminDashboard() {
           </div>
         </div>
         <CardContent className="p-0 divide-y divide-slate-100">
-          {announcements.map(ann => (
+          {announcementsLoading && <div className="p-4"><ListSkeleton rows={3} /></div>}
+          {!announcementsLoading && announcements.map(ann => (
             <div key={ann.id} className="p-4 md:px-6 flex flex-col justify-between">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div className="flex-1 min-w-0">
@@ -510,7 +522,7 @@ export default function AdminDashboard() {
               })()}
             </div>
           ))}
-          {announcements.length === 0 && (
+          {!announcementsLoading && announcements.length === 0 && (
             <p className="text-xs text-slate-400 font-semibold italic text-center py-4">No announcements posted yet.</p>
           )}
         </CardContent>
