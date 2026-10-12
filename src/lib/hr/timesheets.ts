@@ -21,6 +21,7 @@ import {
 } from './shared';
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
+import { coalesce, invalidateCache } from '../requestCache';
 import {
   hasStaleTrackerToken, getCaptureHealth, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
   TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
@@ -174,6 +175,14 @@ export function useAllTrackerHeartbeats() {
   });
 }
 
+// Every employee's heartbeat in ONE request (coalesced in shared.ts), for the
+// dashboard sweeps that look at many open shifts — they used to fetch one
+// hr_tracker_signals row per shift.
+async function heartbeatsByEmail(): Promise<Map<string, TrackerHeartbeat>> {
+  const rows = await pbGetAllTrackerSignals('heartbeat');
+  return new Map(rows.map(r => [(r.email || '').toLowerCase(), r.value as TrackerHeartbeat]));
+}
+
 export const timesheetActions = {
   // ── Tracking settings (hr_tracking_settings — one row per employee) ────
   // Migrated off the old hr_tracking_settings_prod_v1 KV blob (a single
@@ -189,11 +198,14 @@ export const timesheetActions = {
       ? { employeeEmail: found.employeeEmail, enabled: !!found.enabled, intervalMinutes: found.intervalMinutes, excludeFromAutoDelete: !!found.excludeFromAutoDelete, agentToken: found.agentToken, id: found.id }
       : { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
   },
-  getAllTrackingSettings: async (): Promise<TrackingSettings[]> =>
-    (await pbList('hr_tracking_settings')).map((t: any) => ({
-      employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
-      excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
-    })),
+  // Coalesced: the Sidebar/dashboard hook and the dashboard sweeps all want
+  // the full list on mount; updateTrackingSettings invalidates it.
+  getAllTrackingSettings: (): Promise<TrackingSettings[]> =>
+    coalesce('tset:all', 3000, async () =>
+      (await pbList('hr_tracking_settings')).map((t: any) => ({
+        employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
+        excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
+      }))),
   updateTrackingSettings: async (email: string, updates: Partial<TrackingSettings>): Promise<TrackingSettings> => {
     // CRITICAL FIX (2026-08-19): this used to build the write payload as
     // `{...defaults, ...updates}` where `defaults` was a hard-coded
@@ -235,6 +247,7 @@ export const timesheetActions = {
     // seed a mixed-case row that every OTHER lookup in this file then has to
     // work around via a `~` filter + client-side lowercase check.
     const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...base, ...updates, employeeEmail: email.toLowerCase() });
+    invalidateCache('tset:');
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
   regenerateAgentToken: async (email: string): Promise<string> => {
@@ -483,7 +496,7 @@ export const timesheetActions = {
         const settings = settingsForEmail(shift.employeeEmail);
         if (!settings.enabled) continue; // not a tracker-governed shift — leave to other safety nets
 
-        const hb = await hrActions.getTrackerHeartbeat(shift.employeeEmail);
+        const hb = (await heartbeatsByEmail()).get(shift.employeeEmail.toLowerCase());
         if (!hb?.lastSeenAt) continue; // never connected at all — ambiguous, don't guess
 
         const lastSeenMs = new Date(hb.lastSeenAt).getTime();
@@ -553,7 +566,7 @@ export const timesheetActions = {
 
       try {
         let closeAtMs = clockInMs + MAX_SHIFT_DURATION_MS;
-        const hb = await hrActions.getTrackerHeartbeat(shift.employeeEmail);
+        const hb = (await heartbeatsByEmail()).get(shift.employeeEmail.toLowerCase());
         if (hb?.lastSeenAt) {
           const lastSeenMs = new Date(hb.lastSeenAt).getTime();
           if (!isNaN(lastSeenMs) && lastSeenMs > clockInMs && lastSeenMs < closeAtMs) closeAtMs = lastSeenMs;

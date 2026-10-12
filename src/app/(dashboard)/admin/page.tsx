@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { StatCardSkeletonGrid, TableSkeletonRows } from '@/components/ui/Skeleton';
 import { AnnouncementsSection } from '@/components/ui/AnnouncementsSection';
+import { INACTIVITY_THRESHOLD_SECONDS } from '@/lib/core/absences';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function AdminDashboard() {
   const { data: leaves = [], isLoading: isLeavesLoading, refetch: refetchLeaves } = useLeaves();
   const { data: payrollRecords = [] } = usePayroll();
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
-  const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets();
+  const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets({ days: 10 });
 
   // LeaveApplication only snapshots a fullName, not a live Profile reference.
   const nameFor = (employeeName: string): string => {
@@ -59,7 +60,7 @@ export default function AdminDashboard() {
       .catch(() => { /* best-effort */ })
       .then(() => hrActions.autoCloseStaleOpenShifts(timesheets, employees))
       .catch(() => { /* best-effort */ })
-      .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString() }))
+      .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString(), minDurationSeconds: INACTIVITY_THRESHOLD_SECONDS }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
   }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);

@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import { pbFilter } from '../pbFilter';
 import { coalesce, invalidateCache } from '../requestCache';
+import { getSessionEmail, getSessionRole } from '../session';
 export { pbFilter };
 import { getWeekdaysInMonth, localShiftDate } from '../core/dates';
 export { getWeekdaysInMonth, localShiftDate };
@@ -266,7 +267,11 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
 export async function pbGetTrackerSignal(email: string, field: string): Promise<any | null> {
   const key = (email || '').toLowerCase();
   if (!key) return null;
-  const row = await pbFindByField('hr_tracker_signals', 'email', key);
+  // The heartbeat / stop-signal / quit-intent checks fire together for one
+  // employee; share the one row for a moment instead of three identical reads.
+  // Short TTL on purpose: the agent writes pong/command externally and the
+  // portal polls them, so this must stay fresher than that poll.
+  const row = await coalesce(`tsrow:${key}`, 500, () => pbFindByField('hr_tracker_signals', 'email', key));
   return row ? (row[field] ?? null) : null;
 }
 
@@ -277,16 +282,22 @@ export async function pbGetTrackerSignal(email: string, field: string): Promise<
 // scan), so it stays its own function rather than delegating.
 export async function pbGetAllTrackerSignals(field: string): Promise<{ email: string; value: any }[]> {
   // Only this one signal column (plus the key) is needed, not all 8 json blobs.
-  const rows = await pbList('hr_tracker_signals', { fields: `email,${field}` });
-  return rows
-    .filter(r => r[field] != null)
-    .map(r => ({ email: r.email, value: r[field] }));
+  // Coalesced: the dashboard sweeps, the Tracking page poll and any other
+  // caller asking within a few seconds share one request.
+  return coalesce(`tsig:${field}`, 3000, async () => {
+    const rows = await pbList('hr_tracker_signals', { fields: `email,${field}` });
+    return rows
+      .filter(r => r[field] != null)
+      .map(r => ({ email: r.email, value: r[field] }));
+  });
 }
 
 export async function pbSetTrackerSignal(email: string, field: string, value: any): Promise<void> {
   const key = (email || '').toLowerCase();
   if (!key) return;
   await pbUpsertByField('hr_tracker_signals', 'email', key, { [field]: value });
+  invalidateCache('tsig:');
+  invalidateCache('tsrow:');
 }
 
 export async function pbClearTrackerSignal(email: string, field: string): Promise<void> {
@@ -307,6 +318,8 @@ export async function pbClearTrackerSignalFields(email: string, fields: string[]
   const patch: Record<string, null> = {};
   fields.forEach(f => { patch[f] = null; });
   await pbUpdate('hr_tracker_signals', row.id, patch);
+  invalidateCache('tsig:');
+  invalidateCache('tsrow:');
 }
 
 export function useKVByPrefix(prefix: string) {
@@ -370,9 +383,20 @@ const READ_MAP_TTL_MS = 5000;
 const cloneMap = (m: Record<string, string[]>): Record<string, string[]> =>
   Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v]]));
 
+// Employees and team leads only ever act on their OWN read state, so they
+// ask the server for just their row instead of every employee's. HR/Admin
+// keep the full map (their "read by" views need everyone).
+function ownReadScope(): { key: string; filter?: string } {
+  const role = getSessionRole();
+  const email = getSessionEmail();
+  if (!email || !role || role === 'hr' || role === 'admin') return { key: 'all' };
+  return { key: email.toLowerCase(), filter: pbFilter('email = {:email}', { email: email.toLowerCase() }) };
+}
+
 export async function pbGetIdSetMap(collection: string, field: string): Promise<Record<string, string[]>> {
-  const map = await coalesce(`idset:${collection}:${field}`, READ_MAP_TTL_MS, async () => {
-    const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: `email,${field}` });
+  const scope = ownReadScope();
+  const map = await coalesce(`idset:${collection}:${field}:${scope.key}`, READ_MAP_TTL_MS, async () => {
+    const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: `email,${field}`, ...(scope.filter ? { filter: scope.filter } : {}) });
     const built: Record<string, string[]> = {};
     (rows as any[]).forEach(r => {
       const ids: string[] = Array.isArray(r[field]) ? r[field] : [];
@@ -408,8 +432,9 @@ export async function pbMarkIdsInField(collection: string, field: string, entity
 }
 
 export async function pbGetReadMap(collection: string): Promise<Record<string, string[]>> {
-  const map = await coalesce(`readmap:${collection}`, READ_MAP_TTL_MS, async () => {
-    const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: 'entity_id,email' });
+  const scope = ownReadScope();
+  const map = await coalesce(`readmap:${collection}:${scope.key}`, READ_MAP_TTL_MS, async () => {
+    const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: 'entity_id,email', ...(scope.filter ? { filter: scope.filter } : {}) });
     const built: Record<string, string[]> = {};
     (rows as any[]).forEach(r => {
       if (!built[r.entity_id]) built[r.entity_id] = [];

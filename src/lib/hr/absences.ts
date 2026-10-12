@@ -52,6 +52,9 @@ export function useMyAbsenceRecords() {
 }
 
 
+let lastRetentionCheckAt = 0;
+const RETENTION_CHECK_MIN_GAP_MS = 60 * 60 * 1000;
+
 export const absenceActions = {
   // ── Absence records (hr_absence_records — one row per employee per day) ──
   // Migrated off the old hr_absence_records_v1 / hr_absence_deleted_v1 KV
@@ -137,7 +140,9 @@ export const absenceActions = {
     // (see the `dateStr >= nyTodayStr` cutoff below), it's worth the one
     // extra network round trip to guarantee this can never again decide
     // someone's attendance from out-of-date shift data.
-    const timesheets = await fetchTimesheetsFresh();
+    // detectAbsences only looks ABSENCE_LOOKBACK_DAYS back; a small margin on top
+    // of that keeps this to a single page instead of the 60-day default.
+    const timesheets = await fetchTimesheetsFresh({ days: 10 });
     // The check only creates records inside its 5-day lookback, and its
     // self-healing cleanups only matter for recent mistakes — so it never needs
     // the whole table: 60 days of active records for the cleanups, 10 days
@@ -272,7 +277,7 @@ export const absenceActions = {
 
   // ── Mouse inactivity logs (hr_inactivity_logs — see
   // migration_data/create_inactivity_logs_collection.py) ──────────────────
-  getInactivityLogs: async (filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<InactivityLog[]> => {
+  getInactivityLogs: async (filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string; minDurationSeconds?: number }): Promise<InactivityLog[]> => {
     // Same case-insensitive-email pattern as getScreenshots — `~` narrows
     // server-side, exact check below guards against substring false-matches.
     const filterParts: string[] = [];
@@ -280,6 +285,7 @@ export const absenceActions = {
     if (filters?.employeeEmail) filterParts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
     if (filters?.sinceISO) filterParts.push(pbFilter('start_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
     if (filters?.untilISO) filterParts.push(pbFilter('start_at <= {:until}', { until: toPbDate(filters.untilISO) }));
+    if (filters?.minDurationSeconds) filterParts.push(pbFilter('duration_seconds >= {:min}', { min: filters.minDurationSeconds }));
     const records = await pbList('hr_inactivity_logs', {
       sort: '-start_at',
       fields: 'id,employee_email,start_at,end_at,duration_seconds,device_label',
@@ -313,6 +319,10 @@ export const absenceActions = {
   checkScreenshotRetention: async (): Promise<void> => {
     const token = getAuthToken();
     if (!token) return;
+    // The sweep is monthly, so once an hour per tab is plenty — every
+    // dashboard/Tracking mount (and React strict-mode remounts) used to POST.
+    if (Date.now() - lastRetentionCheckAt < RETENTION_CHECK_MIN_GAP_MS) return;
+    lastRetentionCheckAt = Date.now();
     try {
       await fetch(`${API_BASE}/api/tracking/screenshots-retention`, {
         method: 'POST',
