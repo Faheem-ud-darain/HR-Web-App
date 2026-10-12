@@ -26,6 +26,7 @@ import { ImageLightbox } from './ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { X, User, Mail, Shield, ShieldAlert, Key, DollarSign, Calendar, MapPin, Landmark, Briefcase, FileText, CheckSquare, Square, Trash2, Download, Phone, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from './Button';
+import { Input, Select, Textarea } from '@/components/ui/Input';
 
 // Detects the `pbkdf2$<iterations>$<salt>$<hash>` format hashPassword()
 // writes (see serverAuth.ts) — deliberately re-implemented here rather than
@@ -775,83 +776,83 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
             <form onSubmit={handleSaveChanges} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Full Name *</label>
-                <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                <Input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} fieldSize="sm" />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Alias <span className="normal-case font-medium text-slate-400">(shown to their team instead of their real name)</span></label>
-                <input type="text" value={alias} onChange={e => setAlias(e.target.value)} placeholder="e.g. Falcon, Agent-07, Employee 14" className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                <Input type="text" value={alias} onChange={e => setAlias(e.target.value)} placeholder="e.g. Falcon, Agent-07, Employee 14" fieldSize="sm" />
                 <p className="text-[10px] text-slate-400 font-medium">Only HR/Admin ever see the real name. Leave blank to show the real name to everyone (not recommended once this is enforced in production).</p>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Email Address *</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                <Input type="email" required value={email} onChange={e => setEmail(e.target.value)} fieldSize="sm" />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Account Password</label>
-                <input type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep the current password" minLength={6} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                <Input type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep the current password" minLength={6} fieldSize="sm" />
                 <p className="text-[10px] text-slate-400 font-medium">Their current password is never shown here for security. Only fill this in to set a new one (at least 6 characters) — otherwise leave it blank.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Job Title / Designation</label>
-                  <input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                  <Input type="text" value={jobTitle} onChange={e => setJobTitle(e.target.value)} fieldSize="sm" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Base Salary</label>
-                  <input type="number" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold" />
+                  <Input type="number" value={baseSalary} onChange={e => setBaseSalary(e.target.value)} fieldSize="sm" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Region / Base Location</label>
-                  <select value={region} onChange={e => setRegion(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold cursor-pointer">
+                  <Select value={region} onChange={e => setRegion(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
                     <option value="Pakistan">Pakistan</option>
                     <option value="USA">USA</option>
-                  </select>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Gender</label>
-                  <select value={gender} onChange={e => setGender(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold cursor-pointer">
+                  <Select value={gender} onChange={e => setGender(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
                     <option value="male">Male</option>
                     <option value="female">Female</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
               
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">System Role *</label>
-                <select value={role} onChange={e => setRole(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold cursor-pointer">
+                <Select value={role} onChange={e => setRole(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
                   <option value="employee">Employee</option>
                   <option value="team_lead">Team Lead</option>
                   <option value="hr">HR Admin</option>
                   {currentUserRole === 'admin' && <option value="admin">System Admin</option>}
-                </select>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Joining Date *</label>
-                  <input
+                  <Input
                     type="date"
                     required
                     value={joinedDate}
                     onChange={e => setJoinedDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                    fieldSize="sm" className="cursor-pointer"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase" title="Salary tracking starts from this month">Salary Track Month *</label>
-                  <input
+                  <Input
                     type="date"
                     required
                     value={salaryStartDate}
                     onChange={e => setSalaryStartDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                    fieldSize="sm" className="cursor-pointer"
                   />
                 </div>
               </div>
@@ -860,12 +861,12 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                 <label className="text-[10px] font-bold text-slate-500 uppercase" title="PTO accrual is calculated from this date instead of the joining date">
                   Account Creation Date *
                 </label>
-                <input
+                <Input
                   type="date"
                   required
                   value={accountCreationDate}
                   onChange={e => setAccountCreationDate(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                  fieldSize="sm" className="cursor-pointer"
                 />
                 <p className="text-[9px] text-slate-400 font-semibold">PTO accrual is calculated from this date, not the joining date.</p>
               </div>
@@ -976,12 +977,12 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Offboarding Notes / Reason</label>
-                <textarea
+                <Textarea
                   rows={3}
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   placeholder="Reason for resignation or termination checklist notes..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold resize-none"
+                  fieldSize="sm" className="resize-none"
                 />
               </div>
 

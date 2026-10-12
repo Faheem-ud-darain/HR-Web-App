@@ -1,15 +1,21 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
-import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Search, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
+import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
 import { formatTimeNY, getNYDateString } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
 import { Button } from '@/components/ui/Button';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { StatCard } from '@/components/ui/StatCard';
+import { Tabs } from '@/components/ui/Tabs';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { daysAgoNYDateString } from '@/lib/timezone';
 
 
 interface AbsenceDetailsViewProps {
@@ -38,7 +44,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
-  const { data: allTimesheets = [], isLoading: loadingTimesheets } = useTimesheets();
+  // Recent window by default; the user can reach further back on demand.
+  const HISTORY_STEP_DAYS = 90;
+  const [historyDays, setHistoryDays] = useState(HISTORY_STEP_DAYS);
+  const ownEmail = role === 'employee' ? filterEmail : undefined;
+  const { data: allTimesheets = [], isLoading: loadingTimesheets, isFetching: fetchingTimesheets } = useTimesheets({ days: historyDays, email: ownEmail, enabled: role !== 'employee' || !!filterEmail });
   const { data: allProfiles = [] } = useProfiles();
   const { data: leaves = [] } = useLeaves();
   const [leaveBlockedNotice, setLeaveBlockedNotice] = useState<{ employeeName: string; date: string } | null>(null);
@@ -60,18 +70,15 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [selectedEmployeeAbsencesEmail, setSelectedEmployeeAbsencesEmail] = useState<string | null>(null);
 
   const loadAbsenceRecords = () => {
-    hrActions.getAbsenceRecords().then(all => {
-      const scoped = role === 'employee' && filterEmail
-        ? all.filter(a => a.employeeEmail.toLowerCase() === filterEmail.toLowerCase())
-        : all;
-      setAbsenceRecords([...scoped].sort((a, b) => b.date.localeCompare(a.date)));
+    hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(historyDays), email: ownEmail }).then(all => {
+      setAbsenceRecords([...all].sort((a, b) => b.date.localeCompare(a.date)));
       setLoadingAbsences(false);
     });
   };
 
   useEffect(() => {
     loadAbsenceRecords();
-  }, [role, filterEmail]);
+  }, [role, filterEmail, historyDays]);
 
   const handleDeleteAbsenceRecord = (record: AbsenceRecord) => {
     // Never allow deleting an absence record that is actually an approved leave day —
@@ -408,22 +415,16 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         </div>
 
         {/* Tab switcher */}
-        <div className="flex bg-slate-100 p-1 rounded-xl w-fit self-start md:self-auto border border-slate-200">
-          <button
-            onClick={() => setActiveTab('attendance')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'attendance' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <UserCheck className="h-4 w-4 text-emerald-600" />
-            Attendance Logs ({cumulativeAttendanceRows.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('absences')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'absences' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <UserX className="h-4 w-4 text-rose-600" />
-            Absence Deductions ({filteredAbsences.length})
-          </button>
-        </div>
+        <Tabs
+          variant="segmented"
+          className="self-start md:self-auto"
+          value={activeTab}
+          onChange={setActiveTab}
+          items={[
+            { value: 'attendance', label: 'Attendance Logs', count: cumulativeAttendanceRows.length, icon: <UserCheck className="h-4 w-4 text-emerald-600" /> },
+            { value: 'absences', label: 'Absence Deductions', count: filteredAbsences.length, icon: <UserX className="h-4 w-4 text-rose-600" /> },
+          ]}
+        />
       </div>
 
       {/* Filter Bar: Date Filter + Search */}
@@ -458,23 +459,19 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
             {/* Email Search Filter (HR/Admin) */}
             {role !== 'employee' && (
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl min-w-[200px]">
-                <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search employee..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent text-xs text-slate-800 outline-none w-full placeholder:text-slate-400"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 text-xs">×</button>
-                )}
-              </div>
+              <SearchInput fieldSize="sm" clearable value={searchQuery} onChange={setSearchQuery} placeholder="Search employee..." wrapperClassName="min-w-[200px]" />
             )}
           </div>
         </div>
       </Card>
+
+      <LoadMoreHistory
+        days={historyDays}
+        maxDays={HISTORY_STEP_DAYS * 4}
+        loading={fetchingTimesheets || loadingAbsences}
+        noun="attendance & absences"
+        onLoadMore={() => setHistoryDays(d => d + HISTORY_STEP_DAYS)}
+      />
 
       {/* ATTENDANCE TAB */}
       {activeTab === 'attendance' && (
@@ -493,27 +490,27 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             ) : (
               <>
                 {/* Desktop Table — employee's own flat day-by-day log */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                <TableScroll hideOnMobile>
+                  <Table density="cozy" size="xs">
+                    <THead>
                       <tr>
-                        <th className="text-left px-5 py-3 font-bold">Date</th>
-                        <th className="text-center px-5 py-3 font-bold">Total Shifts</th>
-                        <th className="text-right px-5 py-3 font-bold">Total Worked Time</th>
-                        <th className="text-center px-5 py-3 font-bold">Attendance Status</th>
-                        <th className="text-center px-5 py-3 font-bold">Details</th>
+                        <Th className="font-bold">Date</Th>
+                        <Th align="center" className="font-bold">Total Shifts</Th>
+                        <Th align="right" className="font-bold">Total Worked Time</Th>
+                        <Th align="center" className="font-bold">Attendance Status</Th>
+                        <Th align="center" className="font-bold">Details</Th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    </THead>
+                    <TBody>
                       {cumulativeAttendanceRows.map(row => (
-                        <tr key={`${row.employeeEmail}_${row.date}`} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-5 py-3 font-mono font-bold text-slate-700">{row.date}</td>
-                          <td className="px-5 py-3 text-center font-semibold text-slate-700">
+                        <Tr key={`${row.employeeEmail}_${row.date}`}>
+                          <Td className="font-mono font-bold text-slate-700">{row.date}</Td>
+                          <Td align="center" className="font-semibold text-slate-700">
                             {row.isLeave ? '—' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''}`}
-                          </td>
-                          <td className="px-5 py-3 text-right font-bold text-slate-900">{row.isLeave ? '—' : formatDuration(row.totalMinutes)}</td>
-                          <td className="px-5 py-3 text-center"><AttendanceStatusBadges row={row} /></td>
-                          <td className="px-5 py-3 text-center">
+                          </Td>
+                          <Td align="right" className="font-bold text-slate-900">{row.isLeave ? '—' : formatDuration(row.totalMinutes)}</Td>
+                          <Td align="center"><AttendanceStatusBadges row={row} /></Td>
+                          <Td align="center">
                             {row.isLeave ? (
                               <span className="text-[11px] text-slate-400 font-semibold">Approved leave — no shift</span>
                             ) : (
@@ -524,12 +521,12 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                                 View Breakdown
                               </button>
                             )}
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </TBody>
+                  </Table>
+                </TableScroll>
 
                 {/* Mobile Cards Stack */}
                 <div className="md:hidden divide-y divide-slate-100">
@@ -571,50 +568,50 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
           ) : (
             <>
               {/* Desktop Table — HR/Admin: one row per employee, click to open their full history */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+              <TableScroll hideOnMobile>
+                <Table density="cozy" size="xs">
+                  <THead>
                     <tr>
-                      <th className="text-left px-5 py-3 font-bold">Employee</th>
-                      <th className="text-center px-5 py-3 font-bold">Days Logged</th>
-                      <th className="text-center px-5 py-3 font-bold">Present</th>
-                      <th className="text-center px-5 py-3 font-bold">On Leave</th>
-                      <th className="text-center px-5 py-3 font-bold">Flagged</th>
-                      <th className="text-right px-5 py-3 font-bold">Total Worked Time</th>
-                      <th className="text-center px-5 py-3 font-bold">Details</th>
+                      <Th className="font-bold">Employee</Th>
+                      <Th align="center" className="font-bold">Days Logged</Th>
+                      <Th align="center" className="font-bold">Present</Th>
+                      <Th align="center" className="font-bold">On Leave</Th>
+                      <Th align="center" className="font-bold">Flagged</Th>
+                      <Th align="right" className="font-bold">Total Worked Time</Th>
+                      <Th align="center" className="font-bold">Details</Th>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  </THead>
+                  <TBody>
                     {employeeAttendanceSummaries.map(emp => {
                       const presentDays = emp.days.filter(d => !d.isLeave && !d.hasActiveShift && d.totalMinutes >= 240).length;
                       const leaveDays = emp.days.filter(d => d.isLeave).length;
                       const flaggedDays = emp.days.filter(d => !d.isLeave && !d.hasActiveShift && d.totalMinutes < 240).length;
                       const totalMinutes = emp.days.reduce((s, d) => s + d.totalMinutes, 0);
                       return (
-                        <tr key={emp.employeeEmail} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-5 py-3">
+                        <Tr key={emp.employeeEmail}>
+                          <Td>
                             <p className="font-bold text-slate-900">{emp.employeeName}</p>
                             <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
-                          </td>
-                          <td className="px-5 py-3 text-center font-semibold text-slate-700">{emp.days.length}</td>
-                          <td className="px-5 py-3 text-center"><Badge variant="success">{presentDays}</Badge></td>
-                          <td className="px-5 py-3 text-center">{leaveDays > 0 ? <Badge variant="info">{leaveDays}</Badge> : <span className="text-slate-400">0</span>}</td>
-                          <td className="px-5 py-3 text-center">{flaggedDays > 0 ? <Badge variant="danger">{flaggedDays}</Badge> : <span className="text-slate-400">0</span>}</td>
-                          <td className="px-5 py-3 text-right font-bold text-slate-900">{formatDuration(totalMinutes)}</td>
-                          <td className="px-5 py-3 text-center">
+                          </Td>
+                          <Td align="center" className="font-semibold text-slate-700">{emp.days.length}</Td>
+                          <Td align="center"><Badge variant="success">{presentDays}</Badge></Td>
+                          <Td align="center">{leaveDays > 0 ? <Badge variant="info">{leaveDays}</Badge> : <span className="text-slate-400">0</span>}</Td>
+                          <Td align="center">{flaggedDays > 0 ? <Badge variant="danger">{flaggedDays}</Badge> : <span className="text-slate-400">0</span>}</Td>
+                          <Td align="right" className="font-bold text-slate-900">{formatDuration(totalMinutes)}</Td>
+                          <Td align="center">
                             <button
                               onClick={() => setSelectedEmployeeAttendanceEmail(emp.employeeEmail)}
                               className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
                             >
                               View Details <ChevronRight className="h-3 w-3" />
                             </button>
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </TBody>
+                </Table>
+              </TableScroll>
 
               {/* Mobile Cards Stack */}
               <div className="md:hidden divide-y divide-slate-100">
@@ -809,26 +806,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       {activeTab === 'absences' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-            <Card>
-              <CardContent className="pt-5 pb-4">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Absences</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{filteredAbsences.length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5 pb-4">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Deducted</p>
-                <p className="text-2xl font-bold text-rose-600 mt-1">{formatMoney(totalDeducted, 'Pakistan')}</p>
-              </CardContent>
-            </Card>
-            <Card className="col-span-2 md:col-span-1">
-              <CardContent className="pt-5 pb-4">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Inactivity vs No-Show</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {filteredAbsences.filter(r => r.reason === 'inactivity').length} / {filteredAbsences.filter(r => r.reason === 'no_clock_in').length}
-                </p>
-              </CardContent>
-            </Card>
+            <StatCard label="Total Absences" value={filteredAbsences.length} />
+            <StatCard label="Total Deducted" value={formatMoney(totalDeducted, 'Pakistan')} valueTone="danger" />
+            <StatCard label="Inactivity vs No-Show" value={<>{filteredAbsences.filter(r => r.reason === 'inactivity').length} / {filteredAbsences.filter(r => r.reason === 'no_clock_in').length}</>} className="col-span-2 md:col-span-1" />
           </div>
 
           <Card className="border border-slate-200 overflow-hidden p-0 bg-white">
@@ -846,32 +826,32 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
               ) : (
                 <>
                   {/* Desktop table — employee's own flat list, read-only */}
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                  <TableScroll hideOnMobile>
+                    <Table density="cozy" size="xs">
+                      <THead>
                         <tr>
-                          <th className="text-left px-5 py-3 font-bold">Date</th>
-                          <th className="text-left px-5 py-3 font-bold">Reason</th>
-                          <th className="text-right px-5 py-3 font-bold">Deduction</th>
-                          <th className="text-center px-5 py-3 font-bold">Acknowledged</th>
+                          <Th className="font-bold">Date</Th>
+                          <Th className="font-bold">Reason</Th>
+                          <Th align="right" className="font-bold">Deduction</Th>
+                          <Th align="center" className="font-bold">Acknowledged</Th>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      </THead>
+                      <TBody>
                         {absencePageItems.map(r => (
-                          <tr key={r.id} className="hover:bg-slate-50/50">
-                            <td className="px-5 py-3 font-mono font-bold text-slate-700">{r.date}</td>
-                            <td className="px-5 py-3"><AbsenceReasonLabel r={r} /></td>
-                            <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</td>
-                            <td className="px-5 py-3 text-center">
+                          <Tr key={r.id}>
+                            <Td className="font-mono font-bold text-slate-700">{r.date}</Td>
+                            <Td><AbsenceReasonLabel r={r} /></Td>
+                            <Td align="right" className="font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</Td>
+                            <Td align="center">
                               {r.acknowledged
                                 ? <Badge variant="success"><span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Seen</span></Badge>
                                 : <Badge variant="warning">Pending</Badge>}
-                            </td>
-                          </tr>
+                            </Td>
+                          </Tr>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </TBody>
+                    </Table>
+                  </TableScroll>
 
                   {/* Mobile cards */}
                   <div className="md:hidden divide-y divide-slate-100">
@@ -902,44 +882,44 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             ) : (
               <>
                 {/* Desktop table — HR/Admin: one row per employee, manage in a modal */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+                <TableScroll hideOnMobile>
+                  <Table density="cozy" size="xs">
+                    <THead>
                       <tr>
-                        <th className="text-left px-5 py-3 font-bold">Employee</th>
-                        <th className="text-center px-5 py-3 font-bold">Absences</th>
-                        <th className="text-right px-5 py-3 font-bold">Total Deducted</th>
-                        <th className="text-center px-5 py-3 font-bold">Pending</th>
-                        <th className="text-center px-5 py-3 font-bold">Manage</th>
+                        <Th className="font-bold">Employee</Th>
+                        <Th align="center" className="font-bold">Absences</Th>
+                        <Th align="right" className="font-bold">Total Deducted</Th>
+                        <Th align="center" className="font-bold">Pending</Th>
+                        <Th align="center" className="font-bold">Manage</Th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    </THead>
+                    <TBody>
                       {summaryPageItems.map(emp => {
                         const deducted = emp.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0);
                         const pending = emp.records.filter(r => !r.acknowledged).length;
                         return (
-                          <tr key={emp.employeeEmail} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-5 py-3">
+                          <Tr key={emp.employeeEmail}>
+                            <Td>
                               <p className="font-bold text-slate-900">{emp.employeeName}</p>
                               <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
-                            </td>
-                            <td className="px-5 py-3 text-center"><Badge variant="danger">{emp.records.length}</Badge></td>
-                            <td className="px-5 py-3 text-right font-bold text-rose-600">{formatMoney(deducted, 'Pakistan')}</td>
-                            <td className="px-5 py-3 text-center">{pending > 0 ? <Badge variant="warning">{pending}</Badge> : <span className="text-slate-400">0</span>}</td>
-                            <td className="px-5 py-3 text-center">
+                            </Td>
+                            <Td align="center"><Badge variant="danger">{emp.records.length}</Badge></Td>
+                            <Td align="right" className="font-bold text-rose-600">{formatMoney(deducted, 'Pakistan')}</Td>
+                            <Td align="center">{pending > 0 ? <Badge variant="warning">{pending}</Badge> : <span className="text-slate-400">0</span>}</Td>
+                            <Td align="center">
                               <button
                                 onClick={() => setSelectedEmployeeAbsencesEmail(emp.employeeEmail)}
                                 className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
                               >
                                 Manage <ChevronRight className="h-3 w-3" />
                               </button>
-                            </td>
-                          </tr>
+                            </Td>
+                          </Tr>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
+                    </TBody>
+                  </Table>
+                </TableScroll>
 
                 {/* Mobile cards */}
                 <div className="md:hidden divide-y divide-slate-100">

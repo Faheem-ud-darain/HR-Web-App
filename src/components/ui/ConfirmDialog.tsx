@@ -3,6 +3,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
+import { FormField } from '@/components/ui/FormField';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -60,10 +61,7 @@ export function ConfirmDialog({
         </div>
 
         {requireTextMatch && (
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Type <span className="font-mono text-rose-600">{requireTextMatch}</span> to confirm
-            </label>
+          <FormField label={<>Type <span className="font-mono text-rose-600">{requireTextMatch}</span> to confirm</>}>
             <input
               type="text"
               value={typedText}
@@ -72,7 +70,7 @@ export function ConfirmDialog({
               placeholder={requireTextMatch}
               autoFocus
             />
-          </div>
+          </FormField>
         )}
 
         <div className="flex gap-2 pt-1">

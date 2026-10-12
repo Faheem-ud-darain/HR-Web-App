@@ -2,11 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
 import { GripVertical, Clock, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
+import { LEAVE_TYPE_COLORS, LeaveStatusBadge } from '@/components/ui/StatusBadges';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { Tabs } from '@/components/ui/Tabs';
+import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
   { key: 'pending',     label: 'Pending Review',       headerBg: 'bg-amber-50 border-amber-200'   },
@@ -18,25 +22,10 @@ const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: strin
   { key: 'rejected',    label: 'Rejected (Re-open ↩)', headerBg: 'bg-rose-50 border-rose-200'     },
 ];
 
-const TYPE_COLORS: Record<string, string> = {
-  'PTO': 'bg-indigo-100 text-indigo-800',
-  'Sick Leave': 'bg-amber-100 text-amber-800',
-  'Urgent': 'bg-rose-100 text-rose-800',
-  'Normal': 'bg-sky-100 text-sky-800',
-  'Parental Leave': 'bg-emerald-100 text-emerald-800',
-};
-
-const STATUS_BADGE: Record<LeaveApplication['status'], { variant: string; label: string }> = {
-  pending:     { variant: 'warning', label: 'Pending'      },
-  hr_approved: { variant: 'default', label: 'HR Approved'  },
-  approved:    { variant: 'success', label: 'CEO Approved' },
-  rejected:    { variant: 'danger',  label: 'Rejected'     },
-};
-
 type TabView = 'kanban' | 'history';
 
 export default function HRLeavesPage() {
-  const { data: leaves = [], refetch: refetchLeaves } = useLeaves();
+  const { data: leaves = [], isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
   const { data: employees = [] } = useProfiles();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<LeaveApplication['status'] | null>(null);
@@ -265,31 +254,18 @@ export default function HRLeavesPage() {
       </div>
 
       {/* Tab toggle */}
-      <div className="flex gap-2 border-b border-slate-200 pb-0">
-        <button
-          onClick={() => setActiveTab('kanban')}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
-            activeTab === 'kanban'
-              ? 'border-orange-500 text-orange-700 bg-orange-50'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <BarChart3 className="h-4 w-4" /> Kanban Board
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
-            activeTab === 'history'
-              ? 'border-orange-500 text-orange-700 bg-orange-50'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <List className="h-4 w-4" /> History & Audit Log
-        </button>
-      </div>
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: 'kanban', label: 'Kanban Board', icon: <BarChart3 className="h-4 w-4" /> },
+          { value: 'history', label: 'History & Audit Log', icon: <List className="h-4 w-4" /> },
+        ]}
+      />
 
       {/* ── KANBAN VIEW ── */}
-      {activeTab === 'kanban' && (
+      {activeTab === 'kanban' && leavesLoading && <ListSkeleton rows={4} />}
+      {activeTab === 'kanban' && !leavesLoading && (
         <div className="flex xl:grid xl:grid-cols-4 gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 xl:mx-0 xl:px-0 scrollbar-hide">
           {COLUMNS.map(col => {
             const cards = filteredInCol(col.key);
@@ -334,7 +310,7 @@ export default function HRLeavesPage() {
                         <div className="font-bold text-slate-900 text-sm leading-tight">{nameFor(leave.employeeName)}</div>
                         <GripVertical className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5 hidden md:block" />
                       </div>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 ${TYPE_COLORS[leave.type] || 'bg-slate-100 text-slate-700'}`}>
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 ${LEAVE_TYPE_COLORS[leave.type] || 'bg-slate-100 text-slate-700'}`}>
                         {leave.type}
                       </span>
                       <div className="text-[10px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3 w-3" /> {leave.duration}</div>
@@ -408,33 +384,35 @@ export default function HRLeavesPage() {
           </div>
 
           <Card className="overflow-hidden p-0 border border-slate-200">
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[750px] text-sm text-left border-collapse">
-                <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+            <TableScroll hideOnMobile>
+              <Table minWidth={750}>
+                <THead>
                   <tr>
-                    <th className="px-5 py-4">Employee</th>
-                    <th className="px-5 py-4">Type</th>
-                    <th className="px-5 py-4">Duration</th>
-                    <th className="px-5 py-4">Reason</th>
-                    <th className="px-5 py-4 text-center">Status</th>
-                    <th className="px-5 py-4 text-center">Action</th>
+                    <Th>Employee</Th>
+                    <Th>Type</Th>
+                    <Th>Duration</Th>
+                    <Th>Reason</Th>
+                    <Th align="center">Status</Th>
+                    <Th align="center">Action</Th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+                </THead>
+                <TBody>
+{leavesLoading ? (
+  <TableSkeletonRows rows={6} cols={6} />
+) : (
+<>
                   {historyLeaves.map(l => (
-                    <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-slate-900">{nameFor(l.employeeName)}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 font-medium text-xs">{l.duration}</td>
-                      <td className="px-5 py-3.5 text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <Badge variant={STATUS_BADGE[l.status].variant as 'success' | 'warning' | 'danger' | 'default'}>
-                          {STATUS_BADGE[l.status].label}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
+                    <Tr key={l.id}>
+                      <Td density="cozy" className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
+                      <Td density="cozy">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
+                      </Td>
+                      <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
+                      <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
+                      <Td align="center" density="cozy">
+                        <LeaveStatusBadge status={l.status} />
+                      </Td>
+                      <Td align="center" density="cozy">
                         {l.status === 'pending' && (
                           <div className="flex justify-center gap-2">
                             <button
@@ -459,19 +437,21 @@ export default function HRLeavesPage() {
                         {(l.status === 'approved' || l.status === 'hr_approved') && (
                           <span className="text-xs text-slate-400 font-medium">—</span>
                         )}
-                      </td>
-                    </tr>
+                      </Td>
+                    </Tr>
                   ))}
                   {historyLeaves.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center py-12 text-slate-400 font-semibold italic text-sm">
+                    <Tr>
+                      <EmptyState as="td" colSpan={6} py={12} size="sm">
                         No records match your filters.
-                      </td>
-                    </tr>
+                      </EmptyState>
+                    </Tr>
                   )}
-                </tbody>
-              </table>
-            </div>
+                </>
+)}
+</TBody>
+              </Table>
+            </TableScroll>
 
             {/* Mobile card stack */}
             <div className="md:hidden space-y-3 p-4">
@@ -479,14 +459,12 @@ export default function HRLeavesPage() {
                 <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-slate-900 truncate pr-2">{nameFor(l.employeeName)}</p>
-                    <Badge variant={STATUS_BADGE[l.status].variant as 'success' | 'warning' | 'danger' | 'default'} className="shrink-0">
-                      {STATUS_BADGE[l.status].label}
-                    </Badge>
+                    <LeaveStatusBadge status={l.status} className="shrink-0" />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <p className="text-[10px] text-slate-400 font-semibold uppercase">Type</p>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
@@ -525,10 +503,11 @@ export default function HRLeavesPage() {
                   </div>
                 </div>
               ))}
-              {historyLeaves.length === 0 && (
-                <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+              {leavesLoading && <ListSkeleton rows={3} />}
+              {!leavesLoading && historyLeaves.length === 0 && (
+                <EmptyState py={8} size="sm">
                   No records match your filters.
-                </p>
+                </EmptyState>
               )}
             </div>
           </Card>

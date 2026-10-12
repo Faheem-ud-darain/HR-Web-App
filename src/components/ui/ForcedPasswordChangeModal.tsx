@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Profile, changeOwnPassword } from '@/lib/hrData';
+import { Input } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 
 interface ForcedPasswordChangeModalProps {
   profile: Profile | null | undefined;
@@ -97,36 +99,33 @@ export function ForcedPasswordChangeModal({ profile, onChanged }: ForcedPassword
             replace the temporary password you were given with one only you know before continuing.
           </p>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current (Temporary) Password</label>
-            <input
+          <FormField label="Current (Temporary) Password">
+            <Input
               type="password"
               value={currentPass}
               onChange={e => setCurrentPass(e.target.value)}
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+              fieldSize="soft"
               autoComplete="current-password"
             />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">New Password</label>
-            <input
+          </FormField>
+          <FormField label="New Password">
+            <Input
               type="password"
               value={newPass}
               onChange={e => setNewPass(e.target.value)}
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+              fieldSize="soft"
               autoComplete="new-password"
             />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Confirm New Password</label>
-            <input
+          </FormField>
+          <FormField label="Confirm New Password">
+            <Input
               type="password"
               value={confirmPass}
               onChange={e => setConfirmPass(e.target.value)}
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+              fieldSize="soft"
               autoComplete="new-password"
             />
-          </div>
+          </FormField>
 
           {error && (
             <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-semibold flex items-center gap-2">

@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { TaskBoard } from '@/components/ui/TaskBoard';
-import { TaskModal } from '@/components/ui/TaskModal';
+import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Button } from '@/components/ui/Button';
 import { Task, Profile, useTasks, useProfiles } from '@/lib/hrData';
 import { ClipboardList } from 'lucide-react';

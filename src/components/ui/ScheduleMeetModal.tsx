@@ -7,6 +7,7 @@ import { useProfiles, useTeams, hrActions, Profile } from '@/lib/hrData';
 import { Video, Calendar, Clock, Users, ExternalLink } from 'lucide-react';
 import { getSessionEmail } from '@/lib/session';
 import { useActionToast } from '@/components/ui/ActionToastHost';
+import { FormField } from '@/components/ui/FormField';
 
 interface ScheduleMeetModalProps {
   isOpen: boolean;
@@ -96,8 +97,7 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Schedule Google Meet" className="md:max-w-lg">
       <form onSubmit={handleSchedule} className="space-y-4 pt-1">
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Meeting Title *</label>
+        <FormField label="Meeting Title *">
           <input
             type="text"
             required
@@ -106,11 +106,10 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
             placeholder="e.g. Weekly Operations Sync"
             className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900"
           />
-        </div>
+        </FormField>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date *</label>
+          <FormField label="Date *">
             <input
               type="date"
               required
@@ -118,9 +117,8 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
               onChange={e => setMeetingDate(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
             />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Time *</label>
+          </FormField>
+          <FormField label="Start Time *">
             <input
               type="time"
               required
@@ -128,12 +126,11 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
               onChange={e => setStartTime(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900 cursor-pointer"
             />
-          </div>
+          </FormField>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Duration</label>
+          <FormField label="Duration">
             <select
               value={durationMinutes}
               onChange={e => setDurationMinutes(e.target.value)}
@@ -145,10 +142,9 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
               <option value="60">1 hour</option>
               <option value="90">1.5 hours</option>
             </select>
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Invite Audience</label>
+          <FormField label="Invite Audience">
             <select
               value={targetType}
               onChange={e => setTargetType(e.target.value as any)}
@@ -157,12 +153,11 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
               <option value="team">Whole Team</option>
               <option value="individual">Specific Employee</option>
             </select>
-          </div>
+          </FormField>
         </div>
 
         {targetType === 'team' ? (
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Select Team</label>
+          <FormField label="Select Team">
             <select
               value={selectedTeam}
               onChange={e => setSelectedTeam(e.target.value)}
@@ -172,10 +167,9 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
                 <option key={t.id} value={t.name}>{t.name}</option>
               ))}
             </select>
-          </div>
+          </FormField>
         ) : (
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Select Employee</label>
+          <FormField label="Select Employee">
             <select
               value={selectedEmployeeEmail}
               onChange={e => setSelectedEmployeeEmail(e.target.value)}
@@ -186,11 +180,10 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
                 <option key={emp.id} value={emp.email}>{emp.fullName} ({emp.email})</option>
               ))}
             </select>
-          </div>
+          </FormField>
         )}
 
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Agenda / Notes</label>
+        <FormField label="Agenda / Notes">
           <textarea
             rows={2}
             value={description}
@@ -198,7 +191,7 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
             placeholder="Brief meeting description or topics to discuss…"
             className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3 text-xs outline-none font-semibold text-slate-900"
           />
-        </div>
+        </FormField>
 
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between text-xs font-semibold text-slate-700">
           <div className="flex items-center gap-2">

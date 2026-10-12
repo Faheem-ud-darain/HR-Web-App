@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useActionToast } from '@/components/ui/ActionToastHost';
@@ -18,6 +17,9 @@ import {
 } from '@/lib/hrData';
 import { MapPin, Plus, Trash2, CheckCircle2, ArrowRight, X, Briefcase, FileText, Users, AlertTriangle, Gift, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Input, Select } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const STATUS_OPTIONS: { value: CareerApplicationStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -481,9 +483,9 @@ export function CareersView({ role }: CareersViewProps) {
 
               <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
                 {filteredApps.length === 0 && (
-                  <p className="text-center text-slate-400 font-semibold italic text-xs py-8">
+                  <EmptyState py={8} size="xs">
                     {applications.length === 0 ? 'No applications submitted yet.' : 'No applications match the selected filters.'}
-                  </p>
+                  </EmptyState>
                 )}
                 {filteredApps.map(app => {
                   const expanded = expandedAppId === app.id;
@@ -536,25 +538,23 @@ export function CareersView({ role }: CareersViewProps) {
       {/* Add job listing Modal */}
       <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Create New Job Listing">
         <form onSubmit={handleAddJob} className="space-y-4 pt-1">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Job Title *</label>
-            <input 
+          <FormField label="Job Title *">
+            <Input 
               type="text" 
               required 
               value={title} 
               onChange={e => setTitle(e.target.value)} 
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+              fieldSize="soft"
               placeholder="e.g. Lead QA Engineer" 
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Department</label>
-              <select 
+            <FormField label="Department">
+              <Select 
                 value={dept} 
                 onChange={e => setDept(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer appearance-none"
+                fieldSize="soft" className="cursor-pointer appearance-none"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
@@ -567,23 +567,21 @@ export function CareersView({ role }: CareersViewProps) {
                 <option value="Marketing">Marketing</option>
                 <option value="Operations">Operations</option>
                 <option value="HR">HR</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Location *</label>
-              <input 
+              </Select>
+            </FormField>
+            <FormField label="Location *">
+              <Input 
                 type="text" 
                 required 
                 value={loc} 
                 onChange={e => setLoc(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                fieldSize="soft"
                 placeholder="e.g. Remote (Pakistan)" 
               />
-            </div>
+            </FormField>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description *</label>
+          <FormField label="Description *">
             <textarea 
               required 
               rows={3} 
@@ -592,10 +590,9 @@ export function CareersView({ role }: CareersViewProps) {
               className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold resize-none"
               placeholder="Provide details about the role..." 
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Requirements (One per line)</label>
+          <FormField label="Requirements (One per line)">
             <textarea 
               rows={3} 
               value={reqsText} 
@@ -603,7 +600,7 @@ export function CareersView({ role }: CareersViewProps) {
               className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
               placeholder="Requirement 1&#10;Requirement 2&#10;Requirement 3" 
             />
-          </div>
+          </FormField>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isPostingJob} onClick={() => setIsAddOpen(false)}>Cancel</Button>
@@ -630,30 +627,27 @@ export function CareersView({ role }: CareersViewProps) {
                   <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" /> {applyError}
                 </div>
               )}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Full Name *</label>
-                <input 
+              <FormField label="Full Name *">
+                <Input 
                   type="text" 
                   required 
                   value={applicantName} 
                   onChange={e => setApplicantName(e.target.value)} 
-                  className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                  fieldSize="soft"
                   placeholder="e.g. John Doe" 
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email Address *</label>
-                <input 
+              </FormField>
+              <FormField label="Email Address *">
+                <Input 
                   type="email" 
                   required 
                   value={applicantEmail} 
                   onChange={e => setApplicantEmail(e.target.value)} 
-                  className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                  fieldSize="soft"
                   placeholder="e.g. applicant@company.com" 
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cover Letter / Note</label>
+              </FormField>
+              <FormField label="Cover Letter / Note">
                 <textarea 
                   rows={3} 
                   value={coverLetter} 
@@ -661,7 +655,7 @@ export function CareersView({ role }: CareersViewProps) {
                   className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold resize-none"
                   placeholder="Say hello or detail your fit..." 
                 />
-              </div>
+              </FormField>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
                 <Button type="button" variant="outline" size="md" onClick={() => setIsApplyOpen(false)}>Cancel</Button>
                 <button type="submit" disabled={isSubmittingApp} className="bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold px-4 py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm">

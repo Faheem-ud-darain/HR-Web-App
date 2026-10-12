@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useProfiles, Profile } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { TrackingView } from '@/components/ui/TrackingView';
+import { TrackingView } from '@/components/ui/lazy';
 import { Users } from 'lucide-react';
 
 // Read-only tracking view (screenshots + mouse-activity) scoped to a Team

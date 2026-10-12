@@ -6,6 +6,7 @@ import { Button } from './Button';
 import { hrActions, NotificationPrefs } from '@/lib/hrData';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
 import { Bell, BellRing, BellOff, Megaphone, HelpCircle, AtSign, CalendarClock, Clock } from 'lucide-react';
+import { Switch } from '@/components/ui/Switch';
 
 // Shared across all 3 profile pages (employee/hr/admin) — see
 // hrActions.getNotificationPrefs/updateNotificationPrefs in hrData.ts.
@@ -145,17 +146,12 @@ export function NotificationPreferencesCard({ email }: { email: string }) {
                   <p className="text-xs text-slate-500 mt-0.5">{description}</p>
                 </div>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                aria-label={label}
+              <Switch
+                checked={checked}
+                onChange={() => toggle(key)}
+                label={label}
                 disabled={!prefs || savingKey === key || !permissionGranted}
-                onClick={() => toggle(key)}
-                className={`shrink-0 relative w-11 h-6 rounded-full transition-colors disabled:opacity-60 ${checked ? 'bg-orange-600' : 'bg-slate-200'}`}
-              >
-                <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-150 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
+              />
             </div>
           );
         })}

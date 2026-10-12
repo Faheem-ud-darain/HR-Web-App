@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProfiles, useNotifications, hrActions, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { TeamChatView } from '@/components/ui/TeamChatView';
+import { TeamChatView } from '@/components/ui/lazy';
 
 // See the identical comment block in hr/hr-admin/page.tsx — same fixed
 // synthetic single-channel team, same deliberate avoidance of

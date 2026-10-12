@@ -76,15 +76,20 @@ export function TopNav() {
   const [showResults, setShowResults] = useState(false);
 
   const { data: allProfiles } = useProfiles();
-  const { data: allTasks } = useTasks();
+  // Global-search datasets are only needed once the user actually engages with
+  // search (focus / mobile sheet) — fetching them on every page load cost ~6
+  // collection reads (and recurring polls) for something most visits never use.
+  const [searchActive, setSearchActive] = useState(false);
+  const searchEnabled = { enabled: searchActive };
+  const { data: allTasks } = useTasks(searchEnabled);
   const { data: allTickets } = useTickets();
   const { data: allNotifications, refetch: refetchNotifications } = useNotifications();
   const { data: allTeams } = useTeams();
-  const { data: allWarehouses } = useWarehouses();
-  const { data: allPayroll } = usePayroll();
-  const { data: allLeaves } = useLeaves();
-  const { data: allCareers } = useCareers();
-  const { data: allAnnouncements } = useAnnouncements();
+  const { data: allWarehouses } = useWarehouses(searchEnabled);
+  const { data: allPayroll } = usePayroll(searchEnabled);
+  const { data: allLeaves } = useLeaves(searchEnabled);
+  const { data: allCareers } = useCareers(searchEnabled);
+  const { data: allAnnouncements } = useAnnouncements(searchEnabled);
   // Needed to scope an employee's own payroll record (PayrollRecord.employeeId
   // matches Profile.id, not email — see src/app/(dashboard)/employee/salary/page.tsx).
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -233,6 +238,13 @@ export function TopNav() {
       a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q)
     ));
   };
+
+  // Datasets load lazily on first search focus — re-run the current query when
+  // they arrive so results fill in without the user retyping.
+  useEffect(() => {
+    if (searchActive && search.trim()) performSearch(search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTasks, allWarehouses, allPayroll, allLeaves, allCareers, allAnnouncements]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -523,7 +535,7 @@ export function TopNav() {
             type="text"
             value={search}
             onChange={handleSearchChange}
-            onFocus={() => search.trim() && setShowResults(true)}
+            onFocus={() => { setSearchActive(true); if (search.trim()) setShowResults(true); }}
             placeholder="Search employees, tasks, payroll, leaves..."
             className="w-full bg-slate-100/80 border border-transparent rounded-full py-1.5 pl-10 pr-4 text-sm focus:border-orange-500 focus:bg-white outline-none text-slate-900 transition-colors font-semibold"
           />
@@ -551,7 +563,7 @@ export function TopNav() {
           {/* Mobile search icon */}
           {!isChatScreen && (
             <button
-              onClick={() => setIsMobileSearchOpen(true)}
+              onClick={() => { setSearchActive(true); setIsMobileSearchOpen(true); }}
               className="md:hidden p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
             >
               <Search className="h-5 w-5" />

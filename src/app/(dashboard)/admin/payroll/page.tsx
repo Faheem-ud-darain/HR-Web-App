@@ -5,10 +5,16 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { DollarSign, CheckCircle2, TrendingUp } from 'lucide-react';
 import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin } from '@/lib/hrData';
-import { NetPayableModal } from '@/components/ui/NetPayableModal';
+import { NetPayableModal } from '@/components/ui/lazy';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { StatCard } from '@/components/ui/StatCard';
+import { TableSkeletonRows } from '@/components/ui/Skeleton';
+import { ListSkeleton } from '@/components/ui/Skeleton';
+import { daysAgoNYDateString } from '@/lib/timezone';
 
 interface PayrollSummary {
   department: string;
@@ -32,15 +38,15 @@ interface PayrollSummary {
 }
 
 export default function AdminPayrollPage() {
-  const { data: rawPayroll = [], refetch: refetchPayroll } = usePayroll();
-  const { data: employees = [], refetch: refetchProfiles } = useProfiles();
+  const { data: rawPayroll = [], isLoading: payrollLoading, refetch: refetchPayroll } = usePayroll();
+  const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const { data: leaves = [] } = useLeaves();
-  const { data: timesheets = [] } = useTimesheets();
+  const { data: timesheets = [] } = useTimesheets({ days: 45 });
   // No dedicated React Query hook for this — it's stored in the generic KV
   // collection, not its own PocketBase collection (see AbsenceRecord's own
   // comment in hrData.ts). Plain one-time fetch on mount is fine here.
   const [absenceRecords, setAbsenceRecords] = useState<AbsenceRecord[]>([]);
-  useEffect(() => { hrActions.getAbsenceRecords().then(setAbsenceRecords); }, []);
+  useEffect(() => { hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(120) }).then(setAbsenceRecords); }, []);
   // computePayrollView is a PURE function — it never writes. It recomputes
   // the current view (pending increments, urgent-leave deductions,
   // no-call-no-show/inactivity absence deductions, etc.) on top of whatever
@@ -217,34 +223,12 @@ export default function AdminPayrollPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
-        <Card>
-          <CardContent className="pt-5 md:pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-semibold text-slate-500">Total Net Outflow</p>
-                <p className="text-xl md:text-2xl font-bold text-slate-900 mt-2">{formatMoney(grandNetUSD, 'USA')}</p>
-                <p className="text-xs md:text-sm font-semibold text-slate-500 mt-1">{formatMoney(grandNetPKR, 'Pakistan')}</p>
-              </div>
-              <div className="h-11 w-11 md:h-12 md:w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <DollarSign className="h-5 w-5 md:h-6 md:w-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5 md:pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs md:text-sm font-semibold text-slate-500">Accumulated Bonuses</p>
-                <p className="text-xl md:text-2xl font-bold text-slate-900 mt-2">{formatMoney(grandBonusesUSD, 'USA')}</p>
-                <p className="text-xs md:text-sm font-semibold text-slate-500 mt-1">{formatMoney(grandBonusesPKR, 'Pakistan')}</p>
-              </div>
-              <div className="h-11 w-11 md:h-12 md:w-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
-                <TrendingUp className="h-5 w-5 md:h-6 md:w-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard label="Total Net Outflow" value={formatMoney(grandNetUSD, 'USA')} size="md" trailing={<DollarSign className="h-5 w-5" />}>
+          <p className="text-xs md:text-sm font-semibold text-slate-500 mt-1">{formatMoney(grandNetPKR, 'Pakistan')}</p>
+        </StatCard>
+        <StatCard label="Accumulated Bonuses" value={formatMoney(grandBonusesUSD, 'USA')} size="md" trailing={<TrendingUp className="h-5 w-5" />}>
+          <p className="text-xs md:text-sm font-semibold text-slate-500 mt-1">{formatMoney(grandBonusesPKR, 'Pakistan')}</p>
+        </StatCard>
         <Card>
           <CardContent className="pt-5 md:pt-6">
             <div className="flex items-center justify-between">
@@ -266,25 +250,29 @@ export default function AdminPayrollPage() {
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Employee Payroll</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Employee</th>
-                <th className="px-6 py-4 text-right">Net Payable</th>
-                <th className="px-6 py-4 text-right">Reserved Salary</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-center">Actions</th>
+                <Th>Employee</Th>
+                <Th align="right">Net Payable</Th>
+                <Th align="right">Reserved Salary</Th>
+                <Th align="center">Status</Th>
+                <Th align="center">Actions</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
+            </THead>
+            <TBody>
+{(payrollLoading || profilesLoading) ? (
+  <TableSkeletonRows rows={8} cols={9} />
+) : (
+<>
               {pageItems.map(p => {
                 const netPayable = p.baseSalary + p.bonus - p.deductions + p.incrementAmount;
                 const empProfile = employees.find(e => e.id === p.employeeId);
                 const reservedBalance = (empProfile?.reservedSalaryBalance || 0) + (empProfile?.manualReservedAmount || 0);
                 return (
-                  <tr key={p.employeeId} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
+                  <Tr key={p.employeeId}>
+                    <Td>
                       <div className="font-semibold text-slate-900">{p.name}</div>
                       <div className="text-xs text-slate-500 mt-0.5">{p.role}</div>
                       {/* Informational only — see PayrollRecord.pendingArrears's
@@ -296,9 +284,9 @@ export default function AdminPayrollPage() {
                           {formatMoney(p.pendingArrears, p.region)} arrears owed (prior month unpaid)
                         </div>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-slate-900">{formatMoney(netPayable, p.region)}</td>
-                    <td className="px-6 py-4 text-right">
+                    </Td>
+                    <Td align="right" className="font-semibold text-slate-900">{formatMoney(netPayable, p.region)}</Td>
+                    <Td align="right">
                       {reservedBalance > 0 ? (
                         <div>
                           <span className="text-indigo-700 font-bold">{formatMoney(reservedBalance, p.region)}</span>
@@ -310,27 +298,29 @@ export default function AdminPayrollPage() {
                       {p.reservedThisMonth > 0 && (
                         <div className="text-[9px] text-amber-600 font-bold uppercase mt-0.5">+{formatMoney(p.reservedThisMonth, p.region)} this month</div>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-center">
+                    </Td>
+                    <Td align="center">
                       {p.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Pending</Badge>}
-                    </td>
-                    <td className="px-6 py-4 text-center">
+                    </Td>
+                    <Td align="center">
                       <button
                         onClick={() => { setNetPayableRecord(p); setIsNetPayableOpen(true); }}
                         className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 inline-flex items-center gap-1.5"
                       >
                         Net Payable
                       </button>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 );
               })}
               {payroll.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400 font-semibold italic text-xs">No payroll data available.</td></tr>
+                <Tr interactive={false}><EmptyState as="td" colSpan={5} py={10} size="xs">No payroll data available.</EmptyState></Tr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </>
+)}
+</TBody>
+          </Table>
+        </TableScroll>
 
         {/* Mobile card stack */}
         <div className="md:hidden space-y-3 p-4">
@@ -367,8 +357,9 @@ export default function AdminPayrollPage() {
               </div>
             );
           })}
-          {payroll.length === 0 && (
-            <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">No payroll data available.</p>
+          {(payrollLoading || profilesLoading) && <ListSkeleton rows={4} />}
+          {!(payrollLoading || profilesLoading) && payroll.length === 0 && (
+            <EmptyState py={8} size="sm">No payroll data available.</EmptyState>
           )}
         </div>
       </Card>
@@ -378,54 +369,54 @@ export default function AdminPayrollPage() {
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Departmental Breakdowns</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Department</th>
-                <th className="px-6 py-4 text-center">Headcount</th>
-                <th className="px-6 py-4 text-right">Total Base</th>
-                <th className="px-6 py-4 text-right">Increments</th>
-                <th className="px-6 py-4 text-right">Total Bonuses</th>
-                <th className="px-6 py-4 text-right">Total Deductions</th>
-                <th className="px-6 py-4 text-right">Department Net</th>
+                <Th>Department</Th>
+                <Th align="center">Headcount</Th>
+                <Th align="right">Total Base</Th>
+                <Th align="right">Increments</Th>
+                <Th align="right">Total Bonuses</Th>
+                <Th align="right">Total Deductions</Th>
+                <Th align="right">Department Net</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
+            </THead>
+            <TBody>
               {summaries.map(s => (
-                <tr key={s.department} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-slate-900">{s.department}</td>
-                  <td className="px-6 py-4 text-center font-semibold text-slate-600">{s.headcount}</td>
-                  <td className="px-6 py-4 text-right text-slate-900 font-medium">
+                <Tr key={s.department}>
+                  <Td className="font-semibold text-slate-900">{s.department}</Td>
+                  <Td align="center" className="font-semibold text-slate-600">{s.headcount}</Td>
+                  <Td align="right" className="text-slate-900 font-medium">
                     {s.totalBaseUSD > 0 && <div>{formatMoney(s.totalBaseUSD, 'USA')}</div>}
                     {s.totalBasePKR > 0 && <div>{formatMoney(s.totalBasePKR, 'Pakistan')}</div>}
                     {s.totalBaseUSD === 0 && s.totalBasePKR === 0 && '—'}
-                  </td>
-                  <td className="px-6 py-4 text-right text-emerald-600 font-semibold">
+                  </Td>
+                  <Td align="right" className="text-emerald-600 font-semibold">
                     {s.totalIncrementsUSD > 0 && <div>+{formatMoney(s.totalIncrementsUSD, 'USA')}</div>}
                     {s.totalIncrementsPKR > 0 && <div>+{formatMoney(s.totalIncrementsPKR, 'Pakistan')}</div>}
                     {s.totalIncrementsUSD === 0 && s.totalIncrementsPKR === 0 && '—'}
-                  </td>
-                  <td className="px-6 py-4 text-right text-emerald-600 font-semibold">
+                  </Td>
+                  <Td align="right" className="text-emerald-600 font-semibold">
                     {s.totalBonusesUSD > 0 && <div>+{formatMoney(s.totalBonusesUSD, 'USA')}</div>}
                     {s.totalBonusesPKR > 0 && <div>+{formatMoney(s.totalBonusesPKR, 'Pakistan')}</div>}
                     {s.totalBonusesUSD === 0 && s.totalBonusesPKR === 0 && '—'}
-                  </td>
-                  <td className="px-6 py-4 text-right text-rose-600 font-semibold">
+                  </Td>
+                  <Td align="right" className="text-rose-600 font-semibold">
                     {s.totalDeductionsUSD > 0 && <div>-{formatMoney(s.totalDeductionsUSD, 'USA')}</div>}
                     {s.totalDeductionsPKR > 0 && <div>-{formatMoney(s.totalDeductionsPKR, 'Pakistan')}</div>}
                     {s.totalDeductionsUSD === 0 && s.totalDeductionsPKR === 0 && '—'}
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-slate-900">
+                  </Td>
+                  <Td align="right" className="font-bold text-slate-900">
                     {s.totalNetUSD !== 0 && <div>{formatMoney(s.totalNetUSD, 'USA')}</div>}
                     {s.totalNetPKR !== 0 && <div>{formatMoney(s.totalNetPKR, 'Pakistan')}</div>}
                     {s.totalNetUSD === 0 && s.totalNetPKR === 0 && '—'}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        </TableScroll>
 
         {/* Mobile card stack */}
         <div className="md:hidden space-y-3 p-4">
@@ -469,7 +460,7 @@ export default function AdminPayrollPage() {
             );
           })}
           {summaries.length === 0 && (
-            <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">No payroll data available.</p>
+            <EmptyState py={8} size="sm">No payroll data available.</EmptyState>
           )}
         </div>
       </Card>

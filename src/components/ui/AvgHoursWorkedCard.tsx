@@ -8,6 +8,7 @@ import { Clock } from 'lucide-react';
 import { Profile, TimesheetEntry, displayName, localShiftDate } from '@/lib/hrData';
 import { smoothLinePath, smoothAreaPath } from '@/lib/sparkline';
 import { APP_TIMEZONE } from '@/lib/timezone';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface AvgHoursWorkedCardProps {
   employees: Profile[];
@@ -226,7 +227,7 @@ export function AvgHoursWorkedCard({ employees, timesheets, viewerRole }: AvgHou
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Hours Worked (Last 7 Days)">
         {perEmployee.length === 0 ? (
-          <p className="text-xs text-slate-400 font-semibold italic text-center py-8">No completed shifts in the last 7 days.</p>
+          <EmptyState py={8} size="xs">No completed shifts in the last 7 days.</EmptyState>
         ) : (
           <div className="space-y-1.5">
             {perEmployee.map(({ email, minutes, shifts, avgMinutes, profile }, i) => (

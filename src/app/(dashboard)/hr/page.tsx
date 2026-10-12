@@ -5,18 +5,18 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { OrgCalendar } from '@/components/ui/OrgCalendar';
-import { TaskModal } from '@/components/ui/TaskModal';
+import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { Users, Clock, CheckCircle2, ClipboardList, PlusCircle, Loader2, Trash2, Eye, AlertTriangle, Video, Forward } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { hrActions, Profile, Announcement, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName, addEmployeeServer, setTeamLeadAdmin } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
-import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
-import { ScheduleMeetModal } from '@/components/ui/ScheduleMeetModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function HRDashboard() {
   const router = useRouter();
@@ -442,7 +442,7 @@ export default function HRDashboard() {
             </div>
           ))}
           {announcements.length === 0 && (
-            <p className="text-xs text-slate-400 font-semibold italic text-center py-6">No announcements posted yet.</p>
+            <EmptyState py={6} size="xs">No announcements posted yet.</EmptyState>
           )}
         </CardContent>
       </Card>
@@ -461,7 +461,7 @@ export default function HRDashboard() {
         {viewersAnnId && (() => {
           const viewers = viewersForAnnouncement(viewersAnnId);
           return viewers.length === 0 ? (
-            <p className="text-xs text-slate-400 font-semibold italic text-center py-6">No one has viewed this announcement yet.</p>
+            <EmptyState py={6} size="xs">No one has viewed this announcement yet.</EmptyState>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {viewers.map(v => (
@@ -487,20 +487,18 @@ export default function HRDashboard() {
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Announcement Title *</label>
-            <input 
+          <FormField label="Announcement Title *">
+            <Input 
               type="text" 
               required 
               value={annTitle} 
               onChange={e => setAnnTitle(e.target.value)} 
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+              fieldSize="soft"
               placeholder="e.g. System Maintenance Notice" 
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Content *</label>
+          <FormField label="Content *">
             <textarea
               required
               rows={4}
@@ -509,10 +507,9 @@ export default function HRDashboard() {
               className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold resize-none"
               placeholder="Type announcement details here..." 
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Target Audience *</label>
+          <FormField label="Target Audience *">
             <select
               value={annTargetType}
               onChange={e => setAnnTargetType(e.target.value as any)}
@@ -523,7 +520,7 @@ export default function HRDashboard() {
               <option value="pakistan">Pakistani Employees (Remote) Only</option>
               <option value="warehouses">Specific Warehouses</option>
             </select>
-          </div>
+          </FormField>
 
           {annTargetType === 'warehouses' && (
             <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-36 overflow-y-auto">
@@ -604,8 +601,7 @@ export default function HRDashboard() {
               <p className="text-xs font-bold text-slate-800 break-words">{forwardingAnn.title}</p>
               <p className="text-xs text-slate-500 mt-1 line-clamp-3 whitespace-pre-wrap break-words">{forwardingAnn.content}</p>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+            <FormField label="Note (optional)">
               <textarea
                 value={annForwardNote}
                 onChange={e => setAnnForwardNote(e.target.value)}
@@ -613,7 +609,7 @@ export default function HRDashboard() {
                 placeholder="Add a note for HR & Admin…"
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
               />
-            </div>
+            </FormField>
             {annForwardError && <p className="text-xs font-semibold text-rose-600">{annForwardError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <Button

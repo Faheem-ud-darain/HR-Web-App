@@ -26,6 +26,8 @@ import { API_BASE } from '@/lib/apiBase';
 import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle, Smartphone } from 'lucide-react';
 import { OtpInput } from '@/components/ui/OtpInput';
 import { Button } from '@/components/ui/Button';
+import { PageLoader } from '@/components/ui/Spinner';
+import { Input } from '@/components/ui/Input';
 
 export default function AuthPage() {
   // Same cold-start problem as the root page: if the WebView happens to
@@ -412,12 +414,7 @@ export default function AuthPage() {
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <svg className="animate-spin h-8 w-8 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
+      <PageLoader />
     );
   }
 
@@ -496,24 +493,24 @@ export default function AuthPage() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Email Address</label>
-                <input 
+                <Input 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 rounded-xl outline-none text-xs font-semibold transition-colors text-slate-900"
+                  fieldSize="lg" className="hover:bg-slate-100/50 focus:bg-white focus:ring-2 focus:ring-orange-100 transition-colors text-slate-900"
                   placeholder="you@delcargo.us"
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Password</label>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 rounded-xl outline-none text-xs font-semibold transition-colors text-slate-900"
+                    fieldSize="lg" className="pr-10 hover:bg-slate-100/50 focus:bg-white focus:ring-2 focus:ring-orange-100 transition-colors text-slate-900"
                     placeholder="••••••••"
                   />
                   <button

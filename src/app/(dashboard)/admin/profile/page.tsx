@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { PasswordInput } from '@/components/ui/PasswordInput';
-import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
+import { AvatarCropperModal } from '@/components/ui/lazy';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,7 @@ import { useProfiles, hrActions, updateProfileSelf, changeOwnPassword, updatePro
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
+import { FormField } from '@/components/ui/FormField';
 
 export default function AdminProfilePage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -267,8 +268,7 @@ export default function AdminProfilePage() {
       {/* Profile Edit Modal */}
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit System Profile">
         <form onSubmit={handleEditSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Select Profile to Edit</label>
+          <FormField label="Select Profile to Edit" size="md">
             <select
               value={targetEmail}
               onChange={e => setTargetEmail(e.target.value)}
@@ -277,10 +277,9 @@ export default function AdminProfilePage() {
               <option value="admin@delcargo.us">Admin Profile (admin@delcargo.us)</option>
               <option value="hr@delcargo.us">HR Profile (hr@delcargo.us)</option>
             </select>
-          </div>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Full Name</label>
+          <FormField label="Full Name" size="md">
             <input
               type="text"
               value={editName}
@@ -289,10 +288,9 @@ export default function AdminProfilePage() {
               placeholder="Full Name"
               required
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Gender</label>
+          <FormField label="Gender" size="md">
             <select
               value={editGender}
               onChange={e => setEditGender(e.target.value as any)}
@@ -301,10 +299,9 @@ export default function AdminProfilePage() {
               <option value="male">Male</option>
               <option value="female">Female</option>
             </select>
-          </div>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Job Title</label>
+          <FormField label="Job Title" size="md">
             <input
               type="text"
               value={editTitle}
@@ -312,7 +309,7 @@ export default function AdminProfilePage() {
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm outline-none text-slate-900 font-semibold"
               placeholder="e.g. HR Director / System Administrator"
             />
-          </div>
+          </FormField>
 
           <button
             type="submit"
@@ -332,33 +329,30 @@ export default function AdminProfilePage() {
               <AlertCircle className="h-4 w-4" />{resetError}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Password</label>
+          <FormField label="Current Password" size="md">
             <PasswordInput
               value={currentPass}
               onChange={setCurrentPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Enter current password"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">New Password</label>
+          </FormField>
+          <FormField label="New Password" size="md">
             <PasswordInput
               value={newPass}
               onChange={setNewPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Enter new password"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Confirm New Password</label>
+          </FormField>
+          <FormField label="Confirm New Password" size="md">
             <PasswordInput
               value={confirmPass}
               onChange={setConfirmPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Confirm new password"
             />
-          </div>
+          </FormField>
 
           <button
             type="submit"

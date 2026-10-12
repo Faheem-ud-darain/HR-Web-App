@@ -94,7 +94,7 @@ export function Sidebar({ role }: SidebarProps) {
   // via the Tracking Monitor page before the two flags were kept in sync
   // still see the link, without HR/Admin needing to re-toggle anything.
   const { data: trackingSettingsRows } = useKVByPrefix('hr_tracking_settings_prod_v1');
-  // Polls every 15s via useTickets' own refetchInterval, so the dot can
+  // Polls (see POLL_MS in lib/hr/polling.ts) via useTickets' own refetchInterval, so the dot can
   // light up without the user needing to be on the tickets page.
   const { data: allTickets } = useTickets();
   // Same idea for Team Chat — see useAllMessages' comment in hrData.ts.

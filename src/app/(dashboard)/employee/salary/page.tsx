@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FileText, Download, CheckCircle2, ShieldCheck, Printer, TrendingUp, Calendar, Info, AlertTriangle } from 'lucide-react';
 import { APP_TIMEZONE } from '@/lib/timezone';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 interface Payslip {
   month: string;
@@ -240,58 +242,58 @@ export default function EmployeeSalaryPage() {
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Historical Pay slips</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[750px] text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table minWidth={750}>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Month</th>
-                <th className="px-6 py-4 text-right">Base Amount</th>
-                <th className="px-6 py-4 text-right">Increment</th>
-                <th className="px-6 py-4 text-right">Deductions</th>
-                <th className="px-6 py-4 text-right">Bonuses</th>
-                <th className="px-6 py-4 text-right">Net Received</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-center">Receipt</th>
+                <Th>Month</Th>
+                <Th align="right">Base Amount</Th>
+                <Th align="right">Increment</Th>
+                <Th align="right">Deductions</Th>
+                <Th align="right">Bonuses</Th>
+                <Th align="right">Net Received</Th>
+                <Th align="center">Status</Th>
+                <Th align="center">Receipt</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
+            </THead>
+            <TBody>
               {filteredSlips.map((slip, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-slate-900">{slip.month}</td>
-                  <td className="px-6 py-4 text-right font-medium">{formatMoney(slip.base, userProfile?.region)}</td>
-                  <td className="px-6 py-4 text-right text-emerald-600 font-semibold">
+                <Tr key={i}>
+                  <Td className="font-semibold text-slate-900">{slip.month}</Td>
+                  <Td align="right" className="font-medium">{formatMoney(slip.base, userProfile?.region)}</Td>
+                  <Td align="right" className="text-emerald-600 font-semibold">
                     {slip.increment > 0 ? `+${formatMoney(slip.increment, userProfile?.region)}` : '—'}
-                  </td>
-                  <td className="px-6 py-4 text-right text-rose-600 font-semibold">
+                  </Td>
+                  <Td align="right" className="text-rose-600 font-semibold">
                     {slip.deductions > 0 ? `-${formatMoney(slip.deductions, userProfile?.region)}` : formatMoney(0, userProfile?.region)}
-                  </td>
-                  <td className="px-6 py-4 text-right text-emerald-600 font-semibold">
+                  </Td>
+                  <Td align="right" className="text-emerald-600 font-semibold">
                     {slip.bonus > 0 ? `+${formatMoney(slip.bonus, userProfile?.region)}` : formatMoney(0, userProfile?.region)}
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold text-slate-900">{formatMoney(slip.net, userProfile?.region)}</td>
-                  <td className="px-6 py-4 text-center">
+                  </Td>
+                  <Td align="right" className="font-bold text-slate-900">{formatMoney(slip.net, userProfile?.region)}</Td>
+                  <Td align="center">
                     <Badge variant={slip.processed ? 'success' : 'warning'}>{slip.processed ? 'Processed' : 'Pending'}</Badge>
-                  </td>
-                  <td className="px-6 py-4 text-center">
+                  </Td>
+                  <Td align="center">
                     <button
                       onClick={() => setSelectedSlip(slip)}
                       className="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 flex items-center gap-1.5 mx-auto"
                     >
                       <FileText className="h-3.5 w-3.5" /> View Payslip
                     </button>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
               {filteredSlips.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400 font-semibold italic text-xs">
+                <Tr>
+                  <EmptyState as="td" colSpan={8} py={8} size="xs">
                     No salary slips recorded or tracking has not started yet.
-                  </td>
-                </tr>
+                  </EmptyState>
+                </Tr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        </TableScroll>
         {/* Mobile card stack */}
         <div className="md:hidden space-y-2 p-3">
           {filteredSlips.map((slip, i) => (
@@ -333,9 +335,9 @@ export default function EmployeeSalaryPage() {
             </div>
           ))}
           {filteredSlips.length === 0 && (
-            <p className="py-8 text-center text-slate-400 font-semibold italic text-xs">
+            <EmptyState py={8} size="xs">
               No salary slips recorded or tracking has not started yet.
-            </p>
+            </EmptyState>
           )}
         </div>
       </Card>

@@ -6,12 +6,15 @@ import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { TypingIndicator } from './TypingIndicator';
-import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, Search, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star, Video, Forward, ExternalLink } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star, Video, Forward, ExternalLink } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { OptimizedImage } from './OptimizedImage';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 import { Button } from './Button';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SearchInput } from '@/components/ui/SearchInput';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -905,16 +908,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
         {/* Search & Filter panel */}
         {activePanel === 'chat' && showFilters && (
           <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3 shrink-0 space-y-2.5">
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search messages, senders, or file names…"
-                className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-8 pr-3 text-xs outline-none focus:border-orange-500 font-medium"
-              />
-            </div>
+            <SearchInput fieldSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search messages, senders, or file names…" />
             <div className="flex flex-wrap gap-2 items-center">
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-semibold outline-none focus:border-orange-500" />
               <span className="text-[10px] text-slate-400 font-bold">to</span>
@@ -962,10 +956,10 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
           )}
           {isLoading && <p className="text-xs text-slate-400 text-center font-semibold py-6">Loading messages…</p>}
           {!isLoading && messages.length === 0 && (
-            <p className="text-xs text-slate-400 text-center font-semibold py-6 italic">No messages yet — say hi 👋</p>
+            <EmptyState py={6} size="xs">No messages yet — say hi 👋</EmptyState>
           )}
           {!isLoading && messages.length > 0 && filteredMessages.length === 0 && (
-            <p className="text-xs text-slate-400 text-center font-semibold py-6 italic">No messages match your search/filters.</p>
+            <EmptyState py={6} size="xs">No messages match your search/filters.</EmptyState>
           )}
           {filteredMessages.map(m => {
             const isSelf = m.senderEmail.toLowerCase() === currentUserEmail.toLowerCase();
@@ -1422,7 +1416,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
             );
           })}
           {mentionCandidates.length === 0 && (
-            <p className="text-center py-8 text-slate-400 font-semibold text-xs italic">No members in this channel yet.</p>
+            <EmptyState py={8} size="xs">No members in this channel yet.</EmptyState>
           )}
         </div>
       </Modal>
@@ -1451,8 +1445,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                 </p>
               )}
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+            <FormField label="Note (optional)">
               <textarea
                 value={forwardNote}
                 onChange={e => setForwardNote(e.target.value)}
@@ -1460,7 +1453,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
                 placeholder="Add a note for HR & Admin…"
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
               />
-            </div>
+            </FormField>
             {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <Button

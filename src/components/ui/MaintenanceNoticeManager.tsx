@@ -8,6 +8,8 @@ import { Wrench, PlusCircle, Trash2, Loader2 } from 'lucide-react';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { pktLocalToUtcIso, formatInViewerLocalTime } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface MaintenanceNoticeManagerProps {
   createdBy: string;
@@ -125,7 +127,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
               );
             })}
           {notices.length === 0 && (
-            <p className="text-xs text-slate-400 font-semibold italic text-center py-6">No maintenance notices posted yet.</p>
+            <EmptyState py={6} size="xs">No maintenance notices posted yet.</EmptyState>
           )}
         </CardContent>
       </Card>
@@ -136,8 +138,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
             <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-semibold">{error}</div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Title *</label>
+          <FormField label="Title *">
             <input
               type="text"
               required
@@ -146,10 +147,9 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
               className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
               placeholder="e.g. Scheduled App Update"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Message *</label>
+          <FormField label="Message *">
             <textarea
               required
               rows={3}
@@ -158,10 +158,9 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
               className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold resize-none"
               placeholder="e.g. The website and apps will be briefly unavailable while we push an update."
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Maintenance Date *</label>
+          <FormField label="Maintenance Date *">
             <input
               type="date"
               required
@@ -169,11 +168,10 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
               onChange={e => setDate(e.target.value)}
               className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
             />
-          </div>
+          </FormField>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Time (Pakistan) *</label>
+            <FormField label="Start Time (Pakistan) *">
               <input
                 type="time"
                 required
@@ -181,9 +179,8 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
                 onChange={e => setStartTime(e.target.value)}
                 className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Time (Pakistan) *</label>
+            </FormField>
+            <FormField label="End Time (Pakistan) *">
               <input
                 type="time"
                 required
@@ -191,7 +188,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
                 onChange={e => setEndTime(e.target.value)}
                 className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-sky-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-sky-100 font-semibold"
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">

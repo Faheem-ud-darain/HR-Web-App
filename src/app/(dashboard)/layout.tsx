@@ -18,9 +18,8 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { initPush } from '@/lib/push';
-import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
+import { AvatarCropperModal } from '@/components/ui/lazy';
 import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
 import { AbsentPopup } from '@/components/ui/AbsentPopup';
 import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
@@ -31,6 +30,7 @@ import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompre
 import { useAnyModalOpen } from '@/lib/modalStack';
 import { CheckCircle2, ChevronRight, BookOpen, User, ShieldCheck, ShieldAlert, HelpCircle, FileText, Upload, LogOut, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
 
 // Wraps each page's content for the tab-switch fade+rise animation. Split
 // out into its own component (rather than inlining a `page-enter` class
@@ -479,12 +479,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!dbReady || !role || ((role === 'employee' || role === 'team_lead') && !profile)) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <svg className="animate-spin h-8 w-8 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      </div>
+      <DashboardSkeleton />
     );
   }
 

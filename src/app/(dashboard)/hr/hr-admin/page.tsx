@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProfiles, useNotifications, hrActions, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { TeamChatView } from '@/components/ui/TeamChatView';
+import { TeamChatView } from '@/components/ui/lazy';
 
 // Fixed, single-channel team array — TeamChatView auto-hides its team
 // selector whenever there's only one entry to pick from (see the

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProfiles, useAllMessages, markMessageActivitySeen, Profile, Team } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { TeamChatView } from '@/components/ui/TeamChatView';
+import { TeamChatView } from '@/components/ui/lazy';
 
 export default function EmployeeDirectMessagesPage() {
   const { data: allProfiles = [] } = useProfiles();

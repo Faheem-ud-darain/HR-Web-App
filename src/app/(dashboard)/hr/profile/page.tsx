@@ -1,20 +1,21 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, useProfiles, hrActions, updateProfileSelf, changeOwnPassword } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
 import { PasswordInput } from '@/components/ui/PasswordInput';
-import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
+import { AvatarCropperModal } from '@/components/ui/lazy';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import { Button } from '@/components/ui/Button';
 import {
   User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, CheckCircle2, AlertCircle, Camera
 } from 'lucide-react';
+import { FormField } from '@/components/ui/FormField';
 
 export default function HRProfilePage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -244,33 +245,30 @@ export default function HRProfilePage() {
               <AlertCircle className="h-4 w-4" />{resetError}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Password</label>
+          <FormField label="Current Password" size="md">
             <PasswordInput
               value={currentPass}
               onChange={setCurrentPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 md:py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Enter current password"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">New Password</label>
+          </FormField>
+          <FormField label="New Password" size="md">
             <PasswordInput
               value={newPass}
               onChange={setNewPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 md:py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Enter new password"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Confirm New Password</label>
+          </FormField>
+          <FormField label="Confirm New Password" size="md">
             <PasswordInput
               value={confirmPass}
               onChange={setConfirmPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 md:py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Confirm new password"
             />
-          </div>
+          </FormField>
 
           <button
             type="submit"

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProfiles, useAllMessages, markMessageActivitySeen, Profile } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { DirectMessagesView } from '@/components/ui/DirectMessagesView';
+import { DirectMessagesView } from '@/components/ui/lazy';
 
 export default function HrDirectMessagesPage() {
   const { data: allProfiles = [] } = useProfiles();

@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, hrActions } from '@/lib/hrData';
 import { Trash2, CheckCircle2, RotateCcw, Clock, AlertTriangle, Briefcase, Calendar, User, Tag, Flag, ArrowRight, Building2, Loader2 } from 'lucide-react';
+import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 
 interface TaskBoardProps {
   tasks: Task[];
@@ -14,24 +15,6 @@ interface TaskBoardProps {
   canDelete?: boolean;
   readOnly?: boolean;
 }
-
-const PRIORITY_STYLES: Record<Task['priority'], string> = {
-  high:   'bg-rose-100 text-rose-800 border-rose-200',
-  medium: 'bg-orange-100 text-orange-800 border-orange-200',
-  low:    'bg-slate-100 text-slate-600 border-slate-200',
-};
-
-const STATUS_STYLES: Record<Task['status'], string> = {
-  todo:        'bg-amber-50 text-amber-700 border-amber-200',
-  in_progress: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  done:        'bg-emerald-50 text-emerald-700 border-emerald-200',
-};
-
-const STATUS_LABELS: Record<Task['status'], string> = {
-  todo:        'To Do',
-  in_progress: 'In Progress',
-  done:        'Done',
-};
 
 const PRIORITY_ICON: Record<Task['priority'], React.ReactNode> = {
   high:   <AlertTriangle className="h-3 w-3" />,
@@ -95,11 +78,11 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
       <div className="space-y-5">
         {/* Status + priority badges */}
         <div className="flex flex-wrap gap-2">
-          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${PRIORITY_STYLES[task.priority]}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>
             {PRIORITY_ICON[task.priority]} {task.priority} priority
           </span>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${STATUS_STYLES[task.status]}`}>
-            {STATUS_LABELS[task.status]}
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>
+            {TASK_STATUS_LABELS[task.status]}
           </span>
           {isOverdue && <span className="text-xs font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-full">OVERDUE</span>}
           {isDueSoon && <span className="text-xs font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-full">DUE SOON</span>}
@@ -137,8 +120,8 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 overflow-x-auto pb-1">
           {STATUS_SEQUENCE.map((s, i) => (
             <React.Fragment key={s}>
-              <span className={`px-2.5 py-1 rounded-full border whitespace-nowrap ${task.status === s ? STATUS_STYLES[s] : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
-                {STATUS_LABELS[s]}
+              <span className={`px-2.5 py-1 rounded-full border whitespace-nowrap ${task.status === s ? TASK_STATUS_STYLES[s] : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                {TASK_STATUS_LABELS[s]}
               </span>
               {i < STATUS_SEQUENCE.length - 1 && <ArrowRight className="h-3 w-3 text-slate-300 flex-shrink-0" />}
             </React.Fragment>
@@ -155,7 +138,7 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
               className="!py-3 md:!py-2 shadow-sm active:scale-97 transition-transform min-h-[44px] md:min-h-0 w-full md:w-auto"
             >
               {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Mark as {STATUS_LABELS[STATUS_SEQUENCE[(STATUS_SEQUENCE.indexOf(task.status) + 1) % STATUS_SEQUENCE.length]]}
+              Mark as {TASK_STATUS_LABELS[STATUS_SEQUENCE[(STATUS_SEQUENCE.indexOf(task.status) + 1) % STATUS_SEQUENCE.length]]}
             </Button>
           )}
           {!readOnly && task.status !== 'todo' && (
@@ -284,11 +267,11 @@ export function TaskBoard({ tasks, onUpdate, filterEmails, canDelete = true, rea
                   <span className={`font-bold text-slate-900 text-xs md:text-sm ${task.status === 'done' ? 'line-through opacity-60' : ''}`}>
                     {task.title}
                   </span>
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${PRIORITY_STYLES[task.priority]}`}>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>
                     {PRIORITY_ICON[task.priority]}{task.priority}
                   </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[task.status]}`}>
-                    {STATUS_LABELS[task.status]}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>
+                    {TASK_STATUS_LABELS[task.status]}
                   </span>
                   {isOverdue(task.dueDate, task.status)  && <span className="text-[10px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-full">OVERDUE</span>}
                   {isDueSoon(task.dueDate) && task.status !== 'done' && <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">DUE SOON</span>}
