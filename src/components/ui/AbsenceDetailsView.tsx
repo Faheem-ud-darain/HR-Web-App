@@ -17,6 +17,8 @@ import { Tabs } from '@/components/ui/Tabs';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { daysAgoNYDateString } from '@/lib/timezone';
+import { Input } from '@/components/ui/Input';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 
 interface AbsenceDetailsViewProps {
@@ -438,13 +440,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             {/* Date Selector Filter */}
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
               <Calendar className="h-4 w-4 text-slate-400" />
-              <label htmlFor="attendance-date-filter" className="text-[10px] font-bold text-slate-500 uppercase">Date:</label>
-              <input
+              <FieldLabel htmlFor="attendance-date-filter" size="sm">Date:</FieldLabel>
+              <Input
                 id="attendance-date-filter"
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-800 outline-none cursor-pointer"
+                fieldSize="md" className="cursor-pointer"
               />
               {selectedDate && (
                 <button

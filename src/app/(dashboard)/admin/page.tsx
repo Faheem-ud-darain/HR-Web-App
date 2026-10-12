@@ -13,11 +13,12 @@ import { getSessionEmail } from '@/lib/session';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { ListSkeleton, StatCardSkeletonGrid, TableSkeletonRows } from '@/components/ui/Skeleton';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -578,32 +579,32 @@ export default function AdminDashboard() {
           </FormField>
 
           <FormField label="Content *">
-            <textarea 
+            <Textarea 
               required 
               rows={4} 
               value={annContent} 
               onChange={e => setAnnContent(e.target.value)} 
-              className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors transition-transform transition-shadow focus:ring-2 focus:ring-orange-100 font-semibold resize-none" 
+              fieldSize="lg" className="resize-none" 
               placeholder="Type announcement details here..." 
             />
           </FormField>
 
           <FormField label="Target Audience *">
-            <select
+            <Select
               value={annTargetType}
               onChange={e => setAnnTargetType(e.target.value as any)}
-              className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors transition-transform transition-shadow focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer"
+              fieldSize="lg" className="cursor-pointer"
             >
               <option value="all">All Employees</option>
               <option value="usa">USA Employees Only</option>
               <option value="pakistan">Pakistani Employees (Remote) Only</option>
               <option value="warehouses">Specific Warehouses</option>
-            </select>
+            </Select>
           </FormField>
 
           {annTargetType === 'warehouses' && (
             <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-36 overflow-y-auto">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Select Warehouses</label>
+              <FieldLabel size="tiny">Select Warehouses</FieldLabel>
               <div className="space-y-1.5">
                 {warehouses.map(wh => (
                   <label key={wh.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
@@ -681,12 +682,12 @@ export default function AdminDashboard() {
               <p className="text-xs text-slate-500 mt-1 line-clamp-3 whitespace-pre-wrap break-words">{forwardingAnn.content}</p>
             </div>
             <FormField label="Note (optional)">
-              <textarea
+              <Textarea
                 value={annForwardNote}
                 onChange={e => setAnnForwardNote(e.target.value)}
                 rows={2}
                 placeholder="Add a note for HR & Admin…"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
+                fieldSize="md" className="resize-none"
               />
             </FormField>
             {annForwardError && <p className="text-xs font-semibold text-rose-600">{annForwardError}</p>}

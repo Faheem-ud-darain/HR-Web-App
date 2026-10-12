@@ -16,6 +16,7 @@ import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { formatDateNY } from '@/lib/timezone';
 import { FormField } from '@/components/ui/FormField';
+import { Input, Select } from '@/components/ui/Input';
 
 export default function AdminProfilePage() {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
@@ -269,44 +270,44 @@ export default function AdminProfilePage() {
       <Modal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} title="Edit System Profile">
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <FormField label="Select Profile to Edit" size="md">
-            <select
+            <Select
               value={targetEmail}
               onChange={e => setTargetEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm outline-none text-slate-900 font-semibold"
+              fieldSize="md"
             >
               <option value="admin@delcargo.us">Admin Profile (admin@delcargo.us)</option>
               <option value="hr@delcargo.us">HR Profile (hr@delcargo.us)</option>
-            </select>
+            </Select>
           </FormField>
 
           <FormField label="Full Name" size="md">
-            <input
+            <Input
               type="text"
               value={editName}
               onChange={e => setEditName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm outline-none text-slate-900 font-semibold"
+              fieldSize="md"
               placeholder="Full Name"
               required
             />
           </FormField>
 
           <FormField label="Gender" size="md">
-            <select
+            <Select
               value={editGender}
               onChange={e => setEditGender(e.target.value as any)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm outline-none text-slate-900 font-semibold"
+              fieldSize="md"
             >
               <option value="male">Male</option>
               <option value="female">Female</option>
-            </select>
+            </Select>
           </FormField>
 
           <FormField label="Job Title" size="md">
-            <input
+            <Input
               type="text"
               value={editTitle}
               onChange={e => setEditTitle(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm outline-none text-slate-900 font-semibold"
+              fieldSize="md"
               placeholder="e.g. HR Director / System Administrator"
             />
           </FormField>

@@ -9,6 +9,7 @@ import {
   Upload, FileText, FileImage, FileVideo, Download, Trash2, Loader2,
   X, FolderOpen, File as FileIcon,
 } from 'lucide-react';
+import { Input, Textarea } from '@/components/ui/Input';
 
 interface TeamDocumentsPanelProps {
   team: Team | null;
@@ -156,19 +157,19 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
       {showUpload && canManage && (
         <div className="mx-4 mb-3 border border-slate-200 rounded-xl bg-slate-50/80 p-3 space-y-2 shrink-0">
           {error && <p className="text-[10px] text-rose-600 font-bold">{error}</p>}
-          <input
+          <Input
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="Document title (this is what people will type # + this to tag it)"
-            className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-xs outline-none focus:border-orange-500 font-medium"
+            fieldSize="md"
           />
-          <textarea
+          <Textarea
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Optional description…"
             rows={2}
-            className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-xs outline-none focus:border-orange-500 font-medium resize-none"
+            fieldSize="md" className="resize-none"
           />
           <div className="flex items-center gap-2">
             <label className="flex-1 flex items-center gap-2 bg-white border border-dashed border-slate-300 rounded-lg py-2 px-3 text-[10px] font-bold text-slate-500 cursor-pointer hover:border-orange-400">

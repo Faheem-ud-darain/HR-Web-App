@@ -6,93 +6,31 @@ import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { TypingIndicator } from './TypingIndicator';
-import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Headset, Star, Video, Forward, ExternalLink } from 'lucide-react';
+import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Video, Forward, ExternalLink } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 import { OptimizedImage } from './OptimizedImage';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
-import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 import { Button } from './Button';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { ChatSkeleton } from '@/components/ui/Skeleton';
+import { EmojiPicker, ReadReceiptFacepile, roleBadgeInfo, RoleBadge, MAX_ATTACHMENT_BYTES, formatTimestamp, isImageAttachment, FileTypeFilter, SizeFilter, attachmentKind, formatBytes, sizeBucket, FORWARD_KIND_LABEL, renderMessageText } from "@/components/ui/chat/chatHelpers";
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { ChatComposer } from "@/components/ui/chat/ChatComposer";
+import { ChatMessageList } from "@/components/ui/chat/ChatMessageList";
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
 // dependency) just for this. Grouped loosely so the picker doesn't read as
 // a random wall of glyphs; browsers/OSes render these as native emoji, no
 // image assets needed.
-const EMOJI_GROUPS: { label: string; emojis: string[] }[] = [
-  { label: 'Smileys', emojis: ['😀', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '😉', '😊', '😇', '🙃', '😍', '🥰', '😘', '😜', '🤔', '🤨', '😐', '😑', '😴', '🥱', '😷', '🤒'] },
-  { label: 'Gestures', emojis: ['👍', '👎', '👏', '🙌', '🙏', '💪', '🤝', '✌️', '🤞', '👌', '👋', '🤙', '✋'] },
-  { label: 'Hearts', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💯', '✨', '🔥', '⭐'] },
-  { label: 'Work', emojis: ['✅', '❌', '⚠️', '📌', '📎', '📅', '⏰', '💼', '📈', '📉', '💰', '🎯', '🚀', '🛠️', '📝', '📦', '🚚', '☕'] },
-  { label: 'Reactions', emojis: ['🎉', '👀', '💡', '🙌', '😢', '😡', '😮', '🤝', '👏', '🥳'] },
-];
-
-function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
-  // Only Escape is handled here. Outside-click is handled one level up by
-  // the toggle button's own wrapper (see emojiWrapperRef below) — doing it
-  // here too would race with the toggle button's onClick: mousedown closes
-  // the picker first, then the button's click re-opens it, so the button
-  // would appear to do nothing when clicked while the picker is open.
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
-
-  return (
-    <div
-      className="absolute bottom-full left-0 mb-1 w-64 max-w-[calc(100vw-2rem)] max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg z-20 p-2.5 space-y-2"
-    >
-      {EMOJI_GROUPS.map(group => (
-        <div key={group.label}>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-0.5 mb-1">{group.label}</p>
-          <div className="grid grid-cols-8 gap-0.5">
-            {group.emojis.map(emoji => (
-              <button
-                key={emoji}
-                type="button"
-                onMouseDown={e => { e.preventDefault(); onPick(emoji); }}
-                className="text-lg leading-none p-1 rounded-lg hover:bg-slate-100 transition-colors active:scale-90"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // Tiny "announcement styled" read receipt for a single message — a small
 // overlapping avatar facepile plus a count, tucked right under the bubble.
 // Renders nothing until at least one other person has actually viewed the
 // message (no dashed-placeholder state here, unlike the Announcements
 // panel's version — that would put a "0 viewed" line under every single
 // chat message, which is exactly the UI clutter this was asked to avoid).
-function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; onOpen: () => void }) {
-  if (viewers.length === 0) return null;
-  return (
-    <button
-      onClick={onOpen}
-      className="flex items-center gap-1 mt-1 group"
-      title="See who has viewed this message"
-    >
-      <div className="flex -space-x-1.5">
-        {viewers.slice(0, 3).map(v => (
-          <Avatar key={v.id} src={v.profilePicture} name={v.fullName} size={13} className="ring-1 ring-white" />
-        ))}
-      </div>
-      <span className="text-[8px] font-bold text-slate-400 group-hover:text-orange-600 transition-colors">
-        Seen{viewers.length > 3 ? ` by ${viewers.length}` : ''}
-      </span>
-    </button>
-  );
-}
-
 // Small role badge shown next to a name — used both in the Members panel
 // and (for HR/Team Lead) next to a sender's name on their messages, so
 // anyone reading the channel can immediately tell who's HR/Admin/a Team
@@ -101,23 +39,6 @@ function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; onOpen: 
 // recolors the whole bubble); this covers the two roles that previously had
 // no visual distinction at all. Returns null for a plain employee — no
 // badge needed there.
-type RoleBadgeInfo = { label: string; icon: React.ComponentType<{ className?: string }>; text: string; bg: string };
-function roleBadgeInfo(role?: string): RoleBadgeInfo | null {
-  if (role === 'admin') return { label: 'Admin', icon: Crown, text: 'text-purple-700', bg: 'bg-purple-100' };
-  if (role === 'hr') return { label: 'HR', icon: Headset, text: 'text-sky-700', bg: 'bg-sky-100' };
-  if (role === 'team_lead') return { label: 'Team Lead', icon: Star, text: 'text-amber-700', bg: 'bg-amber-100' };
-  return null;
-}
-function RoleBadge({ role, className = '' }: { role?: string; className?: string }) {
-  const info = roleBadgeInfo(role);
-  if (!info) return null;
-  const Icon = info.icon;
-  return (
-    <span className={`flex items-center gap-0.5 ${info.bg} ${info.text} text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${className}`}>
-      <Icon className="h-2.5 w-2.5" /> {info.label}
-    </span>
-  );
-}
 
 interface TeamChatViewProps {
   teams: Team[];
@@ -136,110 +57,17 @@ interface TeamChatViewProps {
   mobileSelectorStyle?: 'horizontal' | 'dropdown';
 }
 
-const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024; // matches the collection's new maxSize
-
-function formatTimestamp(iso: string): string {
-  try {
-    const d = new Date(iso);
-    // "Today" is judged in America/New_York, not the device's local
-    // timezone — every clock in the app is fixed to that one timezone, see
-    // src/lib/timezone.ts.
-    const sameDay = getNYDateString(d) === getNYDateString(new Date());
-    const time = formatTimeNY(d);
-    return sameDay ? time : `${formatShortDateNY(d)} · ${time}`;
-  } catch {
-    return iso;
-  }
-}
-
-function isImageAttachment(name?: string): boolean {
-  if (!name) return false;
-  return /\.(png|jpe?g|gif|webp)$/i.test(name);
-}
-
-type FileTypeFilter = 'all' | 'image' | 'document' | 'other' | 'none' | 'announcement';
-type SizeFilter = 'all' | 'small' | 'medium' | 'large';
-
-function attachmentKind(name?: string): 'image' | 'document' | 'other' | 'none' {
-  if (!name) return 'none';
-  if (isImageAttachment(name)) return 'image';
-  if (/\.(pdf|docx?|xlsx?|txt)$/i.test(name)) return 'document';
-  return 'other';
-}
-
-function formatBytes(bytes?: number): string {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 // Small (<1MB) / Medium (1-5MB) / Large (>5MB) — coarse buckets, matches
 // the sizes people actually think in rather than exact byte ranges.
-function sizeBucket(bytes?: number): SizeFilter {
-  if (!bytes && bytes !== 0) return 'all';
-  if (bytes < 1024 * 1024) return 'small';
-  if (bytes < 5 * 1024 * 1024) return 'medium';
-  return 'large';
-}
-
 // Display tag for a forwarded message's card — see the "Forward" action
 // on tickets/announcements/chat messages (hrActions.forwardToHrAdminLine
 // in hrData.ts) and the m.isForward rendering branch below.
-const FORWARD_KIND_LABEL: Record<'ticket' | 'announcement' | 'chat', string> = {
-  ticket: 'Forwarded → Ticket',
-  announcement: 'Forwarded → Announcement',
-  chat: 'Forwarded → Message',
-};
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 // Highlights "@Display Name" mentions AND "#Document Title" tags in message
 // text. Doc tags are matched against whichever documents currently exist
 // for this team (same "resolve live, don't trust the snapshot" approach as
 // mentions) and render as clickable links straight to the file — that's
 // the "tag a document to ask questions about it" feature: typing #Title in
 // chat both highlights it and opens the doc for anyone reading the thread.
-function renderMessageText(
-  text: string,
-  mentionLabels: string[],
-  docTags: { title: string; url: string }[],
-  onColoredBubble: boolean
-): React.ReactNode {
-  if (!text) return null;
-  const mentionSet = new Set(mentionLabels.map(l => `@${l}`));
-  const docByTag = new Map(docTags.map(d => [`#${d.title}`, d.url]));
-  if (mentionSet.size === 0 && docByTag.size === 0) return text;
-
-  const mentionAlt = [...mentionLabels].sort((a, b) => b.length - a.length).map(escapeRegExp);
-  const docAlt = docTags.map(d => d.title).sort((a, b) => b.length - a.length).map(escapeRegExp);
-  const patterns = [
-    ...(mentionAlt.length ? [`@(?:${mentionAlt.join('|')})`] : []),
-    ...(docAlt.length ? [`#(?:${docAlt.join('|')})`] : []),
-  ];
-  const re = new RegExp(`(${patterns.join('|')})`, 'g');
-  const parts = text.split(re);
-  const mentionClass = onColoredBubble
-    ? 'font-bold bg-white/25 rounded px-1'
-    : 'font-bold text-orange-700 bg-orange-100 rounded px-1';
-  const docClass = onColoredBubble
-    ? 'font-bold bg-white/25 rounded px-1 underline underline-offset-2 cursor-pointer'
-    : 'font-bold text-sky-700 bg-sky-100 rounded px-1 underline underline-offset-2 cursor-pointer';
-  return parts.map((part, i) => {
-    if (mentionSet.has(part)) return <span key={i} className={mentionClass}>{part}</span>;
-    const docUrl = docByTag.get(part);
-    if (docUrl) {
-      return (
-        <a key={i} href={docUrl} target="_blank" rel="noreferrer" className={docClass}>
-          {part}
-        </a>
-      );
-    }
-    return <React.Fragment key={i}>{part}</React.Fragment>;
-  });
-}
 
 export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRole, allProfiles, oversight = false, includeHrDirectChannel = false, mobileSelectorStyle = 'horizontal' }: TeamChatViewProps) {
   const me = allProfiles.find(p => p.email.toLowerCase() === currentUserEmail.toLowerCase());
@@ -799,16 +627,16 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
       {/* Mobile Dropdown selector (only shown on mobile when requested) */}
       {teams.length > 1 && mobileSelectorStyle === 'dropdown' && (
         <div className="md:hidden shrink-0 px-1">
-          <select
+          <Select
             value={activeTeamId || ''}
             onChange={(e) => setActiveTeamId(e.target.value)}
-            className="w-full bg-slate-100 border-none text-slate-700 text-sm font-bold rounded-xl px-4 py-3 appearance-none outline-none focus:ring-2 focus:ring-orange-500/50"
+            fieldSize="md" className="appearance-none"
             style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', backgroundPosition: 'right 1rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1rem' }}
           >
             {teams.map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 
@@ -911,25 +739,25 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
           <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3 shrink-0 space-y-2.5">
             <SearchInput fieldSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search messages, senders, or file names…" />
             <div className="flex flex-wrap gap-2 items-center">
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-semibold outline-none focus:border-orange-500" />
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} fieldSize="md" />
               <span className="text-[10px] text-slate-400 font-bold">to</span>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-semibold outline-none focus:border-orange-500" />
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} fieldSize="md" />
 
-              <select value={fileTypeFilter} onChange={e => setFileTypeFilter(e.target.value as FileTypeFilter)} className="bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-bold outline-none focus:border-orange-500">
+              <Select value={fileTypeFilter} onChange={e => setFileTypeFilter(e.target.value as FileTypeFilter)} fieldSize="md">
                 <option value="all">All types</option>
                 <option value="image">Images</option>
                 <option value="document">Documents</option>
                 <option value="other">Other files</option>
                 <option value="none">Text only</option>
                 <option value="announcement">Announcements</option>
-              </select>
+              </Select>
 
-              <select value={sizeFilter} onChange={e => setSizeFilter(e.target.value as SizeFilter)} className="bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-bold outline-none focus:border-orange-500">
+              <Select value={sizeFilter} onChange={e => setSizeFilter(e.target.value as SizeFilter)} fieldSize="md">
                 <option value="all">Any size</option>
                 <option value="small">Small (&lt;1MB)</option>
                 <option value="medium">Medium (1–5MB)</option>
                 <option value="large">Large (&gt;5MB)</option>
-              </select>
+              </Select>
 
               {hasActiveFilters && (
                 <button
@@ -944,252 +772,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
         )}
 
         {activePanel === 'chat' && (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
-          {messages.length >= messageLimit && (
-            <div className="text-center py-2">
-              <button
-                onClick={() => setMessageLimit(prev => prev + 50)}
-                className="text-[11px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-colors"
-              >
-                Load earlier messages
-              </button>
-            </div>
-          )}
-          {isLoading && <ChatSkeleton />}
-          {!isLoading && messages.length === 0 && (
-            <EmptyState py={6} size="xs">No messages yet — say hi 👋</EmptyState>
-          )}
-          {!isLoading && messages.length > 0 && filteredMessages.length === 0 && (
-            <EmptyState py={6} size="xs">No messages match your search/filters.</EmptyState>
-          )}
-          {filteredMessages.map(m => {
-            const isSelf = m.senderEmail.toLowerCase() === currentUserEmail.toLowerCase();
-            const label = senderLabel(m);
-            // Admin is auto-a-member of every team channel and can post
-            // anywhere — their messages get a distinct highlighted look
-            // (purple + crown badge) in every viewer's chat, self or not,
-            // so they're unmistakable next to regular team messages.
-            const senderRole = emailToProfile.get(normEmail(m.senderEmail))?.role;
-            const isAdminSender = senderRole === 'admin';
-
-            // Announcements render full-width and pinned-banner styled,
-            // not as a left/right chat bubble — they're meant to stand out
-            // from the regular back-and-forth, not blend into it.
-            if (m.isAnnouncement) {
-              return (
-                <div key={m.id} className="border-2 border-amber-300 bg-amber-50 rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">
-                    <Megaphone className="h-3.5 w-3.5" /> Announcement · {label}
-                    {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                    <span className="text-slate-400 font-semibold normal-case ml-auto flex items-center gap-1.5">
-                      {formatTimestamp(m.timestamp)}
-                      {canForward && (
-                        <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors">
-                          <Forward className="h-3 w-3" />
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                  {m.text && (
-                    <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap break-words">
-                      {renderMessageText(m.text, mentionLabels, docTagList, false)}
-                    </p>
-                  )}
-                  {m.attachmentUrl && (
-                    isImageAttachment(m.attachmentName) ? (
-                      <button
-                        type="button"
-                        onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
-                        className={m.text ? 'block mt-2' : 'block'}
-                      >
-                        <OptimizedImage
-                          src={m.attachmentUrl}
-                          alt={m.attachmentName || 'attachment'}
-                          width={400}
-                          height={220}
-                          className="rounded-lg max-h-56 object-cover"
-                        />
-                      </button>
-                    ) : (
-                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline text-amber-700 ${m.text ? 'mt-2' : ''}`}>
-                        <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
-                      </a>
-                    )
-                  )}
-                  {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
-                </div>
-              );
-            }
-
-            // Forwarded messages (HR & Admin Line — see
-            // hrActions.forwardToHrAdminLine in hrData.ts) render as their
-            // own distinct card — role-colored border on a white
-            // background, not the amber full-width banner Announcements
-            // use above — but still sit left/right in the normal
-            // sender-flow like a regular bubble, sized to their content
-            // rather than stretching the full width of the thread.
-            if (m.isForward) {
-              const kindLabel = m.forwardKind ? FORWARD_KIND_LABEL[m.forwardKind] : 'Forwarded';
-              const originalHref = m.forwardKind && m.forwardLink
-                // View-original link is resolved from the raw stored id at
-                // render time using the *viewer's* own role (this channel
-                // is read by both hr and admin) — see the forwardLink
-                // comment on the Message interface in hrData.ts.
-                ? buildNotificationLink(currentUserRole === 'admin' ? 'admin' : 'hr', m.forwardKind, m.forwardLink)
-                : undefined;
-              // Forwarded messages only ever land in the HR & Admin Line
-              // (see hrActions.forwardToHrAdminLine — nothing else posts
-              // isForward: true), so the card is always role-colored: same
-              // purple/sky pairing as roleBadgeInfo(), reused here so "who
-              // forwarded this" reads at a glance the same way "who sent
-              // this" does on a regular message below — a white card with a
-              // colored border/accent, not a solid color fill, so it still
-              // reads as part of the app rather than a loud banner.
-              const c = isAdminSender
-                ? { border: 'border-purple-300', text: 'text-purple-700', tag: 'bg-purple-50', btnHover: 'hover:bg-purple-600 hover:border-purple-600' }
-                : { border: 'border-sky-300', text: 'text-sky-700', tag: 'bg-sky-50', btnHover: 'hover:bg-sky-600 hover:border-sky-600' };
-              // Sits in the same left/right-by-sender flow as a regular
-              // bubble below (own messages on your right, the other
-              // person's on your left) and only ever takes up as much
-              // width as its content needs, capped at 75% — it's a
-              // distinct card, not a full-width banner like Announcements.
-              return (
-                <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
-                  <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
-                  <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-                    <div className={`border ${c.border} bg-white rounded-xl px-4 py-3 ${isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
-                      <div className={`flex items-center gap-1.5 text-[10px] font-black ${c.text} uppercase tracking-wider mb-1`}>
-                        <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
-                        {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                        <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
-                      </div>
-                      {m.forwardLabel && (
-                        <p className="text-xs font-bold text-slate-800 break-words">{m.forwardLabel}</p>
-                      )}
-                      {m.forwardNote && (
-                        <p className="text-xs font-medium text-slate-600 italic mt-1 whitespace-pre-wrap break-words">&ldquo;{m.forwardNote}&rdquo;</p>
-                      )}
-                      {m.attachmentUrl && (
-                        isImageAttachment(m.attachmentName) ? (
-                          <button
-                            type="button"
-                            onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
-                            className="block mt-2"
-                          >
-                            <OptimizedImage
-                              src={m.attachmentUrl}
-                              alt={m.attachmentName || 'attachment'}
-                              width={400}
-                              height={220}
-                              className="rounded-lg max-h-56 object-cover"
-                            />
-                          </button>
-                        ) : (
-                          <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline ${c.text} mt-2`}>
-                            <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
-                          </a>
-                        )
-                      )}
-                      {originalHref && (
-                        // Styled as a small pill button (not a plain text link) —
-                        // the point of a forward card is a one-glance "here's the
-                        // thing, click to jump straight to it" affordance.
-                        <a
-                          href={originalHref}
-                          className={`inline-flex items-center gap-1.5 text-[11px] font-black ${c.text} bg-white border ${c.border} rounded-full px-2.5 py-1 mt-2 ${c.btnHover} hover:text-white transition-colors`}
-                        >
-                          View original <ExternalLink className="h-3 w-3 shrink-0" />
-                        </a>
-                      )}
-                    </div>
-                    {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
-                  </div>
-                </div>
-              );
-            }
-
-            // HR & Admin Line: a white card with a role-colored border/
-            // text (purple for Admin, sky for HR — same pairing as
-            // roleBadgeInfo() and the Forwarded cards above) instead of the
-            // solid self/other fill used everywhere else. The point of this
-            // channel is "who sent this, HR or Admin" being obvious to BOTH
-            // sides regardless of which one of them is reading it right
-            // now — a self-vs-other color scheme can't do that (it'd show
-            // the same message in a different color to each viewer), so it
-            // only applies here; Team Chat/DMs keep their normal bubbles.
-            const hrAdminColor = isAdminSender
-              ? { border: 'border-purple-300', text: 'text-purple-700', name: 'text-purple-700' }
-              : { border: 'border-sky-300', text: 'text-sky-700', name: 'text-sky-700' };
-            return (
-              <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
-                <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
-                <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`text-[10px] font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
-                    {isAdminSender ? (
-                      <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
-                        <Crown className="h-2.5 w-2.5" /> Admin
-                      </span>
-                    ) : (
-                      <RoleBadge role={senderRole} />
-                    )}
-                    <span className="text-[9px] text-slate-400 font-semibold">{formatTimestamp(m.timestamp)}</span>
-                    {canForward && (
-                      <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors">
-                        <Forward className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                  <div className={`rounded-2xl px-3.5 py-2.5 text-xs font-medium leading-relaxed ${
-                    isHrAdminLine
-                      ? `bg-white border ${hrAdminColor.border} text-slate-800 ` + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
-                      : isAdminSender
-                        ? 'bg-purple-600 text-white ring-2 ring-purple-200 ' + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
-                        : isSelf ? 'bg-orange-600 text-white rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'
-                  }`}>
-                    {m.text && (
-                      <p className="whitespace-pre-wrap break-words">
-                        {renderMessageText(m.text, mentionLabels, docTagList, !isHrAdminLine && (isAdminSender || isSelf))}
-                      </p>
-                    )}
-                    {m.attachmentUrl && (
-                      isImageAttachment(m.attachmentName) ? (
-                        <button
-                          type="button"
-                          onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
-                          className={m.text ? 'block mt-2' : 'block'}
-                        >
-                          <OptimizedImage
-                            src={m.attachmentUrl}
-                            alt={m.attachmentName || 'attachment'}
-                            width={400}
-                            height={220}
-                            className="rounded-lg max-h-56 object-cover"
-                          />
-                        </button>
-                      ) : (
-                        <a
-                          href={m.attachmentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`flex items-center gap-1.5 text-[11px] font-bold underline ${m.text ? 'mt-2' : ''} ${
-                            isHrAdminLine ? hrAdminColor.text : (isAdminSender || isSelf ? 'text-white' : 'text-orange-700')
-                          }`}
-                        >
-                          <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'}
-                          {m.attachmentSize !== undefined && <span className="font-semibold opacity-80">({formatBytes(m.attachmentSize)})</span>}
-                          <Download className="h-3 w-3 shrink-0" />
-                        </a>
-                      )
-                    )}
-                  </div>
-                  {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
-                </div>
-              </div>
-            );
-          })}
-          <TypingIndicator names={typingNames} />
-        </div>
+        <ChatMessageList scrollRef={scrollRef} messages={messages} messageLimit={messageLimit} setMessageLimit={setMessageLimit} isLoading={isLoading} filteredMessages={filteredMessages} currentUserEmail={currentUserEmail} senderLabel={senderLabel} emailToProfile={emailToProfile} normEmail={normEmail} canForward={canForward} openForwardModal={openForwardModal} mentionLabels={mentionLabels} docTagList={docTagList} setLightboxSrc={setLightboxSrc} setLightboxName={setLightboxName} viewersForMessage={viewersForMessage} openMessageViewers={openMessageViewers} currentUserRole={currentUserRole} isHrAdminLine={isHrAdminLine} typingNames={typingNames} />
         )}
         {activePanel === 'chat' && (
           /* Uses arbitrary-value padding-bottom (below) instead of
@@ -1200,165 +783,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
              here on purpose, not the curly-brace JSX-children form,
              since this sits right after the && opening paren — still a
              plain JS expression slot, not JSX children. */
-          <div className="border-t border-slate-200 px-2 md:px-3 pt-2 md:pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] shrink-0 relative bg-white">
-            {oversight && (
-              <p className="text-[9px] text-purple-600 font-bold mb-2 flex items-center gap-1"><Crown className="h-3 w-3" /> Posting as Admin — this message will be highlighted for everyone in {activeTeam?.name || 'this team'}.</p>
-            )}
-            {draftIsAnnouncement && (
-              <p className="text-[9px] text-amber-700 font-bold mb-2 flex items-center gap-1"><Megaphone className="h-3 w-3" /> Sending as a pinned Announcement — everyone in {activeTeam?.name || 'this team'} will see it highlighted at the top.</p>
-            )}
-            {sendError && <p className="text-[10px] text-rose-600 font-bold mb-1.5 px-1">{sendError}</p>}
-            {pendingFile && (
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 mb-2 text-[10px] font-bold text-slate-600">
-                <Paperclip className="h-3 w-3" /> {pendingFile.name}
-                <button onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="ml-auto text-slate-400 hover:text-rose-600">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* @mention suggestion dropdown */}
-            {mention && mentionSuggestions.length > 0 && (
-              <div className="absolute bottom-full left-3 mb-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10">
-                {mentionSuggestions.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); pickMention(p); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-orange-50 transition-colors"
-                  >
-                    <Avatar src={p.profilePicture} name={displayName(p, currentUserRole)} size={22} />
-                    <span className="text-xs font-bold text-slate-800 truncate">{displayName(p, currentUserRole)}</span>
-                    {p.role === 'admin' && <Crown className="h-3 w-3 text-purple-600 ml-auto shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* "#" document-tag suggestion dropdown */}
-            {docTag && docTagSuggestions.length > 0 && (
-              <div className="absolute bottom-full left-3 mb-1 w-64 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10">
-                {docTagSuggestions.map(d => (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onMouseDown={e => { e.preventDefault(); pickDocTag(d); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-sky-50 transition-colors"
-                  >
-                    <FileText className="h-3.5 w-3.5 text-sky-600 shrink-0" />
-                    <span className="text-xs font-bold text-slate-800 truncate">{d.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {docTag && docTagSuggestions.length === 0 && teamDocuments.length === 0 && (
-              <div className="absolute bottom-full left-3 mb-1 w-64 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10 px-3 py-2">
-                <span className="text-[10px] text-slate-400 font-semibold">No documents in this team yet.</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1.5 md:gap-2">
-              <label className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 cursor-pointer transition-colors shrink-0 flex items-center justify-center" title="Attach file">
-                <Paperclip className="h-4 w-4" />
-                <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFilePick(e.target.files?.[0])} />
-              </label>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const meetLink = 'https://meet.google.com/new';
-                  const title = `🎥 Google Meet Video Room\nClick to join video call: ${meetLink}`;
-                  setDraft(prev => prev ? `${prev}\n${title}` : title);
-                }}
-                title="Create Google Meet Video Call"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center transition-colors shrink-0"
-              >
-                <Video className="h-4 w-4" />
-              </button>
-              
-              {oversight && (
-                <button
-                  type="button"
-                  onClick={() => setDraftIsAnnouncement(v => !v)}
-                  title="Send as Announcement"
-                  className={`h-8 w-8 md:h-9 md:w-9 rounded-full flex items-center justify-center transition-colors shrink-0 ${
-                    draftIsAnnouncement ? 'bg-amber-500 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
-                  }`}
-                >
-                  <Megaphone className="h-4 w-4" />
-                </button>
-              )}
-
-              <div className="relative flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-3xl pl-1 pr-3">
-                <div ref={emojiWrapperRef} className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker(v => !v)}
-                    title="Insert emoji"
-                    className={`p-2 rounded-full transition-colors flex items-center justify-center ${
-                      showEmojiPicker ? 'text-orange-600' : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    <Smile className="h-4 w-4" />
-                  </button>
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-full left-0 mb-2">
-                      <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmojiPicker(false)} />
-                    </div>
-                  )}
-                </div>
-                
-                <textarea
-                  ref={textareaRef}
-                  value={draft}
-                  onChange={handleDraftChange}
-                  onKeyDown={e => {
-                    if (mention && mentionSuggestions.length > 0 && (e.key === 'Enter' || e.key === 'Tab')) {
-                      e.preventDefault();
-                      pickMention(mentionSuggestions[0]);
-                      return;
-                    }
-                    if (mention && e.key === 'Escape') {
-                      e.preventDefault();
-                      setMention(null);
-                      return;
-                    }
-                    if (docTag && docTagSuggestions.length > 0 && (e.key === 'Enter' || e.key === 'Tab')) {
-                      e.preventDefault();
-                      pickDocTag(docTagSuggestions[0]);
-                      return;
-                    }
-                    if (docTag && e.key === 'Escape') {
-                      e.preventDefault();
-                      setDocTag(null);
-                      return;
-                    }
-                    // Same reasoning as TicketsView's reply box: on the native
-                    // mobile app the keyboard's Enter/Return key should only
-                    // ever insert a newline (there's no Shift key on a phone),
-                    // so gate the "Enter sends" shortcut to desktop web only.
-                    if (e.key === 'Enter' && !e.shiftKey && !isNativeMobileApp()) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder={draftIsAnnouncement ? 'Announcement…' : 'Message… (@ to mention)'}
-                  rows={1}
-                  className="flex-1 bg-transparent py-2 md:py-2.5 px-1 text-[10px] md:text-[11px] outline-none font-medium resize-none max-h-24 min-h-8 md:min-h-9 w-full"
-                />
-              </div>
-
-              <button
-                onClick={handleSend}
-                disabled={sending || (!draft.trim() && !pendingFile)}
-                className={`h-8 w-8 md:h-9 md:w-9 rounded-full flex items-center justify-center disabled:opacity-50 text-white transition-colors transition-transform active:scale-95 shrink-0 ${
-                  draftIsAnnouncement ? 'bg-amber-500 hover:bg-amber-600' : 'bg-orange-600 hover:bg-orange-700'
-                }`}
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
+          <ChatComposer oversight={oversight} activeTeam={activeTeam} draftIsAnnouncement={draftIsAnnouncement} sendError={sendError} pendingFile={pendingFile} setPendingFile={setPendingFile} fileInputRef={fileInputRef} mention={mention} mentionSuggestions={mentionSuggestions} pickMention={pickMention} currentUserRole={currentUserRole} docTag={docTag} docTagSuggestions={docTagSuggestions} pickDocTag={pickDocTag} teamDocuments={teamDocuments} handleFilePick={handleFilePick} setDraft={setDraft} setDraftIsAnnouncement={setDraftIsAnnouncement} emojiWrapperRef={emojiWrapperRef} setShowEmojiPicker={setShowEmojiPicker} showEmojiPicker={showEmojiPicker} insertEmoji={insertEmoji} textareaRef={textareaRef} draft={draft} handleDraftChange={handleDraftChange} setMention={setMention} setDocTag={setDocTag} handleSend={handleSend} sending={sending} />
         )}
       </div>
 
@@ -1447,12 +872,12 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               )}
             </div>
             <FormField label="Note (optional)">
-              <textarea
+              <Textarea
                 value={forwardNote}
                 onChange={e => setForwardNote(e.target.value)}
                 rows={2}
                 placeholder="Add a note for HR & Admin…"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
+                fieldSize="md" className="resize-none"
               />
             </FormField>
             {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}

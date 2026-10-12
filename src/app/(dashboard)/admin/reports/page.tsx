@@ -19,6 +19,7 @@ import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Ta
 import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { Select } from '@/components/ui/Input';
 
 export default function ReportsPage() {
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
@@ -187,28 +188,28 @@ export default function ReportsPage() {
 
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
+          <Select
             value={regionFilter}
             onChange={(e) => setRegionFilter(e.target.value as any)}
-            className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-lg py-2 px-3 text-xs outline-none font-semibold text-slate-700 cursor-pointer"
+            fieldSize="md" className="cursor-pointer"
           >
             <option value="All">All Regions</option>
             <option value="USA">USA Only</option>
             <option value="Pakistan">Pakistan (Remote)</option>
-          </select>
+          </Select>
         </div>
 
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
+          <Select
             value={onboardingFilter}
             onChange={(e) => setOnboardingFilter(e.target.value as any)}
-            className="w-full bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-lg py-2 px-3 text-xs outline-none font-semibold text-slate-700 cursor-pointer"
+            fieldSize="md" className="cursor-pointer"
           >
             <option value="All">All Onboarding Status</option>
             <option value="Completed">Completed Onboarding</option>
             <option value="Pending">Pending Onboarding</option>
-          </select>
+          </Select>
         </div>
       </div>
 

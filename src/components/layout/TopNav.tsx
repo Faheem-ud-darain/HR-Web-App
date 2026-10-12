@@ -12,6 +12,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { getSessionEmail, getSessionRole, clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 import { formatRelativeDateNY } from '@/lib/timezone';
+import { SearchInput } from '@/components/ui/SearchInput';
 
 // The bell only ever showed a bare time-of-day string (e.g. "3:02 AM") with
 // no date — that's all `notification.timestamp` ever contained (see
@@ -247,8 +248,9 @@ export function TopNav() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTasks, allWarehouses, allPayroll, allLeaves, allCareers, allAnnouncements]);
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => handleSearchValue(e.target.value);
+
+  const handleSearchValue = (val: string) => {
     setSearch(val);
     performSearch(val);
     window.dispatchEvent(new CustomEvent('globalSearch', { detail: val }));
@@ -531,14 +533,14 @@ export function TopNav() {
 
         {/* Desktop Search Bar — hidden on mobile */}
         <div className="hidden md:flex flex-1 items-center max-w-md relative">
-          <Search className="absolute left-3 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
+          <SearchInput
+            fieldSize="pill"
+            wrapperClassName="w-full"
+            style={{ paddingLeft: '2.5rem' }}
             value={search}
-            onChange={handleSearchChange}
+            onChange={handleSearchValue}
             onFocus={() => { setSearchActive(true); if (search.trim()) setShowResults(true); }}
             placeholder="Search employees, tasks, payroll, leaves..."
-            className="w-full bg-slate-100/80 border border-transparent rounded-full py-1.5 pl-10 pr-4 text-sm focus:border-orange-500 focus:bg-white outline-none text-slate-900 transition-colors font-semibold"
           />
           {showResults && search.trim().length > 0 && <SearchResults />}
         </div>

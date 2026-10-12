@@ -18,12 +18,14 @@ import React, { createContext, useContext } from 'react';
 // `density` is set once on <Table> and inherited by every Th/Td, so header
 // and body padding can never drift apart (a Th/Td may still override it).
 
-export type TableDensity = 'comfortable' | 'cozy' | 'compact';
+export type TableDensity = 'comfortable' | 'cozy' | 'compact' | 'tight';
 
 const CELL_PADDING: Record<TableDensity, string> = {
   comfortable: 'px-6 py-4',
   cozy: 'px-5 py-3',
   compact: 'px-4 py-2.5',
+  // Nested log lists inside a panel that already has its own horizontal padding.
+  tight: 'py-1.5',
 };
 
 const ALIGN = { left: '', center: 'text-center', right: 'text-right' } as const;

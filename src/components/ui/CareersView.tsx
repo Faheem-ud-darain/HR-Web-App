@@ -17,7 +17,7 @@ import {
 } from '@/lib/hrData';
 import { MapPin, Plus, Trash2, CheckCircle2, ArrowRight, X, Briefcase, FileText, Users, AlertTriangle, Gift, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -460,22 +460,22 @@ export function CareersView({ role }: CareersViewProps) {
             <div className="space-y-3">
               {/* Filters */}
               <div className="flex flex-wrap gap-2 pb-3 border-b border-slate-200">
-                <select
+                <Select
                   value={appPositionFilter}
                   onChange={e => setAppPositionFilter(e.target.value)}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 outline-none focus:border-orange-500"
+                  fieldSize="md"
                 >
                   <option value="All">All Positions</option>
                   {positionTitles.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select
+                </Select>
+                <Select
                   value={appStatusFilter}
                   onChange={e => setAppStatusFilter(e.target.value as CareerApplicationStatus | 'All')}
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 outline-none focus:border-orange-500"
+                  fieldSize="md"
                 >
                   <option value="All">All Statuses</option>
                   {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                </Select>
                 <span className="ml-auto self-center text-[10px] font-semibold text-slate-400">
                   {filteredApps.length} of {applications.length} shown
                 </span>
@@ -515,14 +515,14 @@ export function CareersView({ role }: CareersViewProps) {
                           )}
                           <div className="flex items-center gap-2 pt-1">
                             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Status</label>
-                            <select
+                            <Select
                               value={app.status}
                               disabled={statusUpdating === app.id}
                               onChange={e => handleStatusChange(app.id, e.target.value as CareerApplicationStatus)}
-                              className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 outline-none focus:border-orange-500 disabled:opacity-50"
+                              fieldSize="md" className="disabled:opacity-50"
                             >
                               {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                            </select>
+                            </Select>
                           </div>
                         </div>
                       )}
@@ -582,22 +582,22 @@ export function CareersView({ role }: CareersViewProps) {
           </div>
 
           <FormField label="Description *">
-            <textarea 
+            <Textarea 
               required 
               rows={3} 
               value={desc} 
               onChange={e => setDesc(e.target.value)} 
-              className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold resize-none"
+              fieldSize="lg" className="resize-none"
               placeholder="Provide details about the role..." 
             />
           </FormField>
 
           <FormField label="Requirements (One per line)">
-            <textarea 
+            <Textarea 
               rows={3} 
               value={reqsText} 
               onChange={e => setReqsText(e.target.value)} 
-              className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+              fieldSize="lg"
               placeholder="Requirement 1&#10;Requirement 2&#10;Requirement 3" 
             />
           </FormField>
@@ -648,11 +648,11 @@ export function CareersView({ role }: CareersViewProps) {
                 />
               </FormField>
               <FormField label="Cover Letter / Note">
-                <textarea 
+                <Textarea 
                   rows={3} 
                   value={coverLetter} 
                   onChange={e => setCoverLetter(e.target.value)} 
-                  className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold resize-none"
+                  fieldSize="lg" className="resize-none"
                   placeholder="Say hello or detail your fit..." 
                 />
               </FormField>

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { ListSkeleton } from '@/components/ui/Skeleton';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function HRTeamsPage() {
   const { data: allProfiles = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
@@ -541,12 +542,12 @@ export default function HRTeamsPage() {
         )}
         <form onSubmit={handleCreateTeam} className="flex flex-col sm:flex-row gap-3 items-center">
           <div className="flex-1 w-full space-y-1">
-            <input
+            <Input
               type="text"
               value={newTeamName}
               onChange={(e) => setNewTeamName(e.target.value)}
               placeholder="Enter team/department name (e.g. Quality Assurance)"
-              className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             />
           </div>
           <button
@@ -623,18 +624,18 @@ export default function HRTeamsPage() {
                       phones. This calls the exact same assignEmployeeToTeam()
                       path the desktop drag-and-drop uses. */}
                   {teamNames.length > 0 && (
-                    <select
+                    <Select
                       value=""
                       onChange={e => { if (e.target.value) { assignEmployeeToTeam(emp, e.target.value); e.target.value = ''; } }}
                       onClick={e => e.stopPropagation()}
                       onMouseDown={e => e.stopPropagation()}
-                      className="md:hidden mt-2.5 w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-bold text-slate-700 outline-none focus:border-orange-500"
+                      fieldSize="md" className="md:hidden mt-2.5"
                     >
                       <option value="">Assign to team…</option>
                       {teamNames.filter(t => !findTeamByName(t)?.members.includes(emp.email)).map(t => (
                         <option key={t} value={t}>{t}</option>
                       ))}
-                    </select>
+                    </Select>
                   )}
                 </Card>
               </div>
@@ -662,20 +663,20 @@ export default function HRTeamsPage() {
                   <div className="flex justify-between items-center mb-3">
                     <span className="font-bold text-xs text-slate-700 uppercase tracking-wider">{teamName}</span>
                     <div className="flex items-center gap-1.5">
-                      <select
+                      <Select
                         onChange={(e) => {
                           if (e.target.value) {
                             handleAssignWarehouseToTeam(teamName, e.target.value);
                             e.target.value = '';
                           }
                         }}
-                        className="text-[10px] font-bold bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 text-slate-500 focus:border-orange-500 outline-none max-w-[110px] truncate"
+                        fieldSize="md" className="max-w-[110px] truncate"
                       >
                         <option value="">+ Assign Wh</option>
                         {warehouses.map(wh => (
                           <option key={wh.id} value={wh.id}>{wh.name}</option>
                         ))}
-                      </select>
+                      </Select>
                       <button
                         onClick={() => handleDeleteTeam(teamName)}
                         disabled={deletingTeamName === teamName}
@@ -954,50 +955,50 @@ export default function HRTeamsPage() {
               <CardContent className="p-6">
                 <form onSubmit={handleCreateWarehouse} className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Warehouse Name *</label>
-                    <input 
+                    <FieldLabel size="muted">Warehouse Name *</FieldLabel>
+                    <Input 
                       type="text" 
                       required
                       value={whName}
                       onChange={e => setWhName(e.target.value)}
                       placeholder="e.g. Seattle Logistics Yard"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs focus:border-orange-500 outline-none text-slate-900"
+                      fieldSize="md"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Latitude *</label>
-                      <input 
+                      <FieldLabel size="muted">Latitude *</FieldLabel>
+                      <Input 
                         type="number" 
                         step="0.000001"
                         required
                         value={whLat}
                         onChange={e => setWhLat(e.target.value)}
                         placeholder="e.g. 47.6062"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs focus:border-orange-500 outline-none text-slate-900"
+                        fieldSize="md"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Longitude *</label>
-                      <input 
+                      <FieldLabel size="muted">Longitude *</FieldLabel>
+                      <Input 
                         type="number" 
                         step="0.000001"
                         required
                         value={whLon}
                         onChange={e => setWhLon(e.target.value)}
                         placeholder="e.g. -122.3321"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs focus:border-orange-500 outline-none text-slate-900"
+                        fieldSize="md"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Radius (meters) *</label>
-                      <input 
+                      <FieldLabel size="muted">Radius (meters) *</FieldLabel>
+                      <Input 
                         type="number" 
                         required
                         value={whRadius}
                         onChange={e => setWhRadius(e.target.value)}
                         placeholder="e.g. 500"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-xs focus:border-orange-500 outline-none text-slate-900"
+                        fieldSize="md"
                       />
                     </div>
                   </div>

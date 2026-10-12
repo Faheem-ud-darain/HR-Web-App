@@ -10,6 +10,7 @@ import { useWarehouses, useProfiles, hrActions } from '@/lib/hrData';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function AdminWarehousesPage() {
   const { data: warehouses = [], refetch: refetchWarehouses } = useWarehouses();
@@ -173,52 +174,52 @@ export default function AdminWarehousesPage() {
                   </div>
                 )}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Warehouse Name *</label>
-                  <input
+                  <FieldLabel size="muted">Warehouse Name *</FieldLabel>
+                  <Input
                     type="text"
                     required
                     value={whName}
                     onChange={e => setWhName(e.target.value)}
                     placeholder="e.g. Dallas Distribution Yard"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-3 text-xs focus:border-orange-500 outline-none text-slate-900 font-semibold"
+                    fieldSize="md"
                   />
                 </div>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Latitude *</label>
-                      <input
+                      <FieldLabel size="muted">Latitude *</FieldLabel>
+                      <Input
                         type="number"
                         step="0.000001"
                         required
                         value={whLat}
                         onChange={e => setWhLat(e.target.value)}
                         placeholder="e.g. 32.7767"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-3 text-xs focus:border-orange-500 outline-none text-slate-900 font-semibold"
+                        fieldSize="md"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Longitude *</label>
-                      <input
+                      <FieldLabel size="muted">Longitude *</FieldLabel>
+                      <Input
                         type="number"
                         step="0.000001"
                         required
                         value={whLon}
                         onChange={e => setWhLon(e.target.value)}
                         placeholder="e.g. -96.7970"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-3 text-xs focus:border-orange-500 outline-none text-slate-900 font-semibold"
+                        fieldSize="md"
                       />
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Radius (meters) *</label>
-                    <input
+                    <FieldLabel size="muted">Radius (meters) *</FieldLabel>
+                    <Input
                       type="number"
                       required
                       value={whRadius}
                       onChange={e => setWhRadius(e.target.value)}
                       placeholder="e.g. 500"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 px-3 text-xs focus:border-orange-500 outline-none text-slate-900 font-semibold"
+                      fieldSize="md"
                     />
                   </div>
                 </div>

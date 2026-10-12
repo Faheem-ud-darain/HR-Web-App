@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { ListSkeleton } from '@/components/ui/Skeleton';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 
 export default function AdminTasksPage() {
   const [doneDays, setDoneDays] = useState(30);
@@ -112,7 +113,7 @@ export default function AdminTasksPage() {
 
           {leadEmpId && (
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Lead of Teams</label>
+              <FieldLabel size="md">Lead of Teams</FieldLabel>
               {teams.map(t => (
                 <label key={t.id} className="flex items-center gap-2.5 cursor-pointer group">
                   <input
