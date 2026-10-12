@@ -5,10 +5,10 @@ import { useProfiles, useProfileSelf, updateProfileSelf, changeOwnPassword, hrAc
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { PasswordInput } from '@/components/ui/PasswordInput';
-import { AvatarCropperModal } from '@/components/ui/AvatarCropperModal';
+import { AvatarCropperModal } from '@/components/ui/lazy';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import { LoggedInDevicesCard } from '@/components/ui/LoggedInDevicesCard';
@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { formatDateNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 
 export default function EmployeeProfilePage() {
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
@@ -754,33 +756,30 @@ export default function EmployeeProfilePage() {
               <AlertCircle className="h-4 w-4" />{resetError}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Current Password</label>
+          <FormField label="Current Password" size="md">
             <PasswordInput
               value={currentPass}
               onChange={setCurrentPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Enter current password"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">New Password</label>
+          </FormField>
+          <FormField label="New Password" size="md">
             <PasswordInput
               value={newPass}
               onChange={setNewPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Min. 6 characters"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Confirm New Password</label>
+          </FormField>
+          <FormField label="Confirm New Password" size="md">
             <PasswordInput
               value={confirmPass}
               onChange={setConfirmPass}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
               placeholder="Repeat new password"
             />
-          </div>
+          </FormField>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isResetting} onClick={() => setIsResetOpen(false)}>Cancel</Button>
@@ -797,38 +796,33 @@ export default function EmployeeProfilePage() {
               <AlertCircle className="h-4 w-4" />{bankError}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Bank Name</label>
-            <input
+          <FormField label="Bank Name" size="md">
+            <Input
               type="text"
               value={bankNameInput}
               onChange={e => setBankNameInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
               placeholder="e.g. Habib Bank Limited"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Account Number</label>
-            <input
+          </FormField>
+          <FormField label="Account Number" size="md">
+            <Input
               type="text"
               value={accountNumberInput}
               onChange={e => setAccountNumberInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 font-mono"
+              fieldSize="md" className="font-mono"
               placeholder="Enter your account number"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-              {profile.region === 'USA' ? 'Routing Number' : 'IBAN'}
-            </label>
-            <input
+          </FormField>
+          <FormField label={<>{profile.region === 'USA' ? 'Routing Number' : 'IBAN'}</>} size="md">
+            <Input
               type="text"
               value={ibanInput}
               onChange={e => setIbanInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 font-mono"
+              fieldSize="md" className="font-mono"
               placeholder={profile.region === 'USA' ? 'e.g. 021000021' : 'e.g. PK12ABCD0000001234567890'}
             />
-          </div>
+          </FormField>
 
           <p className="text-[10px] text-slate-400 leading-relaxed">
             Changes to your bank details are saved immediately and visible to HR/Payroll for your next salary cycle.
@@ -849,26 +843,24 @@ export default function EmployeeProfilePage() {
               <AlertCircle className="h-4 w-4" />{phoneError}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Own Number</label>
-            <input
+          <FormField label="Own Number" size="md">
+            <Input
               type="tel"
               value={personalPhoneInput}
               onChange={e => setPersonalPhoneInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
               placeholder="e.g. +92 300 1234567"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Company Allocated Number (if applicable)</label>
-            <input
+          </FormField>
+          <FormField label="Company Allocated Number (if applicable)" size="md">
+            <Input
               type="tel"
               value={companyPhoneInput}
               onChange={e => setCompanyPhoneInput(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
               placeholder="Leave blank if none issued"
             />
-          </div>
+          </FormField>
 
           <p className="text-[10px] text-slate-400 leading-relaxed">
             Changes to your contact numbers are saved immediately and visible to HR/Admin.

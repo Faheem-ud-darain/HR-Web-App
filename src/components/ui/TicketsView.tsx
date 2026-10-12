@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenState, Profile, markTicketActivitySeen, displayName, isTechnicalSupportMember } from '@/lib/hrData';
 import { TypingIndicator } from './TypingIndicator';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Search, Forward } from 'lucide-react';
+import { HelpCircle, Plus, Send, Lock, RotateCcw, User, Mail, Calendar, Briefcase, Users, Eye, AlertCircle, Paperclip, X, FileText, Download, Headset, Loader2, ArrowLeft, Forward } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatDateTimeNY, formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
@@ -18,6 +18,10 @@ import { pushModal, popModal } from '@/lib/modalStack';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { useNativeKeyboard } from '@/hooks/useNativeKeyboard';
 import { Button } from '@/components/ui/Button';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 // Converts an uploaded attachment File to a storable data URL: images are
 // compressed to WebP (max 3 MB), PDFs are stored as-is after a size check
@@ -303,7 +307,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   };
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
-  const { data: allTickets, refetch: refetchTickets, isFetching: isFetchingTickets } = useTickets(
+  const { data: allTickets, isLoading: ticketsLoading, refetch: refetchTickets, isFetching: isFetchingTickets } = useTickets(
     ticketLimit,
     statusFilter === 'all' ? undefined : statusFilter,
   );
@@ -702,16 +706,7 @@ export function TicketsView({ role }: TicketsViewProps) {
               scrollable list, not inside it, so it stays visible/reachable
               regardless of scroll position. */}
           <div className="space-y-2">
-            <div className="relative">
-              <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder={isPrivileged ? 'Search by title, employee, or details…' : 'Search your tickets…'}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 outline-none focus:border-orange-500 placeholder:text-slate-400"
-              />
-            </div>
+            <SearchInput fieldSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder={isPrivileged ? 'Search by title, employee, or details…' : 'Search your tickets…'} />
             <div className="flex items-center justify-between gap-1.5 flex-wrap">
               <div className="flex items-center gap-1.5">
                 {(['all', 'open', 'closed'] as const).map(f => (
@@ -807,12 +802,13 @@ export function TicketsView({ role }: TicketsViewProps) {
                 </Card>
               );
             })}
-            {visibleTickets.length === 0 && tickets.length === 0 && (
+            {ticketsLoading && <ListSkeleton rows={5} />}
+            {!ticketsLoading && visibleTickets.length === 0 && tickets.length === 0 && (
               <div className="text-center py-12 text-slate-400 font-semibold italic text-xs border border-dashed border-slate-200 rounded-xl bg-white">
                 No tickets listed.
               </div>
             )}
-            {visibleTickets.length === 0 && tickets.length > 0 && (
+            {!ticketsLoading && visibleTickets.length === 0 && tickets.length > 0 && (
               <div className="text-center py-12 text-slate-400 font-semibold text-xs border border-dashed border-slate-200 rounded-xl bg-white space-y-2">
                 <p className="italic">No tickets match your filters.</p>
                 <button
@@ -1208,26 +1204,22 @@ export function TicketsView({ role }: TicketsViewProps) {
       {/* New ticket modal */}
       <Modal isOpen={isNewOpen} onClose={() => { setIsNewOpen(false); setNewTicketFile(null); setNewTicketFileError(''); }} title="File Support Ticket">
         <form onSubmit={handleOpenTicket} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Department *</label>
-            <select required value={department} onChange={e => setDepartment(e.target.value as 'hr' | 'technical')} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 appearance-none">
+          <FormField label="Department *" size="md">
+            <Select required value={department} onChange={e => setDepartment(e.target.value as 'hr' | 'technical')} fieldSize="md" className="appearance-none">
               <option value="hr">Human Resources</option>
               <option value="technical">Technical Team</option>
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Ticket Title / Topic *</label>
-            <input type="text" required value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900" placeholder="e.g. Salary discrepancy / System access issues" />
-          </div>
+          <FormField label="Ticket Title / Topic *" size="md">
+            <Input type="text" required value={title} onChange={e => setTitle(e.target.value)} fieldSize="md" placeholder="e.g. Salary discrepancy / System access issues" />
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Describe the Problem *</label>
-            <textarea required rows={4} value={desc} onChange={e => setDesc(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 resize-none" placeholder="Explain the situation in details so HR can assist you..." />
-          </div>
+          <FormField label="Describe the Problem *" size="md">
+            <Textarea required rows={4} value={desc} onChange={e => setDesc(e.target.value)} fieldSize="md" className="resize-none" placeholder="Explain the situation in details so HR can assist you..." />
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Attachment (optional)</label>
+          <FormField label="Attachment (optional)" size="md">
             {newTicketFileError && (
               <div className="p-2 text-[10px] bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />{newTicketFileError}
@@ -1250,7 +1242,7 @@ export function TicketsView({ role }: TicketsViewProps) {
               </button>
             )}
             <input ref={newTicketFileInputRef} type="file" accept="image/*,application/pdf" onChange={handleNewTicketFileChange} className="hidden" />
-          </div>
+          </FormField>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isOpeningTicket} onClick={() => { setIsNewOpen(false); setNewTicketFile(null); setNewTicketFileError(''); }}>Cancel</Button>
@@ -1336,8 +1328,7 @@ export function TicketsView({ role }: TicketsViewProps) {
               <p className="text-xs font-bold text-slate-800 break-words">{forwardingTicket.title}</p>
               <p className="text-xs text-slate-500 mt-1 line-clamp-3 break-words">{forwardingTicket.description}</p>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+            <FormField label="Note (optional)">
               <textarea
                 value={forwardNote}
                 onChange={e => setForwardNote(e.target.value)}
@@ -1345,7 +1336,7 @@ export function TicketsView({ role }: TicketsViewProps) {
                 placeholder="Add a note for HR & Admin…"
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
               />
-            </div>
+            </FormField>
             {forwardError && <p className="text-xs font-semibold text-rose-600">{forwardError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <Button

@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Profile, displayName } from '@/lib/hrData';
 import { TeamChatView } from './TeamChatView';
-import { Search } from 'lucide-react';
+import { SearchInput } from '@/components/ui/SearchInput';
 
 interface DirectMessagesViewProps {
   allProfiles: Profile[];
@@ -51,29 +51,11 @@ export function DirectMessagesView({ allProfiles, currentUserEmail, currentUserR
           <h1 className="text-2xl font-bold text-slate-900">Direct Messages</h1>
           <p className="text-slate-500 text-sm">Private conversations with individual employees.</p>
         </div>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search employees..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 outline-none"
-          />
-        </div>
+        <SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employees..." wrapperClassName="w-64" />
       </div>
       
       {/* Mobile search */}
-      <div className="md:hidden relative shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search employees..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:border-orange-500 outline-none"
-        />
-      </div>
+      <SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employees..." wrapperClassName="md:hidden shrink-0" />
 
       {teams.length > 0 ? (
         <TeamChatView

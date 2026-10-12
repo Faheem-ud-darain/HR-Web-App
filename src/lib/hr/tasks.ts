@@ -12,8 +12,8 @@ function toTask(t: any): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
 }
 
-export function useTasks() {
-  return useQuery({ queryKey: ['hr_tasks'], queryFn: async () => (await pbList('hr_tasks', { sort: '-created' })).map(toTask) });
+export function useTasks(options: { enabled?: boolean } = {}) {
+  return useQuery({ enabled: options.enabled ?? true, queryKey: ['hr_tasks'], queryFn: async () => (await pbList('hr_tasks', { sort: '-created' })).map(toTask) });
 }
 // Scoped variant for an employee's OWN dashboard — useTasks() above fetches
 // every task assigned to everyone in the company, which the employee

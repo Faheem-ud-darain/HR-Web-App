@@ -1,25 +1,30 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, hrActions, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { FileText, Search, Filter, ShieldCheck, Download, MapPin, Edit2, Monitor, Landmark, Loader2 } from 'lucide-react';
-import { UserProfileModal } from '@/components/ui/UserProfileModal';
-import { DocumentsModal } from '@/components/ui/DocumentsModal';
+import { FileText, Filter, ShieldCheck, Download, MapPin, Edit2, Monitor, Landmark, Loader2 } from 'lucide-react';
+import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
+import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function ReportsPage() {
-  const { data: employees = [], refetch: refetchProfiles } = useProfiles();
+  const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const { data: warehouses = [] } = useWarehouses();
-  const { data: timesheets = [] } = useTimesheets();
+  const [historyDays, setHistoryDays] = useState(60);
+  const { data: timesheets = [], isLoading: timesheetsLoading, isFetching: fetchingHistory } = useTimesheets({ days: historyDays });
   const [regionFilter, setRegionFilter] = useState<'All' | 'USA' | 'Pakistan'>('All');
   const [onboardingFilter, setOnboardingFilter] = useState<'All' | 'Completed' | 'Pending'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,18 +179,11 @@ export default function ReportsPage() {
         </button>
       </div>
 
+      <LoadMoreHistory days={historyDays} maxDays={365} loading={fetchingHistory} noun="shifts" onLoadMore={() => setHistoryDays(d => d + 60)} />
+
       {/* Filters row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search employee or role..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 hover:bg-slate-50/70 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-lg py-2 pl-9 pr-3 text-xs outline-none text-slate-800 font-medium"
-          />
-        </div>
+        <SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employee or role..." />
 
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
@@ -216,22 +214,26 @@ export default function ReportsPage() {
 
       {/* Main Table */}
       <Card className="overflow-hidden p-0 border border-slate-200">
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[950px] text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table minWidth={950}>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Employee</th>
-                <th className="px-6 py-4">Region</th>
-                <th className="px-6 py-4">Base Salary</th>
-                <th className="px-6 py-4">Onboarding</th>
-                <th className="px-6 py-4">Bank Details</th>
-                <th className="px-6 py-4 text-center">Actions</th>
+                <Th>Employee</Th>
+                <Th>Region</Th>
+                <Th>Base Salary</Th>
+                <Th>Onboarding</Th>
+                <Th>Bank Details</Th>
+                <Th align="center">Actions</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 bg-white">
+            </THead>
+            <TBody className="bg-white">
+{profilesLoading ? (
+  <TableSkeletonRows rows={8} cols={6} />
+) : (
+<>
               {pageItems.map((emp) => (
-                <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 cursor-pointer hover:bg-slate-100/70" onClick={() => setSelectedProfileEmail(emp.email)}>
+                <Tr key={emp.id}>
+                  <Td className="cursor-pointer hover:bg-slate-100/70" onClick={() => setSelectedProfileEmail(emp.email)}>
                     <div className="flex items-center gap-3">
                       <Avatar src={emp.profilePicture} name={emp.fullName} size={28} />
                       <div>
@@ -239,15 +241,15 @@ export default function ReportsPage() {
                         <div className="text-xs text-slate-400">{emp.email} · <span className="font-bold text-orange-600">{emp.jobTitle || 'Staff'}</span></div>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-slate-700">{emp.region || 'Pakistan'}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900">{formatMoney(emp.baseSalary, emp.region)}</td>
-                  <td className="px-6 py-4">
+                  </Td>
+                  <Td className="font-semibold text-slate-700">{emp.region || 'Pakistan'}</Td>
+                  <Td className="font-bold text-slate-900">{formatMoney(emp.baseSalary, emp.region)}</Td>
+                  <Td>
                     <Badge variant={emp.onboardingCompleted ? 'success' : 'warning'}>
                       {emp.onboardingCompleted ? 'Completed' : 'Pending'}
                     </Badge>
-                  </td>
-                  <td className="px-6 py-4">
+                  </Td>
+                  <Td>
                     {emp.bankName ? (
                       <div className="text-xs text-slate-600 leading-relaxed font-semibold">
                         <div className="flex items-center gap-1"><Landmark className="h-3 w-3 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
@@ -257,8 +259,8 @@ export default function ReportsPage() {
                     ) : (
                       <span className="text-xs text-slate-400 font-semibold italic">Details pending</span>
                     )}
-                  </td>
-                  <td className="px-6 py-4 text-center">
+                  </Td>
+                  <Td align="center">
                     <div className="flex flex-col sm:flex-row justify-center gap-2">
                       <button
                         onClick={() => handleOpenAssignModal(emp)}
@@ -279,19 +281,21 @@ export default function ReportsPage() {
                         <Download className="h-3.5 w-3.5" /> Documents
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
               {filteredEmployees.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400 font-semibold italic">
+                <Tr>
+                  <EmptyState as="td" colSpan={6} py={12}>
                     No employees matching the criteria found.
-                  </td>
-                </tr>
+                  </EmptyState>
+                </Tr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </>
+)}
+</TBody>
+          </Table>
+        </TableScroll>
         
         <div className="md:hidden space-y-3 p-4">
           {pageItems.map((emp) => (
@@ -337,10 +341,11 @@ export default function ReportsPage() {
               </div>
             </div>
           ))}
-          {filteredEmployees.length === 0 && (
-            <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+          {profilesLoading && <ListSkeleton rows={3} />}
+          {!profilesLoading && filteredEmployees.length === 0 && (
+            <EmptyState py={8} size="sm">
               No employees matching the criteria found.
-            </p>
+            </EmptyState>
           )}
         </div>
         <PaginationControls page={page} setPage={setPage} totalPages={totalPages} totalCount={filteredEmployees.length} itemLabel="employees" />
@@ -485,39 +490,45 @@ export default function ReportsPage() {
                 </button>
               </div>
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead className="font-bold text-slate-600 bg-slate-50 border-b border-slate-200 uppercase tracking-widest text-[9px]">
+                <TableScroll hideOnMobile>
+                  <Table density="compact" size="xs">
+                    <THead>
                       <tr>
-                        <th className="px-4 py-2.5">Date</th>
-                        <th className="px-4 py-2.5">Clock In</th>
-                        <th className="px-4 py-2.5">Clock Out</th>
-                        <th className="px-4 py-2.5 text-right">Duration</th>
-                        <th className="px-4 py-2.5 text-right">Status</th>
+                        <Th>Date</Th>
+                        <Th>Clock In</Th>
+                        <Th>Clock Out</Th>
+                        <Th align="right">Duration</Th>
+                        <Th align="right">Status</Th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
+                    </THead>
+                    <TBody>
+{timesheetsLoading ? (
+  <TableSkeletonRows rows={8} cols={7} />
+) : (
+<>
                       {reviewEntries.map((entry) => (
-                        <tr key={entry.id} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-3 font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</td>
-                          <td className="px-4 py-3 text-right font-bold text-slate-900">{entry.duration || '—'}</td>
-                          <td className="px-4 py-3 text-right">
+                        <Tr key={entry.id}>
+                          <Td className="font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</Td>
+                          <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
+                          <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
+                          <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
+                          <Td align="right">
                             <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
                               {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
                             </Badge>
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       ))}
                       {reviewEntries.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-6 text-center text-slate-400 font-semibold italic">No shifts recorded yet.</td>
-                        </tr>
+                        <Tr>
+                          <EmptyState as="td" colSpan={5} py={6}>No shifts recorded yet.</EmptyState>
+                        </Tr>
                       )}
-                    </tbody>
-                  </table>
-                </div>
+                    </>
+)}
+</TBody>
+                  </Table>
+                </TableScroll>
 
                 <div className="md:hidden space-y-3 p-4 bg-slate-50">
                   {reviewEntries.map((entry) => (

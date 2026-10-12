@@ -9,8 +9,11 @@ import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRA
 import { getSessionEmail } from '@/lib/session';
 import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
-import { EmployeeActivityInsights } from '@/components/ui/EmployeeActivityInsights';
+import { EmployeeActivityInsights } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { Tabs } from '@/components/ui/Tabs';
 
 export default function TrackerPage() {
   // 'setup' is the existing tab (connection status + shift history) shown by
@@ -20,7 +23,7 @@ export default function TrackerPage() {
   // EmployeeActivityInsights isn't mounted until activeTab === 'activity'.
   const [activeTab, setActiveTab] = useState<'setup' | 'activity'>('setup');
   const { data: allProfiles = [] } = useProfiles();
-  const { data: allTimesheets = [], refetch: refetchTimesheets } = useTimesheets();
+  const { data: allTimesheets = [], refetch: refetchTimesheets } = useTimesheets({ email: getSessionEmail() || undefined, enabled: !!getSessionEmail() });
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [openShift, setOpenShift] = useState<TimesheetEntry | null>(null);
@@ -193,22 +196,16 @@ export default function TrackerPage() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex bg-slate-100 p-1 rounded-xl w-fit self-start md:self-auto border border-slate-200">
-          <button
-            onClick={() => setActiveTab('setup')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'setup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <Settings2 className="h-4 w-4 text-orange-500" />
-            Setup &amp; History
-          </button>
-          <button
-            onClick={() => setActiveTab('activity')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${activeTab === 'activity' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <Activity className="h-4 w-4 text-emerald-600" />
-            My Activity
-          </button>
-        </div>
+        <Tabs
+          variant="segmented"
+          className="self-start md:self-auto"
+          value={activeTab}
+          onChange={setActiveTab}
+          items={[
+            { value: 'setup', label: 'Setup & History', icon: <Settings2 className="h-4 w-4 text-orange-500" /> },
+            { value: 'activity', label: 'My Activity', icon: <Activity className="h-4 w-4 text-emerald-600" /> },
+          ]}
+        />
       </div>
 
       {activeTab === 'activity' ? (
@@ -449,39 +446,39 @@ export default function TrackerPage() {
             </div>
             <CardContent className="p-0">
               {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead className="font-bold text-slate-500 bg-slate-50 uppercase tracking-widest border-b border-slate-200">
+              <TableScroll hideOnMobile>
+                <Table density="cozy" size="xs">
+                  <THead>
                     <tr>
-                      <th className="px-5 py-3.5">Date</th>
-                      <th className="px-5 py-3.5">Clock In</th>
-                      <th className="px-5 py-3.5">Clock Out</th>
-                      <th className="px-5 py-3.5 text-right">Duration</th>
-                      <th className="px-5 py-3.5 text-right">Status</th>
+                      <Th>Date</Th>
+                      <Th>Clock In</Th>
+                      <Th>Clock Out</Th>
+                      <Th align="right">Duration</Th>
+                      <Th align="right">Status</Th>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  </THead>
+                  <TBody>
                     {timesheetEntries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-slate-100/30 transition-colors">
-                        <td className="px-5 py-4 font-bold text-slate-800">{localShiftDate(entry.clockIn, entry.date)}</td>
-                        <td className="px-5 py-4 text-slate-600 font-medium font-mono">{formatTimeNY(entry.clockIn)}</td>
-                        <td className="px-5 py-4 text-slate-600 font-medium font-mono">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</td>
-                        <td className="px-5 py-4 text-right font-bold text-slate-900">{entry.duration || '—'}</td>
-                        <td className="px-5 py-4 text-right">
+                      <Tr key={entry.id} className="hover:bg-slate-100/30">
+                        <Td density="comfortable" className="font-bold text-slate-800">{localShiftDate(entry.clockIn, entry.date)}</Td>
+                        <Td density="comfortable" className="text-slate-600 font-medium font-mono">{formatTimeNY(entry.clockIn)}</Td>
+                        <Td density="comfortable" className="text-slate-600 font-medium font-mono">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
+                        <Td align="right" density="comfortable" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
+                        <Td align="right" density="comfortable">
                           <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
                             {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
                           </Badge>
-                        </td>
-                      </tr>
+                        </Td>
+                      </Tr>
                     ))}
                     {timesheetEntries.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-slate-400 font-semibold italic">No shifts recorded yet.</td>
-                      </tr>
+                      <Tr>
+                        <EmptyState as="td" colSpan={5} py={8}>No shifts recorded yet.</EmptyState>
+                      </Tr>
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  </TBody>
+                </Table>
+              </TableScroll>
               {/* Mobile card stack */}
               <div className="md:hidden space-y-2 p-3">
                 {timesheetEntries.map((entry) => (
@@ -509,7 +506,7 @@ export default function TrackerPage() {
                   </div>
                 ))}
                 {timesheetEntries.length === 0 && (
-                  <p className="py-6 text-center text-slate-400 font-semibold italic text-xs">No shifts recorded yet.</p>
+                  <EmptyState py={6} size="xs">No shifts recorded yet.</EmptyState>
                 )}
               </div>
             </CardContent>

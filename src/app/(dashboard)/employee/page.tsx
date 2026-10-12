@@ -19,24 +19,9 @@ import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeoloca
 import { useRouter } from 'next/navigation';
 import { formatTimeNY, formatDateNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
-
-const PRIORITY_STYLES: Record<Task['priority'], string> = {
-  high:   'bg-rose-100 text-rose-800 border-rose-200',
-  medium: 'bg-orange-100 text-orange-800 border-orange-200',
-  low:    'bg-slate-100 text-slate-600 border-slate-200',
-};
-
-const STATUS_STYLES: Record<Task['status'], string> = {
-  todo:        'bg-amber-50 text-amber-700 border-amber-200',
-  in_progress: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  done:        'bg-emerald-50 text-emerald-700 border-emerald-200',
-};
-
-const STATUS_LABELS: Record<Task['status'], string> = {
-  todo:        'To Do',
-  in_progress: 'In Progress',
-  done:        'Done',
-};
+import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 export default function EmployeeDashboard() {
   const { data: allProfiles } = useProfiles();
@@ -53,7 +38,9 @@ export default function EmployeeDashboard() {
   const { data: allTasks, refetch: refetchTasks } = useMyTasks(getSessionEmail());
   const { data: allAnnouncements } = useAnnouncements();
   const { data: allWarehouses } = useWarehouses();
-  const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets();
+  // Own shifts only (server-side) — not the whole company's 60-day history.
+  const sessionEmail = getSessionEmail() || undefined;
+  const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets({ email: sessionEmail, enabled: !!sessionEmail });
   const { data: allTeams } = useTeams();
   // Live tracking-enabled source of truth, same hr_tracking_settings
   // collection Sidebar.tsx checks — hr_profiles.trackingEnabled can lag
@@ -1069,7 +1056,7 @@ export default function EmployeeDashboard() {
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-1">
                             <span className={`font-bold text-sm text-slate-900 ${task.status === 'done' ? 'line-through opacity-50' : ''}`}>{task.title}</span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${PRIORITY_STYLES[task.priority]}`}>{task.priority}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>{task.priority}</span>
                             {isOverdue && <span className="text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded-full">OVERDUE</span>}
                             {isDueSoon && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.2 rounded-full">DUE SOON</span>}
                           </div>
@@ -1077,7 +1064,7 @@ export default function EmployeeDashboard() {
                           <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1"><Calendar className="h-3 w-3 shrink-0" /> Due: {formatDateNY(task.dueDate)} · {task.team}</p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[task.status]}`}>{STATUS_LABELS[task.status]}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>{TASK_STATUS_LABELS[task.status]}</span>
                           <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-orange-500 transition-colors" />
                         </div>
                       </div>
@@ -1093,38 +1080,38 @@ export default function EmployeeDashboard() {
             <h2 className="text-base font-bold text-slate-900">Recent Leave Requests</h2>
             <Card className="overflow-hidden p-0 border border-slate-200 bg-white">
               {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full min-w-[500px] text-xs text-left border-collapse">
-                  <thead className="font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+              <TableScroll hideOnMobile>
+                <Table density="cozy" size="xs" minWidth={500}>
+                  <THead>
                     <tr>
-                      <th className="px-5 py-3">Type</th>
-                      <th className="px-5 py-3">Duration</th>
-                      <th className="px-5 py-3">Reason</th>
-                      <th className="px-5 py-3">Status</th>
+                      <Th>Type</Th>
+                      <Th>Duration</Th>
+                      <Th>Reason</Th>
+                      <Th>Status</Th>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  </THead>
+                  <TBody>
                     {leaves
                       .filter(l => 
                         l.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         l.reason.toLowerCase().includes(searchQuery.toLowerCase())
                       )
                       .map((leave) => (
-                        <tr key={leave.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-5 py-3.5 font-bold text-slate-900">{leave.type}</td>
-                          <td className="px-5 py-3.5 text-slate-600 font-medium">{leave.duration}</td>
-                          <td className="px-5 py-3.5 text-slate-500">{leave.reason}</td>
-                          <td className="px-5 py-3.5">{getStatusBadge(leave.status)}</td>
-                        </tr>
+                        <Tr key={leave.id}>
+                          <Td className="font-bold text-slate-900">{leave.type}</Td>
+                          <Td className="text-slate-600 font-medium">{leave.duration}</Td>
+                          <Td className="text-slate-500">{leave.reason}</Td>
+                          <Td>{getStatusBadge(leave.status)}</Td>
+                        </Tr>
                       ))}
                     {leaves.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="py-6 text-center text-slate-400 font-semibold italic">No leave history found.</td>
-                      </tr>
+                      <Tr>
+                        <EmptyState as="td" colSpan={4} py={6}>No leave history found.</EmptyState>
+                      </Tr>
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  </TBody>
+                </Table>
+              </TableScroll>
               {/* Mobile card stack */}
               <div className="md:hidden space-y-2 p-3">
                 {leaves
@@ -1151,7 +1138,7 @@ export default function EmployeeDashboard() {
                     </div>
                   ))}
                 {leaves.length === 0 && (
-                  <p className="py-6 text-center text-slate-400 font-semibold italic text-xs">No leave history found.</p>
+                  <EmptyState py={6} size="xs">No leave history found.</EmptyState>
                 )}
               </div>
             </Card>
@@ -1505,11 +1492,11 @@ export default function EmployeeDashboard() {
         <Modal isOpen onClose={() => setSelectedTask(null)} title="Task Details">
           <div className="space-y-4">
             <div className="flex gap-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${PRIORITY_STYLES[selectedTask.priority]}`}>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${TASK_PRIORITY_STYLES[selectedTask.priority]}`}>
                 {selectedTask.priority} priority
               </span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[selectedTask.status]}`}>
-                {STATUS_LABELS[selectedTask.status]}
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[selectedTask.status]}`}>
+                {TASK_STATUS_LABELS[selectedTask.status]}
               </span>
             </div>
             
@@ -1584,39 +1571,39 @@ export default function EmployeeDashboard() {
               <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Real Shift History (Clock-In / Clock-Out)</h4>
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                 {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead className="font-bold text-slate-500 bg-slate-50 border-b border-slate-200 uppercase tracking-widest text-[9px]">
+                <TableScroll hideOnMobile>
+                  <Table density="compact" size="xs">
+                    <THead>
                       <tr>
-                        <th className="px-4 py-2.5">Date</th>
-                        <th className="px-4 py-2.5">Clock In</th>
-                        <th className="px-4 py-2.5">Clock Out</th>
-                        <th className="px-4 py-2.5 text-right">Duration</th>
-                        <th className="px-4 py-2.5 text-right">Status</th>
+                        <Th>Date</Th>
+                        <Th>Clock In</Th>
+                        <Th>Clock Out</Th>
+                        <Th align="right">Duration</Th>
+                        <Th align="right">Status</Th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
+                    </THead>
+                    <TBody>
                       {reviewEntries.map((entry, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50">
-                          <td className="px-4 py-3 font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</td>
-                          <td className="px-4 py-3 text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</td>
-                          <td className="px-4 py-3 text-right font-bold text-slate-900">{entry.duration || '—'}</td>
-                          <td className="px-4 py-3 text-right">
+                        <Tr key={idx}>
+                          <Td className="font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</Td>
+                          <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
+                          <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
+                          <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
+                          <Td align="right">
                             <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
                               {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
                             </Badge>
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       ))}
                       {reviewEntries.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-6 text-center text-slate-400 font-semibold italic">No real shift history recorded yet.</td>
-                        </tr>
+                        <Tr>
+                          <EmptyState as="td" colSpan={5} py={6}>No real shift history recorded yet.</EmptyState>
+                        </Tr>
                       )}
-                    </tbody>
-                  </table>
-                </div>
+                    </TBody>
+                  </Table>
+                </TableScroll>
                 {/* Mobile card stack */}
                 <div className="md:hidden space-y-2 p-3">
                   {reviewEntries.map((entry, idx) => (
@@ -1644,7 +1631,7 @@ export default function EmployeeDashboard() {
                     </div>
                   ))}
                   {reviewEntries.length === 0 && (
-                    <p className="py-6 text-center text-slate-400 font-semibold italic text-xs">No real shift history recorded yet.</p>
+                    <EmptyState py={6} size="xs">No real shift history recorded yet.</EmptyState>
                   )}
                 </div>
               </div>

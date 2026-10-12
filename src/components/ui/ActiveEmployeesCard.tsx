@@ -8,6 +8,7 @@ import { Zap, Clock } from 'lucide-react';
 import { Profile, TimesheetEntry, displayName, formatDurationBetween, localShiftDate } from '@/lib/hrData';
 import { smoothLinePath, smoothAreaPath } from '@/lib/sparkline';
 import { formatTimeNY, APP_TIMEZONE } from '@/lib/timezone';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface ActiveEmployeesCardProps {
   employees: Profile[];
@@ -193,7 +194,7 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={`Active Employees (${activeRoster.length})`}>
         {activeRoster.length === 0 ? (
-          <p className="text-xs text-slate-400 font-semibold italic text-center py-8">No one is currently clocked in.</p>
+          <EmptyState py={8} size="xs">No one is currently clocked in.</EmptyState>
         ) : (
           <div className="space-y-1.5">
             {activeRoster.map(({ entry, profile }) => (

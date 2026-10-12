@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { TaskBoard } from '@/components/ui/TaskBoard';
-import { TaskModal } from '@/components/ui/TaskModal';
+import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { ClipboardList, Star, CheckCircle2, UserCog, Loader2 } from 'lucide-react';
 import { useTasks, useProfiles, useTeams, hrActions, displayName, setTeamLeadAdmin } from '@/lib/hrData';
+import { Select } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 
 export default function AdminTasksPage() {
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
@@ -83,16 +84,15 @@ export default function AdminTasksPage() {
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Select Employee</label>
-            <select
+          <FormField label="Select Employee" size="md">
+            <Select
               value={leadEmpId}
               onChange={e => {
                 setLeadEmpId(e.target.value);
                 const emp = employees.find(em => em.id === e.target.value);
                 setLeadTeams(emp?.leadTeams || []);
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="">— Select employee —</option>
               {employees.filter(e => e.role === 'employee').map(emp => (
@@ -100,8 +100,8 @@ export default function AdminTasksPage() {
                   {displayName(emp, 'admin')} {emp.isTeamLead ? '(Lead)' : ''} — {emp.teams.join(', ') || 'No team'}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
           {leadEmpId && (
             <div className="space-y-2">

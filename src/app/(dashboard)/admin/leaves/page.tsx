@@ -2,30 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { ShieldCheck, List, Loader2 } from 'lucide-react';
 import { useLeaves, useProfiles, hrActions, LeaveApplication, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-
-const TYPE_COLORS: Record<string, string> = {
-  'PTO': 'bg-indigo-100 text-indigo-800',
-  'Sick Leave': 'bg-amber-100 text-amber-800',
-  'Urgent': 'bg-rose-100 text-rose-800',
-  'Normal': 'bg-sky-100 text-sky-800',
-  'Parental Leave': 'bg-emerald-100 text-emerald-800',
-};
-
-const STATUS_BADGE_MAP: Record<LeaveApplication['status'], { variant: 'success' | 'warning' | 'danger' | 'default'; label: string }> = {
-  pending:     { variant: 'warning', label: 'Pending'      },
-  hr_approved: { variant: 'default', label: 'HR Approved'  },
-  approved:    { variant: 'success', label: 'CEO Approved' },
-  rejected:    { variant: 'danger',  label: 'Rejected'     },
-};
+import { LEAVE_TYPE_COLORS, LeaveStatusBadge } from '@/components/ui/StatusBadges';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { Tabs } from '@/components/ui/Tabs';
+import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 
 type TabView = 'queue' | 'history';
 
 export default function AdminLeavesPage() {
-  const { data: leaves = [], refetch: refetchLeaves } = useLeaves();
+  const { data: leaves = [], isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
   const { data: employees = [] } = useProfiles();
   const [searchQuery, setSearchQuery] = useState('');
   const { showToast } = useActionToast();
@@ -124,56 +113,43 @@ export default function AdminLeavesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('queue')}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
-            activeTab === 'queue'
-              ? 'border-orange-500 text-orange-700 bg-orange-50'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <ShieldCheck className="h-4 w-4" /> CEO Approval Queue
-          {stats.hrApproved > 0 && (
-            <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{stats.hrApproved}</span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 transition-colors ${
-            activeTab === 'history'
-              ? 'border-orange-500 text-orange-700 bg-orange-50'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <List className="h-4 w-4" /> Full History
-        </button>
-      </div>
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: 'queue', label: 'CEO Approval Queue', icon: <ShieldCheck className="h-4 w-4" />, badge: stats.hrApproved },
+          { value: 'history', label: 'Full History', icon: <List className="h-4 w-4" /> },
+        ]}
+      />
 
       {/* ── CEO QUEUE TAB ── */}
       {activeTab === 'queue' && (
         <Card className="overflow-hidden p-0 border border-slate-200">
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[750px] text-sm text-left border-collapse">
-              <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+          <TableScroll hideOnMobile>
+            <Table minWidth={750}>
+              <THead>
                 <tr>
-                  <th className="px-6 py-4">Employee</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Dates</th>
-                  <th className="px-6 py-4">Reason</th>
-                  <th className="px-6 py-4 text-center">Actions</th>
+                  <Th>Employee</Th>
+                  <Th>Type</Th>
+                  <Th>Dates</Th>
+                  <Th>Reason</Th>
+                  <Th align="center">Actions</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
+              </THead>
+              <TBody>
+{leavesLoading ? (
+  <TableSkeletonRows rows={6} cols={5} />
+) : (
+<>
                 {pendingCEOLeaves.map(leave => (
-                  <tr key={leave.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-semibold text-slate-900">{nameFor(leave.employeeName)}</td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[leave.type] || ''}`}>{leave.type}</span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 font-medium text-xs">{leave.duration}</td>
-                    <td className="px-6 py-4 text-slate-500 max-w-xs truncate text-xs">{leave.reason}</td>
-                    <td className="px-6 py-4 text-center">
+                  <Tr key={leave.id}>
+                    <Td className="font-semibold text-slate-900">{nameFor(leave.employeeName)}</Td>
+                    <Td>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[leave.type] || ''}`}>{leave.type}</span>
+                    </Td>
+                    <Td className="text-slate-600 font-medium text-xs">{leave.duration}</Td>
+                    <Td className="text-slate-500 max-w-xs truncate text-xs">{leave.reason}</Td>
+                    <Td align="center">
                       <div className="flex justify-center gap-2">
                         <button onClick={() => handleCEOAction(leave.id, 'approve')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
                           {processingLeaveId === leave.id && <Loader2 className="h-3 w-3 animate-spin" />} CEO Approve
@@ -182,26 +158,28 @@ export default function AdminLeavesPage() {
                           {processingLeaveId === leave.id && <Loader2 className="h-3 w-3 animate-spin" />} Reject
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
                 {pendingCEOLeaves.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="text-center py-12 text-slate-400 font-semibold italic text-sm">
+                  <Tr>
+                    <EmptyState as="td" colSpan={5} py={12} size="sm">
                       No leaves waiting for CEO approval.
-                    </td>
-                  </tr>
+                    </EmptyState>
+                  </Tr>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </>
+)}
+</TBody>
+            </Table>
+          </TableScroll>
           
           <div className="md:hidden space-y-3 p-4">
             {pendingCEOLeaves.map(leave => (
               <div key={leave.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold text-slate-900">{nameFor(leave.employeeName)}</p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[leave.type] || ''}`}>{leave.type}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[leave.type] || ''}`}>{leave.type}</span>
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>
@@ -221,10 +199,11 @@ export default function AdminLeavesPage() {
                 </div>
               </div>
             ))}
-            {pendingCEOLeaves.length === 0 && (
-              <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+            {leavesLoading && <ListSkeleton rows={3} />}
+            {!leavesLoading && pendingCEOLeaves.length === 0 && (
+              <EmptyState py={8} size="sm">
                 No leaves waiting for CEO approval.
-              </p>
+              </EmptyState>
             )}
           </div>
         </Card>
@@ -261,48 +240,54 @@ export default function AdminLeavesPage() {
           </div>
 
           <Card className="overflow-hidden p-0 border border-slate-200">
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full min-w-[750px] text-sm text-left border-collapse">
-                <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+            <TableScroll hideOnMobile>
+              <Table minWidth={750}>
+                <THead>
                   <tr>
-                    <th className="px-5 py-4">Employee</th>
-                    <th className="px-5 py-4">Type</th>
-                    <th className="px-5 py-4">Dates</th>
-                    <th className="px-5 py-4">Reason</th>
-                    <th className="px-5 py-4 text-center">Status</th>
+                    <Th>Employee</Th>
+                    <Th>Type</Th>
+                    <Th>Dates</Th>
+                    <Th>Reason</Th>
+                    <Th align="center">Status</Th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+                </THead>
+                <TBody>
+{leavesLoading ? (
+  <TableSkeletonRows rows={6} cols={5} />
+) : (
+<>
                   {historyLeaves.map(l => (
-                    <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-slate-900">{nameFor(l.employeeName)}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-600'}`}>{l.type}</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 font-medium text-xs">{l.duration}</td>
-                      <td className="px-5 py-3.5 text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <Badge variant={STATUS_BADGE_MAP[l.status].variant}>{STATUS_BADGE_MAP[l.status].label}</Badge>
-                      </td>
-                    </tr>
+                    <Tr key={l.id}>
+                      <Td density="cozy" className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
+                      <Td density="cozy">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-600'}`}>{l.type}</span>
+                      </Td>
+                      <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
+                      <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
+                      <Td align="center" density="cozy">
+                        <LeaveStatusBadge status={l.status} />
+                      </Td>
+                    </Tr>
                   ))}
                   {historyLeaves.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center py-12 text-slate-400 font-semibold italic text-sm">
+                    <Tr>
+                      <EmptyState as="td" colSpan={5} py={12} size="sm">
                         No records match your filters.
-                      </td>
-                    </tr>
+                      </EmptyState>
+                    </Tr>
                   )}
-                </tbody>
-              </table>
-            </div>
+                </>
+)}
+</TBody>
+              </Table>
+            </TableScroll>
 
             <div className="md:hidden space-y-3 p-4">
               {historyLeaves.map(l => (
                 <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-slate-900">{nameFor(l.employeeName)}</p>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-600'}`}>{l.type}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-600'}`}>{l.type}</span>
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>
@@ -314,14 +299,15 @@ export default function AdminLeavesPage() {
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                     <p className="text-[10px] text-slate-400 font-semibold uppercase">Status</p>
-                    <Badge variant={STATUS_BADGE_MAP[l.status].variant}>{STATUS_BADGE_MAP[l.status].label}</Badge>
+                    <LeaveStatusBadge status={l.status} />
                   </div>
                 </div>
               ))}
-              {historyLeaves.length === 0 && (
-                <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+              {leavesLoading && <ListSkeleton rows={3} />}
+              {!leavesLoading && historyLeaves.length === 0 && (
+                <EmptyState py={8} size="sm">
                   No records match your filters.
-                </p>
+                </EmptyState>
               )}
             </div>
           </Card>

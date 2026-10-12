@@ -12,10 +12,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
-import { getNYDateString } from '../timezone';
+import {
+  countAbsentWeekdays, detectAbsences, describeAbsence, findWeekendAbsenceRecords, findPreJoinAbsenceRecords,
+} from '../core/absences';
 import type { AbsenceRecord, MyAbsenceRecord, InactivityLog, Profile, TimesheetEntry, LeaveApplication } from './types';
-import { pbList, pbCreate, pbUpdate, pbDelete, getWeekdaysInMonth, localShiftDate, formatMoney } from './shared';
-import { hrActions, isWeekday, isApprovedLeaveOnDate, fetchTimesheetsFresh, displayName } from '../hrData';
+import { pbList, pbCreate, pbUpdate, pbDelete, formatMoney } from './shared';
+import { hrActions, fetchTimesheetsFresh, displayName } from '../hrData';
+
+export { countAbsentWeekdays };
+import { pbFilter } from '../pbFilter';
+import { daysAgoNYDateString } from '../timezone';
+
+// Columns toAbsenceRecord reads — keeps each fetched row small.
+const ABSENCE_FIELDS = 'id,employeeEmail,employeeName,date,reason,inactivityMinutes,workedMinutes,deductionAmount,createdAt,created,acknowledged,deleted,deletedAt';
 
 function toAbsenceRecord(r: any): AbsenceRecord {
   return {
@@ -42,55 +51,6 @@ export function useMyAbsenceRecords() {
   });
 }
 
-// Per explicit product decision: only Pakistan-region employees are subject
-// to this check (USA staff clock in/out automatically via GPS geofencing,
-// so a "missing" shift there means something different — a device/GPS
-// issue, not a no-show — and isn't penalized the same way). Counts weekdays
-// (Mon-Fri, America/New_York calendar) in the current pay month, from the
-// 1st through yesterday (today doesn't count — its 24 hours haven't fully
-// elapsed yet), where the employee has neither a timesheet shift nor
-// approved leave covering that day. Days before the employee's own
-// joinedDate are never counted (can't be absent from a job you hadn't
-// started yet).
-export function countAbsentWeekdays(
-  profile: Pick<Profile, 'fullName' | 'region' | 'joinedDate'>,
-  timesheets: TimesheetEntry[],
-  leaves: LeaveApplication[],
-  today: Date = new Date()
-): number {
-  if (profile.region !== 'Pakistan') return 0;
-
-  const todayStr = getNYDateString(today);
-  // joinedDate is a plain calendar date ("YYYY-MM-DD") — take it directly
-  // rather than round-tripping through new Date()+NY conversion, which reads
-  // a date-only string as UTC midnight and rolls it back a day once
-  // converted to NY time (see the matching fix/comment in runAbsenceCheck).
-  const joinedStr = profile.joinedDate && /^\d{4}-\d{2}-\d{2}/.test(profile.joinedDate)
-    ? profile.joinedDate.slice(0, 10)
-    : '';
-
-  // Every calendar date this employee actually has a shift recorded for,
-  // regardless of which device/timezone wrote it — localShiftDate always
-  // re-derives the date in America/New_York from the real clockIn instant.
-  const shiftDates = new Set(
-    timesheets
-      .filter(t => t.employeeEmail && t.clockIn)
-      .map(t => localShiftDate(t.clockIn, t.date))
-  );
-
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  let absentDays = 0;
-  for (const cursor = new Date(monthStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-    const dateStr = getNYDateString(cursor);
-    if (dateStr >= todayStr) break; // never count today or the future
-    if (joinedStr && dateStr < joinedStr) continue; // not employed yet
-    if (!isWeekday(dateStr)) continue;
-    if (shiftDates.has(dateStr)) continue;
-    if (isApprovedLeaveOnDate(leaves, profile.fullName, dateStr)) continue;
-    absentDays++;
-  }
-  return absentDays;
-}
 
 export const absenceActions = {
   // ── Absence records (hr_absence_records — one row per employee per day) ──
@@ -103,10 +63,24 @@ export const absenceActions = {
   // active-only (what the UI should show); runAbsenceCheck separately
   // fetches the FULL history including soft-deleted rows so it never
   // resurrects a record HR already removed.
-  getAbsenceRecords: async (): Promise<AbsenceRecord[]> =>
-    (await pbList('hr_absence_records', { filter: 'deleted = false' })).map(toAbsenceRecord),
-  getAllAbsenceRecordsIncludingDeleted: async (): Promise<AbsenceRecord[]> =>
-    (await pbList('hr_absence_records')).map(toAbsenceRecord),
+  // `sinceDate` ("YYYY-MM-DD") limits the fetch to records on/after that day —
+  // pages that only need recent months (payroll) pass it instead of pulling
+  // the entire history. Omit it for the full history.
+  // `email` scopes it to one employee server-side (an employee's own view
+  // must not download everyone's records and filter client-side).
+  getAbsenceRecords: async (opts: { sinceDate?: string; email?: string } = {}): Promise<AbsenceRecord[]> => {
+    const parts = ['deleted = false'];
+    if (opts.sinceDate) parts.push(pbFilter('date >= {:since}', { since: opts.sinceDate }));
+    if (opts.email) parts.push(pbFilter('employeeEmail ~ {:email}', { email: opts.email }));
+    const rows = (await pbList('hr_absence_records', { filter: parts.join(' && '), fields: ABSENCE_FIELDS })).map(toAbsenceRecord);
+    const wanted = opts.email?.toLowerCase();
+    return wanted ? rows.filter(r => r.employeeEmail.toLowerCase() === wanted) : rows;
+  },
+  getAllAbsenceRecordsIncludingDeleted: async (opts: { sinceDate?: string } = {}): Promise<AbsenceRecord[]> =>
+    (await pbList('hr_absence_records', {
+      ...(opts.sinceDate ? { filter: pbFilter('date >= {:since}', { since: opts.sinceDate }) } : {}),
+      fields: ABSENCE_FIELDS,
+    })).map(toAbsenceRecord),
   deleteAbsenceRecord: async (recordId: string): Promise<void> => {
     await pbUpdate('hr_absence_records', recordId, { deleted: true, deletedAt: new Date().toISOString() });
   },
@@ -164,25 +138,20 @@ export const absenceActions = {
     // extra network round trip to guarantee this can never again decide
     // someone's attendance from out-of-date shift data.
     const timesheets = await fetchTimesheetsFresh();
-    const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
-    // Per explicit product decision: absence "day" bucketing runs on the same
-    // America/New_York midnight-boundary calendar used everywhere else in the
-    // app (shift dates via localShiftDate, leave dates, attendance display) —
-    // not the employee's own device/region timezone. Using a different
-    // timezone basis here than the rest of the app was the root cause of
-    // employees getting marked absent on what was actually a Saturday/Sunday
-    // from this app's own point of view: a several-hour day-boundary offset
-    // could shift a date across the Mon-Fri/weekend line entirely.
-    const nyTodayStr = getNYDateString(new Date());
-    const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
-    let existingRecords = await hrActions.getAbsenceRecords();
+    // The check only creates records inside its 5-day lookback, and its
+    // self-healing cleanups only matter for recent mistakes — so it never needs
+    // the whole table: 60 days of active records for the cleanups, 10 days
+    // (incl. soft-deleted) for the don't-resurrect-a-deleted-absence check.
+    const cleanupWindow = { sinceDate: daysAgoNYDateString(60) };
+    const dedupeWindow = { sinceDate: daysAgoNYDateString(10) };
+    let existingRecords = await hrActions.getAbsenceRecords(cleanupWindow);
 
     // Self-healing cleanup: the old PKT-based day bucketing (fixed above)
     // could occasionally land an absence record's date on an actual
     // Saturday/Sunday by the NY calendar. Weekends are never a workday, so
     // any such record is always wrong — reverse it and notify everyone
     // involved rather than leaving a stale bad deduction on the books.
-    const weekendRecords = existingRecords.filter(r => !isWeekday(r.date));
+    const weekendRecords = findWeekendAbsenceRecords(existingRecords);
     if (weekendRecords.length > 0) {
       // One batched write for both the records array and the tombstone list
       // (bulkDeleteAbsenceRecords) instead of deleteAbsenceRecord per
@@ -198,7 +167,7 @@ export const absenceActions = {
           hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date was a weekend and should not have been marked absent.`),
         ]);
       }));
-      existingRecords = await hrActions.getAbsenceRecords();
+      existingRecords = await hrActions.getAbsenceRecords(cleanupWindow);
     }
 
     // Self-healing cleanup #2: an absence record dated before the matching
@@ -208,11 +177,7 @@ export const absenceActions = {
     // while the profile's joinedDate was still unset/being saved, or from
     // any other timing/config drift — reverse it the same way as the
     // weekend cleanup above, whatever the original cause.
-    const preJoinRecords = existingRecords.filter(rec => {
-      const emp = employees.find(e => e.email.toLowerCase() === rec.employeeEmail.toLowerCase());
-      if (!emp?.joinedDate || !/^\d{4}-\d{2}-\d{2}/.test(emp.joinedDate)) return false;
-      return rec.date < emp.joinedDate.slice(0, 10);
-    });
+    const preJoinRecords = findPreJoinAbsenceRecords(existingRecords, employees);
     if (preJoinRecords.length > 0) {
       await hrActions.bulkDeleteAbsenceRecords(preJoinRecords.map(r => r.id));
       await Promise.all(preJoinRecords.map(rec => {
@@ -223,7 +188,7 @@ export const absenceActions = {
           hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that date is before your joining date.`),
         ]);
       }));
-      existingRecords = await hrActions.getAbsenceRecords();
+      existingRecords = await hrActions.getAbsenceRecords(cleanupWindow);
     }
 
     // Full history INCLUDING soft-deleted rows — the partial unique index on
@@ -233,7 +198,7 @@ export const absenceActions = {
     // lookback window below. Keyed by employeeEmail_date (lowercase) rather
     // than record id, since ids are now opaque PocketBase ids, not the old
     // `${email}_${date}` composite string.
-    const fullHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted();
+    const fullHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted(dedupeWindow);
     const ignoredKeys = new Set(fullHistory.map(r => `${r.employeeEmail.toLowerCase()}_${r.date}`));
     const newRecords: Omit<AbsenceRecord, 'id'>[] = [];
     // Keyed by employeeEmail_date, same as ignoredKeys/freshIgnoredKeys —
@@ -242,153 +207,20 @@ export const absenceActions = {
     // record (see the bugfix comment below, near newRecords.push).
     const pendingNotifications = new Map<string, { emp: Profile; dateStr: string; reason: AbsenceRecord['reason']; inactivityMinutes?: number; workedMinutes?: number; deductionAmount: number; name: string }>();
 
-    for (const emp of employees) {
-      if (emp.region !== 'Pakistan') continue;
-      if (emp.role !== 'employee' && emp.role !== 'team_lead') continue;
-      // Skip part-time employees or anyone explicitly marked exempt by HR/Admin
-      if (emp.exemptFromAbsenceCheck) continue;
-
-      const empTimesheets = timesheets.filter(t => t.employeeEmail && t.employeeEmail.toLowerCase() === emp.email.toLowerCase() && t.clockIn);
-      const empInactivity = inactivityLogs.filter(l => l.employeeEmail && l.employeeEmail.toLowerCase() === emp.email.toLowerCase());
-      
-      // joinedDate is stored as a plain calendar date ("YYYY-MM-DD") — the
-      // actual day the employee joined, not a specific instant. Take the
-      // date portion directly instead of round-tripping through
-      // `new Date(...)` + NY-timezone conversion: a date-only string parses
-      // as UTC midnight, and converting THAT to NY time rolls it back to
-      // the previous evening — e.g. "2026-08-16" became "2026-08-15" —
-      // silently shifting the join-date cutoff.
-      const joinedStr = emp.joinedDate && /^\d{4}-\d{2}-\d{2}/.test(emp.joinedDate)
-        ? emp.joinedDate.slice(0, 10)
-        : '';
-
-      const shiftDatesWithShift = new Set<string>();
-      const shiftDatesWithTotalMinutes = new Map<string, number>();
-      const shiftDatesWithMaxSingleInactivity = new Map<string, number>();
-
-      for (const t of empTimesheets) {
-        if (!t.clockIn) continue;
-
-        // Bucket by the absolute UTC clockIn timestamp converted to the NY
-        // midnight-boundary calendar day — consistent with how every other
-        // date in the app (leaves, timesheets shown on the Attendance page,
-        // etc.) is bucketed via getNYDateString/localShiftDate.
-        const d = new Date(t.clockIn);
-        if (isNaN(d.getTime())) continue;
-        const shiftDate = getNYDateString(d);
-        shiftDatesWithShift.add(shiftDate);
-
-        const inTime = d.getTime();
-        // BUGFIX 2026-09-11: an OPEN shift (no clock_out yet) used to skip
-        // the inactivity check entirely — logsForShift/maxSingleInactiveSecs
-        // were only ever computed inside the `if (t.clockOut)` branch below,
-        // while this branch's elapsed-time minutes still counted toward
-        // "worked" time. That let an employee clock in and leave the shift
-        // running (real screen inactivity the whole time, or the whole day
-        // spent doing nothing) show up as a normal, fully-present day with
-        // zero inactivity flag, for as long as the shift stayed open — up to
-        // the 16h autoCloseStaleOpenShifts cap, and only caught retroactively
-        // once that auto-close set clock_out and a LATER absence-check run
-        // happened to re-evaluate the date. Using Date.now() as a synthetic
-        // outTime for still-open shifts means inactivity is now checked on
-        // every run, not just after the shift eventually closes — this
-        // can't change today's own status (the caller's date loop always
-        // skips `dateStr >= nyTodayStr`), it only fixes a PAST day whose
-        // shift is still sitting open.
-        const outTime = t.clockOut ? new Date(t.clockOut).getTime() : Date.now();
-        let shiftMins = 0;
-        if (!isNaN(outTime) && outTime > inTime) {
-          shiftMins = Math.floor((outTime - inTime) / 60000);
-        }
-
-        // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
-        // not by summing up multiple smaller inactive periods across the shift.
-        const logsForShift = empInactivity.filter(l => {
-          const lt = new Date(l.startAt).getTime();
-          return lt >= inTime && lt <= outTime;
-        });
-        let maxSingleInactiveSecs = 0;
-        for (const l of logsForShift) {
-          const duration = l.durationSeconds || 0;
-          if (duration > maxSingleInactiveSecs) {
-            maxSingleInactiveSecs = duration;
-          }
-        }
-        const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
-        shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
-
-        const existingTotal = shiftDatesWithTotalMinutes.get(shiftDate) || 0;
-        shiftDatesWithTotalMinutes.set(shiftDate, existingTotal + shiftMins);
-      }
-
-      const today = new Date();
-      const lookbackStart = new Date(today);
-      lookbackStart.setDate(today.getDate() - 5); // Check at most past 5 days
-      for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-        const dateStr = getNYDateString(cursor);
-        if (dateStr >= nyTodayStr) break;
-        if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
-        if (joinedStr && dateStr < joinedStr) continue;
-        if (!isWeekday(dateStr)) continue; // Saturday/Sunday (by NY calendar) are never checked
-        const ignoreKey = `${emp.email.toLowerCase()}_${dateStr}`;
-        if (ignoredKeys.has(ignoreKey)) continue;
-
-        const totalWorkedMins = shiftDatesWithTotalMinutes.get(dateStr) || 0;
-        const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
-
-        let reason: AbsenceRecord['reason'] | null = null;
-        let inactivityMinutes: number | undefined;
-        let workedMinutes: number | undefined;
-
-        // Requirement: Total on shift time < 4 hours (240 minutes) = Absent, >= 4 hours = Present
-        const MIN_REQUIRED_WORK_MINUTES = 4 * 60; // 240 minutes
-
-        if (totalWorkedMins < MIN_REQUIRED_WORK_MINUTES) {
-          if (!onLeave) {
-            if (totalWorkedMins === 0) {
-              reason = 'no_clock_in';
-            } else {
-              reason = 'under_4_hours';
-              workedMinutes = totalWorkedMins;
-            }
-          }
-        } else if (!onLeave) {
-          const maxSingleInactiveSecs = shiftDatesWithMaxSingleInactivity.get(dateStr) || 0;
-          if (maxSingleInactiveSecs >= INACTIVITY_THRESHOLD_SECONDS) {
-            reason = 'inactivity';
-            inactivityMinutes = Math.round(maxSingleInactiveSecs / 60);
-          }
-        }
-        if (!reason) continue; // present and accounted for (worked >= 4h without excessive inactivity)
-
-        const dailyRate = emp.baseSalary / getWeekdaysInMonth(dateStr.slice(0, 7));
-        const deductionAmount = Math.round(2 * dailyRate);
-        const name = displayName(emp, 'hr');
-
-        // BUGFIX 2026-09-08: notifications used to be sent right here,
-        // unconditionally, the moment this scan computed someone as newly
-        // absent — before the DB write (and its de-dupe check) below even
-        // ran. runAbsenceCheck is called from more than one page (HR and
-        // Admin dashboards both mount it), so whenever two dashboards
-        // loaded within moments of each other, BOTH calls independently
-        // computed the same newly-absent employees and BOTH sent the full
-        // HR+Admin+employee notification triple for them — confirmed live:
-        // exact duplicate "marked absent" notifications for the same
-        // person/date, timestamps a fraction of a second apart. The
-        // database write below was always protected by a unique index (see
-        // its own comment), so only one copy of the record was ever
-        // actually created — but by then the duplicate notifications had
-        // already gone out to employees ("misleading... again and again").
-        // Now the record + its notification texts are just collected here;
-        // notifications are sent later, only for whichever records THIS
-        // call actually manages to create (see below) — a concurrent call
-        // that loses the race skips sending its notifications entirely.
-        newRecords.push({
-          employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
-          reason, inactivityMinutes, workedMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
-        });
-        pendingNotifications.set(`${emp.email.toLowerCase()}_${dateStr}`, { emp, dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount, name });
-      }
+    const candidates = detectAbsences({ employees, timesheets, leaves, inactivityLogs, ignoredKeys });
+    for (const { employee: emp, date: dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount } of candidates) {
+      const name = displayName(emp, 'hr');
+      // BUGFIX 2026-09-08: notifications used to be sent the moment a scan
+      // computed someone as newly absent — before the DB write (and its
+      // de-dupe check) ran — so two dashboards mounting at once sent the
+      // notification triple twice for the same absence. Now the record + its
+      // notification payload are just collected here; notifications go out
+      // later, only for records THIS call actually manages to create.
+      newRecords.push({
+        employeeEmail: emp.email, employeeName: emp.fullName, date: dateStr,
+        reason, inactivityMinutes, workedMinutes, deductionAmount, createdAt: new Date().toISOString(), acknowledged: false,
+      });
+      pendingNotifications.set(`${emp.email.toLowerCase()}_${dateStr}`, { emp, dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount, name });
     }
 
     if (newRecords.length > 0) {
@@ -402,7 +234,7 @@ export const absenceActions = {
       // the "deleted absence comes back" bug this closes. Re-reading fresh
       // right before creating means a concurrent delete always wins over a
       // stale in-flight check.
-      const freshHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted();
+      const freshHistory = await hrActions.getAllAbsenceRecordsIncludingDeleted(dedupeWindow);
       const freshIgnoredKeys = new Set(freshHistory.map(r => `${r.employeeEmail.toLowerCase()}_${r.date}`));
       const safeNewRecords = newRecords.filter(r => !freshIgnoredKeys.has(`${r.employeeEmail.toLowerCase()}_${r.date}`));
       // Independent creates rather than one batched array write — the
@@ -426,16 +258,7 @@ export const absenceActions = {
 
     // Send notifications only for records this call actually created.
     await Promise.all(Array.from(pendingNotifications.values()).map(({ emp, dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount, name }) => {
-      const reasonText = reason === 'inactivity'
-        ? `was inactive for ${inactivityMinutes} minutes during their shift on ${dateStr}`
-        : reason === 'under_4_hours'
-        ? `worked less than 4 hours (${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m) on ${dateStr}`
-        : `did not start a shift on ${dateStr}`;
-      const empReasonDetail = reason === 'inactivity'
-        ? `${inactivityMinutes} min inactivity during shift`
-        : reason === 'under_4_hours'
-        ? `worked only ${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m (under 4 hours minimum)`
-        : 'not starting a shift';
+      const { reasonText, empReasonDetail } = describeAbsence(reason, dateStr, inactivityMinutes, workedMinutes);
       return Promise.all([
         hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email),
         // Dashboard-only for Admin — HR already got the pushable copy above,
@@ -453,11 +276,13 @@ export const absenceActions = {
     // Same case-insensitive-email pattern as getScreenshots — `~` narrows
     // server-side, exact check below guards against substring false-matches.
     const filterParts: string[] = [];
-    if (filters?.employeeEmail) filterParts.push(`employee_email ~ "${filters.employeeEmail.replace(/"/g, '\\"')}"`);
-    if (filters?.sinceISO) filterParts.push(`start_at >= "${filters.sinceISO.replace('T', ' ').replace('Z', '')}"`);
-    if (filters?.untilISO) filterParts.push(`start_at <= "${filters.untilISO.replace('T', ' ').replace('Z', '')}"`);
+    const toPbDate = (iso: string) => iso.replace('T', ' ').replace('Z', '');
+    if (filters?.employeeEmail) filterParts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
+    if (filters?.sinceISO) filterParts.push(pbFilter('start_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
+    if (filters?.untilISO) filterParts.push(pbFilter('start_at <= {:until}', { until: toPbDate(filters.untilISO) }));
     const records = await pbList('hr_inactivity_logs', {
       sort: '-start_at',
+      fields: 'id,employee_email,start_at,end_at,duration_seconds,device_label',
       ...(filterParts.length ? { filter: filterParts.join(' && ') } : {}),
     });
     let logs: InactivityLog[] = records.map((r: any) => ({

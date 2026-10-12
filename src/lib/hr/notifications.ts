@@ -15,6 +15,7 @@ import type {
 } from './types';
 import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField } from './shared';
 import { hrActions } from '../hrData';
+import { POLL_MS, POLL_OPTIONS } from './polling';
 
 // Shared "does this announcement apply to this person" check — the exact
 // targeting rule employee/page.tsx's dashboard feed widget already used
@@ -118,15 +119,18 @@ export function useNotifications() {
         return [];
       }
     },
-    refetchInterval: 15000,
+    refetchInterval: POLL_MS.notifications,
+    ...POLL_OPTIONS,
   });
 }
 
-export function useAnnouncements() {
+export function useAnnouncements(options: { enabled?: boolean } = {}) {
   return useQuery({
+    enabled: options.enabled ?? true,
     queryKey: ['hr_announcements'],
     queryFn: async () => (await pbList('hr_announcements', { sort: '-created' })).map(toAnnouncement),
-    refetchInterval: 30000,
+    refetchInterval: POLL_MS.announcements,
+    ...POLL_OPTIONS,
   });
 }
 
@@ -134,7 +138,8 @@ export function useMaintenanceNotices() {
   return useQuery({
     queryKey: ['hr_maintenance_notices'],
     queryFn: () => hrActions.getMaintenanceNotices(),
-    refetchInterval: 15000,
+    refetchInterval: POLL_MS.maintenanceNotices,
+    ...POLL_OPTIONS,
   });
 }
 

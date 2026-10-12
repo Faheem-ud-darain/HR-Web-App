@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useProfiles, useTasks, Task, Profile, displayName } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { TaskBoard } from '@/components/ui/TaskBoard';
+import { TaskBoard } from '@/components/ui/lazy';
 import { Badge } from '@/components/ui/Badge';
 import { Users, Star } from 'lucide-react';
 

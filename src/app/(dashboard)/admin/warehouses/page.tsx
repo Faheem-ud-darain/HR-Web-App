@@ -7,6 +7,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { MapPin, Edit, Trash, CheckCircle2, Loader2 } from 'lucide-react';
 import { useWarehouses, useProfiles, hrActions } from '@/lib/hrData';
+import { Input } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default function AdminWarehousesPage() {
   const { data: warehouses = [], refetch: refetchWarehouses } = useWarehouses();
@@ -277,9 +280,9 @@ export default function AdminWarehousesPage() {
                 </div>
               ))}
               {warehouses.length === 0 && (
-                <div className="text-center py-10 text-slate-400 font-semibold italic text-xs">
+                <EmptyState as="div" py={10} size="xs">
                   No warehouses configured yet. Add one to start tracking geofenced clock-ins.
-                </div>
+                </EmptyState>
               )}
             </CardContent>
           </Card>
@@ -294,49 +297,45 @@ export default function AdminWarehousesPage() {
                 {editWhError}
               </div>
             )}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Warehouse Name *</label>
-              <input
+            <FormField label="Warehouse Name *">
+              <Input
                 type="text"
                 required
                 value={editingWhName}
                 onChange={e => setEditingWhName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                fieldSize="lg"
               />
-            </div>
+            </FormField>
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Latitude *</label>
-                <input
+              <FormField label="Latitude *">
+                <Input
                   type="number"
                   step="0.000001"
                   required
                   value={editingWhLat}
                   onChange={e => setEditingWhLat(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="lg"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Longitude *</label>
-                <input
+              </FormField>
+              <FormField label="Longitude *">
+                <Input
                   type="number"
                   step="0.000001"
                   required
                   value={editingWhLon}
                   onChange={e => setEditingWhLon(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="lg"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Radius (m) *</label>
-                <input
+              </FormField>
+              <FormField label="Radius (m) *">
+                <Input
                   type="number"
                   required
                   value={editingWhRadius}
                   onChange={e => setEditingWhRadius(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="lg"
                 />
-              </div>
+              </FormField>
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
               <Button type="button" variant="outline" disabled={isSavingWhEdit} onClick={() => setEditingWhId(null)} className="active:scale-97 transition-transform">Cancel</Button>

@@ -28,6 +28,8 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, InactivityLog, TimesheetEntry } from '@/lib/hrData';
 import { getNYDateString, getNYMidnight, formatShortDateNY, formatTimeNY } from '@/lib/timezone';
 import { Activity, MousePointerClick, Table2, BarChart3, Clock } from 'lucide-react';
+import { Table, TableScroll, THead, TBody, Th, Td } from '@/components/ui/Table';
+import { StatCard } from '@/components/ui/StatCard';
 
 interface EmployeeActivityInsightsProps {
   employeeEmail: string;
@@ -176,22 +178,8 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
     <div className="space-y-4 md:space-y-6">
       {/* Today snapshot */}
       <div className="grid grid-cols-2 gap-3 md:gap-4">
-        <Card className="border border-slate-200 bg-white">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" /> Active Today
-            </p>
-            <p className="text-xl md:text-2xl font-bold text-slate-900 mt-1">{secondsToHM(selectedBucket?.activeSeconds || 0)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-slate-200 bg-white">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" /> Inactive Today
-            </p>
-            <p className="text-xl md:text-2xl font-bold text-slate-900 mt-1">{secondsToHM(selectedBucket?.inactiveSeconds || 0)}</p>
-          </CardContent>
-        </Card>
+        <StatCard label="Active Today" icon={<span className="h-2 w-2 rounded-full bg-emerald-500" />} value={secondsToHM(selectedBucket?.activeSeconds || 0)} size="md" />
+        <StatCard label="Inactive Today" icon={<span className="h-2 w-2 rounded-full bg-amber-500" />} value={secondsToHM(selectedBucket?.inactiveSeconds || 0)} size="md" />
       </div>
 
       {/* Week chart */}
@@ -220,28 +208,28 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
 
         <CardContent className="p-4 md:p-6">
           {showTable ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="font-bold text-slate-500 bg-slate-50 uppercase tracking-widest border-b border-slate-200">
+            <TableScroll>
+              <Table density="compact" size="xs">
+                <THead>
                   <tr>
-                    <th className="px-3 py-2.5">Day</th>
-                    <th className="px-3 py-2.5 text-right">Active</th>
-                    <th className="px-3 py-2.5 text-right">Inactive</th>
-                    <th className="px-3 py-2.5 text-right">Idle Stretches</th>
+                    <Th>Day</Th>
+                    <Th align="right">Active</Th>
+                    <Th align="right">Inactive</Th>
+                    <Th align="right">Idle Stretches</Th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+                </THead>
+                <TBody>
                   {days.map(d => (
                     <tr key={d.date} className={`hover:bg-slate-50/50 transition-colors cursor-pointer ${d.date === selectedDay ? 'bg-orange-50/60' : ''}`} onClick={() => setSelectedDay(d.date)}>
-                      <td className="px-3 py-2.5 font-bold text-slate-800">{d.label}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-emerald-700">{secondsToHM(d.activeSeconds)}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-amber-700">{secondsToHM(d.inactiveSeconds)}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-500">{d.logs.length}</td>
+                      <Td className="font-bold text-slate-800">{d.label}</Td>
+                      <Td align="right" className="font-semibold text-emerald-700">{secondsToHM(d.activeSeconds)}</Td>
+                      <Td align="right" className="font-semibold text-amber-700">{secondsToHM(d.inactiveSeconds)}</Td>
+                      <Td align="right" className="text-slate-500">{d.logs.length}</Td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableScroll>
           ) : (
             <div className="flex items-end justify-between gap-2 md:gap-4 h-48 px-1">
               {days.map((d, idx) => {

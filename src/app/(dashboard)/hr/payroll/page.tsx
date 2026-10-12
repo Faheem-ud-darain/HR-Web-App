@@ -6,20 +6,27 @@ import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
 import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord, countApprovedLeaveRequestsInMonth } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
-import { NetPayableModal } from '@/components/ui/NetPayableModal';
+import { NetPayableModal } from '@/components/ui/lazy';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { StatCard } from '@/components/ui/StatCard';
+import { Tabs } from '@/components/ui/Tabs';
+import { TableSkeletonRows } from '@/components/ui/Skeleton';
+import { ListSkeleton, StatCardSkeletonGrid } from '@/components/ui/Skeleton';
+import { daysAgoNYDateString } from '@/lib/timezone';
 
 export default function HRPayrollPage() {
   const { data: leavesList = [] } = useLeaves();
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const { data: payrollRecords = [], isLoading: payrollLoading, refetch: refetchPayroll } = usePayroll();
-  const { data: timesheets = [] } = useTimesheets();
+  const { data: timesheets = [] } = useTimesheets({ days: 45 });
   // No dedicated React Query hook — absence records live in the generic KV
   // store, not their own PocketBase collection (see AbsenceRecord's comment
   // in hrData.ts). Plain one-time fetch is fine for this page.
   const [absenceRecords, setAbsenceRecords] = useState<AbsenceRecord[]>([]);
-  useEffect(() => { hrActions.getAbsenceRecords().then(setAbsenceRecords); }, []);
+  useEffect(() => { hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(120) }).then(setAbsenceRecords); }, []);
 
   // Optimistic local overrides while a bonus/deductions edit is in flight,
   // keyed by employeeId — merged over the server-computed view below.
@@ -178,43 +185,26 @@ export default function HRPayrollPage() {
             <Download className="h-3.5 w-3.5" /> Export CSV
           </Button>
           
-          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-lg">
-            <button 
-              onClick={() => setActiveTab('all')}
-              className={`px-3 py-2 md:py-1.5 rounded-md text-xs font-semibold tracking-wide transition-colors transition-shadow ${
-                activeTab === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-950'
-              }`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setActiveTab('pending')}
-              className={`px-3 py-2 md:py-1.5 rounded-md text-xs font-semibold tracking-wide transition-colors transition-shadow ${
-                activeTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-950'
-              }`}
-            >
-              Pending ({totalPending})
-            </button>
-            <button 
-              onClick={() => setActiveTab('processed')}
-              className={`px-3 py-2 md:py-1.5 rounded-md text-xs font-semibold tracking-wide transition-colors transition-shadow ${
-                activeTab === 'processed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-950'
-              }`}
-            >
-              Processed
-            </button>
-          </div>
+          <Tabs
+            variant="segmented"
+            value={activeTab}
+            onChange={setActiveTab}
+            items={[
+              { value: 'all', label: 'All' },
+              { value: 'pending', label: 'Pending', count: totalPending },
+              { value: 'processed', label: 'Processed' },
+            ]}
+          />
         </div>
       </div>
 
+      {(profilesLoading || payrollLoading) ? (
+        <StatCardSkeletonGrid count={2} className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6" />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
-        <Card>
-          <CardContent className="pt-5 md:pt-6">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Projected Payout</p>
-            <p className="text-xl md:text-2xl font-bold text-slate-900 mt-2">{formatMoney(totalPayrollUSD, 'USA')}</p>
-            <p className="text-xs md:text-sm font-semibold text-slate-500 mt-1">{formatMoney(totalPayrollPKR, 'Pakistan')}</p>
-          </CardContent>
-        </Card>
+        <StatCard label="Total Projected Payout" value={formatMoney(totalPayrollUSD, 'USA')} size="md">
+          <p className="text-xs md:text-sm font-semibold text-slate-500 mt-1">{formatMoney(totalPayrollPKR, 'Pakistan')}</p>
+        </StatCard>
         <Card>
           <CardContent className="pt-5 md:pt-6">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Remaining Checklist</p>
@@ -234,34 +224,39 @@ export default function HRPayrollPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Desktop Table */}
       <div className="hidden md:block">
         <Card className="overflow-hidden p-0 border border-slate-200">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1300px] text-sm text-left border-collapse">
-              <thead className="text-xs font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+          <TableScroll>
+            <Table minWidth={1300}>
+              <THead>
                 <tr>
-                  <th className="px-6 py-4">Employee Details</th>
-                  <th className="px-6 py-4 text-right">Base Salary</th>
-                  <th className="px-6 py-4 text-right">Increment</th>
-                  <th className="px-6 py-4 text-center">Onboarding Penalty</th>
-                  <th className="px-6 py-4 text-right">Bonus ($)</th>
-                  <th className="px-6 py-4 text-right">Deductions ($)</th>
-                  <th className="px-6 py-4 text-right">Net Payable</th>
-                  <th className="px-6 py-4 text-right">Reserved Salary</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                  <th className="px-6 py-4 text-center">Action</th>
+                  <Th>Employee Details</Th>
+                  <Th align="right">Base Salary</Th>
+                  <Th align="right">Increment</Th>
+                  <Th align="center">Onboarding Penalty</Th>
+                  <Th align="right">Bonus ($)</Th>
+                  <Th align="right">Deductions ($)</Th>
+                  <Th align="right">Net Payable</Th>
+                  <Th align="right">Reserved Salary</Th>
+                  <Th align="center">Status</Th>
+                  <Th align="center">Action</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
+              </THead>
+              <TBody>
+{(profilesLoading || payrollLoading) ? (
+  <TableSkeletonRows rows={8} cols={10} />
+) : (
+<>
                 {pageItems.map(emp => {
                   const netPayable = emp.baseSalary + emp.incrementAmount + (Number(emp.bonus) || 0) - (Number(emp.deductions) || 0);
                   const empProfile = employees.find(e => e.id === emp.employeeId);
                   const reservedBalance = (empProfile?.reservedSalaryBalance || 0) + (empProfile?.manualReservedAmount || 0);
                   return (
-                    <tr key={emp.employeeId} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4">
+                    <Tr key={emp.employeeId}>
+                      <Td>
                         <div className="font-semibold text-slate-900">{emp.name}</div>
                         <div className="text-xs text-slate-500 mt-0.5">{emp.role}</div>
                         {/* Informational only — a prior month's still-unpaid
@@ -276,11 +271,11 @@ export default function HRPayrollPage() {
                             {formatMoney(emp.pendingArrears, emp.region)} arrears owed (prior month unpaid)
                           </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right font-medium text-slate-900">
+                      </Td>
+                      <Td align="right" className="font-medium text-slate-900">
                         {formatMoney(emp.baseSalary, emp.region)}
-                      </td>
-                      <td className="px-6 py-4 text-right">
+                      </Td>
+                      <Td align="right">
                         {emp.incrementAmount > 0 ? (
                           <div>
                             <span className="text-emerald-600 font-bold">+{formatMoney(emp.incrementAmount, emp.region)}</span>
@@ -289,15 +284,15 @@ export default function HRPayrollPage() {
                         ) : (
                           <span className="text-slate-300 font-medium">—</span>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-center">
+                      </Td>
+                      <Td align="center">
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                           emp.unpaidLeaves > 0 ? 'bg-amber-50 text-amber-800 border border-amber-200/60' : 'bg-slate-100 text-slate-500'
                         }`}>
                           {emp.unpaidLeaves > 0 ? `${emp.unpaidLeaves} day(s)` : 'None'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
+                      </Td>
+                      <Td align="right">
                         {emp.processed ? (
                           <span className="text-slate-900 font-medium">{formatMoney(emp.bonus || 0, emp.region)}</span>
                         ) : (
@@ -309,8 +304,8 @@ export default function HRPayrollPage() {
                             placeholder="0"
                           />
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
+                      </Td>
+                      <Td align="right">
                         {emp.processed ? (
                           <span className="text-slate-900 font-medium">{formatMoney(emp.deductions || 0, emp.region)}</span>
                         ) : (
@@ -349,11 +344,11 @@ export default function HRPayrollPage() {
                             ))}
                           </div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
+                      </Td>
+                      <Td align="right">
                         <div className="font-semibold text-slate-900">{formatMoney(netPayable, emp.region)}</div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
+                      </Td>
+                      <Td align="right">
                         {reservedBalance > 0 ? (
                           <div>
                             <span className="text-indigo-700 font-bold">{formatMoney(reservedBalance, emp.region)}</span>
@@ -365,11 +360,11 @@ export default function HRPayrollPage() {
                         {emp.reservedThisMonth > 0 && (
                           <div className="text-[9px] text-amber-600 font-bold uppercase mt-0.5">+{formatMoney(emp.reservedThisMonth, emp.region)} this month</div>
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-center">
+                      </Td>
+                      <Td align="center">
                         {emp.processed ? <Badge variant="success">Completed</Badge> : <Badge variant="warning">Pending</Badge>}
-                      </td>
-                      <td className="px-6 py-4 text-center">
+                      </Td>
+                      <Td align="center">
                         <div className="flex flex-col items-center gap-1.5">
                           <button
                             onClick={() => { setNetPayableRecord(emp); setIsNetPayableOpen(true); }}
@@ -390,13 +385,15 @@ export default function HRPayrollPage() {
                             </button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </Td>
+                    </Tr>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </>
+)}
+</TBody>
+            </Table>
+          </TableScroll>
         </Card>
       </div>
 
@@ -509,8 +506,9 @@ export default function HRPayrollPage() {
             </div>
           );
         })}
-        {filteredData.length === 0 && (
-          <p className="text-xs text-slate-400 font-semibold italic text-center py-8">No records found.</p>
+        {(profilesLoading || payrollLoading) && <ListSkeleton rows={4} />}
+        {!(profilesLoading || payrollLoading) && filteredData.length === 0 && (
+          <EmptyState py={8} size="xs">No records found.</EmptyState>
         )}
       </div>
 

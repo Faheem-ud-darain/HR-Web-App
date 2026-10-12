@@ -7,26 +7,11 @@
 'use client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
-import { getNYDateString } from '../timezone';
-
-const WORKING_DAYS_PER_MONTH = 22; // legacy fallback only — see getWeekdaysInMonth below, the real divisor everywhere daily-rate math runs now
-
-// Per confirmed business rule (2026-09-03): daily rate = base salary /
-// COUNT OF WEEKDAYS (Mon-Fri) in the given calendar month — never the
-// fixed WORKING_DAYS_PER_MONTH=22 constant above, and never calendar days
-// (28-31). monthKey is "YYYY-MM". Falls back to 22 for a malformed key
-// rather than risk a divide-by-zero.
-export function getWeekdaysInMonth(monthKey: string): number {
-  const [year, month] = (monthKey || '').split('-').map(Number);
-  if (!year || !month || month < 1 || month > 12) return WORKING_DAYS_PER_MONTH;
-  const daysInMonth = new Date(year, month, 0).getDate();
-  let count = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dow = new Date(year, month - 1, d).getDay(); // 0=Sun..6=Sat, local calendar (matches the Y/M/D components directly, no UTC drift)
-    if (dow !== 0 && dow !== 6) count++;
-  }
-  return count || WORKING_DAYS_PER_MONTH;
-}
+import { pbFilter } from '../pbFilter';
+import { coalesce, invalidateCache } from '../requestCache';
+export { pbFilter };
+import { getWeekdaysInMonth, localShiftDate } from '../core/dates';
+export { getWeekdaysInMonth, localShiftDate };
 
 // ---------------------------------------------------------------------------
 // Low-level PocketBase primitives
@@ -55,9 +40,14 @@ export function looksLikeRealId(id: any): boolean {
   return typeof id === 'string' && /^[a-z0-9]{15}$/.test(id);
 }
 
-export async function pbList(collection: string, opts: { sort?: string; filter?: string } = {}): Promise<any[]> {
+// `fields` trims the response to just the columns the caller maps (comma
+// separated, e.g. 'id,email,teams') — `id` is NOT implicit, include it when
+// the caller needs it. getFullList pages through the collection in
+// `batch`-sized requests, so for collections that grow without bound prefer
+// a `filter` over fetching everything.
+export async function pbList(collection: string, opts: { sort?: string; filter?: string; fields?: string } = {}): Promise<any[]> {
   try {
-    return await pb.collection(collection).getFullList({ requestKey: null, ...opts });
+    return await pb.collection(collection).getFullList({ requestKey: null, batch: 200, ...opts });
   } catch (err) {
     console.error(`[hrData] getFullList error in ${collection}:`, err);
     return [];
@@ -75,9 +65,11 @@ export async function pbList(collection: string, opts: { sort?: string; filter?:
 // employees still see the capital-letter email bug" symptom.
 export async function pbListByEmailField(collection: string, field: string, email: string, opts: { extraFilter?: string; sort?: string } = {}): Promise<any[]> {
   if (!email) return [];
-  const escaped = email.replace(/"/g, '\\"');
   const wanted = email.toLowerCase();
-  const filter = opts.extraFilter ? `${field} ~ "${escaped}" && ${opts.extraFilter}` : `${field} ~ "${escaped}"`;
+  // `field` is always a code-supplied column name (never user input), so it's
+  // safe to inline; only the email value is bound.
+  const base = pbFilter(`${field} ~ {:email}`, { email });
+  const filter = opts.extraFilter ? `${base} && ${opts.extraFilter}` : base;
   const rows = await pbList(collection, { filter, sort: opts.sort });
   return rows.filter((r: any) => (r[field] || '').toLowerCase() === wanted);
 }
@@ -121,9 +113,8 @@ export async function pbUpsertByField(collection: string, field: string, value: 
   // `~` (case-insensitive "like") narrows server-side; the exact
   // case-insensitive check below guards against a substring false-match
   // (same pattern getScreenshots uses for employee email lookups).
-  const escaped = value.replace(/"/g, '\\"');
   try {
-    const matches = await pb.collection(collection).getFullList({ filter: `${field} ~ "${escaped}"`, requestKey: null });
+    const matches = await pb.collection(collection).getFullList({ filter: pbFilter(`${field} ~ {:value}`, { value }), requestKey: null });
     const existing = (matches as any[]).find(r => (r[field] || '').toLowerCase() === value.toLowerCase());
     if (existing) {
       upsertIdCache.set(cacheKey, existing.id);
@@ -142,7 +133,7 @@ export async function pbUpsertByField(collection: string, field: string, value: 
 // employeeEmail above).
 export async function pbFindByField(collection: string, field: string, value: string): Promise<any | null> {
   try {
-    return await pb.collection(collection).getFirstListItem(`${field} = "${value.replace(/"/g, '\\"')}"`, { requestKey: null });
+    return await pb.collection(collection).getFirstListItem(pbFilter(`${field} = {:value}`, { value }), { requestKey: null });
   } catch {
     return null;
   }
@@ -177,7 +168,7 @@ const kvIdCache = new Map<string, string>();
 
 export async function pbGetKV(key: string): Promise<any | null> {
   try {
-    const rec = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
+    const rec = await pb.collection('hr_delcargo_store').getFirstListItem(pbFilter('key = {:key}', { key }), { requestKey: null });
     kvIdCache.set(key, rec.id);
     return rec.value;
   } catch {
@@ -190,6 +181,7 @@ export async function pbSetKV(key: string, value: any): Promise<void> {
   if (cachedId) {
     try {
       await pb.collection('hr_delcargo_store').update(cachedId, { value });
+      invalidateCache('kv:');
       return;
     } catch {
       // Cached id is stale (row deleted elsewhere, or never existed) —
@@ -198,19 +190,26 @@ export async function pbSetKV(key: string, value: any): Promise<void> {
     }
   }
   try {
-    const existing = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
+    const existing = await pb.collection('hr_delcargo_store').getFirstListItem(pbFilter('key = {:key}', { key }), { requestKey: null });
     kvIdCache.set(key, existing.id);
     await pb.collection('hr_delcargo_store').update(existing.id, { value });
   } catch {
     const created = await pb.collection('hr_delcargo_store').create({ key, value });
     kvIdCache.set(key, created.id);
   }
+  invalidateCache('kv:');
 }
 
+const KV_PREFIX_TTL_MS = 3000;
+
 export async function pbGetKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
+  return coalesce(`kv:${prefix}`, KV_PREFIX_TTL_MS, () => fetchKVByPrefix(prefix));
+}
+
+async function fetchKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
   try {
     const records = await pb.collection('hr_delcargo_store').getFullList({
-      filter: `key ~ "${prefix}"`,
+      filter: pbFilter('key ~ {:prefix}', { prefix }),
       requestKey: null,
     });
     for (const r of records as any[]) kvIdCache.set(r.key, r.id);
@@ -225,6 +224,7 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
   // Parallelized (was a sequential for-loop) — each key's lookup+delete is
   // independent, so there's no reason to wait for one before starting the
   // next. Uses the id cache first to skip the lookup entirely when possible.
+  invalidateCache('kv:');
   await Promise.all(keys.map(async (key) => {
     const cachedId = kvIdCache.get(key);
     kvIdCache.delete(key);
@@ -237,12 +237,13 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
       }
     }
     try {
-      const rec = await pb.collection('hr_delcargo_store').getFirstListItem(`key = "${key}"`, { requestKey: null });
+      const rec = await pb.collection('hr_delcargo_store').getFirstListItem(pbFilter('key = {:key}', { key }), { requestKey: null });
       await pb.collection('hr_delcargo_store').delete(rec.id);
     } catch {
       // already gone
     }
   }));
+  invalidateCache('kv:');
 }
 
 // hr_tracker_signals — one row per employee (plan 027 Phase 4b), consolidating
@@ -275,7 +276,8 @@ export async function pbGetTrackerSignal(email: string, field: string): Promise<
 // employee's. No single-row helper covers this (it's a full-collection
 // scan), so it stays its own function rather than delegating.
 export async function pbGetAllTrackerSignals(field: string): Promise<{ email: string; value: any }[]> {
-  const rows = await pbList('hr_tracker_signals');
+  // Only this one signal column (plus the key) is needed, not all 8 json blobs.
+  const rows = await pbList('hr_tracker_signals', { fields: `email,${field}` });
   return rows
     .filter(r => r[field] != null)
     .map(r => ({ email: r.email, value: r[field] }));
@@ -360,26 +362,36 @@ export function useInvalidate() {
 // it doesn't need the read-receipt treatment — it only needs a
 // read-modify-write that's batched per call so marking several ids read
 // in one screen render doesn't race against itself.
+// The same map is requested by Sidebar, TopNav, popups and dashboards on every
+// page mount — coalesced so concurrent/near-simultaneous callers share one
+// request. Callers get their own copy so mutating the result is safe.
+const READ_MAP_TTL_MS = 5000;
+
+const cloneMap = (m: Record<string, string[]>): Record<string, string[]> =>
+  Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v]]));
+
 export async function pbGetIdSetMap(collection: string, field: string): Promise<Record<string, string[]>> {
-  const rows = await pb.collection(collection).getFullList({ requestKey: null });
-  const map: Record<string, string[]> = {};
-  (rows as any[]).forEach(r => {
-    const ids: string[] = Array.isArray(r[field]) ? r[field] : [];
-    ids.forEach(id => {
-      if (!map[id]) map[id] = [];
-      map[id].push(r.email);
+  const map = await coalesce(`idset:${collection}:${field}`, READ_MAP_TTL_MS, async () => {
+    const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: `email,${field}` });
+    const built: Record<string, string[]> = {};
+    (rows as any[]).forEach(r => {
+      const ids: string[] = Array.isArray(r[field]) ? r[field] : [];
+      ids.forEach(id => {
+        if (!built[id]) built[id] = [];
+        built[id].push(r.email);
+      });
     });
+    return built;
   });
-  return map;
+  return cloneMap(map);
 }
 
 export async function pbMarkIdsInField(collection: string, field: string, entityIds: string[], email: string): Promise<void> {
   if (!email || entityIds.length === 0) return;
   const emailLower = email.toLowerCase();
-  const escaped = emailLower.replace(/"/g, '\\"');
   let existing: any = null;
   try {
-    existing = await pb.collection(collection).getFirstListItem(`email = "${escaped}"`, { requestKey: null });
+    existing = await pb.collection(collection).getFirstListItem(pbFilter('email = {:email}', { email: emailLower }), { requestKey: null });
   } catch {
     existing = null;
   }
@@ -391,16 +403,21 @@ export async function pbMarkIdsInField(collection: string, field: string, entity
   } else {
     await pb.collection(collection).create({ email: emailLower, [field]: merged }, { requestKey: null });
   }
+  // Next read of this map must see the write.
+  invalidateCache(`idset:${collection}:`);
 }
 
 export async function pbGetReadMap(collection: string): Promise<Record<string, string[]>> {
-  const rows = await pb.collection(collection).getFullList({ requestKey: null });
-  const map: Record<string, string[]> = {};
-  (rows as any[]).forEach(r => {
-    if (!map[r.entity_id]) map[r.entity_id] = [];
-    map[r.entity_id].push(r.email);
+  const map = await coalesce(`readmap:${collection}`, READ_MAP_TTL_MS, async () => {
+    const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: 'entity_id,email' });
+    const built: Record<string, string[]> = {};
+    (rows as any[]).forEach(r => {
+      if (!built[r.entity_id]) built[r.entity_id] = [];
+      built[r.entity_id].push(r.email);
+    });
+    return built;
   });
-  return map;
+  return cloneMap(map);
 }
 
 export async function pbMarkRead(collection: string, entityId: string, email: string): Promise<void> {
@@ -416,6 +433,7 @@ export async function pbMarkRead(collection: string, entityId: string, email: st
     // person, which is exactly the postcondition the caller wants, so this
     // is success, not an error.
   }
+  invalidateCache(`readmap:${collection}`);
 }
 
 export const formatMoney = (amount: number, region?: 'USA' | 'Pakistan') =>
@@ -427,26 +445,6 @@ export function formatDurationBetween(startISO: string, endISO: string): string 
   return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
 }
 
-// happened to be (in America/New_York — see clockIn() below) when the record
-// was written — it's a plain "YYYY-MM-DD" string, not a real timestamp, so it
-// never re-renders relative to whoever's actually looking at it. Per product
-// decision, the whole app displays exactly one timezone (America/New_York)
-// regardless of the employee's or viewer's own device/location — no
-// per-device or IP-based timezone conversion anywhere (see
-// src/lib/timezone.ts) — so any "Date" column shown in the UI should derive
-// that date fresh from the real clockIn timestamp via that same fixed
-// timezone, rather than trusting the stored field (which is fine on its own,
-// this just guards against any old rows written before this was fixed).
-// Falls back to the stored `date` if clockIn is ever missing/unparseable.
-export function localShiftDate(clockInISO: string | undefined | null, fallbackDate?: string): string {
-  if (clockInISO) {
-    const d = new Date(clockInISO);
-    if (!isNaN(d.getTime())) {
-      return getNYDateString(d);
-    }
-  }
-  return fallbackDate || '—';
-}
 
 
 // Fixed, well-known teamId for the permanent HR & Admin channel (see the

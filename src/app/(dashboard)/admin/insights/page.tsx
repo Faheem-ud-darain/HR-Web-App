@@ -30,6 +30,8 @@ import {
   AbsenceRecord,
 } from '@/lib/hrData';
 import { BarChart3, Users, Wallet, PiggyBank, Table2 } from 'lucide-react';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { StatCard } from '@/components/ui/StatCard';
 
 // Dataviz skill's validated default categorical palette (references/palette.md,
 // light-mode column) — slot 1 blue, slot 2 orange, slot 3 aqua. Assigned by
@@ -141,44 +143,16 @@ export default function AdminInsightsPage() {
 
       {/* Stat tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border border-slate-200 bg-white">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 text-slate-400" /> Total Headcount
-            </p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{profiles.length}</p>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{headcountByRegion[0].count} USA · {headcountByRegion[1].count} Pakistan</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-slate-200 bg-white">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Wallet className="h-3.5 w-3.5 text-slate-400" /> Payroll Cost — {currentMonth ? monthLabel(currentMonth.month) : ''}
-            </p>
-            <p className="text-sm font-bold text-slate-900 mt-1">{formatMoney(currentMonth?.usa || 0, 'USA')}</p>
-            <p className="text-sm font-bold text-slate-900">{formatMoney(currentMonth?.pakistan || 0, 'Pakistan')}</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-slate-200 bg-white">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5 text-slate-400" /> Pending Payroll Liability
-            </p>
-            <p className="text-sm font-bold text-slate-900 mt-1">{formatMoney(pendingLiability.usa, 'USA')}</p>
-            <p className="text-sm font-bold text-slate-900">{formatMoney(pendingLiability.pakistan, 'Pakistan')}</p>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Not-yet-processed payroll records</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-slate-200 bg-white">
-          <CardContent className="pt-5 pb-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <PiggyBank className="h-3.5 w-3.5 text-slate-400" /> Reserved Salary Held
-            </p>
-            <p className="text-sm font-bold text-slate-900 mt-1">{formatMoney(reservedHeld.usa, 'USA')}</p>
-            <p className="text-sm font-bold text-slate-900">{formatMoney(reservedHeld.pakistan, 'Pakistan')}</p>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Paid out only at resignation/termination</p>
-          </CardContent>
-        </Card>
+        <StatCard label="Total Headcount" icon={<Users className="h-3.5 w-3.5" />} value={profiles.length} sub={<>{headcountByRegion[0].count} USA · {headcountByRegion[1].count} Pakistan</>} />
+        <StatCard label={<>Payroll Cost — {currentMonth ? monthLabel(currentMonth.month) : ''}</>} icon={<Wallet className="h-3.5 w-3.5" />} value={formatMoney(currentMonth?.usa || 0, 'USA')} size="sm">
+          <p className="text-sm font-bold text-slate-900">{formatMoney(currentMonth?.pakistan || 0, 'Pakistan')}</p>
+        </StatCard>
+        <StatCard label="Pending Payroll Liability" icon={<BarChart3 className="h-3.5 w-3.5" />} value={formatMoney(pendingLiability.usa, 'USA')} size="sm" sub="Not-yet-processed payroll records">
+          <p className="text-sm font-bold text-slate-900">{formatMoney(pendingLiability.pakistan, 'Pakistan')}</p>
+        </StatCard>
+        <StatCard label="Reserved Salary Held" icon={<PiggyBank className="h-3.5 w-3.5" />} value={formatMoney(reservedHeld.usa, 'USA')} size="sm" sub="Paid out only at resignation/termination">
+          <p className="text-sm font-bold text-slate-900">{formatMoney(reservedHeld.pakistan, 'Pakistan')}</p>
+        </StatCard>
       </div>
 
       {/* Chart 1 — Payroll cost over time, one series per region */}
@@ -207,26 +181,26 @@ export default function AdminInsightsPage() {
         </div>
         <CardContent className="p-4 md:p-6">
           {showPayrollTable ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="font-bold text-slate-500 bg-slate-50 uppercase tracking-widest border-b border-slate-200">
+            <TableScroll>
+              <Table density="compact" size="xs">
+                <THead>
                   <tr>
-                    <th className="px-3 py-2.5">Month</th>
-                    <th className="px-3 py-2.5 text-right">USA</th>
-                    <th className="px-3 py-2.5 text-right">Pakistan</th>
+                    <Th>Month</Th>
+                    <Th align="right">USA</Th>
+                    <Th align="right">Pakistan</Th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+                </THead>
+                <TBody>
                   {payrollByMonth.map(m => (
-                    <tr key={m.month} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2.5 font-bold text-slate-800">{monthLabel(m.month)}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{formatMoney(m.usa, 'USA')}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{formatMoney(m.pakistan, 'Pakistan')}</td>
-                    </tr>
+                    <Tr key={m.month}>
+                      <Td className="font-bold text-slate-800">{monthLabel(m.month)}</Td>
+                      <Td align="right" className="font-semibold text-slate-700">{formatMoney(m.usa, 'USA')}</Td>
+                      <Td align="right" className="font-semibold text-slate-700">{formatMoney(m.pakistan, 'Pakistan')}</Td>
+                    </Tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableScroll>
           ) : (
             <div className="flex items-end justify-between gap-3 md:gap-5 h-48 px-1">
               {payrollByMonth.map((m, idx) => {
@@ -291,28 +265,28 @@ export default function AdminInsightsPage() {
         </div>
         <CardContent className="p-4 md:p-6">
           {showAbsenceTable ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="font-bold text-slate-500 bg-slate-50 uppercase tracking-widest border-b border-slate-200">
+            <TableScroll>
+              <Table density="compact" size="xs">
+                <THead>
                   <tr>
-                    <th className="px-3 py-2.5">Month</th>
-                    <th className="px-3 py-2.5 text-right">Urgent Leave (days)</th>
-                    <th className="px-3 py-2.5 text-right">Normal Leave (days)</th>
-                    <th className="px-3 py-2.5 text-right">Absence (records)</th>
+                    <Th>Month</Th>
+                    <Th align="right">Urgent Leave (days)</Th>
+                    <Th align="right">Normal Leave (days)</Th>
+                    <Th align="right">Absence (records)</Th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
+                </THead>
+                <TBody>
                   {absenceLeaveByMonth.map(m => (
-                    <tr key={m.month} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2.5 font-bold text-slate-800">{monthLabel(m.month)}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{m.urgentDays}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{m.normalDays}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{m.absenceCount}</td>
-                    </tr>
+                    <Tr key={m.month}>
+                      <Td className="font-bold text-slate-800">{monthLabel(m.month)}</Td>
+                      <Td align="right" className="font-semibold text-slate-700">{m.urgentDays}</Td>
+                      <Td align="right" className="font-semibold text-slate-700">{m.normalDays}</Td>
+                      <Td align="right" className="font-semibold text-slate-700">{m.absenceCount}</Td>
+                    </Tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableScroll>
           ) : (
             <div className="flex items-end justify-between gap-3 md:gap-5 h-48 px-1">
               {absenceLeaveByMonth.map((m, idx) => {

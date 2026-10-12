@@ -7,9 +7,11 @@ import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, Team, useProfiles, useTeams, useWarehouses, displayName, updateEmployeeTeamsAdmin, setTeamLeadAdmin, updateProfileAdmin } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Edit, Trash, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
-import { UserProfileModal } from '@/components/ui/UserProfileModal';
+import { UserProfileModal } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
+import { Input, Select } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 
 export default function HRTeamsPage() {
   const { data: allProfiles = [], refetch: refetchProfiles } = useProfiles();
@@ -732,16 +734,15 @@ export default function HRTeamsPage() {
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Select Employee</label>
-            <select
+          <FormField label="Select Employee" size="md">
+            <Select
               value={leadEmployeeId}
               onChange={e => {
                 setLeadEmployeeId(e.target.value);
                 const emp = employees.find(em => em.id === e.target.value);
                 setLeadTeamSelections(emp?.leadTeams || []);
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="">— Select employee —</option>
               {employees.filter(e => e.role === 'employee').map(emp => (
@@ -749,12 +750,11 @@ export default function HRTeamsPage() {
                   {displayName(emp, 'hr')} {emp.isTeamLead ? '(Lead)' : ''} — {emp.teams.join(', ')}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
           {leadEmployeeId && (
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Assign as Lead of Teams</label>
+            <FormField label="Assign as Lead of Teams" size="md">
               <div className="space-y-2 mt-1">
                 {teamNames.map(t => (
                   <label key={t} className="flex items-center gap-2.5 cursor-pointer group">
@@ -769,7 +769,7 @@ export default function HRTeamsPage() {
                 ))}
               </div>
               <p className="text-[10px] text-slate-400 mt-2">Deselecting all teams removes the Team Lead designation.</p>
-            </div>
+            </FormField>
           )}
 
           {/* Current Team Leads List */}
@@ -805,16 +805,15 @@ export default function HRTeamsPage() {
             </div>
           )}
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Select USA Employee</label>
-            <select
+          <FormField label="Select USA Employee" size="md">
+            <Select
               value={whLeadEmployeeId}
               onChange={e => {
                 setWhLeadEmployeeId(e.target.value);
                 const emp = employees.find(em => em.id === e.target.value);
                 setWhLeadSelections(emp?.managedWarehouses || []);
               }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="">— Select employee —</option>
               {employees.filter(e => e.region === 'USA' && e.role === 'employee').map(emp => (
@@ -822,12 +821,11 @@ export default function HRTeamsPage() {
                   {displayName(emp, 'hr')} {emp.isWarehouseLead ? '(Manager)' : ''}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
           {whLeadEmployeeId && (
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Assign as Manager of Warehouses</label>
+            <FormField label="Assign as Manager of Warehouses" size="md">
               <div className="space-y-2 mt-1">
                 {warehouses.map(w => (
                   <label key={w.id} className="flex items-center gap-2.5 cursor-pointer group">
@@ -842,7 +840,7 @@ export default function HRTeamsPage() {
                 ))}
               </div>
               <p className="text-[10px] text-slate-400 mt-2">Deselecting all warehouses removes the Warehouse Manager designation.</p>
-            </div>
+            </FormField>
           )}
 
           {/* Current Warehouse Managers List */}
@@ -1122,49 +1120,45 @@ export default function HRTeamsPage() {
       {editingWhId && (
         <Modal isOpen onClose={() => setEditingWhId(null)} title="Edit Warehouse Details">
           <form onSubmit={handleUpdateWarehouseSubmit} className="space-y-4 pt-1">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Warehouse Name *</label>
-              <input 
+            <FormField label="Warehouse Name *">
+              <Input 
                 type="text" 
                 required
                 value={editingWhName}
                 onChange={e => setEditingWhName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                fieldSize="lg"
               />
-            </div>
+            </FormField>
             <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Latitude *</label>
-                <input 
+              <FormField label="Latitude *">
+                <Input 
                   type="number" 
                   step="0.000001"
                   required
                   value={editingWhLat}
                   onChange={e => setEditingWhLat(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="lg"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Longitude *</label>
-                <input 
+              </FormField>
+              <FormField label="Longitude *">
+                <Input 
                   type="number" 
                   step="0.000001"
                   required
                   value={editingWhLon}
                   onChange={e => setEditingWhLon(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="lg"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Radius (m) *</label>
-                <input 
+              </FormField>
+              <FormField label="Radius (m) *">
+                <Input 
                   type="number" 
                   required
                   value={editingWhRadius}
                   onChange={e => setEditingWhRadius(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="lg"
                 />
-              </div>
+              </FormField>
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
               <Button type="button" variant="outline" size="md" disabled={isSavingWhEdit} onClick={() => setEditingWhId(null)}>Cancel</Button>

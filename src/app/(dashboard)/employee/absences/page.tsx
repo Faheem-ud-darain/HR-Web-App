@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AbsenceDetailsView } from '@/components/ui/AbsenceDetailsView';
+import { AbsenceDetailsView } from '@/components/ui/lazy';
 import { getSessionEmail } from '@/lib/session';
 
 export default function EmployeeAbsencesPage() {

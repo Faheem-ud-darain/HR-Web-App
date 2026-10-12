@@ -5,17 +5,18 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { OrgCalendar } from '@/components/ui/OrgCalendar';
-import { TaskModal } from '@/components/ui/TaskModal';
+import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { DollarSign, TrendingUp, Users, Clock, ClipboardList, CheckCircle2, AlertTriangle, PlusCircle, Loader2, Trash2, Eye, Video, Forward } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, useAnnouncements, useWarehouses, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink, Announcement } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
-import { MaintenanceNoticeManager } from '@/components/ui/MaintenanceNoticeManager';
-import { ScheduleMeetModal } from '@/components/ui/ScheduleMeetModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -339,25 +340,25 @@ export default function AdminDashboard() {
 
         <Card className="overflow-hidden p-0 border border-slate-200">
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm text-left border-collapse">
-              <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+          <TableScroll hideOnMobile>
+            <Table>
+              <THead>
                 <tr>
-                  <th className="px-6 py-4">Employee</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Dates</th>
-                  <th className="px-6 py-4">Reason</th>
-                  <th className="px-6 py-4 text-center">Actions</th>
+                  <Th>Employee</Th>
+                  <Th>Type</Th>
+                  <Th>Dates</Th>
+                  <Th>Reason</Th>
+                  <Th align="center">Actions</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
+              </THead>
+              <TBody>
                 {hrApprovedLeaves.map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-semibold text-slate-900">{nameFor(l.employeeName)}</td>
-                    <td className="px-6 py-4">{l.type}</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">{l.duration}</td>
-                    <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{l.reason}</td>
-                    <td className="px-6 py-4 text-center">
+                  <Tr key={l.id}>
+                    <Td className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
+                    <Td>{l.type}</Td>
+                    <Td className="text-slate-600 font-medium">{l.duration}</Td>
+                    <Td className="text-slate-500 max-w-xs truncate">{l.reason}</Td>
+                    <Td align="center">
                       <div className="flex justify-center gap-2">
                         <button onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
                           {processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />} CEO Approve
@@ -366,24 +367,24 @@ export default function AdminDashboard() {
                           {processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />} Reject
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
                 {hrApprovedLeaves.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400 font-semibold italic text-sm">
+                  <Tr>
+                    <EmptyState as="td" colSpan={5} py={12} size="sm">
                       No pending approvals — all leaves are processed.
-                    </td>
-                  </tr>
+                    </EmptyState>
+                  </Tr>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
+          </TableScroll>
 
           {/* Mobile card stack */}
           <div className="md:hidden">
             {hrApprovedLeaves.length === 0 ? (
-              <p className="py-10 text-center text-slate-400 font-semibold italic text-sm">No pending approvals — all leaves are processed.</p>
+              <EmptyState py={10} size="sm">No pending approvals — all leaves are processed.</EmptyState>
             ) : (
               <div className="space-y-3 p-4">
                 {hrApprovedLeaves.map(l => (
@@ -527,7 +528,7 @@ export default function AdminDashboard() {
         {viewersAnnId && (() => {
           const viewers = viewersForAnnouncement(viewersAnnId);
           return viewers.length === 0 ? (
-            <p className="text-xs text-slate-400 font-semibold italic text-center py-6">No one has viewed this announcement yet.</p>
+            <EmptyState py={6} size="xs">No one has viewed this announcement yet.</EmptyState>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {viewers.map(v => (
@@ -553,20 +554,18 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Announcement Title *</label>
-            <input 
+          <FormField label="Announcement Title *">
+            <Input 
               type="text" 
               required 
               value={annTitle} 
               onChange={e => setAnnTitle(e.target.value)} 
-              className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors transition-transform transition-shadow focus:ring-2 focus:ring-orange-100 font-semibold" 
+              fieldSize="soft" className="transition-transform transition-shadow" 
               placeholder="e.g. System Maintenance Notice" 
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Content *</label>
+          <FormField label="Content *">
             <textarea 
               required 
               rows={4} 
@@ -575,10 +574,9 @@ export default function AdminDashboard() {
               className="w-full bg-slate-50/50 hover:bg-slate-100 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors transition-transform transition-shadow focus:ring-2 focus:ring-orange-100 font-semibold resize-none" 
               placeholder="Type announcement details here..." 
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Target Audience *</label>
+          <FormField label="Target Audience *">
             <select
               value={annTargetType}
               onChange={e => setAnnTargetType(e.target.value as any)}
@@ -589,7 +587,7 @@ export default function AdminDashboard() {
               <option value="pakistan">Pakistani Employees (Remote) Only</option>
               <option value="warehouses">Specific Warehouses</option>
             </select>
-          </div>
+          </FormField>
 
           {annTargetType === 'warehouses' && (
             <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-36 overflow-y-auto">
@@ -670,8 +668,7 @@ export default function AdminDashboard() {
               <p className="text-xs font-bold text-slate-800 break-words">{forwardingAnn.title}</p>
               <p className="text-xs text-slate-500 mt-1 line-clamp-3 whitespace-pre-wrap break-words">{forwardingAnn.content}</p>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Note (optional)</label>
+            <FormField label="Note (optional)">
               <textarea
                 value={annForwardNote}
                 onChange={e => setAnnForwardNote(e.target.value)}
@@ -679,7 +676,7 @@ export default function AdminDashboard() {
                 placeholder="Add a note for HR & Admin…"
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none resize-none"
               />
-            </div>
+            </FormField>
             {annForwardError && <p className="text-xs font-semibold text-rose-600">{annForwardError}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <Button

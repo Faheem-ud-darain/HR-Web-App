@@ -3,6 +3,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { BookOpen, Calendar, HelpCircle, AlertCircle, Award, Info } from 'lucide-react';
+import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 export function PolicyView() {
   return (
@@ -23,27 +24,27 @@ export function PolicyView() {
             DelCargo utilizes a combined sick + vacation bank. Accruals run monthly on your individual anniversary date, capping at a maximum service ceiling of 30 days.
           </p>
           <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-lg">
-            <table className="w-full min-w-[450px] text-xs text-left border-collapse">
-              <thead>
+            <Table density="compact" size="xs" minWidth={450}>
+              <THead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
-                  <th className="px-4 py-3">Years of Service</th>
-                  <th className="px-4 py-3 text-center">Annual Days Equivalent</th>
-                  <th className="px-4 py-3 text-right">Monthly Accrual Rate</th>
+                  <Th>Years of Service</Th>
+                  <Th align="center">Annual Days Equivalent</Th>
+                  <Th align="right">Monthly Accrual Rate</Th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 text-slate-700 font-medium">
-                <tr><td className="px-4 py-2.5">Year 1</td><td className="px-4 py-2.5 text-center">10 days</td><td className="px-4 py-2.5 text-right font-mono">0.83 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 2</td><td className="px-4 py-2.5 text-center">12 days</td><td className="px-4 py-2.5 text-right font-mono">1.00 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 3</td><td className="px-4 py-2.5 text-center">14 days</td><td className="px-4 py-2.5 text-right font-mono">1.17 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 4</td><td className="px-4 py-2.5 text-center">16 days</td><td className="px-4 py-2.5 text-right font-mono">1.33 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 5</td><td className="px-4 py-2.5 text-center">18 days</td><td className="px-4 py-2.5 text-right font-mono">1.50 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 6</td><td className="px-4 py-2.5 text-center">20 days</td><td className="px-4 py-2.5 text-right font-mono">1.67 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 7</td><td className="px-4 py-2.5 text-center">22 days</td><td className="px-4 py-2.5 text-right font-mono">1.83 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 8</td><td className="px-4 py-2.5 text-center">25 days</td><td className="px-4 py-2.5 text-right font-mono">2.08 / mo</td></tr>
-                <tr><td className="px-4 py-2.5">Year 9</td><td className="px-4 py-2.5 text-center">27 days</td><td className="px-4 py-2.5 text-right font-mono">2.25 / mo</td></tr>
-                <tr className="bg-orange-50/20 font-bold"><td className="px-4 py-2.5 text-orange-950">Year 10+</td><td className="px-4 py-2.5 text-center text-orange-950">30 days (Permanent Cap)</td><td className="px-4 py-2.5 text-right font-mono text-orange-950">2.50 / mo</td></tr>
-              </tbody>
-            </table>
+              </THead>
+              <TBody className="text-slate-700 font-medium">
+                <Tr><Td>Year 1</Td><Td align="center">10 days</Td><Td align="right" className="font-mono">0.83 / mo</Td></Tr>
+                <Tr><Td>Year 2</Td><Td align="center">12 days</Td><Td align="right" className="font-mono">1.00 / mo</Td></Tr>
+                <Tr><Td>Year 3</Td><Td align="center">14 days</Td><Td align="right" className="font-mono">1.17 / mo</Td></Tr>
+                <Tr><Td>Year 4</Td><Td align="center">16 days</Td><Td align="right" className="font-mono">1.33 / mo</Td></Tr>
+                <Tr><Td>Year 5</Td><Td align="center">18 days</Td><Td align="right" className="font-mono">1.50 / mo</Td></Tr>
+                <Tr><Td>Year 6</Td><Td align="center">20 days</Td><Td align="right" className="font-mono">1.67 / mo</Td></Tr>
+                <Tr><Td>Year 7</Td><Td align="center">22 days</Td><Td align="right" className="font-mono">1.83 / mo</Td></Tr>
+                <Tr><Td>Year 8</Td><Td align="center">25 days</Td><Td align="right" className="font-mono">2.08 / mo</Td></Tr>
+                <Tr><Td>Year 9</Td><Td align="center">27 days</Td><Td align="right" className="font-mono">2.25 / mo</Td></Tr>
+                <Tr className="bg-orange-50/20 font-bold"><Td className="text-orange-950">Year 10+</Td><Td align="center" className="text-orange-950">30 days (Permanent Cap)</Td><Td align="right" className="font-mono text-orange-950">2.50 / mo</Td></Tr>
+              </TBody>
+            </Table>
           </div>
 
           <div className="md:hidden space-y-2">

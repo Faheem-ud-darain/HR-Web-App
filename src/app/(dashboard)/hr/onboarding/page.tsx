@@ -1,17 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, useProfiles, useProfileDocuments, useTeams, displayName, approveOnboardingServer, rejectOnboardingServer, addEmployeeServer } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { UserPlus, CheckCircle2, AlertCircle, FileText, ShieldCheck, XCircle, ClipboardCheck, Eye, Download } from 'lucide-react';
-import { DocumentPreviewModal } from '@/components/ui/DocumentPreviewModal';
+import { DocumentPreviewModal } from '@/components/ui/lazy';
 import { Button } from '@/components/ui/Button';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { Tabs } from '@/components/ui/Tabs';
+import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function HROnboardingPage() {
-  const { data: employees = [], refetch: refetchProfiles } = useProfiles();
+  const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const { data: teamsData = [], refetch: refetchTeams } = useTeams();
   const teams = teamsData.map(t => t.name);
   const [isOnboardOpen, setIsOnboardOpen] = useState(false);
@@ -199,40 +205,17 @@ export default function HROnboardingPage() {
       </div>
 
       {/* Status Filter Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors ${
-            activeTab === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          All ({employees.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
-            activeTab === 'pending' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-          }`}
-        >
-          Pending Approval ({pendingApprovals.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('rejected')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
-            activeTab === 'rejected' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-          }`}
-        >
-          Rejected ({rejectedEmployees.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('approved')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
-            activeTab === 'approved' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-          }`}
-        >
-          Approved / Active ({approvedEmployees.length})
-        </button>
-      </div>
+      <Tabs
+        variant="chips"
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: 'all', label: 'All', count: employees.length },
+          { value: 'pending', label: 'Pending Approval', count: pendingApprovals.length, tone: 'warning' },
+          { value: 'rejected', label: 'Rejected', count: rejectedEmployees.length, tone: 'danger' },
+          { value: 'approved', label: 'Approved / Active', count: approvedEmployees.length, tone: 'success' },
+        ]}
+      />
 
       {/* Pending Onboarding Approvals Banner */}
       {pendingApprovals.length > 0 && activeTab === 'all' && (
@@ -261,19 +244,23 @@ export default function HROnboardingPage() {
       )}
 
       <Card className="overflow-hidden border border-slate-200">
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Email</th>
-                <th className="px-6 py-4">Job Title (Role)</th>
-                <th className="px-6 py-4 text-center">Gender</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-center">Actions</th>
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>Job Title (Role)</Th>
+                <Th align="center">Gender</Th>
+                <Th>Status</Th>
+                <Th align="center">Actions</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
+            </THead>
+            <TBody>
+{profilesLoading ? (
+  <TableSkeletonRows rows={6} cols={6} />
+) : (
+<>
               {filteredEmployees.map((emp) => {
                 const statusLabel = emp.approvalStatus === 'pending'
                   ? 'Pending Approval'
@@ -292,19 +279,19 @@ export default function HROnboardingPage() {
                   : 'warning';
 
                 return (
-                  <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-semibold text-slate-900">{displayName(emp, 'hr')}</td>
-                    <td className="px-6 py-4">{emp.email}</td>
-                    <td className="px-6 py-4 capitalize font-medium text-slate-800">
+                  <Tr key={emp.id}>
+                    <Td className="font-semibold text-slate-900">{displayName(emp, 'hr')}</Td>
+                    <Td>{emp.email}</Td>
+                    <Td className="capitalize font-medium text-slate-800">
                       {emp.jobTitle || 'Employee'} <span className="text-[10px] text-slate-400 font-bold uppercase">({emp.role})</span>
-                    </td>
-                    <td className="px-6 py-4 text-center capitalize font-semibold text-slate-500">{emp.gender || 'male'}</td>
-                    <td className="px-6 py-4">
+                    </Td>
+                    <Td align="center" className="capitalize font-semibold text-slate-500">{emp.gender || 'male'}</Td>
+                    <Td>
                       <Badge variant={badgeVariant}>
                         {statusLabel}
                       </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-center">
+                    </Td>
+                    <Td align="center">
                       {(emp.approvalStatus === 'pending' || emp.approvalStatus === 'rejected' || emp.onboardingCompleted) && (
                         <button
                           onClick={() => { setReviewingEmp(emp); setShowRejectForm(false); setRejectReason(emp.approvalRejectionReason || ''); setReviewError(''); }}
@@ -313,20 +300,22 @@ export default function HROnboardingPage() {
                           Review Docs
                         </button>
                       )}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 );
               })}
               {filteredEmployees.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+                <Tr>
+                  <EmptyState as="td" colSpan={6} py={8} size="sm">
                     No employees found for this tab.
-                  </td>
-                </tr>
+                  </EmptyState>
+                </Tr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </>
+)}
+</TBody>
+          </Table>
+        </TableScroll>
         
         <div className="md:hidden space-y-3 p-4">
           {filteredEmployees.map((emp) => {
@@ -385,10 +374,11 @@ export default function HROnboardingPage() {
               </div>
             );
           })}
-          {filteredEmployees.length === 0 && (
-            <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">
+          {profilesLoading && <ListSkeleton rows={3} />}
+          {!profilesLoading && filteredEmployees.length === 0 && (
+            <EmptyState py={8} size="sm">
               No employees found for this tab.
-            </p>
+            </EmptyState>
           )}
         </div>
       </Card>
@@ -410,48 +400,44 @@ export default function HROnboardingPage() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Full Name *</label>
-              <input 
+            <FormField label="Full Name *">
+              <Input 
                 type="text" 
                 required 
                 value={fullName} 
                 onChange={e => setFullName(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                fieldSize="soft"
                 placeholder="e.g. John Doe" 
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Job Title / Designation *</label>
-              <input 
+            </FormField>
+            <FormField label="Job Title / Designation *">
+              <Input 
                 type="text" 
                 required 
                 value={jobTitle} 
                 onChange={e => setJobTitle(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                fieldSize="soft"
                 placeholder="e.g. QA Specialist" 
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Email Address *</label>
-              <input 
+            <FormField label="Email Address *">
+              <Input 
                 type="email" 
                 required 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                fieldSize="soft"
                 placeholder="e.g. john@company.com" 
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Gender</label>
-              <select 
+            </FormField>
+            <FormField label="Gender">
+              <Select 
                 value={gender} 
                 onChange={e => setGender(e.target.value as 'male' | 'female')} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer appearance-none"
+                fieldSize="soft" className="cursor-pointer appearance-none"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
@@ -461,17 +447,16 @@ export default function HROnboardingPage() {
               >
                 <option value="male">Male</option>
                 <option value="female">Female</option>
-              </select>
-            </div>
+              </Select>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Role Type</label>
-              <select 
+            <FormField label="Role Type">
+              <Select 
                 value={role} 
                 onChange={e => setRole(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer appearance-none"
+                fieldSize="soft" className="cursor-pointer appearance-none"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
@@ -481,14 +466,13 @@ export default function HROnboardingPage() {
               >
                 <option value="employee">Employee</option>
                 <option value="hr">HR</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Region / Base Location Mode</label>
-              <select 
+              </Select>
+            </FormField>
+            <FormField label="Region / Base Location Mode">
+              <Select 
                 value={region} 
                 onChange={e => setRegion(e.target.value as 'USA' | 'Pakistan')} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer appearance-none"
+                fieldSize="soft" className="cursor-pointer appearance-none"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
@@ -498,30 +482,26 @@ export default function HROnboardingPage() {
               >
                 <option value="Pakistan">Pakistan (Remote Employee)</option>
                 <option value="USA">USA Employee (Warehouse Geofencing)</option>
-              </select>
-            </div>
+              </Select>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Base Salary ({region === 'USA' ? 'USD $' : 'PKR'}) *
-              </label>
-              <input 
+            <FormField label={<>Base Salary ({region === 'USA' ? 'USD $' : 'PKR'}) *</>}>
+              <Input 
                 type="text" 
                 required 
                 value={salary} 
                 onChange={e => setSalary(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                fieldSize="soft"
                 placeholder={region === 'USA' ? 'e.g. 5000' : 'e.g. 50000'} 
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Assign Team</label>
-              <select 
+            </FormField>
+            <FormField label="Assign Team">
+              <Select 
                 value={team} 
                 onChange={e => setTeam(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer appearance-none"
+                fieldSize="soft" className="cursor-pointer appearance-none"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
@@ -530,47 +510,45 @@ export default function HROnboardingPage() {
                 }}
               >
                 {teams.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+              </Select>
+            </FormField>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Joining Date *</label>
-              <input
+            <FormField label="Joining Date *">
+              <Input
                 type="date"
                 required
                 value={joinedDate}
                 onChange={e => setJoinedDate(e.target.value)}
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer"
+                fieldSize="soft" className="cursor-pointer"
               />
-            </div>
+            </FormField>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider" title="PTO accrual is calculated from this date, not the joining date">
                 Account Creation Date *
               </label>
-              <input
+              <Input
                 type="date"
                 required
                 value={accountCreationDate}
                 onChange={e => setAccountCreationDate(e.target.value)}
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold cursor-pointer"
+                fieldSize="soft" className="cursor-pointer"
               />
               <p className="text-[9px] text-slate-400 font-semibold">PTO accrual is calculated from this date.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-col sm:flex-row">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Temporary Password</label>
-              <input 
+            <FormField label="Temporary Password">
+              <Input 
                 type="text" 
                 value={tempPassword} 
                 onChange={e => setTempPassword(e.target.value)} 
-                className="w-full bg-slate-50/50 hover:bg-slate-50 border border-slate-200 focus:border-orange-500 focus:bg-white rounded-xl py-2.5 px-3.5 text-xs outline-none text-slate-900 transition-colors focus:ring-2 focus:ring-orange-100 font-semibold"
+                fieldSize="soft"
                 placeholder="e.g. welcome123" 
               />
-            </div>
+            </FormField>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
@@ -710,12 +688,12 @@ export default function HROnboardingPage() {
             {showRejectForm ? (
               <div className="space-y-3 pt-3 border-t border-slate-200">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Reason for rejection *</label>
-                <textarea
+                <Textarea
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}
                   rows={3}
                   placeholder="e.g. CNIC back-side image is blurry, please re-upload."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs outline-none focus:border-orange-500 font-semibold"
+                  fieldSize="sm"
                 />
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" size="md" className="flex-1" onClick={() => setShowRejectForm(false)}>

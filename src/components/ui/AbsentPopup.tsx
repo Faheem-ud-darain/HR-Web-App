@@ -38,8 +38,9 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
 
   useEffect(() => {
     if (!email) return;
-    hrActions.getAbsenceRecords().then(all => {
-      setRecords(all.filter(r => r.employeeEmail.toLowerCase() === email.toLowerCase()));
+    // Scoped to this employee server-side — not the whole company's records.
+    hrActions.getAbsenceRecords({ email }).then(all => {
+      setRecords(all);
       setLoaded(true);
     });
   }, [email]);

@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { Task, Profile, hrActions, displayName } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Loader2 } from 'lucide-react';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -79,34 +81,31 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
         {error && (
           <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold">{error}</div>
         )}
-        <div className="space-y-1">
-          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Task Title *</label>
-          <input
+        <FormField label="Task Title *" size="md">
+          <Input
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+            fieldSize="md"
             placeholder="e.g. Prepare Q3 Report"
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1">
-          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Description</label>
-          <textarea
+        <FormField label="Description" size="md">
+          <Textarea
             value={description}
             onChange={e => setDescription(e.target.value)}
             rows={2}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 resize-none"
+            fieldSize="md" className="resize-none"
             placeholder="Brief description of the task..."
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1">
-          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Assign To *</label>
-          <select
+        <FormField label="Assign To *" size="md">
+          <Select
             value={assignedEmail}
             onChange={e => setAssignedEmail(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+            fieldSize="md"
           >
             <option value="">— Select employee —</option>
             {employees.map(emp => (
@@ -114,31 +113,29 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
                 {displayName(emp, createdBy as 'hr' | 'admin')} ({emp.teams.join(', ')})
               </option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </FormField>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Due Date *</label>
-            <input
+          <FormField label="Due Date *" size="md">
+            <Input
               type="date"
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Priority</label>
-            <select
+          </FormField>
+          <FormField label="Priority" size="md">
+            <Select
               value={priority}
               onChange={e => setPriority(e.target.value as Task['priority'])}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
-            </select>
-          </div>
+            </Select>
+          </FormField>
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">

@@ -29,6 +29,9 @@ import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Lock, ImageOff } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { Switch } from '@/components/ui/Switch';
 
 interface TrackingViewProps {
   role: 'admin' | 'hr' | 'team_lead';
@@ -750,42 +753,37 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
       </Card>
 
       <Card className="overflow-hidden p-0 border border-slate-200">
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table minWidth={1000}>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Employee</th>
-                <th className="px-6 py-4">Region</th>
-                <th className="px-6 py-4 text-center">Device</th>
-                <th className="px-6 py-4 text-center">Tracking</th>
-                {canManage && <th className="px-6 py-4 text-center">Interval (min)</th>}
-                {canManage && <th className="px-6 py-4 text-center">Exclude from Auto-Delete</th>}
-                <th className="px-6 py-4 text-center">Actions</th>
+                <Th>Employee</Th>
+                <Th>Region</Th>
+                <Th align="center">Device</Th>
+                <Th align="center">Tracking</Th>
+                {canManage && <Th align="center">Interval (min)</Th>}
+                {canManage && <Th align="center">Exclude from Auto-Delete</Th>}
+                <Th align="center">Actions</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
+            </THead>
+            <TBody>
               {filteredEmployees.map(emp => {
                 const settings = settingsFor(emp.email);
                 const hb = heartbeatFor(emp.email);
                 return (
-                  <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
+                  <Tr key={emp.id}>
+                    <Td>
                       <div className="font-semibold text-slate-900">{displayName(emp, role)}</div>
                       <div className="text-xs text-slate-400">{emp.email}</div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 font-semibold">{emp.region || 'Pakistan'}</td>
-                    <td className="px-6 py-4 text-center">
+                    </Td>
+                    <Td className="text-slate-600 font-semibold">{emp.region || 'Pakistan'}</Td>
+                    <Td align="center">
                       <TrackerStatusBadge hb={hb} settings={settings} align="center" />
-                    </td>
-                    <td className="px-6 py-4 text-center">
+                    </Td>
+                    <Td align="center">
                       {canManage ? (
                         <>
-                          <button
-                            onClick={() => handleToggle(emp.email, !settings.enabled)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
+                          <Switch checked={settings.enabled} onChange={on => handleToggle(emp.email, on)} label={`Tracking for ${displayName(emp, role)}`} />
                           <div className="mt-1">
                             <Badge variant={settings.enabled ? 'success' : 'default'}>{settings.enabled ? 'Active' : 'Off'}</Badge>
                           </div>
@@ -793,9 +791,9 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                       ) : (
                         <Badge variant={settings.enabled ? 'success' : 'default'}>{settings.enabled ? 'Active' : 'Off'}</Badge>
                       )}
-                    </td>
+                    </Td>
                     {canManage && (
-                      <td className="px-6 py-4 text-center">
+                      <Td align="center">
                         <input
                           type="number"
                           min="1"
@@ -807,19 +805,19 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                           className="w-20 bg-slate-50 border border-slate-200 rounded-md py-1.5 px-2 text-center text-xs focus:border-orange-500 outline-none"
                           title="Minimum 1 minute"
                         />
-                      </td>
+                      </Td>
                     )}
                     {canManage && (
-                      <td className="px-6 py-4 text-center">
+                      <Td align="center">
                         <input
                           type="checkbox"
                           checked={settings.excludeFromAutoDelete}
                           onChange={(e) => handleExcludeToggle(emp.email, e.target.checked)}
                           className="h-4 w-4 accent-orange-600 cursor-pointer"
                         />
-                      </td>
+                      </Td>
                     )}
-                    <td className="px-6 py-4 text-center">
+                    <Td align="center">
                       {/* flex-wrap + whitespace-nowrap/shrink-0 on every
                           button — fixed 2026-08-21. Without these, a row
                           with 5 buttons (Setup Agent/Screenshots/Mouse
@@ -874,20 +872,20 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 );
               })}
               {filteredEmployees.length === 0 && (
-                <tr>
-                  <td colSpan={canManage ? 7 : 5} className="py-12 text-center text-slate-400 font-semibold italic">
+                <Tr>
+                  <EmptyState as="td" colSpan={canManage ? 7 : 5} py={12}>
                     {canManage ? 'No employees found.' : 'No teammates found on your team(s) yet.'}
-                  </td>
-                </tr>
+                  </EmptyState>
+                </Tr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        </TableScroll>
         
         {/* Mobile card stack */}
         <div className="md:hidden space-y-3 p-4">
@@ -912,12 +910,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
                     <p className="text-[10px] text-slate-400 font-semibold uppercase">Tracking</p>
                     {canManage ? (
                       <div className="flex items-center gap-2 mt-0.5">
-                        <button
-                          onClick={() => handleToggle(emp.email, !settings.enabled)}
-                          className={`relative inline-flex h-5 w-9 shrink-0 flex-none items-center rounded-full transition-colors ${settings.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                        >
-                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${settings.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                        </button>
+                        <Switch size="sm" checked={settings.enabled} onChange={on => handleToggle(emp.email, on)} label={`Tracking for ${displayName(emp, role)}`} />
                         <Badge variant={settings.enabled ? 'success' : 'default'} className="text-[9px] px-1.5 py-0">
                           {settings.enabled ? 'Active' : 'Off'}
                         </Badge>
@@ -1002,7 +995,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
             );
           })}
           {filteredEmployees.length === 0 && (
-            <p className="py-8 text-center text-slate-400 font-semibold italic text-sm">No employees found.</p>
+            <EmptyState py={8} size="sm">No employees found.</EmptyState>
           )}
         </div>
       </Card>
@@ -1350,7 +1343,7 @@ AGENT_TOKEN=${settings.agentToken}`}
                 ))}
               </div>
             ) : viewerShots.length === 0 ? (
-              <p className="text-center text-slate-400 text-xs font-semibold italic py-10">No screenshots captured in this period.</p>
+              <EmptyState py={10} size="xs">No screenshots captured in this period.</EmptyState>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[50vh] overflow-y-auto pr-1">
                 {viewerShots.map((shot, idx) => (
@@ -1509,9 +1502,9 @@ AGENT_TOKEN=${settings.agentToken}`}
                     show clearly "when" each stretch happened, not just a flat
                     list. On the Daily view this collapses to a single group. */}
                 {mouseLogs.length === 0 ? (
-                  <p className="text-center text-slate-400 text-xs font-semibold italic py-10">
+                  <EmptyState py={10} size="xs">
                     No mouse inactivity of 3+ minutes recorded in this period.
-                  </p>
+                  </EmptyState>
                 ) : (
                   <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
                     {mouseLogsByDay().map(group => (
@@ -1520,26 +1513,26 @@ AGENT_TOKEN=${settings.agentToken}`}
                           <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">{group.day}</p>
                           <p className="text-[10px] font-bold text-amber-700">{formatDuration(group.totalSeconds)} total</p>
                         </div>
-                        <table className="w-full text-xs text-left">
-                          <thead>
+                        <Table size="xs">
+                          <THead>
                             <tr className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                               <th className="py-1 font-bold">Start</th>
                               <th className="py-1 font-bold">End</th>
                               <th className="py-1 font-bold text-right">Duration</th>
                               <th className="py-1 font-bold text-right">Device</th>
                             </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          </THead>
+                          <TBody>
                             {group.logs.map(log => (
-                              <tr key={log.id}>
+                              <Tr key={log.id}>
                                 <td className="py-1.5 font-semibold text-slate-700">{formatTimeNY(log.startAt)}</td>
                                 <td className="py-1.5 font-semibold text-slate-700">{formatTimeNY(log.endAt)}</td>
                                 <td className="py-1.5 font-bold text-amber-700 text-right">{formatDuration(log.durationSeconds)}</td>
                                 <td className="py-1.5 text-slate-400 text-[10px] text-right">{log.deviceLabel || '—'}</td>
-                              </tr>
+                              </Tr>
                             ))}
-                          </tbody>
-                        </table>
+                          </TBody>
+                        </Table>
                       </div>
                     ))}
                   </div>

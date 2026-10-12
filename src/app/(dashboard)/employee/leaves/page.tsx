@@ -9,10 +9,17 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Clock, PlusCircle, AlertCircle, HelpCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
+import { Input, Select, Textarea } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { StatCard } from '@/components/ui/StatCard';
+import { TableSkeletonRows } from '@/components/ui/Skeleton';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
-  const { data: allLeaves, refetch: refetchLeaves } = useLeaves();
+  const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
 
   const [leaves, setLeaves] = useState<LeaveApplication[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -249,27 +256,9 @@ export default function EmployeeLeavesPage() {
 
       {/* Dynamic PTO balances */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border border-slate-200">
-          <CardContent className="pt-5">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Remaining Bank (PTO + Sick)</p>
-            <p className="text-3xl font-bold text-orange-600 mt-1">{remainingPTO} Days</p>
-            <p className="text-[10px] text-slate-400 mt-1">Capped at 30 days maximum ceiling</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-slate-200">
-          <CardContent className="pt-5">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Accrued</p>
-            <p className="text-3xl font-bold text-slate-800 mt-1">{accruedPTO} Days</p>
-            <p className="text-[10px] text-slate-400 mt-1">Accumulated at individual anniversary date</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-slate-200">
-          <CardContent className="pt-5">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Approved Days Taken</p>
-            <p className="text-3xl font-bold text-slate-800 mt-1">{takenPTO} Days</p>
-            <p className="text-[10px] text-slate-400 mt-1">PTO + Sick Leave, upon official CEO validation</p>
-          </CardContent>
-        </Card>
+        <StatCard label="Remaining Bank (PTO + Sick)" value={<>{remainingPTO} Days</>} size="xl" valueTone="accent" sub="Capped at 30 days maximum ceiling" />
+        <StatCard label="Total Accrued" value={<>{accruedPTO} Days</>} size="xl" sub="Accumulated at individual anniversary date" />
+        <StatCard label="Approved Days Taken" value={<>{takenPTO} Days</>} size="xl" sub="PTO + Sick Leave, upon official CEO validation" />
       </div>
 
       {/* Jan 31 Settlement Simulator */}
@@ -322,25 +311,29 @@ export default function EmployeeLeavesPage() {
       {/* History log */}
       <Card className="overflow-hidden p-0 border border-slate-200">
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[700px] text-sm text-left border-collapse">
-            <thead className="text-xs font-bold text-slate-600 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
+        <TableScroll hideOnMobile>
+          <Table minWidth={700}>
+            <THead>
               <tr>
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Dates</th>
-                <th className="px-6 py-4">Reason</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-center">Actions</th>
+                <Th>Type</Th>
+                <Th>Dates</Th>
+                <Th>Reason</Th>
+                <Th align="center">Status</Th>
+                <Th align="center">Actions</Th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
+            </THead>
+            <TBody>
+{leavesLoading ? (
+  <TableSkeletonRows rows={5} cols={5} />
+) : (
+<>
               {filteredLeaves.map(leave => (
-                <tr key={leave.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-slate-900">{leave.type}</td>
-                  <td className="px-6 py-4 text-slate-600 font-medium">{leave.duration}</td>
-                  <td className="px-6 py-4 text-slate-500">{leave.reason}</td>
-                  <td className="px-6 py-4 text-center">{getStatusBadge(leave.status)}</td>
-                  <td className="px-6 py-4 text-center">
+                <Tr key={leave.id}>
+                  <Td className="font-semibold text-slate-900">{leave.type}</Td>
+                  <Td className="text-slate-600 font-medium">{leave.duration}</Td>
+                  <Td className="text-slate-500">{leave.reason}</Td>
+                  <Td align="center">{getStatusBadge(leave.status)}</Td>
+                  <Td align="center">
                     {leave.status === 'pending' ? (
                       <button
                         type="button"
@@ -353,19 +346,21 @@ export default function EmployeeLeavesPage() {
                     ) : (
                       <span className="text-slate-300 text-xs">—</span>
                     )}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
               {filteredLeaves.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center py-12 text-slate-400 font-semibold italic text-xs">
+                <Tr>
+                  <EmptyState as="td" colSpan={5} py={12} size="xs">
                     No leave requests found
-                  </td>
-                </tr>
+                  </EmptyState>
+                </Tr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </>
+)}
+</TBody>
+          </Table>
+        </TableScroll>
         {/* Mobile card stack */}
         <div className="md:hidden space-y-2 p-3">
           {filteredLeaves.map(leave => (
@@ -398,8 +393,9 @@ export default function EmployeeLeavesPage() {
               </div>
             </div>
           ))}
-          {filteredLeaves.length === 0 && (
-            <p className="text-center py-12 text-slate-400 font-semibold italic text-xs">No leave requests found</p>
+          {leavesLoading && <ListSkeleton rows={3} />}
+          {!leavesLoading && filteredLeaves.length === 0 && (
+            <EmptyState py={12} size="xs">No leave requests found</EmptyState>
           )}
         </div>
       </Card>
@@ -413,49 +409,45 @@ export default function EmployeeLeavesPage() {
               {error}
             </div>
           )}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Leave Type</label>
-            <select
+          <FormField label="Leave Type" size="md">
+            <Select
               value={leaveType}
               onChange={(e) => setLeaveType(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+              fieldSize="md"
             >
               <option value="urgent">Urgent Leave (any time, deducts 2 days pay/day)</option>
               <option value="normal">Normal Leave (14 days notice, deducts 1 day pay/day)</option>
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Start Date *</label>
-              <input
+            <FormField label="Start Date *" size="md">
+              <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+                fieldSize="md"
               />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">End Date *</label>
-              <input
+            </FormField>
+            <FormField label="End Date *" size="md">
+              <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
+                fieldSize="md"
               />
-            </div>
+            </FormField>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Reason *</label>
-            <textarea
+          <FormField label="Reason *" size="md">
+            <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 resize-none"
+              fieldSize="md" className="resize-none"
               placeholder="Provide explanation..."
             />
-          </div>
+          </FormField>
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isSubmittingLeave} onClick={() => setIsLeaveOpen(false)}>Cancel</Button>

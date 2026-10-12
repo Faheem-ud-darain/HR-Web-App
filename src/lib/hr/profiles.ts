@@ -12,6 +12,7 @@ import { pb } from '../pocketbase';
 import { getOrCreateDeviceId, getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
+import { pbFilter } from '../pbFilter';
 import {
   pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField,
   pbGetKV, pbSetKV, pbDeleteKVByKeys, withTimeout,
@@ -462,7 +463,7 @@ export const profileActions = {
     // gone. Also drop their heartbeat row.
     if (email) {
       const settingsRow = await pbFindByField('hr_tracking_settings', 'employeeEmail', lower)
-        ?? (await pbList('hr_tracking_settings', { filter: `employeeEmail ~ "${lower.replace(/"/g, '\\"')}"` }))
+        ?? (await pbList('hr_tracking_settings', { filter: pbFilter('employeeEmail ~ {:email}', { email: lower }) }))
           .find((r: any) => (r.employeeEmail || '').toLowerCase() === lower);
       if (settingsRow) await pbDelete('hr_tracking_settings', settingsRow.id);
       await pbDeleteByField('hr_tracker_signals', 'email', lower);
@@ -503,7 +504,7 @@ export const profileActions = {
       // hr_leaves has no email field — matched by name everywhere else in
       // this app (see getApprovedLeaveDays/getRemainingPTO), so do the same here.
       deletions.push(
-        pbList('hr_leaves', { filter: `employee_name = "${fullName.replace(/"/g, '\\"')}"` })
+        pbList('hr_leaves', { filter: pbFilter('employee_name = {:name}', { name: fullName }) })
           .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_leaves', r.id))))
       );
     }
@@ -599,7 +600,7 @@ export const profileActions = {
       pbListByEmailField('hr_tickets', 'employee_email', email),
       email ? getCareerApplicationsForEmailAdmin(email) : Promise.resolve([]),
       pbListByEmailField('hr_notifications', 'recipient_email', email),
-      pbList('hr_leaves', { filter: `employee_name = "${profile.fullName.replace(/"/g, '\\"')}"` }),
+      pbList('hr_leaves', { filter: pbFilter('employee_name = {:name}', { name: profile.fullName }) }),
       email ? hrActions.getScreenshots({ employeeEmail: email }) : Promise.resolve([]),
     ]);
     zip.file('payroll.json', JSON.stringify(payrollRows, null, 2));
@@ -796,7 +797,7 @@ export const profileActions = {
           let actorLabel = email;
           let actorEmailForPush: string | undefined = email;
           try {
-            const rawMatches = await pbList('hr_profiles', { filter: `email ~ "${email.replace(/"/g, '\\"')}"` });
+            const rawMatches = await pbList('hr_profiles', { filter: pbFilter('email ~ {:email}', { email }) });
             const rawProfile = rawMatches.find((r: any) => (r.email || '').toLowerCase() === email.toLowerCase());
             if (rawProfile) {
               const extras = await getProfileExtras(rawProfile.id);

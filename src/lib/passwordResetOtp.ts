@@ -20,6 +20,7 @@
 
 import { pbAdminFetch, adminFindByField, adminUpsertByField, adminDeleteByField } from './pbAdmin';
 import { hashPassword } from './serverAuth';
+import { pbFilter } from '@/lib/pbFilter';
 
 const OTP_COLLECTION = 'hr_password_reset_otps';
 const RATE_LIMIT_COLLECTION = 'hr_rate_limits';
@@ -90,8 +91,7 @@ async function setRlRecord(rlKey: string, value: any): Promise<void> {
 // exact address in JS.
 export async function findProfileByEmail(email: string): Promise<{ id: string; email: string; fullName: string } | null> {
   const clean = email.toLowerCase().trim();
-  const escaped = clean.replace(/"/g, '\\"');
-  const encoded = encodeURIComponent(`email ~ "${escaped}"`);
+  const encoded = encodeURIComponent(pbFilter('email ~ {:email}', { email: clean }));
   const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=20`);
   const items: any[] = list?.items || [];
   const item = items.find((p) => (p.email || '').toLowerCase().trim() === clean);

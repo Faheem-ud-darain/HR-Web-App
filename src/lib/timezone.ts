@@ -153,3 +153,9 @@ export function formatInViewerLocalTime(date: Date | string | number): string {
     minute: '2-digit',
   });
 }
+
+
+/** "YYYY-MM-DD" (America/New_York) for the day `days` days before `now`. */
+export function daysAgoNYDateString(days: number, now: Date = new Date()): string {
+  return getNYDateString(new Date(now.getTime() - days * 24 * 3600 * 1000));
+}
