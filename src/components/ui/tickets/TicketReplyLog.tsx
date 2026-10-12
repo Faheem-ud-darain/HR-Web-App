@@ -54,6 +54,16 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
     
       {/* Replies list */}
       {selectedTicket.replies.map((rep, repIdx) => {
+        if (rep.event) {
+          const who = rep.senderRole === 'hr' ? 'HR' : rep.senderRole === 'admin' ? 'Admin' : 'employee';
+          return (
+            <div key={rep.id} className="flex justify-center py-1">
+              <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded-full px-3 py-1 text-center">
+                Ticket {rep.event} by {nameFor(rep.senderName)} ({who}) · {formatTicketDate(rep.timestamp)}
+              </span>
+            </div>
+          );
+        }
         let isSenderSelf = false;
     
         // 1. Direct email match if available

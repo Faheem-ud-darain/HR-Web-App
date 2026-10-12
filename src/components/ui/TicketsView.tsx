@@ -590,7 +590,7 @@ export function TicketsView({ role }: TicketsViewProps) {
     if (!ticket) return;
     setUpdatingTicketStatusId(id);
     try {
-      await hrActions.updateTicketStatus(ticket, action);
+      await hrActions.updateTicketStatus(ticket, action, { name: userProfile?.fullName || (role === 'hr' ? 'HR' : role === 'admin' ? 'Admin' : 'Employee'), role, email: currentEmail });
       refetchTickets();
     } finally {
       setUpdatingTicketStatusId(null);

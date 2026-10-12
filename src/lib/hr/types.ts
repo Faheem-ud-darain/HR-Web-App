@@ -366,6 +366,8 @@ export interface CareerApplication {
 export interface TicketReply {
   id: string; senderName: string; senderRole: 'employee' | 'hr' | 'admin' | 'team_lead'; message: string; timestamp: string;
   attachmentName?: string; attachmentUrl?: string; attachmentSize?: number; senderEmail?: string;
+  /** Set on system entries recording who closed/reopened the ticket (no message body). */
+  event?: 'closed' | 'reopened';
 }
 
 export interface Ticket {

@@ -220,19 +220,29 @@ export const ticketActions = {
       await hrActions.addNotification('all', 'admin', `New support message from ${ticket.employeeName} on ticket "${ticket.title}".`, undefined, undefined, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', ticket.id));
     }
   },
-  updateTicketStatus: async (ticket: Ticket, status: 'open' | 'closed'): Promise<void> => {
-    await pbUpdate('hr_tickets', ticket.id, { status });
-    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
+  updateTicketStatus: async (
+    ticket: Ticket,
+    status: 'open' | 'closed',
+    actor?: { name: string; role: TicketReply['senderRole']; email?: string },
+  ): Promise<void> => {
+    // The thread records who closed/reopened it (employee, HR, Admin) as an
+    // event entry in the existing replies JSON — no schema change needed.
+    const event: TicketReply | null = actor
+      ? { id: `evt_${Date.now()}`, senderName: actor.name, senderRole: actor.role, senderEmail: actor.email, message: '', timestamp: new Date().toISOString(), event: status === 'closed' ? 'closed' : 'reopened' }
+      : null;
+    await pbUpdate('hr_tickets', ticket.id, event ? { status, replies: [...ticket.replies, event] } : { status });
+    const by = actor ? ` by ${actor.name} (${actor.role === 'team_lead' ? 'employee' : actor.role === 'hr' ? 'HR' : actor.role === 'admin' ? 'Admin' : 'employee'})` : '';
+    await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}${by}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
     if (ticket.department === 'hr') {
-      await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
+      await hrActions.addNotification('all', 'hr', `Support ticket "${ticket.title}" is now ${status}${by}.`, 'ticket', ticket.title, undefined, buildNotificationLink('hr', 'ticket', ticket.id));
     } else if (ticket.department === 'technical') {
       const techEmails = await getTechnicalSupportEmails();
       for (const email of techEmails) {
-        await hrActions.addNotification(email, 'employee', `Technical ticket "${ticket.title}" is now ${status}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
+        await hrActions.addNotification(email, 'employee', `Technical ticket "${ticket.title}" is now ${status}${by}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
       }
     }
     // Dashboard-only for Admin — same reasoning as the create/reply notifications above.
-    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}.`, undefined, undefined, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
+    await hrActions.addNotification('all', 'admin', `Support ticket "${ticket.title}" is now ${status}${by}.`, undefined, undefined, undefined, buildNotificationLink('admin', 'ticket', ticket.id));
     // Starts/clears the 15-day attachment-deletion timer (see
     // checkTicketAttachmentRetention below) — hr_tickets has no closedAt
     // column of its own, so this is tracked in the KV store the same way
