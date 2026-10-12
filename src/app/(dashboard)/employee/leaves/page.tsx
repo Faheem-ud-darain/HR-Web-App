@@ -19,7 +19,8 @@ import { ListSkeleton } from '@/components/ui/Skeleton';
 
 export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
-  const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
+  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
+  const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
 
   const [leaves, setLeaves] = useState<LeaveApplication[]>([]);
   const [searchQuery, setSearchQuery] = useState('');

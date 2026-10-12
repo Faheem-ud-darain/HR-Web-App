@@ -8,7 +8,7 @@
 // exactly as the server and the UI use them. `now` is always injected.
 import { describe, it, expect } from 'vitest';
 import { getWeekdaysInMonth, isWeekday, localShiftDate } from './dates';
-import { getRemainingPTO, getAccruedPTOForDisplay, getApprovedLeaveDaysInMonth } from './leaves';
+import { getRemainingPTO, getAccruedPTOForDisplay, getApprovedLeaveDaysInMonth, getApprovedLeaveOnDate, parseLeaveDay, parseLeaveDateStrings, getLeaveRange, eachLeaveDay, leaveDayCount } from './leaves';
 import { elapsedMinutes, getCaptureHealth, hasStaleTrackerToken, isHeartbeatLive, isShiftTabHeartbeatLive } from './timesheets';
 import { detectAbsences, findWeekendAbsenceRecords, findPreJoinAbsenceRecords, describeAbsence, countAbsentWeekdays } from './absences';
 import { getAbsenceDeductionForMonth, getShiftShortfallDeduction, getFinalLeavePayout } from './payroll';
@@ -59,6 +59,38 @@ describe('leaves', () => {
     expect(getApprovedLeaveDaysInMonth([l], 'Test Employee', 'Urgent', '2026-09')).toBe(2);
     expect(getApprovedLeaveDaysInMonth([l], 'Test Employee', 'Urgent', '2026-08')).toBe(1);
     expect(getApprovedLeaveDaysInMonth([leave({ duration: 'nonsense - nope' })], 'Test Employee', 'Urgent', '2026-09')).toBe(0);
+  });
+});
+
+describe('leave date ranges (timezone-independent calendar days)', () => {
+  it('parses the formats the app writes, plus ISO', () => {
+    expect(parseLeaveDay('Sep 03, 2026')).toBe('2026-09-03');
+    expect(parseLeaveDay('September 3 2026')).toBe('2026-09-03');
+    expect(parseLeaveDay('2026-09-03')).toBe('2026-09-03');
+    expect(parseLeaveDay('nonsense')).toBeNull();
+    expect(parseLeaveDay('Foo 03, 2026')).toBeNull();
+  });
+  it('parses single days and ranges, and normalises a reversed range', () => {
+    expect(parseLeaveDateStrings('Sep 03, 2026')).toEqual({ start: '2026-09-03', end: '2026-09-03' });
+    expect(parseLeaveDateStrings('Sep 03, 2026 - Sep 05, 2026')).toEqual({ start: '2026-09-03', end: '2026-09-05' });
+    expect(parseLeaveDateStrings('Sep 05, 2026 - Sep 03, 2026')).toEqual({ start: '2026-09-03', end: '2026-09-05' });
+    expect(parseLeaveDateStrings('nonsense - nope')).toBeNull();
+  });
+  it('prefers stored start/end over the free-text duration', () => {
+    expect(getLeaveRange({ duration: 'Sep 03, 2026', startDate: '2026-10-01', endDate: '2026-10-02' })).toEqual({ start: '2026-10-01', end: '2026-10-02' });
+    expect(getLeaveRange({ duration: 'Sep 03, 2026' })).toEqual({ start: '2026-09-03', end: '2026-09-03' });
+  });
+  it('walks days across month and year boundaries, inclusive', () => {
+    expect(eachLeaveDay({ start: '2026-12-30', end: '2027-01-02' })).toEqual(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']);
+    expect(leaveDayCount({ start: '2026-09-03', end: '2026-09-05' })).toBe(3);
+  });
+  it('covers exactly the booked days regardless of the machine timezone', () => {
+    // Was off by one day when run in e.g. Asia/Karachi (local-midnight Date -> NY day).
+    const l = leave({ type: 'Normal', duration: 'Sep 03, 2026 - Sep 04, 2026' });
+    expect(getApprovedLeaveOnDate([l], 'Test Employee', '2026-09-02')).toBeNull();
+    expect(getApprovedLeaveOnDate([l], 'Test Employee', '2026-09-03')).not.toBeNull();
+    expect(getApprovedLeaveOnDate([l], 'Test Employee', '2026-09-04')).not.toBeNull();
+    expect(getApprovedLeaveOnDate([l], 'Test Employee', '2026-09-05')).toBeNull();
   });
 });
 

@@ -107,7 +107,8 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
   const { data: allWarehouses } = useWarehouses();
-  const { data: allLeaves } = useLeaves();
+  // This employee's own leaves (all of them) — drives their PTO bank / payout.
+  const { data: allLeaves } = useLeaves({ employeeName: profile?.fullName ?? null });
   const warehouses = allWarehouses || [];
   const leaves = allLeaves || [];
 

@@ -25,7 +25,9 @@ import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Ta
 
 export default function EmployeeDashboard() {
   const { data: allProfiles } = useProfiles();
-  const { data: allLeaves } = useLeaves();
+  // Own leaves only (all of them — the PTO balance needs the full history).
+  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
+  const { data: allLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
   // Own net-payable figure only, via the authenticated self-only
   // /api/payroll/me route (see usePayrollSelf's comment in hrData.ts) — not
   // the public useProfiles()/usePayroll() combo, which would leak every

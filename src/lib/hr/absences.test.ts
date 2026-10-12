@@ -178,11 +178,9 @@ describe('runAbsenceCheck — approved leave overrides everything', () => {
   it('does not mark an employee absent on a date fully covered by an approved leave, regardless of hours worked', async () => {
     const emp = makeProfile();
     mockFreshTimesheets = [fullShiftOn(emp.email, '2026-09-11'), fullShiftOn(emp.email, '2026-09-14')]; // Sep 15 has zero minutes, which would normally be no_clock_in
-    // Nominal "2026-09-16 - 2026-09-16" reads back (after the same
-    // new Date(...) + NY-conversion shift documented in leaves.test.ts /
-    // payroll.test.ts) as the actual NY date 2026-09-15 — the target date.
+    // A one-day approved leave on the target date, 2026-09-15.
     const leaves: LeaveApplication[] = [
-      { id: 'lv1', employeeName: emp.fullName, type: 'PTO', duration: '2026-09-16 - 2026-09-16', status: 'approved', reason: 'vacation' },
+      { id: 'lv1', employeeName: emp.fullName, type: 'PTO', duration: '2026-09-15 - 2026-09-15', status: 'approved', reason: 'vacation' },
     ];
     await absenceActions.runAbsenceCheck([emp], [], leaves, []);
     const created = extractCreatedRecords();

@@ -61,3 +61,19 @@ export function localShiftDate(clockInISO: string | undefined | null, fallbackDa
   }
   return fallbackDate || '—';
 }
+
+const DAY_MS = 24 * 3600 * 1000;
+const dayNumber = (s: string) => Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10))) / DAY_MS;
+const dayString = (n: number) => new Date(n * DAY_MS).toISOString().slice(0, 10);
+
+/** "YYYY-MM-DD" plus `n` calendar days — pure string math, so it is timezone-independent. */
+export function addDays(dateStr: string, n: number): string {
+  return dayString(dayNumber(dateStr) + n);
+}
+
+/** Every calendar day from `start` through `end` inclusive ("YYYY-MM-DD"); empty if end < start. */
+export function eachDay(start: string, end: string): string[] {
+  const days: string[] = [];
+  for (let n = dayNumber(start); n <= dayNumber(end); n++) days.push(dayString(n));
+  return days;
+}

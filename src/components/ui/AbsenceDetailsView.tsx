@@ -3,9 +3,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, parseLeaveDates, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
+import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
 import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
-import { formatTimeNY, getNYDateString } from '@/lib/timezone';
+import { formatTimeNY } from '@/lib/timezone';
+import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
@@ -215,12 +216,10 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       const empEmail = (empProfile?.email || '').toLowerCase();
       if (role === 'employee' && filterEmail && empEmail !== filterEmail.toLowerCase()) continue;
 
-      const dates = parseLeaveDates(l.duration);
-      if (!dates || isNaN(dates.start.getTime()) || isNaN(dates.end.getTime())) continue;
-      const endStr = getNYDateString(dates.end);
+      const range = getLeaveRange(l);
+      if (!range) continue;
 
-      for (const cursor = new Date(dates.start); getNYDateString(cursor) <= endStr; cursor.setDate(cursor.getDate() + 1)) {
-        const dateKey = getNYDateString(cursor);
+      for (const dateKey of eachLeaveDay(range)) {
         if (selectedDate && dateKey !== selectedDate) continue;
 
         if (searchQuery.trim()) {

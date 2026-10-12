@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
   { key: 'pending',     label: 'Pending Review',       headerBg: 'bg-amber-50 border-amber-200'   },
@@ -25,7 +26,8 @@ const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: strin
 type TabView = 'kanban' | 'history';
 
 export default function HRLeavesPage() {
-  const { data: leaves = [], isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
+  const [leaveWindowDays, setLeaveWindowDays] = useState(365);
+  const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
   const { data: employees = [] } = useProfiles();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<LeaveApplication['status'] | null>(null);
@@ -261,6 +263,14 @@ export default function HRLeavesPage() {
           { value: 'kanban', label: 'Kanban Board', icon: <BarChart3 className="h-4 w-4" /> },
           { value: 'history', label: 'History & Audit Log', icon: <List className="h-4 w-4" /> },
         ]}
+      />
+
+      <LoadMoreHistory
+        days={leaveWindowDays}
+        maxDays={365 * 5}
+        loading={leavesFetching}
+        noun="leaves"
+        onLoadMore={() => setLeaveWindowDays(d => d + 365)}
       />
 
       {/* ── KANBAN VIEW ── */}

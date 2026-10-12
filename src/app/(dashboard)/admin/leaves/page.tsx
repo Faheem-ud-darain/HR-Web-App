@@ -10,11 +10,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 
 type TabView = 'queue' | 'history';
 
 export default function AdminLeavesPage() {
-  const { data: leaves = [], isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves();
+  const [leaveWindowDays, setLeaveWindowDays] = useState(365);
+  const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
   const { data: employees = [] } = useProfiles();
   const [searchQuery, setSearchQuery] = useState('');
   const { showToast } = useActionToast();
@@ -120,6 +122,14 @@ export default function AdminLeavesPage() {
           { value: 'queue', label: 'CEO Approval Queue', icon: <ShieldCheck className="h-4 w-4" />, badge: stats.hrApproved },
           { value: 'history', label: 'Full History', icon: <List className="h-4 w-4" /> },
         ]}
+      />
+
+      <LoadMoreHistory
+        days={leaveWindowDays}
+        maxDays={365 * 5}
+        loading={leavesFetching}
+        noun="leaves"
+        onLoadMore={() => setLeaveWindowDays(d => d + 365)}
       />
 
       {/* ── CEO QUEUE TAB ── */}

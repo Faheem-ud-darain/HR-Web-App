@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch } from '@/lib/pbAdmin';
+import { parseLeaveDateStrings } from '@/lib/core/leaves';
 
 export const runtime = 'edge';
 
@@ -701,6 +702,54 @@ export async function POST(request: Request) {
         body: JSON.stringify({ schema: newSchema }),
       });
       return NextResponse.json({ ok: true, collection: name, field: field.name, result: 'added' });
+    }
+    if (body.action === 'ensureLeaveDateFields') {
+      // Adds hr_leaves.start_date / end_date ("YYYY-MM-DD" text) so leaves can be
+      // filtered by date server-side. Purely additive — never touches existing
+      // fields or rows. Run backfillLeaveDates afterwards to fill old rows.
+      const results: Record<string, string> = {};
+      const existing = await pbAdminFetch('/api/collections/hr_leaves');
+      let schema: any[] = existing.schema || [];
+      let changed = false;
+      for (const name of ['start_date', 'end_date']) {
+        if (schema.some((f: any) => f.name === name)) { results[name] = 'already exists'; continue; }
+        schema = [...schema, { name, type: 'text', required: false, unique: false, options: { min: null, max: 10, pattern: '' } }];
+        results[name] = 'added';
+        changed = true;
+      }
+      if (changed) {
+        await pbAdminFetch(`/api/collections/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ schema }) });
+      }
+      return NextResponse.json({ ok: true, results });
+    }
+    if (body.action === 'backfillLeaveDates') {
+      // Fills start_date / end_date on hr_leaves rows that don't have them yet by
+      // parsing the free-text `duration` ("Sep 03, 2026 - Sep 04, 2026"). Rows
+      // whose duration can't be parsed are reported and left untouched. Defaults
+      // to a dry run — pass { dryRun: false } to write.
+      const dryRun = body.dryRun !== false;
+      const filter = encodeURIComponent('start_date = "" || end_date = ""');
+      const updates: Array<{ id: string; duration: string; start: string; end: string }> = [];
+      const unparseable: Array<{ id: string; duration: string }> = [];
+      for (let page = 1; page < 50; page++) {
+        const res = await pbAdminFetch(`/api/collections/hr_leaves/records?perPage=200&page=${page}&filter=${filter}&fields=id,duration,start_date,end_date`);
+        const items: any[] = res?.items || [];
+        for (const r of items) {
+          const range = parseLeaveDateStrings(r.duration || '');
+          if (range) updates.push({ id: r.id, duration: r.duration, start: range.start, end: range.end });
+          else unparseable.push({ id: r.id, duration: r.duration });
+        }
+        if (items.length < 200) break;
+      }
+      if (!dryRun) {
+        for (const u of updates) {
+          await pbAdminFetch(`/api/collections/hr_leaves/records/${u.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ start_date: u.start, end_date: u.end }),
+          });
+        }
+      }
+      return NextResponse.json({ ok: true, dryRun, toUpdate: updates.length, unparseable, sample: updates.slice(0, 8) });
     }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err: any) {

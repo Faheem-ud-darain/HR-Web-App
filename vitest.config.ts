@@ -1,6 +1,6 @@
 // Pin the runner's timezone: leave durations are parsed as local-midnight dates,
 // so results would otherwise differ by machine (see src/lib/core/core.test.ts).
-process.env.TZ = 'America/New_York';
+process.env.TZ = process.env.TZ || 'America/New_York';
 
 import { defineConfig } from 'vitest/config';
 

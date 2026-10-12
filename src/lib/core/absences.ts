@@ -3,7 +3,7 @@
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import { getNYDateString } from '../timezone';
 import type { AbsenceRecord, Profile, TimesheetEntry, LeaveApplication, InactivityLog } from '../hr/types';
-import { getWeekdaysInMonth, isWeekday, localShiftDate } from './dates';
+import { getWeekdaysInMonth, isWeekday, localShiftDate, addDays, eachDay } from './dates';
 import { isApprovedLeaveOnDate } from './leaves';
 import { elapsedMinutes } from './timesheets';
 
@@ -53,10 +53,9 @@ export function countAbsentWeekdays(
       .map(t => localShiftDate(t.clockIn, t.date))
   );
 
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   let absentDays = 0;
-  for (const cursor = new Date(monthStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-    const dateStr = getNYDateString(cursor);
+  // First of the New York month through yesterday — string math, no local-timezone dates.
+  for (const dateStr of eachDay(`${todayStr.slice(0, 8)}01`, addDays(todayStr, -1))) {
     if (dateStr >= todayStr) break; // never count today or the future
     if (joinedStr && dateStr < joinedStr) continue; // not employed yet
     if (!isWeekday(dateStr)) continue;
@@ -211,11 +210,7 @@ export function detectAbsences(input: {
       shiftDatesWithTotalMinutes.set(shiftDate, existingTotal + shiftMins);
     }
 
-    const today = new Date(now);
-    const lookbackStart = new Date(today);
-    lookbackStart.setDate(today.getDate() - ABSENCE_LOOKBACK_DAYS);
-    for (const cursor = new Date(lookbackStart); cursor < today; cursor.setDate(cursor.getDate() + 1)) {
-      const dateStr = getNYDateString(cursor);
+    for (const dateStr of eachDay(addDays(nyTodayStr, -ABSENCE_LOOKBACK_DAYS), addDays(nyTodayStr, -1))) {
       if (dateStr >= nyTodayStr) break;
       if (dateStr < ABSENCE_ENFORCEMENT_START_DATE) continue;
       if (joinedStr && dateStr < joinedStr) continue;
