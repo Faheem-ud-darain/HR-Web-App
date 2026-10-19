@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch, adminUpsertByField, adminListAllPayroll, adminListPayrollForEmployee, adminDeletePayrollForEmployee, adminFindProfileByEmail } from '@/lib/pbAdmin';
+import type { PbRow } from '@/lib/pbTypes';
 
 // Same "why was I deducted" breakdown key scheme /api/payroll/me reads back
 // (see that route's comment) — not a real hr_payroll column (the live
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 });
   }
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/payroll POST] error:', err);
     return NextResponse.json({ error: 'Could not save payroll record.' }, { status: 500 });
   }
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
 // trivial enough that duplicating it here is simpler than restructuring
 // hrData.ts to share it, matching how the career-applications route
 // already keeps its own local toCareerApplication() mapper).
-function toPayrollRecord(p: any) {
+function toPayrollRecord(p: PbRow) {
   return {
     id: p.id, employeeId: p.employee_id, name: p.employee_name, role: p.role, region: p.region,
     baseSalary: Number(p.base_salary) || 0, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus: Number(p.bonus) || 0,
@@ -150,7 +151,7 @@ export async function GET(request: Request) {
   const isPrivileged = session.role === 'hr' || session.role === 'admin';
 
   try {
-    let rows: any[];
+    let rows: PbRow[];
     if (employeeId) {
       if (!isPrivileged) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 });
       rows = await adminListPayrollForEmployee(employeeId);
@@ -161,7 +162,7 @@ export async function GET(request: Request) {
       rows = profile ? await adminListPayrollForEmployee(profile.id) : [];
     }
     return NextResponse.json({ records: rows.map(toPayrollRecord) });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/payroll GET] error:', err);
     return NextResponse.json({ error: 'Could not load payroll records.' }, { status: 500 });
   }
@@ -184,7 +185,7 @@ export async function DELETE(request: Request) {
   try {
     await adminDeletePayrollForEmployee(employeeId);
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/payroll DELETE] error:', err);
     return NextResponse.json({ error: 'Could not delete payroll records.' }, { status: 500 });
   }

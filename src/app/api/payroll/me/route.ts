@@ -4,6 +4,7 @@ import { adminFindProfileByEmail, adminListPayrollForEmployee, adminFindByField 
 import { getPendingIncrement } from '@/lib/incrementMath';
 import { getNYDateString } from '@/lib/timezone';
 import { adminListAbsenceRecordsForEmail } from '@/lib/pbAdmin';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -61,8 +62,8 @@ export async function GET(request: Request) {
       try {
         const absenceRows = await adminListAbsenceRecordsForEmail(session.email);
         liveDeductionsThisMonth = absenceRows
-          .filter((r: any) => typeof r.date === 'string' && r.date.slice(0, 7) === currentMonthKey)
-          .reduce((sum: number, r: any) => sum + (Number(r.deductionAmount) || 0), 0);
+          .filter((r: PbRow) => typeof r.date === 'string' && r.date.slice(0, 7) === currentMonthKey)
+          .reduce((sum: number, r: PbRow) => sum + (Number(r.deductionAmount) || 0), 0);
       } catch { /* best-effort — worst case the dashboard shows 0 until HR processes */ }
     }
 
@@ -130,7 +131,7 @@ export async function GET(request: Request) {
             ? { bonus: 0, deductions: liveDeductionsThisMonth, processed: false, month: currentMonthKey, deductionBreakdown: [], reservedThisMonth: 0 }
             : null),
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[payroll/me] error:', err);
     return NextResponse.json({ error: 'Could not load payroll data.' }, { status: 500 });
   }

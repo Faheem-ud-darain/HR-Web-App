@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Profile } from '@/lib/hrData';
 import { getAuthToken } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { CheckCircle2, AlertCircle, Calendar, Video, ShieldCheck, Mail, Link as LinkIcon, RefreshCw, Trash2, Smartphone } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Calendar, ShieldCheck, Mail, Trash2, Smartphone } from 'lucide-react';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 interface GoogleIntegrationCardProps {
@@ -20,7 +20,14 @@ interface GoogleIntegrationCardProps {
 // unauthenticated-read exposure of OAuth tokens, and the client never
 // needed those tokens in the first place). The route only ever returns
 // the safe display fields, never the raw tokens.
-async function fetchGoogleIntegration(): Promise<any> {
+interface GoogleIntegrationData {
+  connectedEmail: string;
+  connectedAt?: string;
+  syncCalendar?: boolean;
+  useFor2FA?: boolean;
+  useForPasswordReset?: boolean;
+}
+async function fetchGoogleIntegration(): Promise<GoogleIntegrationData | null> {
   const token = getAuthToken();
   if (!token) return null;
   const res = await fetch(`${API_BASE}/api/google/integration`, {
@@ -30,7 +37,7 @@ async function fetchGoogleIntegration(): Promise<any> {
   const data = await res.json();
   return data.data || null;
 }
-async function updateGoogleIntegration(fields: Record<string, boolean>): Promise<any> {
+async function updateGoogleIntegration(fields: Record<string, boolean>): Promise<GoogleIntegrationData | null> {
   const token = getAuthToken();
   if (!token) return null;
   const res = await fetch(`${API_BASE}/api/google/integration`, {
@@ -52,7 +59,7 @@ async function disconnectGoogleIntegration(): Promise<void> {
 }
 
 export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCardProps) {
-  const [googleData, setGoogleData] = useState<any>(null);
+  const [googleData, setGoogleData] = useState<GoogleIntegrationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -63,7 +70,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
       try {
         const data = await fetchGoogleIntegration();
         if (active) setGoogleData(data);
-      } catch (err) {
+      } catch {
         // null if never connected
       } finally {
         if (active) setLoading(false);

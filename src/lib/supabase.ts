@@ -1,4 +1,5 @@
-// This file previously contained the Supabase client used during the
+
+import type { PbRow } from '@/lib/pbTypes';// This file previously contained the Supabase client used during the
 // Supabase → PocketBase migration. The app now runs entirely on the
 // self-hosted PocketBase instance at https://pb.delcargo.us.
 //
@@ -11,4 +12,4 @@
 
 export const supabase = {
   // Stub — not connected. Use src/lib/pocketbase.ts (pb) instead.
-} as any;
+} as PbRow;

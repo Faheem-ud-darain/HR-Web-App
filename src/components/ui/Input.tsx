@@ -20,9 +20,18 @@ export const FIELD_STYLES: Record<FieldSize, string> = {
 
 const join = (size: FieldSize, className?: string) => (className ? `${FIELD_STYLES[size]} ${className}` : FIELD_STYLES[size]);
 
+// Every form built on these components gets a length cap by default, so a
+// field can't be used to push megabytes of text into the database. Pass
+// `maxLength` to override either way. Only text-like inputs are capped
+// (numbers, dates, files, checkboxes have no use for it).
+export const DEFAULT_INPUT_MAX_LENGTH = 255;
+export const DEFAULT_TEXTAREA_MAX_LENGTH = 5000;
+const TEXT_LIKE_TYPES = new Set(['text', 'search', 'tel', 'url', 'email', 'password']);
+
 type InputProps = React.InputHTMLAttributes<HTMLInputElement> & { fieldSize?: FieldSize };
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input({ fieldSize = 'md', className, ...props }, ref) {
-  return <input ref={ref} className={join(fieldSize, className)} {...props} />;
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input({ fieldSize = 'md', className, maxLength, ...props }, ref) {
+  const textLike = !props.type || TEXT_LIKE_TYPES.has(props.type);
+  return <input ref={ref} className={join(fieldSize, className)} maxLength={maxLength ?? (textLike ? DEFAULT_INPUT_MAX_LENGTH : undefined)} {...props} />;
 });
 
 type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & { fieldSize?: FieldSize };
@@ -31,6 +40,6 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function 
 });
 
 type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & { fieldSize?: FieldSize };
-export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ fieldSize = 'md', className, ...props }, ref) {
-  return <textarea ref={ref} className={join(fieldSize, className)} {...props} />;
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ fieldSize = 'md', className, maxLength, ...props }, ref) {
+  return <textarea ref={ref} className={join(fieldSize, className)} maxLength={maxLength ?? DEFAULT_TEXTAREA_MAX_LENGTH} {...props} />;
 });

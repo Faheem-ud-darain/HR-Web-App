@@ -34,7 +34,7 @@ export function usePayroll(options: { enabled?: boolean } = {}) {
 // HR/Admin-only: one employee's payroll rows, via the same route's
 // ?employeeId= scope. Used by exportEmployeeArchive's "Download Archive"
 // action (was previously a direct public pbList call against hr_payroll).
-export async function getPayrollForEmployeeAdmin(employeeId: string): Promise<any[]> {
+export async function getPayrollForEmployeeAdmin(employeeId: string): Promise<PbRow[]> {
   const token = getAuthToken();
   if (!token) return [];
   const res = await fetch(`${API_BASE}/api/admin/payroll?employeeId=${encodeURIComponent(employeeId)}`, {
@@ -121,6 +121,7 @@ export async function upsertPayrollRecordAdmin(record: PayrollRecord): Promise<v
 // here under their original names so no existing call site anywhere in the
 // app needs to change.
 import { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory, getPendingIncrementForPayrollMonth } from '../incrementMath';
+import type { PbRow } from '@/lib/pbTypes';
 export { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory, getPendingIncrementForPayrollMonth };
 export type { IncrementEvent } from '../incrementMath';
 

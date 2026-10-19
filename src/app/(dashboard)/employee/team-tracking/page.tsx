@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useProfiles, Profile } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
+import React from 'react';
+import { useProfiles } from '@/lib/hrData';
 import { TrackingView } from '@/components/ui/lazy';
 import { Users } from 'lucide-react';
+import { useSessionEmail } from '@/lib/useSession';
+import { useMemo } from 'react';
 
 // Read-only tracking view (screenshots + mouse-activity) scoped to a Team
 // Lead's own teammates. TrackingView itself enforces the "view only, never
@@ -13,15 +14,11 @@ import { Users } from 'lucide-react';
 // resolve which team(s) to scope to.
 export default function TeamLeadTrackingPage() {
   const { data: allProfiles = [] } = useProfiles();
-  const [userProfile, setUserProfile] = useState<Profile | null>(null);
-  const [userEmail, setUserEmail] = useState('');
-
-  useEffect(() => {
-    const email = getSessionEmail() || '';
-    setUserEmail(email);
-    const profile = allProfiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
-    if (profile) setUserProfile(profile);
-  }, [allProfiles]);
+  const userEmail = useSessionEmail() || '';
+  const userProfile = useMemo(
+    () => allProfiles.find(e => e.email && userEmail && e.email.toLowerCase() === userEmail.toLowerCase()) || null,
+    [allProfiles, userEmail],
+  );
 
   if (!userProfile?.isTeamLead) {
     return (

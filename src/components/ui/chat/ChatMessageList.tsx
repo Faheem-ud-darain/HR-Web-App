@@ -9,6 +9,7 @@ import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { buildNotificationLink, Message, Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { TypingIndicator } from '@/components/ui/TypingIndicator';
+import { safeHref } from '@/lib/sanitize';
 
 interface ChatMessageListProps {
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -103,7 +104,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                     />
                   </button>
                 ) : (
-                  <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline text-amber-700 ${m.text ? 'mt-2' : ''}`}>
+                  <a href={safeHref(m.attachmentUrl)} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline text-amber-700 ${m.text ? 'mt-2' : ''}`}>
                     <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
                   </a>
                 )
@@ -177,7 +178,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                         />
                       </button>
                     ) : (
-                      <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline ${c.text} mt-2`}>
+                      <a href={safeHref(m.attachmentUrl)} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline ${c.text} mt-2`}>
                         <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
                       </a>
                     )
@@ -261,7 +262,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                     </button>
                   ) : (
                     <a
-                      href={m.attachmentUrl}
+                      href={safeHref(m.attachmentUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className={`flex items-center gap-1.5 text-[11px] font-bold underline ${m.text ? 'mt-2' : ''} ${

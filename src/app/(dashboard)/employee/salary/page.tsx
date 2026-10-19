@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { FileText, Download, CheckCircle2, ShieldCheck, Printer, TrendingUp, Calendar, Info, AlertTriangle } from 'lucide-react';
+import { FileText, ShieldCheck, Printer, TrendingUp, Calendar, Info, AlertTriangle } from 'lucide-react';
 import { APP_TIMEZONE } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
@@ -410,7 +410,7 @@ export default function EmployeeSalaryPage() {
               ))}
             </div>
             <p className="text-[9px] text-slate-400 leading-relaxed">
-              This amount is added to your base salary once HR/Admin processes it via Payroll — it isn't paid out automatically.
+              This amount is added to your base salary once HR/Admin processes it via Payroll — it isn&apos;t paid out automatically.
             </p>
           </div>
         )}

@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
 import { adminUpsertByField } from '@/lib/pbAdmin';
+import { errMsg } from '@/lib/errors';
+import type { PbRow } from '@/lib/pbTypes';
 
 const GOOGLE_INTEGRATION_COLLECTION = 'hr_google_integrations';
 
@@ -21,10 +22,10 @@ export async function GET(request: Request) {
     );
   }
 
-  let state: any = {};
+  let state: PbRow = {};
   try {
     state = JSON.parse(decodeURIComponent(stateRaw));
-  } catch (err) {
+  } catch {
     // fallback
   }
 
@@ -94,10 +95,10 @@ export async function GET(request: Request) {
       </script></body></html>`,
       { headers: { 'content-type': 'text/html' } }
     );
-  } catch (err: any) {
+  } catch (err) {
     return new Response(
       `<html><body><script>
-        window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: ${JSON.stringify(err.message)} }, '*');
+        window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: ${JSON.stringify(errMsg(err))} }, '*');
       </script></body></html>`,
       { headers: { 'content-type': 'text/html' } }
     );

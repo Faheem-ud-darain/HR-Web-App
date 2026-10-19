@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── When tab/window is closed: clear the granted flag and stop stream ─────
   window.addEventListener('beforeunload', () => {
     if (desktopStream) desktopStream.getTracks().forEach(t => t.stop());
-    try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch (_) {}
+    try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch {}
   });
 
   startBtn.addEventListener('click', requestCapture);
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const track = stream.getVideoTracks()[0];
     if (track) {
       track.addEventListener('ended', () => {
-        try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch (_) {}
+        try { chrome.storage.local.set({ desktopStreamGranted: false }); } catch {}
         showIdle('Screen sharing was stopped. Click the button to restart full desktop capture.');
       });
     }
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     video.srcObject = stream;
 
     video.onloadedmetadata = async () => {
-      try { await video.play(); } catch (_) {}
+      try { await video.play(); } catch {}
 
       const w = video.videoWidth  || 1920;
       const h = video.videoHeight || 1080;
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
               chrome.windows.update(win.id, { state: 'minimized' });
             }
           });
-        } catch (_) {}
+        } catch {}
       }, 2000);
 
       // ── MANIFEST V3 KEEPALIVE ──

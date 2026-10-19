@@ -11,12 +11,16 @@ import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import type {
-  Warehouse, Profile, Team, Message, TeamDocument, Notification, NotificationReadMap,
+  Warehouse, Profile, Team, Message, TeamDocument,
 } from './types';
-import { pbList, pbCreate, pbUpdate, pbDelete, pbGetIdSetMap, pbMarkIdsInField, HR_ADMIN_LINE_TEAM_ID } from './shared';
+import { pbList, pbCreate, pbUpdate, pbDelete, pbGetIdSetMap, pbMarkIdsInField, HR_ADMIN_LINE_TEAM_ID, type ReadScope } from './shared';
 import { hrActions, buildNotificationLink, updateProfileAdmin } from '../hrData';
 import { pbFilter } from '../pbFilter';
 import { POLL_MS, POLL_OPTIONS } from './polling';
+import { every } from '../idle';
+import { touchActivity } from './activity';
+import { chatScope } from '../core/activity';
+import type { PbRow } from '@/lib/pbTypes';
 
 // Read receipts for regular Team Chat messages — same shape again (message
 // id -> emails who've viewed it). Kept as its own KV key/blob rather than
@@ -27,15 +31,15 @@ import { POLL_MS, POLL_OPTIONS } from './polling';
 // not needed yet at this app's scale.
 type MessageReadMap = Record<string, string[]>;
 
-function toWarehouse(w: any): Warehouse {
+function toWarehouse(w: PbRow): Warehouse {
   return { id: w.id, name: w.name, latitude: Number(w.latitude), longitude: Number(w.longitude), radius: Number(w.radius) };
 }
 
-function toTeam(t: any): Team {
+function toTeam(t: PbRow): Team {
   return { id: t.id, name: t.name, leadEmail: t.lead_email || undefined, members: t.members || [], warehouseId: t.warehouse_id || undefined };
 }
 
-function toMessage(m: any): Message {
+function toMessage(m: PbRow): Message {
   return {
     id: m.id,
     teamId: m.team_id,
@@ -55,7 +59,7 @@ function toMessage(m: any): Message {
   };
 }
 
-function toTeamDocument(d: any): TeamDocument {
+function toTeamDocument(d: PbRow): TeamDocument {
   return {
     id: d.id,
     teamId: d.team_id,
@@ -72,11 +76,11 @@ function toTeamDocument(d: any): TeamDocument {
 }
 
 export function useWarehouses(options: { enabled?: boolean } = {}) {
-  return useQuery({ enabled: options.enabled ?? true, queryKey: ['hr_warehouses'], queryFn: async () => (await pbList('hr_warehouses')).map(toWarehouse) });
+  return useQuery({ enabled: options.enabled ?? true, queryKey: ['hr_warehouses'], staleTime: 5 * 60 * 1000, queryFn: async () => (await pbList('hr_warehouses')).map(toWarehouse) });
 }
 
 export function useTeams() {
-  return useQuery({ queryKey: ['hr_teams'], queryFn: async () => (await pbList('hr_teams', { sort: 'name' })).map(toTeam) });
+  return useQuery({ queryKey: ['hr_teams'], staleTime: 5 * 60 * 1000, queryFn: async () => (await pbList('hr_teams', { sort: 'name' })).map(toTeam) });
 }
 
 export function useMessages(teamId: string | null | undefined, limit: number = 50) {
@@ -117,25 +121,8 @@ export function useMessages(teamId: string | null | undefined, limit: number = 5
       return rows.items.map(toMessage).reverse();
     },
     enabled: !!teamId,
-    refetchInterval: POLL_MS.openChat,
+    refetchInterval: every(POLL_MS.openChat),
     staleTime: 5000,
-    ...POLL_OPTIONS,
-  });
-}
-
-export function useAllMessages() {
-  return useQuery({
-    queryKey: ['hr_messages_all'],
-    queryFn: async () => {
-      try {
-        const res = await pb.collection('hr_messages').getList(1, 100, { sort: '-created', requestKey: null });
-        return res.items.map(toMessage);
-      } catch (err) {
-        console.error('[hrData] getList error in hr_messages:', err);
-        return [];
-      }
-    },
-    refetchInterval: POLL_MS.allMessages,
     ...POLL_OPTIONS,
   });
 }
@@ -149,84 +136,9 @@ export function useTeamDocuments(teamId: string | null | undefined) {
       return rows.map(toTeamDocument);
     },
     enabled: !!teamId,
-    refetchInterval: POLL_MS.teamDocuments,
+    refetchInterval: every(POLL_MS.teamDocuments),
     ...POLL_OPTIONS,
   });
-}
-
-// specific team ids a member/lead belongs to. Own messages never count —
-// you already "saw" what you just sent.
-export function computeMessageActivitySignature(
-  messages: Message[],
-  myTeamIds: string[] | 'all',
-  email: string,
-): number {
-  const emailLower = email.toLowerCase();
-  return messages.filter(m =>
-    (myTeamIds === 'all' || myTeamIds.includes(m.teamId)) &&
-    m.senderEmail.toLowerCase() !== emailLower
-  ).length;
-}
-
-function chatSeenStorageKey(role: string, email: string): string {
-  return `hr_chat_seen_v1_${role}_${email.toLowerCase()}`;
-}
-
-export function hasUnseenMessageActivity(
-  messages: Message[],
-  myTeamIds: string[] | 'all',
-  role: string,
-  email: string,
-): boolean {
-  if (typeof window === 'undefined' || !email) return false;
-  const current = computeMessageActivitySignature(messages, myTeamIds, email);
-  const stored = Number(window.localStorage.getItem(chatSeenStorageKey(role, email)) || '0');
-  return current > stored;
-}
-
-export function markMessageActivitySeen(
-  messages: Message[],
-  myTeamIds: string[] | 'all',
-  role: string,
-  email: string,
-): void {
-  if (typeof window === 'undefined' || !email) return;
-  const current = computeMessageActivitySignature(messages, myTeamIds, email);
-  window.localStorage.setItem(chatSeenStorageKey(role, email), String(current));
-}
-
-// ---------------------------------------------------------------------------
-// HR & Admin Line unseen-activity — deliberately NOT the
-// hasUnseenMessageActivity/useAllMessages pattern above. That pattern
-// requires polling every hr_messages row (useAllMessages, 20s interval)
-// just to compute a sidebar dot, which is exactly the always-on background
-// load this feature was explicitly asked NOT to add before the HR & Admin
-// page is actually opened (see the page components). Instead this drives
-// the dot off `hr_notifications`, which is already polled app-wide for
-// TopNav's bell (useNotifications, 15s interval) regardless of which page
-// is open — so checking it here is free, not a new cost. Only once the HR
-// & Admin page itself mounts does useMessages(HR_ADMIN_LINE_TEAM_ID) start
-// polling that channel's actual messages.
-//
-// Broadcast notifications (recipientEmail === 'all') use the same
-// per-user readMap-based "seen" tracking TopNav's bell already fetches via
-// hrActions.getNotificationReadMap() — NOT the localStorage counter
-// pattern the other hasUnseenX helpers above use, because that map is the
-// one place "read" state for a broadcast row actually lives; there's no
-// separate concept of "seen" to invent here.
-export function hasUnseenHrAdminLineActivity(
-  notifications: Notification[],
-  readMap: NotificationReadMap,
-  role: 'admin' | 'hr',
-  email: string,
-): boolean {
-  if (!email) return false;
-  return notifications.some(n =>
-    n.category === 'hr_admin_line' &&
-    n.recipientRole === role &&
-    n.recipientEmail === 'all' &&
-    !(readMap[n.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase())
-  );
 }
 
 export const teamActions = {
@@ -286,6 +198,9 @@ export const teamActions = {
         is_announcement: !!isAnnouncement,
       });
     }
+    // Light the Team Chat dot for everyone else in this channel (the scope's single
+    // activity row is overwritten, so only the newest event is kept).
+    void touchActivity([chatScope(teamId)], senderEmail);
   },
 
   // ── HR & Admin Line forwarding (hr_messages, HR_ADMIN_LINE_TEAM_ID) ────
@@ -323,7 +238,7 @@ export const teamActions = {
     attachmentName?: string,
   ): Promise<void> => {
     const trimmedNote = (note || '').trim();
-    const baseFields: any = {
+    const baseFields: PbRow = {
       team_id: HR_ADMIN_LINE_TEAM_ID, sender_email: senderEmail, sender_name: senderName, text: '',
       is_forward: true, forward_kind: forwardKind, forward_label: sourceLabel, forward_link: sourceId,
     };
@@ -355,6 +270,7 @@ export const teamActions = {
     if (!attachmentCopied) {
       await pbCreate('hr_messages', baseFields);
     }
+    void touchActivity([chatScope(HR_ADMIN_LINE_TEAM_ID)], senderEmail); // the HR & Admin line's nav dot
 
     // Notify the OTHER role — see the header comment above. Always fires:
     // 'hr_admin_line' is a maintenance-style always-on category, not
@@ -378,7 +294,7 @@ export const teamActions = {
   // same read-tracking pattern as getAnnouncementReadMap/markAnnouncementsSeen
   // above, scoped to whichever messages are currently loaded (i.e. the
   // channel someone has open), not the whole message history at once.
-  getMessageReadMap: (): Promise<MessageReadMap> => pbGetIdSetMap('hr_message_reads', 'read_ids'),
+  getMessageReadMap: (scope: ReadScope = 'own'): Promise<MessageReadMap> => pbGetIdSetMap('hr_message_reads', 'read_ids', scope),
   isMessageRead: (msg: Message, email: string, readMap: MessageReadMap): boolean =>
     (readMap[msg.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
   // Called whenever someone has a channel's messages on screen — marks every

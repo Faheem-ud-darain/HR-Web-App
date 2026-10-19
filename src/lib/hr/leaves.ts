@@ -11,13 +11,14 @@ import { pbList, pbCreate, pbUpdate, pbDelete } from './shared';
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
 import { parseLeaveDateStrings } from '../core/leaves';
+import type { PbRow } from '@/lib/pbTypes';
 
 // Columns the app reads. start_date / end_date are "YYYY-MM-DD" calendar days
 // (older rows get them via the backfillLeaveDates migration; until then they
 // are derived from the free-text `duration`).
 const LEAVE_FIELDS = 'id,employee_name,type,duration,reason,status,start_date,end_date';
 
-function toLeave(l: any): LeaveApplication {
+function toLeave(l: PbRow): LeaveApplication {
   const stored = l.start_date && l.end_date ? { start: String(l.start_date).slice(0, 10), end: String(l.end_date).slice(0, 10) } : null;
   const range = stored ?? parseLeaveDateStrings(l.duration);
   return {
@@ -123,7 +124,7 @@ export const leaveActions = {
   // This is a convenience guard, not a security boundary — like the rest of
   // this app, there's no server-side rule (RLS/hook) enforcing it yet.
   deleteLeave: async (id: string): Promise<{ success: boolean; reason?: string }> => {
-    let current: any;
+    let current: PbRow;
     try {
       current = await pb.collection('hr_leaves').getOne(id, { requestKey: null });
     } catch {

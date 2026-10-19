@@ -4,11 +4,12 @@ import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useProfiles, useTeams, hrActions, Profile } from '@/lib/hrData';
-import { Video, Calendar, Clock, Users, ExternalLink } from 'lucide-react';
+import { Video } from 'lucide-react';
 import { getSessionEmail } from '@/lib/session';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { errMsg } from '@/lib/errors';
 
 interface ScheduleMeetModalProps {
   isOpen: boolean;
@@ -89,9 +90,9 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
       setDescription('');
       onClose();
       showToast({ type: 'success', message: 'Google Meet room generated and invitation sent!' });
-    } catch (err: any) {
+    } catch (err) {
       setIsSubmitting(false);
-      showToast({ type: 'error', message: err.message || 'Failed to schedule meeting' });
+      showToast({ type: 'error', message: errMsg(err) || 'Failed to schedule meeting' });
     }
   };
 
@@ -148,7 +149,7 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
           <FormField label="Invite Audience">
             <Select
               value={targetType}
-              onChange={e => setTargetType(e.target.value as any)}
+              onChange={e => setTargetType(e.target.value as Parameters<typeof setTargetType>[0])}
               fieldSize="lg" className="cursor-pointer"
             >
               <option value="team">Whole Team</option>

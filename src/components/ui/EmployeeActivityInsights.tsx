@@ -30,6 +30,7 @@ import { getNYDateString, getNYMidnight, formatShortDateNY, formatTimeNY } from 
 import { Activity, MousePointerClick, Table2, BarChart3, Clock } from 'lucide-react';
 import { Table, TableScroll, THead, TBody, Th, Td } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/StatCard';
+import { useQuery } from '@tanstack/react-query';
 
 interface EmployeeActivityInsightsProps {
   employeeEmail: string;
@@ -74,47 +75,40 @@ function shiftSecondsForDay(timesheets: TimesheetEntry[], dateStr: string): numb
 }
 
 export function EmployeeActivityInsights({ employeeEmail, timesheets }: EmployeeActivityInsightsProps) {
-  const [logs, setLogs] = useState<InactivityLog[] | null>(null); // null = not fetched yet
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [selectedDay, setSelectedDay] = useState<string>(() => getNYDateString());
   const [showTable, setShowTable] = useState(false);
-  const [animateIn, setAnimateIn] = useState(false);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  // Fires exactly once, the first time this component is actually mounted
-  // (i.e. the employee clicked the "My Activity" tab) — never on page load.
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError('');
-    const until = new Date();
-    // Bug fix: this used to compute `since` as a flat "now minus 7*24h"
-    // instant, which doesn't line up with NY calendar-day boundaries — if
-    // the tab is opened any time other than exactly midnight NY, that
-    // instant lands partway through what should be the oldest of the 7
-    // included days, silently dropping that day's earliest inactivity
-    // logs from the total. Anchoring `since` to the actual NY midnight of
-    // the oldest included calendar day (today - (HISTORY_DAYS - 1)) makes
-    // the fetch window match the 7 calendar days `days` below actually
-    // buckets logs into.
-    const oldestDay = new Date();
-    oldestDay.setDate(oldestDay.getDate() - (HISTORY_DAYS - 1));
-    const since = getNYMidnight(getNYDateString(oldestDay));
-    hrActions.getInactivityLogs({ employeeEmail, sinceISO: since.toISOString(), untilISO: until.toISOString() })
-      .then(result => { if (!cancelled) setLogs(result); })
-      .catch(() => { if (!cancelled) setError("Couldn't load your activity data right now. Try again shortly."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employeeEmail]);
+  // Fetched the first time this component is actually mounted (i.e. the employee
+  // clicked the "My Activity" tab) — never on page load.
+  const { data: fetchedLogs, isLoading: loading, isError } = useQuery({
+    queryKey: ['inactivity_insights', employeeEmail.toLowerCase()],
+    queryFn: () => {
+      const until = new Date();
+      // Bug fix: this used to compute `since` as a flat "now minus 7*24h" instant, which
+      // doesn't line up with NY calendar-day boundaries — if the tab is opened any time
+      // other than exactly midnight NY, that instant lands partway through what should be
+      // the oldest of the 7 included days, silently dropping that day's earliest
+      // inactivity logs from the total. Anchoring `since` to the actual NY midnight of
+      // the oldest included calendar day (today - (HISTORY_DAYS - 1)) makes the fetch
+      // window match the 7 calendar days `days` below actually buckets logs into.
+      const oldestDay = new Date();
+      oldestDay.setDate(oldestDay.getDate() - (HISTORY_DAYS - 1));
+      const since = getNYMidnight(getNYDateString(oldestDay));
+      return hrActions.getInactivityLogs({ employeeEmail, sinceISO: since.toISOString(), untilISO: until.toISOString() });
+    },
+  });
+  const logs: InactivityLog[] | null = fetchedLogs ?? null; // null = not fetched yet
+  const error = isError ? "Couldn't load your activity data right now. Try again shortly." : '';
 
-  // Trigger the bar-grow animation one tick after data actually lands, so
-  // bars visibly grow from 0 instead of just appearing at full height.
+  // Trigger the bar-grow animation one tick after data actually lands, so bars
+  // visibly grow from 0 instead of just appearing at full height. `animateIn` is
+  // derived: it is false for every new batch of logs until the timer below fires.
+  const [animatedFor, setAnimatedFor] = useState<InactivityLog[] | null>(null);
+  const animateIn = logs !== null && animatedFor === logs;
   useEffect(() => {
     if (logs === null) return;
-    setAnimateIn(false);
-    const t = setTimeout(() => setAnimateIn(true), 30);
+    const t = setTimeout(() => setAnimatedFor(logs), 30);
     return () => clearTimeout(t);
   }, [logs]);
 

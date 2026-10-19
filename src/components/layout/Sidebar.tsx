@@ -1,13 +1,17 @@
 'use client';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserX, UserCheck, Smartphone, Download, BarChart3 } from 'lucide-react';
-import { hrActions, useProfiles, useTeams, useTickets, useAllMessages, useNotifications, useTrackingSettings, hasUnseenTicketActivity, hasUnseenMessageActivity, hasUnseenHrAdminLineActivity, TrackingSettings } from '@/lib/hrData';
-import { getSessionEmail, clearSession } from '@/lib/session';
+import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserCheck, BarChart3 } from 'lucide-react';
+import { hrActions, useProfiles, useTeams, useTrackingSettings, isTechnicalSupportMember, TrackingSettings } from '@/lib/hrData';
+import { HR_ADMIN_LINE_TEAM_ID } from '@/lib/hr/shared';
+import { clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 import { useAnyModalOpen } from '@/lib/modalStack';
 import { triggerHaptic } from '@/lib/haptics';
+import { useNavDots } from '@/lib/hr/activity';
+import { useSessionEmail } from '@/lib/useSession';
+import { useIsClient } from '@/lib/useIsClient';
 
 interface SidebarProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead';
@@ -16,8 +20,6 @@ interface SidebarProps {
 export function Sidebar({ role }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isTeamLead, setIsTeamLead] = useState(false);
-  const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNavVisible, setIsNavVisible] = useState(true);
   const lastScrollY = useRef(0);
@@ -30,7 +32,7 @@ export function Sidebar({ role }: SidebarProps) {
       const target = e.target as HTMLElement | Document;
       let currentScrollY = 0;
 
-      if (target === document || target === document.documentElement || (target as any) === window) {
+      if (target === document || target === document.documentElement || (target as unknown) === window) {
         currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
       } else if (target instanceof HTMLElement) {
         // Only track vertical overflow scrollable elements
@@ -69,21 +71,19 @@ export function Sidebar({ role }: SidebarProps) {
   // layout/CSS change — it doesn't reduce any network fetches — but it
   // does cut down on rendered DOM (labels, dots) and gives more screen
   // space, which some people do notice as feeling snappier.
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('sidebar_collapsed') : null;
-    if (saved === '1') setIsCollapsed(true);
-  }, []);
+  const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null);
+  const savedCollapsed = useSyncExternalStore(
+    () => () => {},
+    () => window.localStorage.getItem('sidebar_collapsed') === '1',
+    () => false,
+  );
+  const isCollapsed = collapsedOverride ?? savedCollapsed;
   const toggleCollapsed = () => {
-    setIsCollapsed(prev => {
-      const next = !prev;
-      if (typeof window !== 'undefined') window.localStorage.setItem('sidebar_collapsed', next ? '1' : '0');
-      return next;
-    });
+    const next = !isCollapsed;
+    setCollapsedOverride(next);
+    window.localStorage.setItem('sidebar_collapsed', next ? '1' : '0');
   };
-  const [platform, setPlatform] = useState<'ios' | 'android'>('ios');
-  const [userEmail, setUserEmail] = useState('');
-  const [myTeamIds, setMyTeamIds] = useState<string[] | 'all'>([]);
+  const userEmail = useSessionEmail() || '';
   const drawerRef = useRef<HTMLDivElement>(null);
   const { data: profiles } = useProfiles();
   const { data: allTeams } = useTeams();
@@ -94,73 +94,63 @@ export function Sidebar({ role }: SidebarProps) {
   // via the Tracking Monitor page before the two flags were kept in sync
   // still see the link, without HR/Admin needing to re-toggle anything.
   const { data: trackingSettingsRows } = useTrackingSettings();
-  // Polls (see POLL_MS in lib/hr/polling.ts) via useTickets' own refetchInterval, so the dot can
-  // light up without the user needing to be on the tickets page.
-  const { data: allTickets } = useTickets();
-  // Same idea for Team Chat — see useAllMessages' comment in hrData.ts.
-  const { data: allMessages } = useAllMessages();
-  // Already polled app-wide for TopNav's bell (15s interval) regardless of
-  // which page is open — reused here (react-query dedupes by queryKey) to
-  // drive the HR & Admin nav dot WITHOUT adding a second hr_messages poll
-  // for this channel. See hasUnseenHrAdminLineActivity's comment in
-  // hrData.ts for why this deliberately does NOT follow the
-  // useAllMessages/hasUnseenMessageActivity pattern above.
-  const { data: allNotifications } = useNotifications();
-  const [notificationReadMap, setNotificationReadMap] = useState<Record<string, string[]>>({});
-  useEffect(() => {
-    hrActions.getNotificationReadMap().then(setNotificationReadMap).catch(() => {});
-  }, []);
 
-  const hasUnseenTickets = hasUnseenTicketActivity(allTickets || [], role, userEmail);
-  const hasUnseenChat = hasUnseenMessageActivity(allMessages || [], myTeamIds, role, userEmail);
-  const hasUnseenHrAdmin = (role === 'hr' || role === 'admin')
-    && hasUnseenHrAdminLineActivity(allNotifications || [], notificationReadMap, role, userEmail);
+  // Everything below is derived from the roster, the team list and the person's own
+  // tracking settings — recomputed when they change, not copied into state by an effect.
+  const me = useMemo(
+    () => profiles?.find(p => p.email && userEmail && p.email.toLowerCase() === userEmail.toLowerCase()),
+    [profiles, userEmail],
+  );
+  const isTeamLead = !!(me?.isTeamLead && (me.leadTeams?.length ?? 0) > 0);
+  const mySettings = (trackingSettingsRows || []).find((s: TrackingSettings) => s.employeeEmail?.toLowerCase() === userEmail.toLowerCase());
+  const trackingEnabled = !!me?.trackingEnabled || !!mySettings?.enabled;
+  // Admin is auto-a-member of every team channel (see TeamChatView), so their "unseen"
+  // activity spans every team. HR has the same "every team" oversight (see
+  // hr/team-chats/page.tsx) — hr_profiles.teams is normally empty for HR, so without
+  // this they'd never show as unread. Everyone else: the teams they belong to or lead.
+  const myTeamIds: string[] | 'all' = useMemo(() => {
+    if (role === 'admin' || role === 'hr') return 'all';
+    if (!me || !allTeams) return [];
+    const names = new Set([...(me.teams || []), ...(me.leadTeams || [])]);
+    return allTeams.filter(t => names.has(t.name)).map(t => t.id);
+  }, [role, me, allTeams]);
 
-  useEffect(() => {
-    const email = getSessionEmail();
-    if (email) setUserEmail(email);
-    if (email && profiles) {
-      const profile = profiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
-      setIsTeamLead(!!(profile?.isTeamLead && (profile.leadTeams?.length ?? 0) > 0));
-
-      const settingsList: TrackingSettings[] = trackingSettingsRows || [];
-      const mySettings = settingsList.find(s => s.employeeEmail?.toLowerCase() === email.toLowerCase());
-      setTrackingEnabled(!!profile?.trackingEnabled || !!mySettings?.enabled);
-
-      // Admin is auto-a-member of every team channel (see TeamChatView),
-      // so their "unseen" signature spans every team, not just ones
-      // they're formally on. Everyone else: the specific teams they're a
-      // member of or lead, resolved to ids via hr_teams.
-      if (role === 'admin' || role === 'hr') {
-        // HR now has the same "every team" Team Chats/Documents oversight
-        // as Admin (see hr/team-chats/page.tsx) — without this they'd never
-        // show as unread since hr_profiles.teams is normally empty for HR.
-        setMyTeamIds('all');
-      } else if (profile && allTeams) {
-        const names = new Set([...(profile.teams || []), ...(profile.leadTeams || [])]);
-        setMyTeamIds(allTeams.filter(t => names.has(t.name)).map(t => t.id));
-      }
-    }
-
-    // Dynamic OS Platform Detection for iOS vs Android
+  // Dynamic OS platform detection for iOS vs Android styling (browser only).
+  const isClient = useIsClient();
+  const detectedOs: 'ios' | 'android' | null = useMemo(() => {
+    if (!isClient) return null;
     const ua = navigator.userAgent.toLowerCase();
-    if (/iphone|ipad|ipod/.test(ua)) {
-      setPlatform('ios');
-      document.body.classList.add('platform-ios');
-      document.body.classList.remove('platform-android');
-    } else if (/android/.test(ua)) {
-      setPlatform('android');
-      document.body.classList.add('platform-android');
-      document.body.classList.remove('platform-ios');
-    } else {
-      // Desktop Developer Emulation check (Chrome devtools overrides userAgent on devices)
-      if (ua.includes('android')) {
-        setPlatform('android');
-      } else {
-        setPlatform('ios'); // default fallback
-      }
-    }
-  }, [profiles, allTeams, role, trackingSettingsRows]);
+    if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+    if (/android/.test(ua)) return 'android';
+    return null;
+  }, [isClient]);
+  const platform: 'ios' | 'android' = detectedOs ?? 'ios'; // desktop falls back to the iOS look
+  useEffect(() => {
+    if (!detectedOs) return;
+    document.body.classList.toggle('platform-ios', detectedOs === 'ios');
+    document.body.classList.toggle('platform-android', detectedOs === 'android');
+  }, [detectedOs]);
+
+  // Unseen-activity dots (Tickets / Team Chat / HR & Admin line). Driven by one tiny
+  // "latest event" record per scope that is pushed live, instead of polling the full
+  // ticket and message lists. A new event overwrites the previous one for its scope,
+  // the person who caused it never gets a dot, and the page you have open is marked
+  // seen as events arrive, so it never shows a dot for itself. See core/activity.ts.
+  const dotViewer = React.useMemo(() => {
+    if (!userEmail || !role) return null;
+    const me = profiles?.find(p => p.email?.toLowerCase() === userEmail.toLowerCase());
+    return {
+      role,
+      email: userEmail,
+      technical: isTechnicalSupportMember(me?.teams),
+      chatTeamIds: myTeamIds === 'all' ? (allTeams || []).map(t => t.id) : myTeamIds,
+      hrAdminTeamId: HR_ADMIN_LINE_TEAM_ID,
+    };
+  }, [userEmail, role, profiles, myTeamIds, allTeams]);
+  const dots = useNavDots(dotViewer, pathname);
+  const hasUnseenTickets = dots.tickets;
+  const hasUnseenChat = dots.chat;
+  const hasUnseenHrAdmin = dots.hrAdmin;
 
   // Click outside listener for mobile drawer
   useEffect(() => {

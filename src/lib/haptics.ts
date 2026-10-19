@@ -1,14 +1,19 @@
 'use client';
 
+import type { PbRow } from '@/lib/pbTypes';
+
 // Lightweight, safe Haptic Feedback wrapper for Capacitor Native Apps (iOS/Android)
 // Gracefully degrades on Web browsers without throwing errors.
 
-let HapticsPlugin: any = null;
-let ImpactStyleEnum: any = null;
-let NotificationTypeEnum: any = null;
+let HapticsPlugin: PbRow | null = null;
+let ImpactStyleEnum: PbRow | null = null;
+let NotificationTypeEnum: PbRow | null = null;
 
 if (typeof window !== 'undefined') {
   try {
+    // Loaded lazily inside this guard on purpose (see NativeBackButtonHandler): a top-level
+    // import would run native-plugin code during server rendering and in the web build.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Haptics, ImpactStyle, NotificationType } = require('@capacitor/haptics');
     HapticsPlugin = Haptics;
     ImpactStyleEnum = ImpactStyle;

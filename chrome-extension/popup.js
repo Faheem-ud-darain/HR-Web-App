@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const timerDisplay = document.getElementById('timerDisplay');
 
   let timerInterval = null;
-  let isShiftActive = false;
   let shiftStartMs = 0;
 
   // ── Version footer ──────────────────────────────────────────────────────
@@ -38,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (versionLabel && manifestVersion) {
       versionLabel.textContent = 'v' + manifestVersion;
     }
-  } catch (e) {
+  } catch {
     // Leave the static fallback text in place if this ever fails.
   }
 
@@ -84,12 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (res.shiftActive && res.shiftStartTime) {
-          isShiftActive = true;
           shiftStartMs = new Date(res.shiftStartTime).getTime();
           updateUiActive();
           startTimer();
         } else {
-          isShiftActive = false;
           stopTimer();
           updateUiPaused();
         }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { adminListAbsenceRecordsForEmail } from '@/lib/pbAdmin';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const rows = await adminListAbsenceRecordsForEmail(session.email);
-    const records = rows.map((r: any) => ({
+    const records = rows.map((r: PbRow) => ({
       id: r.id,
       date: r.date,
       reason: r.reason,

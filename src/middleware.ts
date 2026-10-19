@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { allowedOrigin, corsHeaders } from '@/lib/cors';
 
 // CORS for every /api/* route — added 2026-08-20 after the iOS Xcode
 // simulator build couldn't log in.
@@ -25,36 +26,34 @@ import { NextRequest, NextResponse } from 'next/server';
 //
 // Fixed centrally here (rather than in each of the 8 route.ts files under
 // src/app/api/**) so no individual route can regress this by omission.
-// Access-Control-Allow-Origin: '*' is safe for these routes specifically —
-// none of them rely on cookies (`credentials: 'include'`); the client sends
-// email/password or a Bearer token in the request body/header instead (see
-// src/lib/session.ts's AUTH_TOKEN_KEY) — so there's no session-fixation risk
-// from allowing any origin to read the JSON response.
-const ALLOWED_HEADERS = 'Content-Type, Authorization';
-const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
-
+// This used to answer `Access-Control-Allow-Origin: *`. It now echoes only
+// origins on the allow-list in src/lib/cors.ts (the web app, the native app
+// shells, local dev) — the routes use Bearer tokens rather than cookies, so
+// `*` was never an auth hole, but there's no reason to let arbitrary sites
+// read these responses.
 export function middleware(request: NextRequest) {
-  // Preflight — browsers (including WKWebView) send this automatically
-  // ahead of any POST with a JSON body before the real request, and expect
-  // a 2xx with these headers back before they'll even attempt the real one.
+  const origin = request.headers.get('origin');
+  const cors = corsHeaders(origin);
+
+  // Preflight — browsers (including WKWebView) send this automatically ahead
+  // of any POST with a JSON body before the real request, and expect a 2xx
+  // with these headers back before they'll even attempt the real one. A
+  // browser origin that isn't on the allow-list is refused outright.
   if (request.method === 'OPTIONS') {
+    if (origin && !allowedOrigin(origin)) return new NextResponse(null, { status: 403, headers: cors });
     return new NextResponse(null, {
       status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': ALLOWED_METHODS,
-        'Access-Control-Allow-Headers': ALLOWED_HEADERS,
-        'Access-Control-Max-Age': '86400',
-      },
+      headers: { ...cors, 'Access-Control-Max-Age': '86400' },
     });
   }
 
   // Every other /api/* request — let it reach its route handler as normal,
-  // then stamp the same CORS headers onto whatever that handler returns.
+  // then stamp the CORS headers onto whatever that handler returns.
   const response = NextResponse.next();
-  response.headers.set('Access-Control-Allow-Origin', '*');
-  response.headers.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
-  response.headers.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+  for (const [key, value] of Object.entries(cors)) response.headers.set(key, value);
+  // Everything under /api returns per-user or admin data: never let a browser,
+  // proxy or the Cloudflare edge store a copy.
+  response.headers.set('Cache-Control', 'private, no-store');
   return response;
 }
 

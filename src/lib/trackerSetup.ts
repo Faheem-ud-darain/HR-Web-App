@@ -1,4 +1,5 @@
-// Shared helpers for the DelCargo Tracker desktop agent's one-time setup
+
+import type { PbRow } from '@/lib/pbTypes';// Shared helpers for the DelCargo Tracker desktop agent's one-time setup
 // code — used by both the HR/Admin Setup Agent modal (TrackingView.tsx)
 // and the employee self-service setup card (employee/tracker/page.tsx), so
 // the encoding logic only lives in one place.
@@ -109,7 +110,7 @@ export function detectOS(): 'windows' | 'mac' | 'cros' | 'other' {
  * (e.g. blocking manual shift start when screen tracking is required,
  * since the desktop tracker agent can never run on a phone). */
 export function isNativeMobileApp(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).Capacitor?.isNativePlatform?.();
+  return typeof window !== 'undefined' && !!(window as unknown as PbRow).Capacitor?.isNativePlatform?.();
 }
 
 // Broader than isNativeMobileApp above — that one only catches the

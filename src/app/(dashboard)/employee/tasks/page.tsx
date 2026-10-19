@@ -1,30 +1,25 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useProfiles, useTasks, Task, Profile, displayName } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
+import React, { useState, useMemo } from 'react';
+import { useProfiles, useTasks, displayName } from '@/lib/hrData';
 import { TaskBoard } from '@/components/ui/lazy';
 import { Badge } from '@/components/ui/Badge';
 import { Users, Star } from 'lucide-react';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { ListSkeleton } from '@/components/ui/Skeleton';
+import { useSessionEmail } from '@/lib/useSession';
 
 export default function TeamLeadTasksPage() {
   const { data: allProfiles = [] } = useProfiles();
   const [doneDays, setDoneDays] = useState(30);
   const { data: allTasks = [], isLoading: tasksLoading, isFetching: tasksFetching, refetch: refetchTasks } = useTasks({ doneWithinDays: doneDays });
 
-  const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  const sessionEmail = useSessionEmail();
+  const userProfile = useMemo(
+    () => allProfiles.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
+    [allProfiles, sessionEmail],
+  );
   const [teamFilter, setTeamFilter] = useState<'all' | 'my' | string>('all');
-
-  useEffect(() => {
-    const email = getSessionEmail();
-    const employees = allProfiles;
-    const profile = employees.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
-    if (profile) {
-      setUserProfile(profile);
-    }
-  }, [allProfiles]);
 
   if (!userProfile?.isTeamLead) {
     return (

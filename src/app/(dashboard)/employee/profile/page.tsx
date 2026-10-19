@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useProfiles, useProfileSelf, updateProfileSelf, changeOwnPassword, hrActions, Profile, formatMoney } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
@@ -15,17 +15,22 @@ import { LoggedInDevicesCard } from '@/components/ui/LoggedInDevicesCard';
 import { GoogleIntegrationCard } from '@/components/ui/GoogleIntegrationCard';
 import {
   User, Mail, Briefcase, Calendar, Users, ShieldCheck,
-  KeyRound, CheckCircle2, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
+  KeyRound, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
 } from 'lucide-react';
 import { formatDateNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
+import { useSessionEmail } from '@/lib/useSession';
 
 export default function EmployeeProfilePage() {
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
 
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const sessionEmail = useSessionEmail();
+  const profile: Profile | null = useMemo(
+    () => allProfiles?.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
+    [allProfiles, sessionEmail],
+  );
   // Bank details / phone / documents / password all come from the
   // server-side self-service route now (see useProfileSelf in hrData.ts),
   // not the fully-public useProfiles() list `profile` above still supplies
@@ -111,13 +116,6 @@ export default function EmployeeProfilePage() {
     }
   };
 
-  useEffect(() => {
-    const email = getSessionEmail();
-    if (!email || !allProfiles) return;
-    const p = allProfiles.find(e => e.email && e.email.toLowerCase() === email.toLowerCase());
-    if (p) setProfile(p);
-  }, [allProfiles]);
-
   const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -133,9 +131,7 @@ export default function EmployeeProfilePage() {
     if (!profile?.id) return;
     try {
       await updateProfileSelf({ profilePicture: webpDataUrl });
-      const { data: refreshed } = await refetchProfiles();
-      const updatedProfile = refreshed?.find(p => p.id === profile.id);
-      if (updatedProfile) setProfile(updatedProfile);
+      await refetchProfiles(); // the profile below is derived from the roster, so it updates by itself
       setPendingPhotoFile(null);
       showToast({ type: 'success', message: 'Profile picture updated!' });
     } catch (err) {

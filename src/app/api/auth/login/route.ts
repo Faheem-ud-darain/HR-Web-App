@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminFindProfileByEmail, adminFindByField, adminUpdateProfile } from '@/lib/pbAdmin';
 import { signSessionToken, verifyPassword, isBcryptHash, hashPassword } from '@/lib/serverAuth';
-import { checkRateLimit, clearRateLimit } from '@/lib/rateLimit';
+import { checkRateLimit, clearRateLimit, rateLimitByIp, tooManyRequests } from '@/lib/rateLimit';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -44,13 +45,19 @@ export async function POST(request: Request) {
   // guess, not just the ones that get past it). Thresholds flagged in the
   // plan as needing product-owner sign-off, not a hard requirement — easy
   // to retune here if 5/15min proves too strict or too loose in practice.
+  // Per ADDRESS as well (60 per 15 minutes — an office of ~20 people sharing
+  // one IP logs in well under that): the per-email limit below stops one
+  // account being guessed, this stops one machine spraying many accounts.
+  const ipLimited = await rateLimitByIp(request, 'login', 60, 15 * 60 * 1000);
+  if (ipLimited) return ipLimited;
+
   const rateLimitKey = `login_ratelimit_${email}`;
   const rl = await checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
   if (!rl.allowed) {
     const minutes = Math.ceil((rl.retryAfterSeconds || 0) / 60);
-    return NextResponse.json(
-      { error: `Too many login attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` },
-      { status: 429 }
+    return tooManyRequests(
+      rl.retryAfterSeconds,
+      `Too many login attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
     );
   }
 
@@ -110,7 +117,7 @@ export async function POST(request: Request) {
     // offboarded") on a storage error rather than blocking login entirely —
     // same reasoning as rateLimit.ts's fail-open fix, this is a secondary
     // check, not the primary credential check above it.
-    let extras: { data?: any } | null = null;
+    let extras: { data?: PbRow } | null = null;
     try {
       extras = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
     } catch (err) {
@@ -146,7 +153,7 @@ export async function POST(request: Request) {
     const token = await signSessionToken({ email: profile.email, role });
     await clearRateLimit(rateLimitKey);
     return NextResponse.json({ role, email: profile.email, token });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[login] error:', err);
     return NextResponse.json({ error: 'An error occurred while logging in. Please try again.' }, { status: 500 });
   }

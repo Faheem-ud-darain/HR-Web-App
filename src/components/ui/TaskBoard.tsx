@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, hrActions } from '@/lib/hrData';
-import { Trash2, CheckCircle2, RotateCcw, Clock, AlertTriangle, Briefcase, Calendar, User, Tag, Flag, ArrowRight, Building2, Loader2 } from 'lucide-react';
+import { Trash2, CheckCircle2, RotateCcw, Clock, AlertTriangle, Briefcase, Calendar, User, Flag, ArrowRight, Building2, Loader2 } from 'lucide-react';
 import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 
 interface TaskBoardProps {

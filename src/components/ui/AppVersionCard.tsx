@@ -1,10 +1,9 @@
 'use client';
-
-import { useEffect, useState } from 'react';
 import { Card } from './Card';
 import { Capacitor } from '@capacitor/core';
 import { Info, Globe, Smartphone, Apple } from 'lucide-react';
 import { APP_VERSIONS, AppPlatform } from '@/lib/appVersion';
+import { useIsClient } from '@/lib/useIsClient';
 
 // Shown at the bottom of every Profile Settings page (employee/hr/admin).
 // Purely informational — no editable state, no PocketBase calls. Version
@@ -22,13 +21,9 @@ export function AppVersionCard() {
   // here to highlight which row matches the device the user is currently
   // on; every row is shown regardless, so this can't fail loudly on web
   // (where Capacitor.getPlatform() always safely returns 'web').
-  const [currentPlatform, setCurrentPlatform] = useState<AppPlatform>('web');
-
-  useEffect(() => {
-    const p = Capacitor.getPlatform();
-    if (p === 'android' || p === 'ios') setCurrentPlatform(p);
-    else setCurrentPlatform('web');
-  }, []);
+  const isClient = useIsClient();
+  const detected = isClient ? Capacitor.getPlatform() : 'web';
+  const currentPlatform: AppPlatform = detected === 'android' || detected === 'ios' ? detected : 'web';
 
   return (
     <Card className="border border-slate-200 p-0 overflow-hidden">

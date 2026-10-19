@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, Team, useProfiles, useTeams, useWarehouses, displayName, updateEmployeeTeamsAdmin, setTeamLeadAdmin, updateProfileAdmin } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
 import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Edit, Trash, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
 import { UserProfileModal } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -14,6 +13,8 @@ import { Input, Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { useSessionEmail } from '@/lib/useSession';
+import type { Warehouse } from '@/lib/hrData';
 
 export default function HRTeamsPage() {
   const { data: allProfiles = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
@@ -37,7 +38,7 @@ export default function HRTeamsPage() {
 
   // Profile modal states
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const currentUserEmail = useSessionEmail() || '';
 
   // Warehouse states
   const [whName, setWhName] = useState('');
@@ -81,9 +82,6 @@ export default function HRTeamsPage() {
   const [isSavingWhEdit, setIsSavingWhEdit] = useState(false);
 
   useEffect(() => {
-    const email = getSessionEmail();
-    if (email) setCurrentUserEmail(email);
-
     const handleSearch = (e: Event) => {
       setSearchQuery((e as CustomEvent).detail || '');
     };
@@ -354,7 +352,7 @@ export default function HRTeamsPage() {
     }
   };
 
-  const handleStartEditWarehouse = (wh: any) => {
+  const handleStartEditWarehouse = (wh: Warehouse) => {
     setEditingWhId(wh.id);
     setEditingWhName(wh.name);
     setEditingWhLat(wh.latitude.toString());

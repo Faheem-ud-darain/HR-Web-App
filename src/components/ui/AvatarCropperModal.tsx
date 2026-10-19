@@ -38,9 +38,20 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
     dragging: false, startX: 0, startY: 0, panX: 0, panY: 0,
   });
 
-  useEffect(() => {
-    if (!file) { setImgEl(null); setLoadError(null); return; }
+  // A different photo starts from a clean slate (adjusting state while rendering is
+  // React's way of resetting state when a prop changes).
+  const [shownFile, setShownFile] = useState(file);
+  if (file !== shownFile) {
+    setShownFile(file);
+    setImgEl(null);
     setLoadError(null);
+    setZoom(1);
+    setRotation(0);
+    setPan({ x: 0, y: 0 });
+  }
+
+  useEffect(() => {
+    if (!file) return;
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => setImgEl(img);
@@ -54,9 +65,6 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
       );
     };
     img.src = url;
-    setZoom(1);
-    setRotation(0);
-    setPan({ x: 0, y: 0 });
     return () => URL.revokeObjectURL(url);
   }, [file]);
 

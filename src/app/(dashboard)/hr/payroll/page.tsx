@@ -117,7 +117,7 @@ export default function HRPayrollPage() {
   });
 
   const { page, setPage, totalPages, pageItems } = usePagination(filteredData, 25);
-  useEffect(() => { setPage(1); }, [searchQuery, activeTab]);
+  useEffect(() => { setPage(1); }, [searchQuery, activeTab, setPage]);
 
   const totalPayrollUSD = compiledPayrollData
     .filter(emp => emp.region === 'USA')

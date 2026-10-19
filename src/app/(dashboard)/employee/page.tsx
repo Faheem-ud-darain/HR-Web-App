@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTeams, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, hasStaleTrackerToken, usePayrollSelf } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { AlertTriangle, Monitor, WifiOff, Smartphone, Landmark, Loader2 } from 'lucide-react';
+import { AlertTriangle, WifiOff, Smartphone, Landmark, Loader2 } from 'lucide-react';
 import { isMobileDevice, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
@@ -18,11 +17,20 @@ import { TimesheetReviewModal } from "@/app/(dashboard)/employee/_components/Tim
 import { EmployeeSidePanel } from "@/app/(dashboard)/employee/_components/EmployeeSidePanel";
 import { EmployeeMainColumn } from "@/app/(dashboard)/employee/_components/EmployeeMainColumn";
 import { ShiftControlCard } from "@/app/(dashboard)/employee/_components/ShiftControlCard";
+import { useNow } from '@/lib/useNow';
+import { useSessionEmail } from '@/lib/useSession';
+
+// Stable empties, so memos and effects that depend on them don't re-run every render.
+const NO_ANNOUNCEMENTS: Announcement[] = [];
+const NO_WAREHOUSES: Warehouse[] = [];
+const NO_PROFILES: Profile[] = [];
 
 export default function EmployeeDashboard() {
+  const now = useNow(); // wall clock for due-date checks (see lib/useNow.ts)
   const { data: allProfiles } = useProfiles();
   // Own leaves only (all of them — the PTO balance needs the full history).
-  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
+  const sessionEmail = useSessionEmail() || undefined;
+  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (sessionEmail || '').toLowerCase())?.fullName;
   const { data: allLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
   // Own net-payable figure only, via the authenticated self-only
   // /api/payroll/me route (see usePayrollSelf's comment in hrData.ts) — not
@@ -33,13 +41,11 @@ export default function EmployeeDashboard() {
   // Scoped to just this employee's own tasks server-side (see useMyTasks'
   // comment in hrData.ts) instead of fetching every task assigned to
   // everyone in the company and filtering to "mine" client-side.
-  const { data: allTasks, refetch: refetchTasks } = useMyTasks(getSessionEmail());
+  const { data: allTasks, refetch: refetchTasks } = useMyTasks(sessionEmail ?? null);
   const { data: allAnnouncements } = useAnnouncements();
   const { data: allWarehouses } = useWarehouses();
   // Own shifts only (server-side) — not the whole company's 60-day history.
-  const sessionEmail = getSessionEmail() || undefined;
   const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets({ email: sessionEmail, enabled: !!sessionEmail });
-  const { data: allTeams } = useTeams();
   // Live tracking-enabled source of truth, same hr_tracking_settings
   // collection Sidebar.tsx checks — hr_profiles.trackingEnabled can lag
   // behind this if tracking was toggled from the Tracking Monitor page, so
@@ -50,15 +56,26 @@ export default function EmployeeDashboard() {
     !!emp.trackingEnabled || !!trackingSettingsList.find(s => s.employeeEmail?.toLowerCase() === emp.email?.toLowerCase())?.enabled;
 
   const router = useRouter();
-  const [userProfile, setUserProfile] = useState<Profile | null>(null);
-  const [leaves, setLeaves] = useState<LeaveApplication[]>([]);
-  const [myTasks, setMyTasks] = useState<Task[]>([]);
+  // Everything below is derived from the queries above — not copied into state by an effect.
+  const userProfile: Profile | null = useMemo(
+    () => allProfiles?.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
+    [allProfiles, sessionEmail],
+  );
+  const leaves: LeaveApplication[] = useMemo(
+    () => (userProfile && allLeaves ? allLeaves.filter(l => l.employeeName === userProfile.fullName) : []),
+    [allLeaves, userProfile],
+  );
+  // allTasks is already server-scoped to this employee via useMyTasks above — this filter is a
+  // harmless no-op kept as a defensive safety net rather than assuming the server-side email
+  // match is always exact.
+  const myTasks: Task[] = useMemo(
+    () => (userProfile && allTasks ? allTasks.filter(t => t.assignedEmail === userProfile.email) : []),
+    [allTasks, userProfile],
+  );
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // New States
-  const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [allEmployees, setAllEmployees] = useState<Profile[]>([]);
+  const announcements: Announcement[] = allAnnouncements ?? NO_ANNOUNCEMENTS;
+  const warehouses: Warehouse[] = allWarehouses ?? NO_WAREHOUSES;
+  const allEmployees: Profile[] = allProfiles ?? NO_PROFILES;
   // Snapshotted once per visit (not re-fetched after markAnnouncementsSeen
   // writes) so an announcement that was unread when this page loaded stays
   // visibly highlighted for the rest of this visit, instead of the
@@ -70,8 +87,11 @@ export default function EmployeeDashboard() {
   
   // Geofencing states
   const [shiftActive, setShiftActive] = useState(false);
-  const [geofenceStatus, setGeofenceStatus] = useState('Outside Geofence');
-  const [geoPermission, setGeoPermission] = useState<'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported'>('idle');
+  const [, setGeofenceStatus] = useState('Outside Geofence');
+  // What the device reported ('requesting' = USA employee, GPS answer not in yet; 'idle' = not applicable).
+  const [geoResult, setGeoPermission] = useState<'granted' | 'denied' | 'unsupported' | null>(null);
+  const geoPermission: 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' =
+    geoResult ?? (userProfile?.region === 'USA' ? 'requesting' : 'idle');
   const [geoErrorMsg, setGeoErrorMsg] = useState('');
   const [liveDistance, setLiveDistance] = useState<{ meters: number; warehouseName: string; isInside: boolean } | null>(null);
 
@@ -186,14 +206,15 @@ export default function EmployeeDashboard() {
   // the page around.
   const isInitialLoading = !allProfiles || !allLeaves || !allTasks || !allAnnouncements || !allWarehouses || !allTimesheets;
 
+  // Reconciles the shift state machine (shiftActive / geofenceStatus / the open-shift ref) with the
+  // server's record of this person's shifts. The setState calls here are the point of the effect:
+  // they mirror server state into a state machine that button clicks and geofence events also drive.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!allProfiles || !allLeaves || !allTasks || !allAnnouncements || !allWarehouses || !allTimesheets) return;
+    if (!allTimesheets) return;
 
-    const email = getSessionEmail();
-    const employees = allProfiles;
-    const profile = employees.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
+    const profile = userProfile;
     if (profile) {
-      setUserProfile(profile);
       const openShift = allTimesheets.find(t => t.employeeEmail.toLowerCase() === (profile.email).toLowerCase() && !t.clockOut);
       setShiftActive(!!openShift);
       if (openShift) {
@@ -220,31 +241,30 @@ export default function EmployeeDashboard() {
         openShiftRef.current = null;
       }
     }
-    
-    setAllEmployees(employees);
-    setAnnouncements(allAnnouncements);
-    setWarehouses(allWarehouses);
-    if (profile) {
-      setLeaves(allLeaves.filter(l => l.employeeName === profile.fullName) as any);
-      // allTasks is already server-scoped to this employee via useMyTasks
-      // above — this filter is now a harmless no-op kept as a defensive
-      // safety net rather than assuming the server-side email match is
-      // always exact.
-      setMyTasks(allTasks.filter(t => t.assignedEmail === profile.email));
-    }
+  }, [userProfile, allTimesheets, refetchTimesheets]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
+  // The header search box (TopNav) broadcasts what's typed as a window event.
+  useEffect(() => {
     const handleSearch = (e: Event) => {
       setSearchQuery((e as CustomEvent).detail || '');
     };
     window.addEventListener('globalSearch', handleSearch);
     return () => window.removeEventListener('globalSearch', handleSearch);
-  }, [allProfiles, allLeaves, allTasks, allAnnouncements, allWarehouses, allTimesheets]);
+  }, []);
 
   // Keep refs in sync so the long-lived geolocation callback always reads
   // fresh data without needing to be re-registered on every render.
   useEffect(() => { profileRef.current = userProfile; }, [userProfile]);
   useEffect(() => { warehousesRef.current = warehouses; }, [warehouses]);
   useEffect(() => { shiftActiveRef.current = shiftActive; }, [shiftActive]);
+  // The long-lived timers below depend only on who is signed in (their email/region), so they
+  // aren't torn down and restarted whenever the profile object is re-created. They read the
+  // newest profile / tracking check through these refs instead.
+  const userEmail = userProfile?.email;
+  const userRegion = userProfile?.region;
+  const isTrackingLiveForRef = useRef(isTrackingLiveFor);
+  useEffect(() => { isTrackingLiveForRef.current = isTrackingLiveFor; });
 
   // Poll the desktop tracker app's connection heartbeat. Uses a 15-minute
   // grace period before auto-clocking out — a dead heartbeat alone is NOT
@@ -254,14 +274,15 @@ export default function EmployeeDashboard() {
   //   (a) A deliberate quit intent signal (Signal 2) is present, OR
   //   (b) The heartbeat has been continuously dead for > 15 minutes (crash)
   useEffect(() => {
-    if (!userProfile?.email) return;
+    if (!userEmail) return;
     let cancelled = false;
     const check = async () => {
-      const hb = await hrActions.getTrackerHeartbeat(userProfile.email);
+      const hb = await hrActions.getTrackerHeartbeat(userEmail);
       if (cancelled) return;
       setTrackerHeartbeat(hb);
 
-      const trackingEnabled = isTrackingLiveFor(userProfile);
+      const profile = profileRef.current;
+      const trackingEnabled = !!profile && isTrackingLiveForRef.current(profile);
       const heartbeatDead = trackingEnabled && !hrActions.isHeartbeatLive(hb);
 
       if (!heartbeatDead) {
@@ -276,7 +297,7 @@ export default function EmployeeDashboard() {
       if (!shiftActiveRef.current) return; // shift already ended
 
       // Check Signal 2: deliberate quit intent
-      const quitIntent = await hrActions.getTrackerQuitIntent(userProfile.email);
+      const quitIntent = await hrActions.getTrackerQuitIntent(userEmail);
       const quitIntentRecent = !!quitIntent?.timestamp &&
         (Date.now() - new Date(quitIntent.timestamp).getTime()) < TRACKER_HEARTBEAT_GRACE_MS;
 
@@ -293,10 +314,10 @@ export default function EmployeeDashboard() {
       setShiftActive(false);
       setGeofenceStatus('Shift Ended');
       openShiftRef.current = null;
-      await hrActions.clockOut(userProfile.email);
+      await hrActions.clockOut(userEmail);
       await refetchTimesheets();
       // Clean up quit intent so it doesn't re-trigger on the next poll
-      try { await hrActions.clearTrackerQuitIntent(userProfile.email); } catch { /* best-effort */ }
+      try { await hrActions.clearTrackerQuitIntent(userEmail); } catch { /* best-effort */ }
       setShiftStopReason('tracker_closed');
       setShiftStopModal(true);
       setHeartbeatFirstDeadAt(null);
@@ -304,18 +325,18 @@ export default function EmployeeDashboard() {
     check();
     const interval = setInterval(check, 30000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [userProfile?.email, heartbeatFirstDeadAt]);
+  }, [userEmail, heartbeatFirstDeadAt, refetchTimesheets]);
 
   // Poll for a "tracker was just closed mid-shift" signal from the desktop
   // agent. Polls faster than the heartbeat check above (10s) since the
   // whole point is to feel immediate — the employee closed the app, so
   // they're looking right at their screen when it happens.
   useEffect(() => {
-    if (!userProfile?.email) return;
+    if (!userEmail) return;
     let cancelled = false;
-    const ackKey = `shift_stop_ack_${userProfile.email.toLowerCase()}`;
+    const ackKey = `shift_stop_ack_${userEmail.toLowerCase()}`;
     const check = async () => {
-      const signal = await hrActions.getShiftStopSignal(userProfile.email);
+      const signal = await hrActions.getShiftStopSignal(userEmail);
       if (cancelled || !signal?.timestamp) return;
       if (window.localStorage.getItem(ackKey) === signal.timestamp) return; // already shown
       window.localStorage.setItem(ackKey, signal.timestamp);
@@ -332,7 +353,7 @@ export default function EmployeeDashboard() {
     check();
     const interval = setInterval(check, 10000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [userProfile?.email]);
+  }, [userEmail, refetchTimesheets]);
 
   // Keeps the manual-shift tab heartbeat warm (see ShiftTabHeartbeat in
   // hrData.ts) for as long as this tab has a manual shift active and open —
@@ -366,12 +387,12 @@ export default function EmployeeDashboard() {
   // when switching back to the tab.
   useEffect(() => {
     if (!shiftActive || typeof window === 'undefined' || !('wakeLock' in navigator)) return;
-    let wakeLockSentinel: any = null;
+    let wakeLockSentinel: WakeLockSentinel | null = null;
 
     const requestWakeLock = async () => {
       try {
         if (document.visibilityState === 'visible' && !wakeLockSentinel) {
-          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
         }
       } catch (err) {
         // Wake lock can fail if low battery or disallowed by OS policy — fail gracefully
@@ -441,10 +462,9 @@ export default function EmployeeDashboard() {
   // web it falls back to the browser's foreground-only geolocation, same as
   // before.
   useEffect(() => {
-    if (!userProfile || userProfile.region !== 'USA') return;
+    if (!userEmail || userRegion !== 'USA') return;
 
     let cancelled = false;
-    setGeoPermission('requesting');
 
     const handleSuccess = async (point: GeoPoint) => {
       if (cancelled) return;
@@ -529,7 +549,7 @@ export default function EmployeeDashboard() {
       geoWatchRef.current?.stop();
       geoWatchRef.current = null;
     };
-  }, [userProfile?.email, userProfile?.region]);
+  }, [userEmail, userRegion, refetchTimesheets]);
 
   const [isUpdatingTaskStatus, setIsUpdatingTaskStatus] = useState(false);
   const handleUpdateTaskStatus = async (taskId: string, nextStatus: Task['status']) => {
@@ -576,7 +596,8 @@ export default function EmployeeDashboard() {
   // tile, which just duplicated the new Shift Control card above).
   const tasksNeedingAttention = myTasks.filter(t => {
     if (t.status === 'done') return false;
-    const daysUntil = (new Date(t.dueDate).getTime() - Date.now()) / (1000 * 3600 * 24);
+    if (now === 0) return false; // clock not known yet (server render / hydration)
+    const daysUntil = (new Date(t.dueDate).getTime() - now) / (1000 * 3600 * 24);
     return daysUntil <= 3;
   }).length;
 
@@ -610,7 +631,7 @@ export default function EmployeeDashboard() {
         <div className="flex items-center gap-3 md:gap-4">
           <Avatar src={userProfile?.profilePicture} name={userProfile?.fullName || 'Employee'} size={56} className="border-2 border-orange-500" />
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight" style={{ textWrap: 'balance' as any }}>{userProfile?.fullName || 'Employee'}</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight" style={{ textWrap: 'balance' as React.CSSProperties['textWrap'] }}>{userProfile?.fullName || 'Employee'}</h1>
             <p className="text-xs text-slate-500 font-semibold">{userProfile?.jobTitle || 'Team Member'} · <span className="text-orange-600 font-bold">{userProfile?.region === 'USA' ? 'USA Operations' : 'Pakistan (Remote)'}</span></p>
           </div>
         </div>
@@ -678,7 +699,7 @@ export default function EmployeeDashboard() {
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
               <WifiOff className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Your account has screen tracking enabled by HR/Admin, so your shift can only be started once the DelCargo Tracker desktop app is installed and running. Open the app (check your system tray / menu bar if it's already installed) and try starting your shift again.
+                Your account has screen tracking enabled by HR/Admin, so your shift can only be started once the DelCargo Tracker desktop app is installed and running. Open the app (check your system tray / menu bar if it&apos;s already installed) and try starting your shift again.
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
@@ -748,7 +769,7 @@ export default function EmployeeDashboard() {
             <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 rounded-xl">
               <AlertTriangle className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Your setup code was regenerated by HR/Admin, so your desktop tracker app is still using the old code and can no longer connect. Your shift can't start until you open your Tracker Setup page, copy the new setup code, and paste it into the DelCargo Tracker app on your computer.
+                Your setup code was regenerated by HR/Admin, so your desktop tracker app is still using the old code and can no longer connect. Your shift can&apos;t start until you open your Tracker Setup page, copy the new setup code, and paste it into the DelCargo Tracker app on your computer.
               </p>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
@@ -903,7 +924,7 @@ export default function EmployeeDashboard() {
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
               <div className="flex justify-between items-center text-slate-700">
-                <span className="font-semibold text-slate-500">Today's Total Shift Time:</span>
+                <span className="font-semibold text-slate-500">Today&apos;s Total Shift Time:</span>
                 <span className="font-bold font-mono text-sm text-slate-900">
                   {Math.floor(under8HourDetails.workedMinutes / 60)}h {under8HourDetails.workedMinutes % 60}m
                 </span>

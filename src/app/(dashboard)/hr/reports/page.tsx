@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useTimesheets, displayName } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
-import { FileText, Filter, ShieldCheck, Download, Monitor, Clock, CheckCircle2, TrendingUp, Calendar, Landmark } from 'lucide-react';
+import { FileText, Filter, Download, Clock, TrendingUp, Calendar, Landmark } from 'lucide-react';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
@@ -17,8 +16,11 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 import { Select } from '@/components/ui/Input';
+import { useSessionEmail } from '@/lib/useSession';
+import { useNow } from '@/lib/useNow';
 
 export default function ReportsPage() {
+  const now = useNow(); // for the running total of still-open shifts (see lib/useNow.ts)
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const [historyDays, setHistoryDays] = useState(60);
   const { data: allTimesheets = [], isLoading: timesheetsLoading, isFetching: fetchingHistory } = useTimesheets({ days: historyDays });
@@ -30,7 +32,7 @@ export default function ReportsPage() {
   const [dateFilter, setDateFilter] = useState('');
 
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const currentUserEmail = useSessionEmail() || '';
   // Fetched on demand, only for whichever employee is currently selected
   // (see useProfileDocuments in hrData.ts).
   const [selectedDocsEmp, setSelectedDocsEmp] = useState<Profile | null>(null);
@@ -41,15 +43,10 @@ export default function ReportsPage() {
     setDateFilter('');
 
     const entries = allTimesheets
-      .filter((t: any) => t.employeeEmail.toLowerCase() === emp.email.toLowerCase())
-      .sort((a: any, b: any) => (b.clockIn || '').localeCompare(a.clockIn || ''));
+      .filter((t) => t.employeeEmail.toLowerCase() === emp.email.toLowerCase())
+      .sort((a, b) => (b.clockIn || '').localeCompare(a.clockIn || ''));
     setReviewEntries(entries);
   };
-
-  useEffect(() => {
-    const email = getSessionEmail();
-    if (email) setCurrentUserEmail(email);
-  }, []);
 
   const filteredEmployees = employees.filter(emp => {
     if (emp.role === 'admin' || emp.role === 'hr') return false;
@@ -77,7 +74,7 @@ export default function ReportsPage() {
   const totalHours = filteredReviewEntries.reduce((acc, e) => {
     if (!e.clockIn) return acc;
     const start = new Date(e.clockIn).getTime();
-    const end = e.clockOut ? new Date(e.clockOut).getTime() : Date.now();
+    const end = e.clockOut ? new Date(e.clockOut).getTime() : (now || start);
     const minutes = Math.max(0, Math.round((end - start) / 60000));
     return acc + minutes;
   }, 0);
@@ -154,7 +151,7 @@ export default function ReportsPage() {
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           <Select
             value={regionFilter}
-            onChange={(e) => setRegionFilter(e.target.value as any)}
+            onChange={(e) => setRegionFilter(e.target.value as Parameters<typeof setRegionFilter>[0])}
             fieldSize="md" className="cursor-pointer"
           >
             <option value="All">All Regions</option>
@@ -167,7 +164,7 @@ export default function ReportsPage() {
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           <Select
             value={onboardingFilter}
-            onChange={(e) => setOnboardingFilter(e.target.value as any)}
+            onChange={(e) => setOnboardingFilter(e.target.value as Parameters<typeof setOnboardingFilter>[0])}
             fieldSize="md" className="cursor-pointer"
           >
             <option value="All">All Onboarding Status</option>

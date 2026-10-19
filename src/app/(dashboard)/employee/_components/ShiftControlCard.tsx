@@ -335,7 +335,7 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                 </Button>
               </div>
             ) : (
-              <p className="text-[9px] text-slate-400 leading-relaxed">Your shift starts and ends automatically as you enter or leave an assigned warehouse's geofence — no manual check-in needed.</p>
+              <p className="text-[9px] text-slate-400 leading-relaxed">Your shift starts and ends automatically as you enter or leave an assigned warehouse&apos;s geofence — no manual check-in needed.</p>
             )}
           </div>
         ) : (

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, useProfiles, updateProfileSelf, changeOwnPassword } from '@/lib/hrData';
@@ -14,6 +14,8 @@ import { AppVersionCard } from '@/components/ui/AppVersionCard';
 import { Button } from '@/components/ui/Button';
 import { User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, AlertCircle, Camera } from 'lucide-react';
 import { FormField } from '@/components/ui/FormField';
+import { useSessionEmail } from '@/lib/useSession';
+import { errMsg } from '@/lib/errors';
 
 type StaffProfileViewProps = {
   /** Prefix for console error messages, e.g. "HR Profile". */
@@ -34,7 +36,11 @@ type StaffProfileViewProps = {
 // pages only differ in copy and an optional header action.
 export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, defaultGender, securityRoleLabel, headerAction }: StaffProfileViewProps) {
   const { data: employees = [], refetch: refetchProfiles } = useProfiles();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const sessionEmail = useSessionEmail();
+  const profile: Profile | null = useMemo(
+    () => employees.find((e: Profile) => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
+    [employees, sessionEmail],
+  );
 
   // Profile picture upload
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,14 +54,6 @@ export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, def
   const [confirmPass, setConfirmPass] = useState('');
   const [resetError, setResetError] = useState('');
   const [isResetting, setIsResetting] = useState(false);
-
-  useEffect(() => {
-    const email = getSessionEmail();
-    if (email) {
-      const p = employees.find((e: Profile) => e.email && e.email.toLowerCase() === email.toLowerCase());
-      if (p) setProfile(p as any);
-    }
-  }, [employees]);
 
   const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -112,9 +110,9 @@ export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, def
         setCurrentPass(''); setNewPass(''); setConfirmPass('');
         setIsResetOpen(false);
         showToast({ type: 'success', message: 'Password updated successfully!' });
-      } catch (err: any) {
+      } catch (err) {
         console.error(`[${logTag}] Password update error:`, err);
-        setResetError(err?.message || 'Failed to update password. Please try again.');
+        setResetError(errMsg(err, 'Failed to update password. Please try again.'));
       } finally {
         setIsResetting(false);
       }

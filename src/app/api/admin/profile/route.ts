@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession, hashPassword, isBcryptHash } from '@/lib/serverAuth';
 import {
-  adminFindProfileByEmail,
   adminUpdateProfile,
   adminUploadProfilePicture,
   adminFindByField,
@@ -10,6 +9,7 @@ import {
   pbAdminFetch,
 } from '@/lib/pbAdmin';
 import { splitProfileUpdate, fromProfileFields } from '@/lib/profileFields';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -39,15 +39,15 @@ export const runtime = 'edge';
 // shape as Phase 1's collections). getExtras/mergeExtras below replace
 // every repeated "read existing, spread in a patch, write back" call site
 // in this file with one call each.
-async function getExtras(profileId: string): Promise<Record<string, any>> {
+async function getExtras(profileId: string): Promise<PbRow> {
   const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
   return row?.data || {};
 }
-async function mergeExtras(profileId: string, patch: Record<string, any>): Promise<void> {
+async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
   const existing = await getExtras(profileId);
   await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
 }
-async function mergeDocs(profileId: string, patch: Record<string, any>): Promise<void> {
+async function mergeDocs(profileId: string, patch: PbRow): Promise<void> {
   const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
   const existing = row?.data || {};
   await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
@@ -88,10 +88,10 @@ async function requireHrOrAdmin(request: Request) {
 // covering role/teams/leadTeams/warehouses/baseSalary/offboarding/etc. via
 // the same splitProfileUpdate() classification used by updateProfileSelf.
 export async function POST(request: Request) {
-  const { session, error } = await requireHrOrAdmin(request);
+  const { error } = await requireHrOrAdmin(request);
   if (error) return error;
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/profile POST] error:', err);
     return NextResponse.json({ error: 'Could not save changes. Please try again.' }, { status: 500 });
   }
@@ -167,7 +167,7 @@ export async function PUT(request: Request) {
   const { session, error } = await requireHrOrAdmin(request);
   if (error) return error;
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -237,7 +237,7 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/profile PUT] error:', err);
     return NextResponse.json({ error: 'Could not complete the requested action.' }, { status: 500 });
   }
@@ -247,10 +247,10 @@ export async function PUT(request: Request) {
 // since it creates a record rather than updating one.
 // PATCH { action: 'addEmployee', profile: {...} }
 export async function PATCH(request: Request) {
-  const { session, error } = await requireHrOrAdmin(request);
+  const { error } = await requireHrOrAdmin(request);
   if (error) return error;
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -295,7 +295,7 @@ export async function PATCH(request: Request) {
     // caller can display/communicate it — this is the only place it's ever
     // sent back in plaintext, and only to an already-authenticated HR/Admin.
     return NextResponse.json({ ok: true, id: profileId, tempPassword: rawPassword });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/profile PATCH] error:', err);
     return NextResponse.json({ error: 'Could not create employee.' }, { status: 500 });
   }

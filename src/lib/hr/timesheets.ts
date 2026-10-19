@@ -14,18 +14,21 @@ import type {
   TrackerStopCommand, TrackerCommand, TrackerDiagnostics, TrackingSettings,
 } from './types';
 import {
-  pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
+  pbList, pbCreate, pbUpdate, pbUpsertByField, pbFindByField, pbDeleteByField,
   withTimeout,
-  pbGetTrackerSignal, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields,
-  looksLikeRealId, formatDurationBetween,
+  pbGetTrackerSignal, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields, formatDurationBetween,
 } from './shared';
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
 import { coalesce, invalidateCache } from '../requestCache';
+import { getSessionEmail, getSessionRole } from '../session';
+import { isStaffRole } from '../core/profiles';
 import {
   hasStaleTrackerToken, getCaptureHealth, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
   TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
 } from '../core/timesheets';
+import { every } from '../idle';
+import type { PbRow } from '@/lib/pbTypes';
 
 // Pure tracker-health / heartbeat / timesheet-mapping logic lives in
 // ../core/timesheets (shared with the server); re-exported so existing
@@ -141,21 +144,28 @@ export function useTimesheets(opts: TimesheetQuery & { enabled?: boolean } = {})
   });
 }
 
-// Replaces the old useKVByPrefix('hr_tracking_settings_prod_v1') pattern
+// Replaces the old KV-prefix polling of 'hr_tracking_settings_prod_v1'
 // now that tracking settings live in their own hr_tracking_settings
 // collection instead of a single KV blob — same polling cadence/gating as
-// useKVByPrefix above.
-export function useTrackingSettings() {
+// the old KV-blob polling this replaced.
+export function useTrackingSettings(options: { all?: boolean } = {}) {
+  // The settings rows hold every employee's agent setup token. Everyone — HR and
+  // Admin included — loads just their OWN row (a one-item list, so callers read
+  // it the same way); only the Tracking page, which manages everyone's tracker,
+  // asks for all of them (`all: true`, honoured for HR/Admin only).
+  const email = (getSessionEmail() || '').toLowerCase();
+  const all = !!options.all && isStaffRole(getSessionRole());
   return useQuery({
-    queryKey: ['hr_tracking_settings'],
-    queryFn: () => hrActions.getAllTrackingSettings(),
-    refetchInterval: 30000,
+    queryKey: ['hr_tracking_settings', all ? 'all' : email],
+    enabled: all || !!email,
+    queryFn: () => (all ? hrActions.getAllTrackingSettings() : hrActions.getTrackingSettingsFor(email).then(t => [t])),
+    refetchInterval: every(30000),
     refetchIntervalInBackground: false,
   });
 }
 
 // Plan 027 Phase 4b regression fix (2026-09-15): TrackingView.tsx was still
-// calling useKVByPrefix('tracker_heartbeat_') directly against the now-dead
+// reading the 'tracker_heartbeat_' KV keys directly from the now-dead
 // hr_delcargo_store collection instead of going through
 // hrActions.getAllTrackerHeartbeats() (which was correctly migrated to
 // hr_tracker_signals) — missed because that call site queried
@@ -170,6 +180,8 @@ export function useAllTrackerHeartbeats() {
   return useQuery({
     queryKey: ['hr_tracker_signals', 'heartbeat'],
     queryFn: () => hrActions.getAllTrackerHeartbeats(),
+    // Deliberately NOT idle-slowed: this is the live connected/disconnected board HR
+    // watches without touching the mouse, so it must keep its own pace.
     refetchInterval: 30000,
     refetchIntervalInBackground: false,
   });
@@ -193,7 +205,7 @@ export const timesheetActions = {
   // safety-net sweeps); this one is for a single employee's settings.
   getTrackingSettingsFor: async (email: string): Promise<TrackingSettings> => {
     const matches = await pbList('hr_tracking_settings', { filter: pbFilter('employeeEmail ~ {:email}', { email }) });
-    const found = matches.find((t: any) => (t.employeeEmail || '').toLowerCase() === email.toLowerCase());
+    const found = matches.find((t: PbRow) => (t.employeeEmail || '').toLowerCase() === email.toLowerCase());
     return found
       ? { employeeEmail: found.employeeEmail, enabled: !!found.enabled, intervalMinutes: found.intervalMinutes, excludeFromAutoDelete: !!found.excludeFromAutoDelete, agentToken: found.agentToken, id: found.id }
       : { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
@@ -202,7 +214,7 @@ export const timesheetActions = {
   // the full list on mount; updateTrackingSettings invalidates it.
   getAllTrackingSettings: (): Promise<TrackingSettings[]> =>
     coalesce('tset:all', 3000, async () =>
-      (await pbList('hr_tracking_settings')).map((t: any) => ({
+      (await pbList('hr_tracking_settings')).map((t: PbRow) => ({
         employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
         excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
       }))),
@@ -329,7 +341,7 @@ export const timesheetActions = {
   // Diagnostics" or "Reload Settings Now" in TrackingView. Tracker agent
   // reads via realtime SSE, acts on it, and deletes the key itself
   // (clear_command in agent_gui.py) — nothing to clean up on this side.
-  writeTrackerCommand: async (email: string, type: 'diagnostics' | 'reload_settings'): Promise<void> => {
+  writeTrackerCommand: async (email: string, type: TrackerCommand['type']): Promise<void> => {
     await pbSetTrackerSignal(email, 'command', {
       employeeEmail: email,
       type,
@@ -506,6 +518,12 @@ export const timesheetActions = {
         // earlier than clock-in (a corrupt/stale-from-before-this-shift
         // heartbeat shouldn't produce a negative-duration shift).
         const closeAtIso = new Date(Math.max(lastSeenMs, clockInMs)).toISOString();
+        // Nothing was recorded after clock-in: the only heartbeat on file
+        // predates the shift, so no time is credited (never grant unearned
+        // hours). Say so explicitly instead of the generic "tracker stopped
+        // reporting" text, so HR knows to review it if the employee insists
+        // they worked.
+        const noActivityAfterClockIn = lastSeenMs <= clockInMs;
 
         // BUGFIX (2026-09-11, live): this used to also pass status:
         // 'completed' — but hr_timesheets.status is a select field
@@ -523,13 +541,16 @@ export const timesheetActions = {
         });
         try { await pbDeleteByField('hr_shift_tab_heartbeats', 'email', shift.employeeEmail.toLowerCase()); } catch { /* best-effort */ }
         const name = displayName({ fullName: shift.employeeEmail }, 'hr');
-        await hrActions.addNotification(
-          shift.employeeEmail, 'employee',
-          "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR."
-        ).catch(() => {});
-        await hrActions.addNotification('all', 'hr', `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`, 'shift', name, shift.employeeEmail).catch(() => {});
+        const employeeMsg = noActivityAfterClockIn
+          ? "Your shift was automatically ended with 0 minutes credited because the DelCargo Tracker reported no activity after you clocked in. If you were working, contact HR."
+          : "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR.";
+        const staffMsg = noActivityAfterClockIn
+          ? `${name}'s shift was auto-closed with 0 minutes — the tracker reported no activity after clock-in. Review it if they report having worked.`
+          : `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`;
+        await hrActions.addNotification(shift.employeeEmail, 'employee', employeeMsg).catch(() => {});
+        await hrActions.addNotification('all', 'hr', staffMsg, 'shift', name, shift.employeeEmail).catch(() => {});
         // Dashboard-only for Admin — HR already got the pushable copy above.
-        await hrActions.addNotification('all', 'admin', `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`, undefined, undefined, shift.employeeEmail).catch(() => {});
+        await hrActions.addNotification('all', 'admin', staffMsg, undefined, undefined, shift.employeeEmail).catch(() => {});
       } catch {
         // Best-effort per-shift — one bad lookup/write shouldn't stop the rest.
       }

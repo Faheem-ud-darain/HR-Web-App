@@ -4,9 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Profile, formatMoney, TimesheetEntry, hrActions, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
-import { FileText, Filter, ShieldCheck, Download, MapPin, Edit2, Monitor, Landmark, Loader2 } from 'lucide-react';
+import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin } from '@/lib/hrData';
+import { FileText, Filter, Download, MapPin, Monitor, Landmark, Loader2 } from 'lucide-react';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
@@ -20,6 +19,7 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 import { Select } from '@/components/ui/Input';
+import { useSessionEmail } from '@/lib/useSession';
 
 export default function ReportsPage() {
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
@@ -45,17 +45,12 @@ export default function ReportsPage() {
 
   // Profile modal states
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const currentUserEmail = useSessionEmail() || '';
 
   // Documents modal state — fetched on demand, only for whichever employee
   // is currently selected (see useProfileDocuments in hrData.ts).
   const [selectedDocsEmp, setSelectedDocsEmp] = useState<Profile | null>(null);
   const { data: selectedDocs } = useProfileDocuments(selectedDocsEmp?.id);
-
-  useEffect(() => {
-    const email = getSessionEmail();
-    if (email) setCurrentUserEmail(email);
-  }, []);
 
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = emp.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -71,7 +66,7 @@ export default function ReportsPage() {
   });
 
   const { page, setPage, totalPages, pageItems } = usePagination(filteredEmployees, 25);
-  useEffect(() => { setPage(1); }, [searchQuery, regionFilter, onboardingFilter]);
+  useEffect(() => { setPage(1); }, [searchQuery, regionFilter, onboardingFilter, setPage]);
 
   const exportCSV = () => {
     const headers = ['Full Name', 'Email', 'Role', 'Region', 'Bank Name', 'Account Number', 'IBAN', 'Onboarding Status', 'Base Salary'];
@@ -190,7 +185,7 @@ export default function ReportsPage() {
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           <Select
             value={regionFilter}
-            onChange={(e) => setRegionFilter(e.target.value as any)}
+            onChange={(e) => setRegionFilter(e.target.value as Parameters<typeof setRegionFilter>[0])}
             fieldSize="md" className="cursor-pointer"
           >
             <option value="All">All Regions</option>
@@ -203,7 +198,7 @@ export default function ReportsPage() {
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           <Select
             value={onboardingFilter}
-            onChange={(e) => setOnboardingFilter(e.target.value as any)}
+            onChange={(e) => setOnboardingFilter(e.target.value as Parameters<typeof setOnboardingFilter>[0])}
             fieldSize="md" className="cursor-pointer"
           >
             <option value="All">All Onboarding Status</option>
