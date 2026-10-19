@@ -52,7 +52,7 @@ vi.mock('../hrData', async () => {
 
 // Only pbCreate is actually invoked by runAbsenceCheck (the write path);
 // everything else in ./shared is pure and kept real.
-const pbCreateMock = vi.fn(async (_collection: string, fields: any) => ({ id: 'new-record-id', ...fields }));
+const pbCreateMock = vi.fn(async (_collection: string, fields: Record<string, unknown>) => ({ id: 'new-record-id', ...fields }));
 vi.mock('./shared', async () => {
   const actual = await vi.importActual<typeof import('./shared')>('./shared');
   return { ...actual, pbCreate: pbCreateMock };

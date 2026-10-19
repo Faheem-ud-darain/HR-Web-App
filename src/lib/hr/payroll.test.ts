@@ -10,7 +10,7 @@
 // the 10th so every test below processes "2026-09" (not a rollover day).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { payrollActions, getPendingIncrementForPayrollMonth } from './payroll';
-import type { Profile, PayrollRecord, LeaveApplication, TimesheetEntry, AbsenceRecord } from './types';
+import type { Profile, AbsenceRecord } from './types';
 
 function makeProfile(overrides: Partial<Profile> = {}): Profile {
   return {

@@ -5,18 +5,13 @@
 // @onesignal/capacitor-plugin native SDK instead, wired up in src/lib/push.ts).
 // Rendering this on native would just be a wasted network request in the
 // webview, since initWeb() in src/lib/push.ts never runs there anyway.
-
-import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { Capacitor } from '@capacitor/core';
 import { isPushConfigured } from '@/lib/push';
+import { useIsClient } from '@/lib/useIsClient';
 
 export function PushWebScript() {
-  const [showScript, setShowScript] = useState(false);
-
-  useEffect(() => {
-    setShowScript(!Capacitor.isNativePlatform() && isPushConfigured());
-  }, []);
+  const showScript = useIsClient() && !Capacitor.isNativePlatform() && isPushConfigured();
 
   if (!showScript) return null;
 

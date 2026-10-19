@@ -145,7 +145,7 @@ async function getTrackerSignalRecord(serverUrl, email) {
     if (!res.ok) return null;
     const data = await res.json();
     return data?.items?.[0] || null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -484,7 +484,7 @@ async function handleHeartbeatTick() {
 
         if (continuousIdleSec >= AUTO_ABSENT_INACTIVITY_SECONDS && !data.autoAbsentFired) {
           chrome.storage.local.set({ autoAbsentFired: true });
-          await autoClockOut(serverUrl, email, 'inactivity_absence', continuousIdleSec);
+          await autoClockOut(serverUrl, email, 'inactivity_absence');
         }
       }
     });
@@ -498,7 +498,7 @@ async function handleHeartbeatTick() {
 }
 
 // ── Auto Clock Out / Shift Stop ───────────────────────────────────────────
-async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleSeconds = 0) {
+async function autoClockOut(serverUrl, email, reason = 'tracker_closed') {
   try {
     const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
     console.log(`[Delcargo Tracker] Auto clock-out triggered. Reason: ${reason}`);

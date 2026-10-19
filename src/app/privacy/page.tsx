@@ -57,8 +57,8 @@ export default function PrivacyPolicyPage() {
             <li><strong>Account &amp; profile data:</strong> name, email, phone number, job title, team assignment, and (where provided) bank details, CNIC/ID images, and CV/passport documents for HR/onboarding purposes.</li>
             <li>
               <strong>Attendance &amp; location:</strong> for employees on automatic GPS-based
-              attendance (currently USA-based staff), the app checks your device's location
-              against your assigned warehouse's geofence to automatically start and end your
+              attendance (currently USA-based staff), the app checks your device&apos;s location
+              against your assigned warehouse&apos;s geofence to automatically start and end your
               shift as you arrive at or leave the site. To do this reliably, the app requests{' '}
               <strong>&quot;Always&quot; location access</strong> and continues checking your
               location while the app is closed or your device is locked — not just while the app
@@ -77,8 +77,8 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2">
           <h2 className="text-base font-bold text-slate-900">3. Desktop screen-tracking agent (separate tool)</h2>
           <p>
-            DelCargo also offers a separate, optional desktop application ("DelCargo Tracker")
-            that HR/Admin can enable for specific employees' work computers to periodically
+            DelCargo also offers a separate, optional desktop application (&quot;DelCargo Tracker&quot;)
+            that HR/Admin can enable for specific employees&apos; work computers to periodically
             capture screenshots for time-tracking purposes. This is a distinct, separately
             installed program — <strong>it is not part of, and is not bundled with, the mobile
             app or this web dashboard</strong>, and is not distributed through the Apple App
@@ -103,7 +103,7 @@ export default function PrivacyPolicyPage() {
           <p>
             We use <strong>OneSignal</strong> to deliver push notifications, which involves
             sharing a device push token with OneSignal. We do not share your HR records
-            (payroll, leave, tickets, etc.) with OneSignal or any other third party beyond what's
+            (payroll, leave, tickets, etc.) with OneSignal or any other third party beyond what&apos;s
             required to operate the app.
           </p>
         </section>
@@ -121,8 +121,8 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-base font-bold text-slate-900">7. Your choices</h2>
           <p>
             You can control notification categories from your Profile page. Location access
-            (including the "Always" level described above) can be denied or downgraded to
-            "While Using" at the OS level at any time, though this will prevent automatic
+            (including the &quot;Always&quot; level described above) can be denied or downgraded to
+            &quot;While Using&quot; at the OS level at any time, though this will prevent automatic
             location-based clock-in/out from working — in that case, contact HR to be switched to
             manual attendance. To request a copy of, or correction to, your data, contact HR
             directly (see below).

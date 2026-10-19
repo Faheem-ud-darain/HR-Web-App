@@ -1,4 +1,5 @@
-// Shared field-routing logic for hr_profiles writes, split out of
+
+import type { PbRow } from '@/lib/pbTypes';// Shared field-routing logic for hr_profiles writes, split out of
 // hrData.ts so the new admin-gated server route
 // (src/app/api/admin/profile/route.ts) can classify an update payload into
 // "real hr_profiles column" / "hr_profile_extra_ KV overlay" /
@@ -50,8 +51,8 @@ const FIELD_MAP: Record<string, string> = {
   salaryStartDate: 'salary_start_date',
 };
 
-export function fromProfileFields(p: Record<string, any>): Record<string, any> {
-  const fields: Record<string, any> = {};
+export function fromProfileFields(p: PbRow): PbRow {
+  const fields: PbRow = {};
   for (const [key, pbKey] of Object.entries(FIELD_MAP)) {
     if (p[key] !== undefined) {
       // Normalize email to lowercase on write, same as hrData.ts's
@@ -68,17 +69,17 @@ export function fromProfileFields(p: Record<string, any>): Record<string, any> {
 }
 
 export interface SplitProfileUpdate {
-  real: Record<string, any>;
-  overlay: Record<string, any>;
-  docs: Record<string, any>;
+  real: PbRow;
+  overlay: PbRow;
+  docs: PbRow;
   profilePicture?: string;
 }
 
 // Same 3-way split as hrActions.updateProfileDetails in hrData.ts.
-export function splitProfileUpdate(updates: Record<string, any>): SplitProfileUpdate {
-  const overlay: Record<string, any> = {};
-  const docs: Record<string, any> = {};
-  const real: Record<string, any> = {};
+export function splitProfileUpdate(updates: PbRow): SplitProfileUpdate {
+  const overlay: PbRow = {};
+  const docs: PbRow = {};
+  const real: PbRow = {};
   let profilePicture: string | undefined;
   for (const [key, value] of Object.entries(updates)) {
     if (key === 'profilePicture') { profilePicture = value; continue; }

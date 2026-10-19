@@ -8,8 +8,9 @@ import type { Task } from './types';
 import { pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete } from './shared';
 import { hrActions, buildNotificationLink } from '../hrData';
 import { pbFilter } from '../pbFilter';
+import type { PbRow } from '@/lib/pbTypes';
 
-function toTask(t: any): Task {
+function toTask(t: PbRow): Task {
   return { id: t.id, title: t.title, description: t.description, assignedTo: t.assigned_to, assignedEmail: t.assigned_email, team: t.team, dueDate: t.due_date, priority: t.priority, status: t.status, createdBy: t.created_by };
 }
 

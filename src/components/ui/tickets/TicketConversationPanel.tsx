@@ -28,7 +28,7 @@ interface TicketConversationPanelProps {
   userProfile: Profile | null;
   profileFor: (name: string) => Profile | undefined;
   role: "admin" | "hr" | "employee" | "team_lead";
-  ticketSeenState: TicketSeenState | null;
+  ticketSeenState: TicketSeenState | null | undefined;
   setLightboxSrc: React.Dispatch<React.SetStateAction<string | null>>;
   setLightboxName: React.Dispatch<React.SetStateAction<string | undefined>>;
   typingNames: string[];

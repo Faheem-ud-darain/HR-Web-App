@@ -32,6 +32,8 @@
 // and you'd also add `@config "./tailwind.config.js";` back to globals.css.
 
 /** @type {import('tailwindcss').Config} */
-export default {
+const tailwindConfig = {
   plugins: [],
 };
+
+export default tailwindConfig;

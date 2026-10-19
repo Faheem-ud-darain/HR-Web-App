@@ -7,10 +7,11 @@ import { Star, Gift } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import type { Announcement } from '@/lib/hrData';
 
 interface EmployeeSidePanelProps {
   isInitialLoading: boolean;
-  myAnnouncements: any[];
+  myAnnouncements: Announcement[];
   userProfile: Profile | null;
   announcementReadMap: Record<string, string[]>;
   allEmployees: Profile[];

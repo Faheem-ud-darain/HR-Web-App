@@ -181,7 +181,6 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
 
       // 1. Calculate Base Salary for Current Month (Handling Mid-Month Joiners)
       let effectiveBaseSalary = emp.baseSalary;
-      let isFirstMonthLateJoiner = false;
       // True whenever targetMonthKey IS this employee's own first
       // calendar month of employment — drives the automatic first-month
       // salary reserve below (item 3), regardless of which day in that
@@ -201,7 +200,6 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
           // - If joined in month's first 5 days (joinDayOfMonth <= 5): Processed normally with full base salary.
           // - If joined after a week (joinDayOfMonth > 5): Prorated for days worked, and carried over if unpaid.
           if (joinDayOfMonth > 5) {
-            isFirstMonthLateJoiner = true;
             const year = joinedDateObj.getFullYear();
             const month = joinedDateObj.getMonth();
             const totalDaysInMonth = new Date(year, month + 1, 0).getDate();

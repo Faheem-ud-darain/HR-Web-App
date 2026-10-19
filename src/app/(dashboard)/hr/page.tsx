@@ -3,11 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { Users, Clock, ClipboardList, PlusCircle, Video } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { hrActions, Profile, Announcement, useProfiles, useLeaves, useTasks, useTeams, useAnnouncements, useWarehouses, useTimesheets, displayName, addEmployeeServer, setTeamLeadAdmin } from '@/lib/hrData';
+import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTimesheets, displayName } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
@@ -19,10 +18,9 @@ export default function HRDashboard() {
   const router = useRouter();
 
   // Data
-  const { data: employees = [], isLoading: isEmployeesLoading, refetch: refetchProfiles } = useProfiles();
-  const { data: leaves = [], isLoading: isLeavesLoading, refetch: refetchLeaves } = useLeaves();
+  const { data: employees = [], isLoading: isEmployeesLoading } = useProfiles();
+  const { data: leaves = [], isLoading: isLeavesLoading } = useLeaves();
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
-  const { data: teamsData = [], refetch: refetchTeams } = useTeams();
   const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets({ days: 10 });
 
 
@@ -31,35 +29,16 @@ export default function HRDashboard() {
     const emp = employees.find((e: Profile) => e.fullName === employeeName);
     return emp ? displayName(emp, 'hr') : employeeName;
   };
-  const teams = teamsData.map(t => t.name); // extract names
-  const { data: announcements = [], isLoading: announcementsLoading, refetch: refetchAnnouncements } = useAnnouncements();
-  const { data: warehouses = [], refetch: refetchWarehouses } = useWarehouses();
-  
-  const [searchQuery, setSearchQuery] = useState('');
+  const [, setSearchQuery] = useState('');
 
   // Modals
   const [isTaskOpen, setIsTaskOpen] = useState(false);
   const [isScheduleMeetOpen, setIsScheduleMeetOpen] = useState(false);
-  const [isTeamLeadOpen, setIsTeamLeadOpen] = useState(false);
-  const [isOnboardOpen, setIsOnboardOpen] = useState(false);
   const [isAnnounceOpen, setIsAnnounceOpen] = useState(false);
 
 
   // Team Lead assignment form
-  const [leadEmployeeId, setLeadEmployeeId] = useState('');
-  const [leadTeamSelections, setLeadTeamSelections] = useState<string[]>([]);
-  const [leadSuccess, setLeadSuccess] = useState('');
-
   // Onboard form
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('employee');
-  const [salary, setSalary] = useState('');
-  const [team, setTeam] = useState('Engineering');
-  const [tempPassword, setTempPassword] = useState('');
-  const [onboardError, setOnboardError] = useState('');
-  const [onboardSuccess, setOnboardSuccess] = useState('');
-
   useEffect(() => {
     // Monthly screenshot retention sweep — no-ops if already checked this
     // month or nothing is due; see checkScreenshotRetention in hrData.ts.
@@ -98,39 +77,8 @@ export default function HRDashboard() {
       .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString(), minDurationSeconds: INACTIVITY_THRESHOLD_SECONDS }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sweep runs when the data finishes loading or its size changes, not on every refetch of identical rows
   }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
-
-
-
-  const handleOnboardSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOnboardError('');
-    if (!fullName || !email || !salary) { setOnboardError('Please fill in all required fields.'); return; }
-    if (isNaN(Number(salary)) || Number(salary) <= 0) { setOnboardError('Please enter a valid base salary.'); return; }
-
-    await addEmployeeServer({ fullName, email, role: role as Profile['role'], joinedDate: new Date().toISOString().split('T')[0], baseSalary: Number(salary), teams: [team], password: tempPassword || undefined });
-    await hrActions.addNotification('all', 'hr', `New employee ${fullName} (${role}) registered.`);
-    await hrActions.addNotification('all', 'admin', `New employee ${fullName} (${role}) registered.`);
-    setOnboardSuccess('Employee registered!');
-    refetchProfiles();
-    setTimeout(() => { setIsOnboardOpen(false); setFullName(''); setEmail(''); setSalary(''); setTempPassword(''); setOnboardSuccess(''); }, 1200);
-  };
-
-  const handleLeadToggle = (teamName: string) => {
-    setLeadTeamSelections(prev =>
-      prev.includes(teamName) ? prev.filter(t => t !== teamName) : [...prev, teamName]
-    );
-  };
-
-  const handleSaveTeamLead = async () => {
-    if (!leadEmployeeId) return;
-    await setTeamLeadAdmin(leadEmployeeId, leadTeamSelections);
-    refetchProfiles();
-    const emp = employees.find((e: Profile) => e.id === leadEmployeeId);
-    setLeadSuccess(`${emp?.fullName} is now team lead of: ${leadTeamSelections.join(', ') || '(none)'}`);
-    setTimeout(() => { setIsTeamLeadOpen(false); setLeadSuccess(''); setLeadEmployeeId(''); setLeadTeamSelections([]); }, 1400);
-  };
-
   // Stats
   const pendingLeaves = leaves.filter(l => l.status === 'pending').length;
 
@@ -255,7 +203,7 @@ export default function HRDashboard() {
           <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">Leaves, task deadlines, and schedule conflicts — all teams in one view.</p>
         </div>
         <div className="p-3 md:p-6">
-          <OrgCalendar leaves={leaves as any} tasks={tasks as any} employees={employees} />
+          <OrgCalendar leaves={leaves} tasks={tasks} employees={employees} />
         </div>
       </Card>
 
@@ -272,7 +220,7 @@ export default function HRDashboard() {
         onClose={() => setIsTaskOpen(false)}
         employees={employees.filter((e: Profile) => e.role === 'employee' || e.isTeamLead)}
         createdBy="hr"
-        onTaskAdded={(task) => refetchTasks()}
+        onTaskAdded={() => refetchTasks()}
       />
 
       {/* Schedule Google Meet Modal */}

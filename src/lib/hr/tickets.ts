@@ -11,9 +11,15 @@ import type { Ticket, TicketPresence, TicketSeenState, TypingState, TicketReply 
 import {
   pbList, pbCreate, pbUpdate, pbDelete, pbUpsertByField, pbFindByField, pbDeleteByField,
 } from './shared';
-import { hrActions, buildNotificationLink, isTechnicalSupportMember } from '../hrData';
+import { hrActions, buildNotificationLink, isTechnicalSupportMember, useProfiles } from '../hrData';
+import { getSessionEmail, getSessionRole } from '../session';
+import { isStaffRole } from '../core/profiles';
 import { pbFilter } from '../pbFilter';
 import { POLL_MS, POLL_OPTIONS } from './polling';
+import { every } from '../idle';
+import { touchActivity } from './activity';
+import { ticketEventScopes } from '../core/activity';
+import type { PbRow } from '@/lib/pbTypes';
 
 // shows a "Live" badge for any ticket whose presence hasn't gone stale.
 // Backed by the dedicated hr_ticket_presence collection (one row per
@@ -59,11 +65,11 @@ export const TYPING_STALE_MS = 5 * 1000;
 async function getTechnicalSupportEmails(): Promise<string[]> {
   const profiles = await pbList('hr_profiles', { fields: 'email,teams' });
   return profiles
-    .filter((p: any) => isTechnicalSupportMember(p.teams))
-    .map((p: any) => p.email)
+    .filter((p: PbRow) => isTechnicalSupportMember(p.teams))
+    .map((p: PbRow) => p.email)
     .filter(Boolean);
 }
-function toTypingState(row: any): TypingState {
+function toTypingState(row: PbRow): TypingState {
   return { scope: row.scope, scopeId: row.scope_id, email: row.email, displayName: row.display_name || row.email, lastTypedAt: row.updated_at };
 }
 async function upsertTypingRow(scope: 'chat' | 'ticket', scopeId: string, email: string, displayName: string): Promise<void> {
@@ -95,76 +101,47 @@ async function deleteTypingRow(scope: 'chat' | 'ticket', scopeId: string, email:
   } catch { /* already gone — fine */ }
 }
 
-function toTicket(t: any): Ticket {
+function toTicket(t: PbRow): Ticket {
   return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
 }
 
-export function useTickets(limit: number = 50, status?: 'open' | 'closed') {
+// HR/Admin see every ticket. Everyone else only ever gets their OWN tickets,
+// plus (for Technical Support team members) the technical department's queue —
+// asked of the server directly instead of downloading the latest tickets of
+// the whole company and hiding the rest client-side.
+export function useTickets(limit: number = 50, status?: 'open' | 'closed', options: { enabled?: boolean } = {}) {
+  const email = (getSessionEmail() || '').toLowerCase();
+  const staff = isStaffRole(getSessionRole());
+  const { data: roster } = useProfiles();
+  const technical = !staff && isTechnicalSupportMember(roster?.find(p => p.email?.toLowerCase() === email)?.teams);
   return useQuery({
-    queryKey: ['hr_tickets', limit, status || 'all'],
+    queryKey: ['hr_tickets', limit, status || 'all', staff ? 'staff' : email, technical],
+    enabled: (staff || !!email) && (options.enabled ?? true),
     queryFn: async () => {
       try {
+        const parts: string[] = [];
+        if (status) parts.push(pbFilter('status = {:status}', { status }));
+        if (!staff) {
+          parts.push(technical
+            ? `(${pbFilter('employee_email ~ {:email}', { email })} || department = "technical")`
+            : pbFilter('employee_email ~ {:email}', { email }));
+        }
         const res = await pb.collection('hr_tickets').getList(1, limit, {
           sort: '-created',
           requestKey: null,
-          ...(status ? { filter: pbFilter('status = {:status}', { status }) } : {}),
+          ...(parts.length ? { filter: parts.join(' && ') } : {}),
         });
-        return res.items.map(toTicket);
+        const tickets = res.items.map(toTicket);
+        // `~` is a "contains" match — drop another person's address that merely contains this one.
+        return staff ? tickets : tickets.filter(t => t.employeeEmail.toLowerCase() === email || (technical && t.department === 'technical'));
       } catch (err) {
         console.error('[hrData] getList error in hr_tickets:', err);
         return [];
       }
     },
-    refetchInterval: POLL_MS.tickets,
+    refetchInterval: every(POLL_MS.tickets),
     ...POLL_OPTIONS,
   });
-}
-
-// ---------------------------------------------------------------------------
-// Ticket activity "seen" tracking (client-side only, per role+email) — used
-// to light up a small dot on the Support Tickets nav item when there's a
-// new ticket or reply the viewer hasn't looked at yet.
-// ---------------------------------------------------------------------------
-
-// A single number that changes whenever there's new activity relevant to
-// this viewer: for HR/Admin that's every ticket + every reply on every
-// ticket (they see all of it); for employees/team leads it's just replies
-// from HR/Admin on their own tickets (their own messages don't count).
-export function computeTicketActivitySignature(
-  tickets: Ticket[],
-  role: 'admin' | 'hr' | 'employee' | 'team_lead',
-  email: string,
-): number {
-  if (role === 'admin' || role === 'hr') {
-    return tickets.reduce((sum, t) => sum + 1 + t.replies.length, 0);
-  }
-  const mine = tickets.filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase());
-  return mine.reduce((sum, t) => sum + t.replies.filter(r => r.senderRole === 'hr' || r.senderRole === 'admin').length, 0);
-}
-
-function ticketSeenStorageKey(role: string, email: string): string {
-  return `hr_tickets_seen_v1_${role}_${email.toLowerCase()}`;
-}
-
-export function hasUnseenTicketActivity(
-  tickets: Ticket[],
-  role: 'admin' | 'hr' | 'employee' | 'team_lead',
-  email: string,
-): boolean {
-  if (typeof window === 'undefined' || !email) return false;
-  const current = computeTicketActivitySignature(tickets, role, email);
-  const stored = Number(window.localStorage.getItem(ticketSeenStorageKey(role, email)) || '0');
-  return current > stored;
-}
-
-export function markTicketActivitySeen(
-  tickets: Ticket[],
-  role: 'admin' | 'hr' | 'employee' | 'team_lead',
-  email: string,
-): void {
-  if (typeof window === 'undefined' || !email) return;
-  const current = computeTicketActivitySignature(tickets, role, email);
-  window.localStorage.setItem(ticketSeenStorageKey(role, email), String(current));
 }
 
 export const ticketActions = {
@@ -198,11 +175,15 @@ export const ticketActions = {
     // a dashboard-only row (push_notifications.pb.js exits before the
     // hr_profiles role lookup + OneSignal send for non-pushable categories).
     await hrActions.addNotification('all', 'admin', `New support ticket opened: "${ticket.title}" by ${ticket.employeeName}.`, undefined, undefined, ticket.employeeEmail, buildNotificationLink('admin', 'ticket', created.id));
+    // Light the Tickets dot for HR/Admin (and Technical Support for technical tickets).
+    void touchActivity(ticketEventScopes({ employeeEmail: ticket.employeeEmail, department: ticket.department }), ticket.employeeEmail);
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
     const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toISOString() };
     await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
+    // Newest event for this ticket's scopes: the owner's own dot, the staff dot, the tech queue.
+    void touchActivity(ticketEventScopes(ticket), reply.senderEmail || '');
     if (reply.senderRole === 'hr' || reply.senderRole === 'admin' || (ticket.department === 'technical' && reply.senderRole !== 'employee')) {
       const senderLabel = ticket.department === 'technical' ? 'Technical Support' : (reply.senderRole === 'hr' ? 'HR' : 'Admin');
       await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support response received from ${senderLabel} regarding ticket "${ticket.title}".`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
@@ -231,6 +212,7 @@ export const ticketActions = {
       ? { id: `evt_${Date.now()}`, senderName: actor.name, senderRole: actor.role, senderEmail: actor.email, message: '', timestamp: new Date().toISOString(), event: status === 'closed' ? 'closed' : 'reopened' }
       : null;
     await pbUpdate('hr_tickets', ticket.id, event ? { status, replies: [...ticket.replies, event] } : { status });
+    void touchActivity(ticketEventScopes(ticket), actor?.email || '');
     const by = actor ? ` by ${actor.name} (${actor.role === 'team_lead' ? 'employee' : actor.role === 'hr' ? 'HR' : actor.role === 'admin' ? 'Admin' : 'employee'})` : '';
     await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}${by}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));
     if (ticket.department === 'hr') {
@@ -299,7 +281,7 @@ export const ticketActions = {
     if (row) await pbDelete('hr_ticket_presence', row.id);
   },
   getAllTicketPresences: async (): Promise<TicketPresence[]> =>
-    await pbList('hr_ticket_presence'),
+    (await pbList('hr_ticket_presence')) as TicketPresence[],
   // Scoped variant — fetches presence rows only for the given ticket IDs
   // (one server-side OR-filter, still a single request) instead of fetching
   // every row in hr_ticket_presence, which is one row per ticket in the
@@ -309,7 +291,7 @@ export const ticketActions = {
   getTicketPresencesForIds: async (ticketIds: string[]): Promise<TicketPresence[]> => {
     if (ticketIds.length === 0) return [];
     const filter = ticketIds.map((id, i) => pbFilter(`ticketId = {:id${i}}`, { [`id${i}`]: id })).join(' || ');
-    return await pbList('hr_ticket_presence', { filter });
+    return (await pbList('hr_ticket_presence', { filter })) as TicketPresence[];
   },
   isTicketPresenceLive: (p: TicketPresence | null | undefined): boolean =>
     !!p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) < TICKET_PRESENCE_STALE_MS,

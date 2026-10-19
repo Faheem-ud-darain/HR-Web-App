@@ -6,54 +6,37 @@
 // './hrData' anywhere in the app need to change. See plans/014.
 export * from './hr/types';
 import {
-  getWeekdaysInMonth, formatMoney, formatDurationBetween, localShiftDate,
-  useKVByPrefix, useInvalidate, HR_ADMIN_LINE_TEAM_ID, sharedActions,
+  sharedActions,
 } from './hr/shared';
 import {
-  isAnnouncementForProfile, buildNotificationLink, useNotifications,
-  useAnnouncements, useMaintenanceNotices, notificationActions,
+  notificationActions,
 } from './hr/notifications';
 import {
-  useCareers, getCareerApplicationsAdmin, updateApplicationStatusAdmin,
-  getCareerApplicationsForEmailAdmin, deleteCareerApplicationsForEmailAdmin,
   careerActions,
 } from './hr/careers';
-import { useTasks, useMyTasks, taskActions } from './hr/tasks';
+import { taskActions } from './hr/tasks';
 export { useTasks, useMyTasks } from './hr/tasks';
 import {
-  useTickets, computeTicketActivitySignature, hasUnseenTicketActivity,
-  markTicketActivitySeen, TICKET_PRESENCE_STALE_MS, TYPING_STALE_MS,
   ticketActions,
 } from './hr/tickets';
 import {
-  useWarehouses, useTeams, useMessages, useAllMessages, useTeamDocuments,
-  computeMessageActivitySignature, hasUnseenMessageActivity, markMessageActivitySeen,
-  hasUnseenHrAdminLineActivity, teamActions,
+  teamActions,
 } from './hr/teams';
 import {
-  useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued, getAccruedPTOForDisplay,
-  getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,
-  isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
-  countApprovedLeaveRequestsInMonth, getPTOAccrualDate, leaveActions,
+  leaveActions,
 } from './hr/leaves';
 import {
-  hasStaleTrackerToken, getCaptureHealth, TRACKER_HEARTBEAT_STALE_MS,
-  SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
-  useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, timesheetActions,
-  fetchTimesheetsFresh,
+  timesheetActions
 } from './hr/timesheets';
 export {
   hasStaleTrackerToken, getCaptureHealth, TRACKER_HEARTBEAT_STALE_MS,
   SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
   useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, fetchTimesheetsFresh,
 } from './hr/timesheets';
-import { useMyAbsenceRecords, countAbsentWeekdays, absenceActions } from './hr/absences';
+import { absenceActions } from './hr/absences';
 export { useMyAbsenceRecords, countAbsentWeekdays } from './hr/absences';
 import {
-  usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
-  upsertPayrollRecordAdmin, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
-  getPendingIncrementForPayrollMonth, getFinalLeavePayout, getAbsenceDeductionForMonth,
-  getShiftShortfallDeduction, payrollActions,
+  payrollActions,
 } from './hr/payroll';
 export {
   usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
@@ -63,13 +46,7 @@ export {
 } from './hr/payroll';
 export type { IncrementEvent } from './hr/payroll';
 import {
-  isTechnicalSupportMember, displayName, MAX_USER_SESSION_DEVICES,
-  USER_SESSION_STALE_MS, getProfileExtras, saveProfileExtras,
-  getProfileDocuments, saveProfileDocuments, useProfiles, useProfileDocuments,
-  useProfileSelf, updateProfileSelf, changeOwnPassword, updateProfileAdmin,
-  approveOnboardingServer, rejectOnboardingServer, resetPasswordServer,
-  applyIncrementServer, addEmployeeServer, updateEmployeeTeamsAdmin,
-  setTeamLeadAdmin, profileActions,
+  profileActions,
 } from './hr/profiles';
 export {
   isTechnicalSupportMember, displayName, MAX_USER_SESSION_DEVICES,
@@ -87,13 +64,10 @@ export {
   countApprovedLeaveRequestsInMonth, getPTOAccrualDate,
 } from './hr/leaves';
 export {
-  useWarehouses, useTeams, useMessages, useAllMessages, useTeamDocuments,
-  computeMessageActivitySignature, hasUnseenMessageActivity, markMessageActivitySeen,
-  hasUnseenHrAdminLineActivity,
-} from './hr/teams';
+  useWarehouses, useTeams, useMessages, useTeamDocuments,
+  } from './hr/teams';
 export {
-  useTickets, computeTicketActivitySignature, hasUnseenTicketActivity,
-  markTicketActivitySeen, TICKET_PRESENCE_STALE_MS, TYPING_STALE_MS,
+  useTickets, TICKET_PRESENCE_STALE_MS, TYPING_STALE_MS,
 } from './hr/tickets';
 export {
   useCareers, getCareerApplicationsAdmin, updateApplicationStatusAdmin,
@@ -105,7 +79,7 @@ export {
 } from './hr/notifications';
 export {
   getWeekdaysInMonth, formatMoney, formatDurationBetween, localShiftDate,
-  useKVByPrefix, useInvalidate, HR_ADMIN_LINE_TEAM_ID,
+  useInvalidate, HR_ADMIN_LINE_TEAM_ID,
 } from './hr/shared';
 
 // ─────────────────────────────────────────────────────────────────────────

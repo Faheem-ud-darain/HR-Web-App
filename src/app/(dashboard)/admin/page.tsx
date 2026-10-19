@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { DollarSign, Users, Clock, ClipboardList, PlusCircle, Loader2, Video } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useProfiles, useLeaves, useTasks, useAnnouncements, useWarehouses, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink, Announcement } from '@/lib/hrData';
+import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -30,9 +29,6 @@ export default function AdminDashboard() {
   };
   const [isTaskOpen, setIsTaskOpen] = useState(false);
   const [isScheduleMeetOpen, setIsScheduleMeetOpen] = useState(false);
-
-  const { data: announcements = [], isLoading: announcementsLoading, refetch: refetchAnnouncements } = useAnnouncements();
-  const { data: warehouses = [] } = useWarehouses();
   const [isAnnounceOpen, setIsAnnounceOpen] = useState(false);
 
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
@@ -63,6 +59,7 @@ export default function AdminDashboard() {
       .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString(), minDurationSeconds: INACTIVITY_THRESHOLD_SECONDS }))
       .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
       .catch(() => { /* best-effort */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sweep runs when the data finishes loading or its size changes, not on every refetch of identical rows
   }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
 
 
@@ -321,7 +318,7 @@ export default function AdminDashboard() {
           <p className="text-xs text-slate-500 mt-0.5">Leave schedules, task deadlines, and conflict indicators across all departments.</p>
         </div>
         <div className="p-4 md:p-6">
-          <OrgCalendar leaves={leaves as any} tasks={tasks as any} employees={employees} />
+          <OrgCalendar leaves={leaves} tasks={tasks} employees={employees} />
         </div>
       </Card>
 

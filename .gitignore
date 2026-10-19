@@ -98,3 +98,10 @@ _to_delete/
 tracker-agent/__pycache__/
 tracker-agent/*.log
 public/__pycache__/
+
+# tracker agent
+__pycache__/
+*.pyc
+tracker-agent/dist/
+tracker-agent/build/
+tracker-agent/*.spec

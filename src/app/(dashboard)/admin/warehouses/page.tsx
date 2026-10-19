@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import type { Warehouse } from '@/lib/hrData';
 
 export default function AdminWarehousesPage() {
   const { data: warehouses = [], refetch: refetchWarehouses } = useWarehouses();
@@ -106,7 +107,7 @@ export default function AdminWarehousesPage() {
     }
   };
 
-  const handleStartEditWarehouse = (wh: any) => {
+  const handleStartEditWarehouse = (wh: Warehouse) => {
     setEditWhError('');
     setEditingWhId(wh.id);
     setEditingWhName(wh.name);

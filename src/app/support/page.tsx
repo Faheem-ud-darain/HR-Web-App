@@ -55,7 +55,7 @@ export default function SupportPage() {
           </p>
           <p className="text-xs text-slate-500">
             We aim to respond within 1–2 business days. Please include your account email and, if
-            reporting a bug, what device/OS and app version you're using.
+            reporting a bug, what device/OS and app version you&apos;re using.
           </p>
         </section>
 
@@ -63,7 +63,7 @@ export default function SupportPage() {
           <h2 className="text-base font-bold text-slate-900">Frequently Asked Questions</h2>
 
           <div className="space-y-1.5">
-            <p className="font-bold text-slate-900 text-sm">I can't log in / forgot my password.</p>
+            <p className="font-bold text-slate-900 text-sm">I can&apos;t log in / forgot my password.</p>
             <p>
               Use the &quot;Forgot Password&quot; link on the login screen to reset it via a one-time
               code sent to your registered email. If you no longer have access to that email,
@@ -72,19 +72,19 @@ export default function SupportPage() {
           </div>
 
           <div className="space-y-1.5">
-            <p className="font-bold text-slate-900 text-sm">My shift won't start / I'm told to reconnect my tracker.</p>
+            <p className="font-bold text-slate-900 text-sm">My shift won&apos;t start / I&apos;m told to reconnect my tracker.</p>
             <p>
               If HR/Admin has screen tracking enabled on your account, Start Shift requires the
               DelCargo Tracker desktop app to be installed, running, and up to date. A &quot;Tracker
               App Required&quot; or &quot;Reconnect Tracker Required&quot; message means the app either
-              isn't running or its setup code needs to be refreshed — open the Tracker Setup page
+              isn&apos;t running or its setup code needs to be refreshed — open the Tracker Setup page
               in the app, copy the current setup code, and paste it into the DelCargo Tracker
-              program on your computer. If it still won't connect, contact HR.
+              program on your computer. If it still won&apos;t connect, contact HR.
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <p className="font-bold text-slate-900 text-sm">My screenshots/activity aren't showing up.</p>
+            <p className="font-bold text-slate-900 text-sm">My screenshots/activity aren&apos;t showing up.</p>
             <p>
               This is almost always the same reconnect issue above (an outdated or unrecognized
               setup code), or the DelCargo Tracker app not currently running. Reconnecting per the
@@ -93,9 +93,9 @@ export default function SupportPage() {
           </div>
 
           <div className="space-y-1.5">
-            <p className="font-bold text-slate-900 text-sm">I'm not receiving push notifications.</p>
+            <p className="font-bold text-slate-900 text-sm">I&apos;m not receiving push notifications.</p>
             <p>
-              Check that notifications are allowed for the app in your device's system settings,
+              Check that notifications are allowed for the app in your device&apos;s system settings,
               and check your notification preferences on your Profile page inside the app.
             </p>
           </div>
@@ -104,7 +104,7 @@ export default function SupportPage() {
             <p className="font-bold text-slate-900 text-sm">How do I request time off, check my payroll, or raise an HR issue?</p>
             <p>
               Use the Leaves, Salary, and Tickets sections inside the app. For anything those
-              sections can't cover, email HR directly.
+              sections can&apos;t cover, email HR directly.
             </p>
           </div>
 
@@ -113,7 +113,7 @@ export default function SupportPage() {
             <p>
               Since this app is provisioned and managed by DelCargo for its employees and
               contractors, account and data deletion requests go through HR rather than a
-              self-service option in the app. Email HR and we'll process the request.
+              self-service option in the app. Email HR and we&apos;ll process the request.
             </p>
           </div>
         </section>
@@ -123,7 +123,7 @@ export default function SupportPage() {
           <p>
             See our{' '}
             <Link href="/privacy" className="text-orange-600 font-semibold hover:underline">Privacy Policy</Link>
-            {' '}for details on what data the app collects and how it's used.
+            {' '}for details on what data the app collects and how it&apos;s used.
           </p>
         </section>
       </main>

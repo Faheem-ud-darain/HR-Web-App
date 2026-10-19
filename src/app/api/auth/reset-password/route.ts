@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findProfileByEmail, verifyOtp, consumeOtp, setProfilePassword } from '@/lib/passwordResetOtp';
+import { rateLimitByIp } from '@/lib/rateLimit';
+import { cleanEmail, cleanText } from '@/lib/sanitize';
 
 // Enabled Edge runtime for Cloudflare Pages compatibility.
 export const runtime = 'edge';
@@ -23,11 +25,13 @@ export const dynamic = 'force-dynamic';
 // anything — never trust the client's word that a code was already
 // confirmed valid.
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitByIp(req, 'reset-password', 20, 60 * 60 * 1000);
+  if (limited) return limited;
   let email: string, otp: string, newPassword: string;
   try {
     const body = await req.json();
-    email = String(body?.email || '').trim();
-    otp = String(body?.otp || '').trim();
+    email = cleanEmail(body?.email);
+    otp = cleanText(body?.otp, { max: 12 });
     newPassword = String(body?.newPassword || '');
   } catch {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });

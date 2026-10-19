@@ -5,13 +5,15 @@
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import { pbFilter } from '../pbFilter';
+import { sanitizeForWrite } from '../sanitize';
 import { coalesce, invalidateCache } from '../requestCache';
-import { getSessionEmail, getSessionRole } from '../session';
+import { getSessionEmail } from '../session';
 export { pbFilter };
 import { getWeekdaysInMonth, localShiftDate } from '../core/dates';
+import type { PbRow, PbJson } from '@/lib/pbTypes';
 export { getWeekdaysInMonth, localShiftDate };
 
 // ---------------------------------------------------------------------------
@@ -37,7 +39,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'request
   });
 }
 
-export function looksLikeRealId(id: any): boolean {
+export function looksLikeRealId(id: string): boolean {
   return typeof id === 'string' && /^[a-z0-9]{15}$/.test(id);
 }
 
@@ -46,7 +48,7 @@ export function looksLikeRealId(id: any): boolean {
 // the caller needs it. getFullList pages through the collection in
 // `batch`-sized requests, so for collections that grow without bound prefer
 // a `filter` over fetching everything.
-export async function pbList(collection: string, opts: { sort?: string; filter?: string; fields?: string } = {}): Promise<any[]> {
+export async function pbList(collection: string, opts: { sort?: string; filter?: string; fields?: string } = {}): Promise<PbRow[]> {
   try {
     return await pb.collection(collection).getFullList({ requestKey: null, batch: 200, ...opts });
   } catch (err) {
@@ -64,7 +66,7 @@ export async function pbList(collection: string, opts: { sort?: string; filter?:
 // email was still stored mixed-case (before fromProfileFields started
 // lowercasing it) would silently never match here — that's the exact "some
 // employees still see the capital-letter email bug" symptom.
-export async function pbListByEmailField(collection: string, field: string, email: string, opts: { extraFilter?: string; sort?: string } = {}): Promise<any[]> {
+export async function pbListByEmailField(collection: string, field: string, email: string, opts: { extraFilter?: string; sort?: string } = {}): Promise<PbRow[]> {
   if (!email) return [];
   const wanted = email.toLowerCase();
   // `field` is always a code-supplied column name (never user input), so it's
@@ -72,15 +74,18 @@ export async function pbListByEmailField(collection: string, field: string, emai
   const base = pbFilter(`${field} ~ {:email}`, { email });
   const filter = opts.extraFilter ? `${base} && ${opts.extraFilter}` : base;
   const rows = await pbList(collection, { filter, sort: opts.sort });
-  return rows.filter((r: any) => (r[field] || '').toLowerCase() === wanted);
+  return rows.filter((r: PbRow) => (r[field] || '').toLowerCase() === wanted);
 }
 
-export async function pbCreate(collection: string, fields: any): Promise<any> {
-  return pb.collection(collection).create(fields);
+// Every write through these helpers is passed through sanitizeForWrite first
+// (control/spoofing characters stripped from all strings, nothing else
+// changed) — one chokepoint instead of every form remembering to do it.
+export async function pbCreate(collection: string, fields: PbRow): Promise<PbJson> {
+  return pb.collection(collection).create(sanitizeForWrite(fields));
 }
 
-export async function pbUpdate(collection: string, id: string, fields: any): Promise<any> {
-  return pb.collection(collection).update(id, fields);
+export async function pbUpdate(collection: string, id: string, fields: PbRow): Promise<PbJson> {
+  return pb.collection(collection).update(id, sanitizeForWrite(fields));
 }
 
 export async function pbDelete(collection: string, id: string): Promise<void> {
@@ -101,7 +106,8 @@ const upsertIdCache = new Map<string, string>();
 // instead of the generic hr_delcargo_store KV table. Used for
 // hr_tracking_settings (keyed on employeeEmail) and hr_ticket_presence
 // (keyed on ticketId).
-export async function pbUpsertByField(collection: string, field: string, value: string, data: Record<string, any>): Promise<any> {
+export async function pbUpsertByField(collection: string, field: string, value: string, rawData: PbRow): Promise<PbJson> {
+  const data = sanitizeForWrite(rawData);
   const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
   const cachedId = upsertIdCache.get(cacheKey);
   if (cachedId) {
@@ -116,7 +122,7 @@ export async function pbUpsertByField(collection: string, field: string, value: 
   // (same pattern getScreenshots uses for employee email lookups).
   try {
     const matches = await pb.collection(collection).getFullList({ filter: pbFilter(`${field} ~ {:value}`, { value }), requestKey: null });
-    const existing = (matches as any[]).find(r => (r[field] || '').toLowerCase() === value.toLowerCase());
+    const existing = (matches as PbRow[]).find(r => (r[field] || '').toLowerCase() === value.toLowerCase());
     if (existing) {
       upsertIdCache.set(cacheKey, existing.id);
       return await pb.collection(collection).update(existing.id, data);
@@ -132,7 +138,7 @@ export async function pbUpsertByField(collection: string, field: string, value: 
 // Finds one row by an exact field match (used for ticketId lookups, which
 // are opaque PocketBase ids with no case-sensitivity concern, unlike
 // employeeEmail above).
-export async function pbFindByField(collection: string, field: string, value: string): Promise<any | null> {
+export async function pbFindByField(collection: string, field: string, value: string): Promise<PbJson | null> {
   try {
     return await pb.collection(collection).getFirstListItem(pbFilter(`${field} = {:value}`, { value }), { requestKey: null });
   } catch {
@@ -167,7 +173,7 @@ export async function pbDeleteByField(collection: string, field: string, value: 
 // if an update-by-id 404s because the row was deleted elsewhere).
 const kvIdCache = new Map<string, string>();
 
-export async function pbGetKV(key: string): Promise<any | null> {
+export async function pbGetKV(key: string): Promise<PbJson | null> {
   try {
     const rec = await pb.collection('hr_delcargo_store').getFirstListItem(pbFilter('key = {:key}', { key }), { requestKey: null });
     kvIdCache.set(key, rec.id);
@@ -177,13 +183,12 @@ export async function pbGetKV(key: string): Promise<any | null> {
   }
 }
 
-export async function pbSetKV(key: string, value: any): Promise<void> {
+export async function pbSetKV(key: string, value: PbJson): Promise<void> {
   const cachedId = kvIdCache.get(key);
   if (cachedId) {
     try {
       await pb.collection('hr_delcargo_store').update(cachedId, { value });
-      invalidateCache('kv:');
-      return;
+          return;
     } catch {
       // Cached id is stale (row deleted elsewhere, or never existed) —
       // fall through to the full lookup-then-create/update path below.
@@ -198,34 +203,12 @@ export async function pbSetKV(key: string, value: any): Promise<void> {
     const created = await pb.collection('hr_delcargo_store').create({ key, value });
     kvIdCache.set(key, created.id);
   }
-  invalidateCache('kv:');
-}
-
-const KV_PREFIX_TTL_MS = 3000;
-
-export async function pbGetKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
-  return coalesce(`kv:${prefix}`, KV_PREFIX_TTL_MS, () => fetchKVByPrefix(prefix));
-}
-
-async function fetchKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
-  try {
-    const records = await pb.collection('hr_delcargo_store').getFullList({
-      filter: pbFilter('key ~ {:prefix}', { prefix }),
-      requestKey: null,
-    });
-    for (const r of records as any[]) kvIdCache.set(r.key, r.id);
-    return records.map((r: any) => ({ key: r.key, value: r.value, id: r.id }));
-  } catch (err) {
-    console.error(`[hrData] KV prefix fetch error (${prefix}):`, err);
-    return [];
-  }
 }
 
 export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
   // Parallelized (was a sequential for-loop) — each key's lookup+delete is
   // independent, so there's no reason to wait for one before starting the
   // next. Uses the id cache first to skip the lookup entirely when possible.
-  invalidateCache('kv:');
   await Promise.all(keys.map(async (key) => {
     const cachedId = kvIdCache.get(key);
     kvIdCache.delete(key);
@@ -244,7 +227,6 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
       // already gone
     }
   }));
-  invalidateCache('kv:');
 }
 
 // hr_tracker_signals — one row per employee (plan 027 Phase 4b), consolidating
@@ -264,7 +246,7 @@ export async function pbDeleteKVByKeys(keys: string[]): Promise<void> {
 // upsertIdCache almost verbatim — removed; pbUpsertByField's own cache
 // already covers the hot path, keyed the same way).
 
-export async function pbGetTrackerSignal(email: string, field: string): Promise<any | null> {
+export async function pbGetTrackerSignal(email: string, field: string): Promise<PbJson | null> {
   const key = (email || '').toLowerCase();
   if (!key) return null;
   // The heartbeat / stop-signal / quit-intent checks fire together for one
@@ -280,7 +262,7 @@ export async function pbGetTrackerSignal(email: string, field: string): Promise<
 // the one caller that needs everyone's signal at once instead of a single
 // employee's. No single-row helper covers this (it's a full-collection
 // scan), so it stays its own function rather than delegating.
-export async function pbGetAllTrackerSignals(field: string): Promise<{ email: string; value: any }[]> {
+export async function pbGetAllTrackerSignals(field: string): Promise<{ email: string; value: PbJson }[]> {
   // Only this one signal column (plus the key) is needed, not all 8 json blobs.
   // Coalesced: the dashboard sweeps, the Tracking page poll and any other
   // caller asking within a few seconds share one request.
@@ -292,7 +274,7 @@ export async function pbGetAllTrackerSignals(field: string): Promise<{ email: st
   });
 }
 
-export async function pbSetTrackerSignal(email: string, field: string, value: any): Promise<void> {
+export async function pbSetTrackerSignal(email: string, field: string, value: PbJson): Promise<void> {
   const key = (email || '').toLowerCase();
   if (!key) return;
   await pbUpsertByField('hr_tracker_signals', 'email', key, { [field]: value });
@@ -320,26 +302,6 @@ export async function pbClearTrackerSignalFields(email: string, fields: string[]
   await pbUpdate('hr_tracker_signals', row.id, patch);
   invalidateCache('tsig:');
   invalidateCache('tsrow:');
-}
-
-export function useKVByPrefix(prefix: string) {
-  return useQuery({
-    queryKey: ['hr_kv', prefix],
-    queryFn: () => pbGetKVByPrefix(prefix),
-    // Was 5000ms — far tighter than this data (tracking settings, tracker
-    // heartbeats) actually needs, and this hook is used from EVERY
-    // employee's own dashboard (not just HR/Admin), each polling the
-    // entire company-wide blob every 5s. 30s keeps HR/Admin's "is this
-    // tracker connected" view reasonably fresh while cutting steady-state
-    // load ~6x; callers that need an immediate update after an action
-    // already have a manual refetch() available (see TrackingView's
-    // refetchSettings/refetchHeartbeats).
-    refetchInterval: 30000,
-    // Stop polling entirely while the tab is backgrounded/inactive — no
-    // reason to keep hitting PocketBase every 30s for a dashboard nobody
-    // is looking at right now. Resumes automatically on refocus.
-    refetchIntervalInBackground: false,
-  });
 }
 
 export function useInvalidate() {
@@ -383,22 +345,40 @@ const READ_MAP_TTL_MS = 5000;
 const cloneMap = (m: Record<string, string[]>): Record<string, string[]> =>
   Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v]]));
 
-// Employees and team leads only ever act on their OWN read state, so they
-// ask the server for just their row instead of every employee's. HR/Admin
-// keep the full map (their "read by" views need everyone).
-function ownReadScope(): { key: string; filter?: string } {
-  const role = getSessionRole();
-  const email = getSessionEmail();
-  if (!email || !role || role === 'hr' || role === 'admin') return { key: 'all' };
-  return { key: email.toLowerCase(), filter: pbFilter('email = {:email}', { email: email.toLowerCase() }) };
+// Read-state rows (one per person) are fetched with an explicit SCOPE, so a
+// screen only downloads the rows it actually uses:
+//   'own'            — just the signed-in person's row (the default, and all the
+//                      notification bell / nav dots / popups ever need — for
+//                      everyone, HR and Admin included);
+//   { emails: [...] }— just those people (e.g. chat read-receipts for the
+//                      members of the one channel that is open);
+//   'all'            — every row, only for screens that genuinely show
+//                      everyone's reads (the announcements "Viewed by" list).
+export type ReadScope = 'own' | 'all' | { emails: string[] };
+
+function resolveReadScope(scope: ReadScope = 'own'): { key: string; filter?: string } {
+  if (scope === 'all') return { key: 'all' };
+  if (scope !== 'own') {
+    const emails = [...new Set(scope.emails.map(e => (e || '').trim().toLowerCase()).filter(Boolean))].sort();
+    if (emails.length > 0) {
+      const params: Record<string, string> = {};
+      emails.forEach((e, i) => { params[`e${i}`] = e; });
+      return { key: `emails:${emails.join(',')}`, filter: pbFilter(emails.map((_, i) => `email = {:e${i}}`).join(' || '), params) };
+    }
+  }
+  const own = (getSessionEmail() || '').toLowerCase();
+  // No signed-in user: fetch nothing rather than everyone's rows.
+  return own
+    ? { key: own, filter: pbFilter('email = {:email}', { email: own }) }
+    : { key: 'none', filter: 'email = ""' };
 }
 
-export async function pbGetIdSetMap(collection: string, field: string): Promise<Record<string, string[]>> {
-  const scope = ownReadScope();
+export async function pbGetIdSetMap(collection: string, field: string, readScope: ReadScope = 'own'): Promise<Record<string, string[]>> {
+  const scope = resolveReadScope(readScope);
   const map = await coalesce(`idset:${collection}:${field}:${scope.key}`, READ_MAP_TTL_MS, async () => {
     const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: `email,${field}`, ...(scope.filter ? { filter: scope.filter } : {}) });
     const built: Record<string, string[]> = {};
-    (rows as any[]).forEach(r => {
+    (rows as PbRow[]).forEach(r => {
       const ids: string[] = Array.isArray(r[field]) ? r[field] : [];
       ids.forEach(id => {
         if (!built[id]) built[id] = [];
@@ -413,7 +393,7 @@ export async function pbGetIdSetMap(collection: string, field: string): Promise<
 export async function pbMarkIdsInField(collection: string, field: string, entityIds: string[], email: string): Promise<void> {
   if (!email || entityIds.length === 0) return;
   const emailLower = email.toLowerCase();
-  let existing: any = null;
+  let existing: PbJson = null;
   try {
     existing = await pb.collection(collection).getFirstListItem(pbFilter('email = {:email}', { email: emailLower }), { requestKey: null });
   } catch {
@@ -431,12 +411,12 @@ export async function pbMarkIdsInField(collection: string, field: string, entity
   invalidateCache(`idset:${collection}:`);
 }
 
-export async function pbGetReadMap(collection: string): Promise<Record<string, string[]>> {
-  const scope = ownReadScope();
+export async function pbGetReadMap(collection: string, readScope: ReadScope = 'own'): Promise<Record<string, string[]>> {
+  const scope = resolveReadScope(readScope);
   const map = await coalesce(`readmap:${collection}:${scope.key}`, READ_MAP_TTL_MS, async () => {
     const rows = await pb.collection(collection).getFullList({ requestKey: null, batch: 200, fields: 'entity_id,email', ...(scope.filter ? { filter: scope.filter } : {}) });
     const built: Record<string, string[]> = {};
-    (rows as any[]).forEach(r => {
+    (rows as PbRow[]).forEach(r => {
       if (!built[r.entity_id]) built[r.entity_id] = [];
       built[r.entity_id].push(r.email);
     });
@@ -481,8 +461,8 @@ export function formatDurationBetween(startISO: string, endISO: string): string 
 // (dashboard)/hr/hr-admin/page.tsx.
 // Lives in shared.ts (not notifications.ts or teams.ts) because both of
 // those domain modules reference it (buildNotificationLink here uses the
-// 'hr_admin' link kind's id; teams.ts's HR & Admin Line forwarding hrActions
-// and hasUnseenHrAdminLineActivity use it directly) and neither should
+// 'hr_admin' link kind's id; teams.ts's HR & Admin Line forwarding and the
+// sidebar's activity dots use it directly) and neither should
 // depend on the other just for this constant.
 export const HR_ADMIN_LINE_TEAM_ID = 'hr_admin_line';
 
@@ -491,7 +471,7 @@ export const sharedActions = {
   // deleteKV removed (2026-09-10) — its only caller (GoogleIntegrationCard's
   // disconnect flow) now goes through the authenticated
   // /api/google/integration route instead (see that route's own comment).
-  getKV: async (key: string): Promise<any | null> => pbGetKV(key),
-  setKV: async (key: string, value: any): Promise<void> => pbSetKV(key, value),
+  getKV: async (key: string): Promise<PbJson | null> => pbGetKV(key),
+  setKV: async (key: string, value: PbJson): Promise<void> => pbSetKV(key, value),
 
 };

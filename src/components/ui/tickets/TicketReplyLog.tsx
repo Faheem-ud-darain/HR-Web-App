@@ -6,6 +6,8 @@ import { formatTicketDate, isImageAttachment, formatBytes } from '@/components/u
 import { FileText, Download } from 'lucide-react';
 import { TypingIndicator } from '@/components/ui/TypingIndicator';
 import { Ticket, Profile, TicketSeenState } from '@/lib/hrData';
+import { receiptReplyIndex, ownerHasSeenMessage } from '@/lib/core/ticketReceipts';
+import { safeHref } from '@/lib/sanitize';
 
 interface TicketReplyLogProps {
   currentEmail: string;
@@ -15,14 +17,18 @@ interface TicketReplyLogProps {
   nameFor: (name: string) => string;
   role: "admin" | "hr" | "employee" | "team_lead";
   isPrivileged: boolean;
-  ticketSeenState: TicketSeenState | null;
+  ticketSeenState: TicketSeenState | null | undefined;
   setLightboxSrc: React.Dispatch<React.SetStateAction<string | null>>;
   setLightboxName: React.Dispatch<React.SetStateAction<string | undefined>>;
   typingNames: string[];
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, profileFor, nameFor, role, isPrivileged, ticketSeenState, setLightboxSrc, setLightboxName, typingNames, chatEndRef }: TicketReplyLogProps) {
+export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, profileFor, nameFor, role, ticketSeenState, setLightboxSrc, setLightboxName, typingNames, chatEndRef }: TicketReplyLogProps) {
+  const viewerIsOwner = !!currentEmail && currentEmail.toLowerCase() === selectedTicket.employeeEmail.toLowerCase();
+  // The one message that carries the "Seen / Not seen yet" receipt (-1 = none) — see core/ticketReceipts.
+  const lastCounterpartIdx = receiptReplyIndex(selectedTicket);
+
   return (
     <div className="flex-1 min-h-0 p-5 space-y-4 overflow-y-auto bg-slate-50/30">
       {/* Employee Description */}
@@ -89,18 +95,22 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
           isSenderSelf = true;
         }
     
-        // "Seen" only ever shows under the single most recent
-        // HR reply, same one-badge-at-a-time convention as most
-        // chat apps (not one per message) — and only to HR/Admin,
-        // since they're the ones who actually want to know
-        // whether the employee has caught up.
-        const isLastReply = repIdx === selectedTicket.replies.length - 1;
-        const showSeen =
-          isLastReply &&
-          isPrivileged &&
-          rep.senderRole === 'hr' &&
-          !!ticketSeenState?.employeeSeenAt &&
-          new Date(ticketSeenState.employeeSeenAt).getTime() >= new Date(rep.timestamp).getTime();
+        // Read receipt. It tells HR and Admin (the two superior profiles —
+        // Technical Support teammates are ordinary employees and don't get
+        // one) whether the TICKET OWNER has caught up, so:
+        //  - it is shown only to HR/Admin when they are not the owner
+        //    themselves (the owner never sees a receipt about their own
+        //    reading, and HR/Admin opening a ticket never marks the owner as
+        //    having seen it — only the owner's own view writes that marker,
+        //    see TicketsView);
+        //  - it sits under the single most recent message that someone OTHER
+        //    than the owner sent (a trailing close/reopen event is skipped);
+        //  - it always says one thing or the other — "Seen" with the time, or
+        //    "Not seen yet" — rather than staying silent until it's true.
+        const isLastCounterpartMessage = repIdx === lastCounterpartIdx;
+        // `undefined` = the seen state hasn't loaded yet; showing "Not seen yet" then would be a false negative.
+        const showReceipt = (role === 'hr' || role === 'admin') && !viewerIsOwner && isLastCounterpartMessage && ticketSeenState !== undefined;
+        const ownerHasSeen = ownerHasSeenMessage(ticketSeenState?.employeeSeenAt, rep.timestamp);
     
         const isAdminViewer = role === 'admin';
         const isHrSender = rep.senderRole === 'hr';
@@ -153,7 +163,7 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                     </button>
                   ) : (
                     <a
-                      href={rep.attachmentUrl}
+                      href={safeHref(rep.attachmentUrl)}
                       download={rep.attachmentName}
                       className={`flex items-center gap-1.5 text-[11px] font-bold underline ${rep.message ? 'mt-2' : ''} ${isSenderSelf ? 'text-orange-100' : 'text-amber-700'}`}
                     >
@@ -173,9 +183,11 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                   {formatTicketDate(rep.timestamp)}
                 </span>
               </div>
-              {showSeen && (
-                <span className={`block text-[9px] font-semibold mt-1 ${isSenderSelf ? 'text-right' : 'text-left'} text-slate-400`}>
-                  Seen
+              {showReceipt && (
+                <span className={`block text-[9px] font-semibold mt-1 ${isSenderSelf ? 'text-right' : 'text-left'} ${ownerHasSeen ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {ownerHasSeen
+                    ? `Seen by ${nameFor(selectedTicket.employeeName)} · ${formatTicketDate(ticketSeenState!.employeeSeenAt)}`
+                    : `Not seen yet by ${nameFor(selectedTicket.employeeName)}`}
                 </span>
               )}
             </div>

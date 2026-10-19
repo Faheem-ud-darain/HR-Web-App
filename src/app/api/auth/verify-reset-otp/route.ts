@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOtp } from '@/lib/passwordResetOtp';
+import { rateLimitByIp } from '@/lib/rateLimit';
+import { cleanEmail, cleanText } from '@/lib/sanitize';
 
 // Enabled Edge runtime for Cloudflare Pages compatibility, same as the other
 // two Forgot Password routes.
@@ -24,11 +26,13 @@ export const dynamic = 'force-dynamic';
 // their new password, and the final submit re-checks the same code with no
 // double-counting and no early expiry side effects introduced by this route.
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitByIp(req, 'verify-reset-otp', 30, 60 * 60 * 1000);
+  if (limited) return limited;
   let email: string, otp: string;
   try {
     const body = await req.json();
-    email = String(body?.email || '').trim();
-    otp = String(body?.otp || '').trim();
+    email = cleanEmail(body?.email);
+    otp = cleanText(body?.otp, { max: 12 });
   } catch {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }

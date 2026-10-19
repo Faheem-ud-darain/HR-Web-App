@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useProfiles, useNotifications, hrActions, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
+import React, { useEffect } from 'react';
+import { useProfiles, hrActions, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { TeamChatView } from '@/components/ui/lazy';
+import { useHrAdminLineNotifications } from '@/lib/hr/notifications';
+import { useSessionEmail } from '@/lib/useSession';
 
 // Fixed, single-channel team array — TeamChatView auto-hides its team
 // selector whenever there's only one entry to pick from (see the
@@ -16,30 +17,25 @@ import { TeamChatView } from '@/components/ui/lazy';
 // into this channel is keyed on that exact constant.
 const HR_ADMIN_TEAMS = [{ id: HR_ADMIN_LINE_TEAM_ID, name: 'HR & Admin', members: [] as string[] }];
 
-// Deliberately does NOT call useAllMessages() here (unlike
+// Deliberately does NOT poll the message list here (unlike
 // direct-messages/page.tsx) — that hook polls every hr_messages row every
 // 20s just to compute a sidebar unread dot, which is exactly the
 // always-on background cost this feature was explicitly asked not to add
 // before someone actually opens this page. The sidebar's dot for this nav
-// item is instead driven off hr_notifications (see
-// hasUnseenHrAdminLineActivity in hrData.ts / Sidebar.tsx), which is
-// already polled app-wide for TopNav's bell regardless of which page is
-// open. TeamChatView itself only starts polling THIS channel's actual
+// item is instead driven by the small activity feed (see
+// core/activity.ts and lib/hr/activity.ts), which is pushed live and costs
+// nothing to keep current regardless of which page is open. TeamChatView itself only starts polling THIS channel's actual
 // messages (useMessages(HR_ADMIN_LINE_TEAM_ID), already lazy/enabled-gated
 // by teamId) once it mounts below.
 export default function HrHrAdminPage() {
   const { data: allProfiles = [] } = useProfiles();
-  const { data: allNotifications = [] } = useNotifications();
-  const [hrEmail, setHrEmail] = useState('');
-
-  useEffect(() => {
-    setHrEmail(getSessionEmail() || '');
-  }, []);
+  const { data: allNotifications = [] } = useHrAdminLineNotifications();
+  const hrEmail = useSessionEmail() || '';
 
   // Clears the sidebar's unread dot for this channel by marking every
   // 'hr_admin_line' notification addressed to hr as read, the same
   // markNotificationsAsRead the bell dropdown uses — piggybacking on the
-  // already-loaded useNotifications() feed rather than a dedicated fetch.
+  // the HR & Admin line notifications query (useHrAdminLineNotifications) rather than a dedicated fetch.
   useEffect(() => {
     if (!hrEmail) return;
     const relevant = allNotifications.filter(n => n.category === 'hr_admin_line' && n.recipientRole === 'hr');

@@ -61,7 +61,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   };
   const openViewersModal = (annId: string) => {
     setViewersAnnId(annId);
-    hrActions.getAnnouncementReadMap().then(setAnnouncementReadMap);
+    hrActions.getAnnouncementReadMap('all').then(setAnnouncementReadMap);
   };
 
   // "Forward" (HR & Admin Line) — see hrActions.forwardToHrAdminLine in
@@ -99,7 +99,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   };
 
   useEffect(() => {
-    hrActions.getAnnouncementReadMap().then(setAnnouncementReadMap);
+    hrActions.getAnnouncementReadMap('all').then(setAnnouncementReadMap);
   }, [announcements.length]);
 
   const handleAnnouncementSubmit = async (e: React.FormEvent) => {
@@ -293,7 +293,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
           <FormField label="Target Audience *">
             <Select
               value={annTargetType}
-              onChange={e => setAnnTargetType(e.target.value as any)}
+              onChange={e => setAnnTargetType(e.target.value as Parameters<typeof setAnnTargetType>[0])}
               fieldSize="lg" className="cursor-pointer"
             >
               <option value="all">All Employees</option>

@@ -1,39 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useProfiles, useTeams, useAllMessages, markMessageActivitySeen, Profile } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
+import React from 'react';
+import { useProfiles, useTeams } from '@/lib/hrData';
 import { TeamChatView } from '@/components/ui/lazy';
+import { useSessionEmail } from '@/lib/useSession';
+import { useMemo } from 'react';
 
 export default function EmployeeTeamChatPage() {
   const { data: allProfiles = [] } = useProfiles();
   const { data: allTeams = [] } = useTeams();
-  const { data: allMessages = [] } = useAllMessages();
-  const [userProfile, setUserProfile] = useState<Profile | null>(null);
-  const [userEmail, setUserEmail] = useState('');
-
-  useEffect(() => {
-    const email = getSessionEmail() || '';
-    setUserEmail(email);
-    const profile = allProfiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
-    if (profile) setUserProfile(profile);
-  }, [allProfiles]);
+  const userEmail = useSessionEmail() || '';
+  const userProfile = useMemo(
+    () => allProfiles.find(e => e.email && userEmail && e.email.toLowerCase() === userEmail.toLowerCase()) || null,
+    [allProfiles, userEmail],
+  );
 
   // A regular member sees only the team(s) they belong to; a Team Lead also
   // sees any team they lead even if they're not formally a member of it.
   const memberTeamNames = new Set([...(userProfile?.teams || []), ...(userProfile?.leadTeams || [])]);
   const myTeams = allTeams.filter(t => memberTeamNames.has(t.name));
-  const myTeamIds = myTeams.map(t => t.id);
-
-  // Viewing this page clears the sidebar's unseen-chat dot, same pattern as
-  // TicketsView. Re-runs on every poll while the page stays open, so a new
-  // message that arrives in a channel you're NOT currently viewing still
-  // lights the dot back up later.
-  useEffect(() => {
-    if (userEmail && userProfile) {
-      markMessageActivitySeen(allMessages, myTeamIds, userProfile.role, userEmail);
-    }
-  }, [allMessages, myTeamIds.join(','), userProfile?.role, userEmail]);
 
   return (
     // flex/h-full/min-h-0 chain (not just space-y-4) is required here — it's

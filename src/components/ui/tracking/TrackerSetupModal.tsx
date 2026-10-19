@@ -22,12 +22,13 @@ interface TrackerSetupModalProps {
   handleRunDiagnostics: (email: string) => Promise<void>;
   diagnosticsStatus: "idle" | "waiting" | "ok" | "timeout";
   handleReloadSettingsNow: (email: string) => Promise<void>;
+  handleTrackerAction: (email: string, type: 'reconnect' | 'restart') => Promise<void>;
   diagnosticsResult: TrackerDiagnostics | null;
   copyDiagnosticsReport: (emp: Profile, diag: TrackerDiagnostics) => void;
   copiedDiagnostics: boolean;
 }
 
-export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupEmp, role, settingsFor, copySetupCode, copied, handleRegenerateToken, handleForceDisconnect, copyConfig, handleRunDiagnostics, diagnosticsStatus, handleReloadSettingsNow, diagnosticsResult, copyDiagnosticsReport, copiedDiagnostics }: TrackerSetupModalProps) {
+export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupEmp, role, settingsFor, copySetupCode, copied, handleRegenerateToken, handleForceDisconnect, copyConfig, handleRunDiagnostics, diagnosticsStatus, handleReloadSettingsNow, handleTrackerAction, diagnosticsResult, copyDiagnosticsReport, copiedDiagnostics }: TrackerSetupModalProps) {
   return (
     <Modal
             isOpen={!!setupEmp}
@@ -146,6 +147,24 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                       >
                         <RefreshCw className="h-3.5 w-3.5" /> Reload Settings Now
                       </button>
+                      <button
+                        onClick={() => handleTrackerAction(setupEmp.email, 'reconnect')}
+                        className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                        title="Make the tracker re-claim this device and refresh its connection now (tracker v25+)"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Reconnect Device
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Restart this employee\u2019s tracker app? It closes and reopens within a few seconds. A running shift is not ended.')) {
+                            handleTrackerAction(setupEmp.email, 'restart');
+                          }
+                        }}
+                        className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                        title="Close and reopen the tracker app on the employee's machine without ending their shift (tracker v25+)"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Restart Tracker
+                      </button>
                     </div>
     
                     {diagnosticsStatus === 'timeout' && (
@@ -188,6 +207,12 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                         </div>
                         {diagnosticsResult.lastError && (
                           <p className="text-[11px] text-rose-600 font-semibold pt-1">Last error: {diagnosticsResult.lastError}</p>
+                        )}
+                        {diagnosticsResult.logTail && (
+                          <details className="pt-1">
+                            <summary className="text-[11px] font-semibold text-slate-600 cursor-pointer">Recent tracker log</summary>
+                            <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-slate-900 p-2 text-[10px] leading-snug text-slate-100 whitespace-pre-wrap break-words">{diagnosticsResult.logTail}</pre>
+                          </details>
                         )}
                         {diagnosticsResult.updateAvailableVersion && (
                           <p className="text-[11px] text-amber-700 font-semibold pt-1">

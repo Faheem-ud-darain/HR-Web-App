@@ -5,20 +5,18 @@ import { Team, Profile, Message, useMessages, useTeamDocuments, hrActions, displ
 import { Avatar } from './Avatar';
 import { Modal } from './Modal';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
-import { TypingIndicator } from './TypingIndicator';
-import { Send, Paperclip, FileText, Download, ShieldCheck, Loader2, Crown, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Smile, Users, Video, Forward, ExternalLink } from 'lucide-react';
+import { FileText, ShieldCheck, Loader2, SlidersHorizontal, X, Megaphone, MessageCircle, FolderOpen, Users } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
-import { OptimizedImage } from './OptimizedImage';
-import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { Button } from './Button';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { ChatSkeleton } from '@/components/ui/Skeleton';
-import { EmojiPicker, ReadReceiptFacepile, roleBadgeInfo, RoleBadge, MAX_ATTACHMENT_BYTES, formatTimestamp, isImageAttachment, FileTypeFilter, SizeFilter, attachmentKind, formatBytes, sizeBucket, FORWARD_KIND_LABEL, renderMessageText } from "@/components/ui/chat/chatHelpers";
+import { RoleBadge, MAX_ATTACHMENT_BYTES, formatTimestamp, FileTypeFilter, SizeFilter, attachmentKind, sizeBucket } from "@/components/ui/chat/chatHelpers";
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { ChatComposer } from "@/components/ui/chat/ChatComposer";
 import { ChatMessageList } from "@/components/ui/chat/ChatMessageList";
+import type { ReadScope } from '@/lib/hr/shared';
+import { setAdaptiveInterval } from '@/lib/idle';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -68,6 +66,12 @@ interface TeamChatViewProps {
 // mentions) and render as clickable links straight to the file — that's
 // the "tag a document to ask questions about it" feature: typing #Title in
 // chat both highlights it and opens the doc for anyone reading the thread.
+
+// Typing-indicator pace: warm channel / quiet channel, and how long without a message or
+// typing counts as quiet.
+const CHAT_TYPING_POLL_MS = 5000;
+const CHAT_TYPING_QUIET_POLL_MS = 15000;
+const CHAT_QUIET_AFTER_MS = 2 * 60 * 1000;
 
 export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRole, allProfiles, oversight = false, includeHrDirectChannel = false, mobileSelectorStyle = 'horizontal' }: TeamChatViewProps) {
   const me = allProfiles.find(p => p.email.toLowerCase() === currentUserEmail.toLowerCase());
@@ -183,6 +187,15 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
   // second UI competing with the chat itself.
   const [messageReadMap, setMessageReadMap] = useState<Record<string, string[]>>({});
   const [viewersMsgId, setViewersMsgId] = useState<string | null>(null);
+  // Receipts only matter for people who can actually see this channel: its
+  // members plus HR/Admin (who oversee every channel). Ask for just their
+  // read rows instead of every employee's.
+  const openTeamName = (propTeams.find(t => t.id === activeTeamId))?.name;
+  const receiptScope: ReadScope = {
+    emails: [currentUserEmail, ...allProfiles
+      .filter(p => p.role === 'hr' || p.role === 'admin' || (!!openTeamName && ((p.teams || []).includes(openTeamName) || (p.leadTeams || []).includes(openTeamName))))
+      .map(p => p.email)],
+  };
   // "X is typing…" — names of everyone else currently typing in the active
   // channel, refreshed on a short poll (see the effect below). Empty most
   // of the time; TypingIndicator renders nothing when this is [].
@@ -276,7 +289,7 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
   // rather than the whole list.
   useEffect(() => {
     if (!activeTeamId || messages.length === 0 || !currentUserEmail) return;
-    hrActions.getMessageReadMap().then(setMessageReadMap);
+    hrActions.getMessageReadMap(receiptScope).then(setMessageReadMap);
     hrActions.markMessagesSeen(messages, currentUserEmail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTeamId, messages.length, currentUserEmail]);
@@ -290,28 +303,34 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
 
   const openMessageViewers = (msgId: string) => {
     setViewersMsgId(msgId);
-    hrActions.getMessageReadMap().then(setMessageReadMap);
+    hrActions.getMessageReadMap(receiptScope).then(setMessageReadMap);
   };
 
-  // "X is typing…" — poll everyone else's typing state for the active
-  // channel every 2s (short enough that the indicator feels live, long
-  // enough not to hammer the KV collection). The reset of this device's
-  // own typing marker on channel switch lives in the render-time block
-  // above (setTypingNames([])); this effect only owns the polling
-  // subscription itself.
+  // "X is typing…" — poll everyone else's typing state for the active channel.
+  // There's no presence signal for chat, so instead of polling every 2s forever:
+  //  - 5s ticks while the channel is "warm" (a message arrived or someone was
+  //    typing within the last 2 minutes), backing off to 15s once it's quiet —
+  //    any new message or typing snaps it back to 5s;
+  //  - hidden tabs are skipped and idle people poll 3x slower (setAdaptiveInterval).
+  // The reset of this device's own typing marker on channel switch lives in the
+  // render-time block above (setTypingNames([])); this effect only owns polling.
+  const typingQuietSinceRef = React.useRef(0); // set to the real time by the effect below
+  useEffect(() => { typingQuietSinceRef.current = Date.now(); }, [messages.length, activeTeamId]);
   useEffect(() => {
     if (!activeTeamId || !currentUserEmail) return;
     let cancelled = false;
     const poll = () => {
       hrActions.getTypingUsers('chat', activeTeamId, currentUserEmail).then(rows => {
-        if (!cancelled) setTypingNames(rows.map(r => r.displayName));
+        if (cancelled) return;
+        if (rows.length > 0) typingQuietSinceRef.current = Date.now();
+        setTypingNames(rows.map(r => r.displayName));
       }).catch(() => {});
     };
     poll();
-    const interval = setInterval(poll, 2000);
+    const stop = setAdaptiveInterval(poll, () => (Date.now() - typingQuietSinceRef.current > CHAT_QUIET_AFTER_MS ? CHAT_TYPING_QUIET_POLL_MS : CHAT_TYPING_POLL_MS));
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stop();
       hrActions.clearTypingState('chat', activeTeamId, currentUserEmail).catch(() => {});
     };
   }, [activeTeamId, currentUserEmail]);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { adminFindByField, adminUpsertByField, adminDeleteByField } from '@/lib/pbAdmin';
+import type { PbRow } from '@/lib/pbTypes';
 
 const GOOGLE_INTEGRATION_COLLECTION = 'hr_google_integrations';
 
@@ -33,7 +34,7 @@ function emailKeyFor(email: string) {
 
 // Fields safe to send to the browser. Deliberately excludes `tokens`
 // (accessToken/refreshToken/expiresAt) entirely.
-function toSafeShape(value: any) {
+function toSafeShape(value: PbRow) {
   if (!value) return null;
   return {
     connectedEmail: value.connectedEmail,
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
   try {
     const row = await adminFindByField(GOOGLE_INTEGRATION_COLLECTION, 'email', emailKeyFor(session.email));
     return NextResponse.json({ data: toSafeShape(row?.data) });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[google/integration GET] error:', err);
     return NextResponse.json({ error: 'Could not load Google integration status.' }, { status: 500 });
   }
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
   const session = await requireSession(request);
   if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
     if (typeof body.useForPasswordReset === 'boolean') next.useForPasswordReset = body.useForPasswordReset;
     await adminUpsertByField(GOOGLE_INTEGRATION_COLLECTION, 'email', key, next);
     return NextResponse.json({ data: toSafeShape(next) });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[google/integration POST] error:', err);
     return NextResponse.json({ error: 'Could not update Google integration settings.' }, { status: 500 });
   }
@@ -97,7 +98,7 @@ export async function DELETE(request: Request) {
   try {
     await adminDeleteByField(GOOGLE_INTEGRATION_COLLECTION, 'email', emailKeyFor(session.email));
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[google/integration DELETE] error:', err);
     return NextResponse.json({ error: 'Could not disconnect Google account.' }, { status: 500 });
   }

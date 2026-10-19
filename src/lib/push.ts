@@ -25,6 +25,8 @@
 // ---------------------------------------------------------------------------
 
 import { Capacitor } from '@capacitor/core';
+import { safeInternalPath } from './sanitize';
+import type { PbRow } from '@/lib/pbTypes';
 
 // TODO: replace with your real OneSignal App ID (Settings → Keys & IDs).
 // Typed explicitly as `string` (not left as a literal type) — once a real
@@ -100,12 +102,15 @@ async function initNative(externalId?: string): Promise<void> {
   await OneSignal.Notifications.requestPermission(false);
 
   // Register Notification Click Event Listener for Deep-Linking Navigation
-  OneSignal.Notifications.addEventListener('click', (event: any) => {
+  OneSignal.Notifications.addEventListener('click', (event: PbRow) => {
     const data = event?.notification?.additionalData;
     const launchUrl = data?.url || data?.path || event?.notification?.launchURL;
-    if (launchUrl && typeof window !== 'undefined') {
-      console.log('[push] Deep-linking notification clicked:', launchUrl);
-      window.location.href = launchUrl;
+    // Deep links come from notification payloads, so only a same-site path is
+    // followed — never an absolute URL or a javascript: link.
+    const target = safeInternalPath(launchUrl);
+    if (target && typeof window !== 'undefined') {
+      console.log('[push] Deep-linking notification clicked:', target);
+      window.location.href = target;
     }
   });
 
@@ -117,9 +122,9 @@ async function initNative(externalId?: string): Promise<void> {
 }
 
 function initWeb(externalId?: string): void {
-  const w = window as any;
+  const w = window as unknown as PbRow;
   w.OneSignalDeferred = w.OneSignalDeferred || [];
-  w.OneSignalDeferred.push(async (OneSignal: any) => {
+  w.OneSignalDeferred.push(async (OneSignal: PbRow) => {
     await OneSignal.init({ appId: ONESIGNAL_APP_ID });
     // Same permission-before-login ordering as initNative above, and for
     // the same reason — login() before a subscription exists risks the
@@ -135,14 +140,14 @@ async function loginPush(externalId: string): Promise<void> {
       const { default: OneSignal } = await import('@onesignal/capacitor-plugin');
       OneSignal.login(externalId);
     } else {
-      const w = window as any;
+      const w = window as unknown as PbRow;
       if (w.OneSignal?.login) {
         await w.OneSignal.login(externalId);
       } else {
         // Web SDK hasn't finished loading yet — queue it the same way
         // initWeb does.
         w.OneSignalDeferred = w.OneSignalDeferred || [];
-        w.OneSignalDeferred.push((OneSignal: any) => OneSignal.login(externalId));
+        w.OneSignalDeferred.push((OneSignal: PbRow) => OneSignal.login(externalId));
       }
     }
   } catch (err) {
@@ -193,7 +198,7 @@ export async function requestPushPermissionAgain(): Promise<boolean> {
       return await OneSignal.Notifications.requestPermission(true);
     }
     if (typeof Notification === 'undefined') return false;
-    const w = window as any;
+    const w = window as unknown as PbRow;
     if (w.OneSignal?.Notifications?.requestPermission) {
       return await w.OneSignal.Notifications.requestPermission();
     }
@@ -217,7 +222,7 @@ export async function logoutPush(): Promise<void> {
       const { default: OneSignal } = await import('@onesignal/capacitor-plugin');
       await OneSignal.logout();
     } else {
-      const w = window as any;
+      const w = window as unknown as PbRow;
       if (w.OneSignal?.logout) await w.OneSignal.logout();
     }
   } catch (err) {

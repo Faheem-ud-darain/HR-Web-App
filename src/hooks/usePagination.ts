@@ -8,7 +8,7 @@
 // of the already-filtered result renders at once.
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 export interface UsePaginationResult<T> {
   page: number;
@@ -18,16 +18,15 @@ export interface UsePaginationResult<T> {
 }
 
 export function usePagination<T>(items: T[], pageSize: number): UsePaginationResult<T> {
-  const [page, setPage] = useState(1);
+  const [requestedPage, setPage] = useState(1);
 
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
 
   // If the underlying list shrinks (a filter narrows results, a record is
-  // deleted) and the current page no longer exists, snap back to the last
-  // real page instead of rendering an empty list that looks broken.
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  // deleted) and the requested page no longer exists, show the last real page
+  // instead of an empty list that looks broken. Derived, not stored: if the list
+  // grows back, the person's requested page is honoured again.
+  const page = Math.min(requestedPage, totalPages);
 
   const pageItems = useMemo(() => {
     const start = (page - 1) * pageSize;

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession, verifyPassword, hashPassword } from '@/lib/serverAuth';
+import type { PbRow } from '@/lib/pbTypes';
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
@@ -42,19 +43,19 @@ const REAL_FIELD_MAP: Record<string, string> = {
 // Plan 027 Phase 2: same hr_profile_extras/hr_profile_docs collections
 // (profile_id-keyed) admin/profile/route.ts uses — see that file's
 // getExtras/mergeExtras comment for the full rationale.
-async function getExtras(profileId: string): Promise<Record<string, any>> {
+async function getExtras(profileId: string): Promise<PbRow> {
   const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
   return row?.data || {};
 }
-async function mergeExtras(profileId: string, patch: Record<string, any>): Promise<void> {
+async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
   const existing = await getExtras(profileId);
   await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
 }
-async function getDocs(profileId: string): Promise<Record<string, any>> {
+async function getDocs(profileId: string): Promise<PbRow> {
   const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
   return row?.data || {};
 }
-async function mergeDocs(profileId: string, patch: Record<string, any>): Promise<void> {
+async function mergeDocs(profileId: string, patch: PbRow): Promise<void> {
   const existing = await getDocs(profileId);
   await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
 }
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
       // the raw bytes, unless/until it actually needs to display or
       // re-download them. Keeps this response small.
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[profile/me GET] error:', err);
     return NextResponse.json({ error: 'Could not load profile.' }, { status: 500 });
   }
@@ -98,7 +99,7 @@ export async function PATCH(request: Request) {
   const session = await requireSession(request);
   if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -140,7 +141,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const realFields: Record<string, any> = {};
+    const realFields: PbRow = {};
     for (const [clientKey, pbKey] of Object.entries(REAL_FIELD_MAP)) {
       if (body[clientKey] !== undefined) realFields[pbKey] = body[clientKey];
     }
@@ -148,7 +149,7 @@ export async function PATCH(request: Request) {
       await adminUpdateProfile(profile.id, realFields);
     }
 
-    const extraUpdates: Record<string, any> = {};
+    const extraUpdates: PbRow = {};
     for (const key of KV_EXTRA_KEYS) {
       if (body[key] !== undefined) extraUpdates[key] = body[key];
     }
@@ -156,7 +157,7 @@ export async function PATCH(request: Request) {
       await mergeExtras(profile.id, extraUpdates);
     }
 
-    const docUpdates: Record<string, any> = {};
+    const docUpdates: PbRow = {};
     for (const key of KV_DOC_KEYS) {
       if (body[key] !== undefined) docUpdates[key] = body[key];
     }
@@ -169,7 +170,7 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[profile/me PATCH] error:', err);
     return NextResponse.json({ error: 'Could not save changes. Please try again.' }, { status: 500 });
   }

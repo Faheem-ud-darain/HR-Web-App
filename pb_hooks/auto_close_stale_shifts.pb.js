@@ -208,13 +208,20 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         const closeAtIso = new Date(Math.max(lastSeenMs, clockInMs)).toISOString();
         closeShift(dao, shift, closeAtIso);
 
+        // Only heartbeat on file predates the shift: 0 minutes credited, and
+        // the message says so (mirrors autoCloseOrphanTrackedShifts in hrData).
+        const noActivity = lastSeenMs <= clockInMs;
         const profile = findProfileByEmail(dao, email);
         const name = displayNameFor(profile, email);
-        addNotification(dao, email, "employee",
-          "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR.",
-          "shift");
-        addNotification(dao, "all", "hr", `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`, "shift", name, email);
-        addNotification(dao, "all", "admin", `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`, undefined, undefined, email);
+        const employeeMsg = noActivity
+          ? "Your shift was automatically ended with 0 minutes credited because the DelCargo Tracker reported no activity after you clocked in. If you were working, contact HR."
+          : "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR.";
+        const staffMsg = noActivity
+          ? `${name}'s shift was auto-closed with 0 minutes — the tracker reported no activity after clock-in. Review it if they report having worked.`
+          : `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`;
+        addNotification(dao, email, "employee", employeeMsg, "shift");
+        addNotification(dao, "all", "hr", staffMsg, "shift", name, email);
+        addNotification(dao, "all", "admin", staffMsg, undefined, undefined, email);
       } catch (err) {
         console.log("[auto_close_stale_shifts] pass1 error for shift", shift.id, err);
       }

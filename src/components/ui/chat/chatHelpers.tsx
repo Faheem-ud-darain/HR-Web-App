@@ -5,6 +5,7 @@ import { Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { Crown, Headset, Star } from 'lucide-react';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
+import { safeHref } from '@/lib/sanitize';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -208,7 +209,7 @@ export function renderMessageText(
     const docUrl = docByTag.get(part);
     if (docUrl) {
       return (
-        <a key={i} href={docUrl} target="_blank" rel="noreferrer" className={docClass}>
+        <a key={i} href={safeHref(docUrl)} target="_blank" rel="noreferrer" className={docClass}>
           {part}
         </a>
       );

@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from './Card';
 import { hrActions, UserSessionSlot } from '@/lib/hrData';
 import { getOrCreateDeviceId, clearSession, getSessionRole } from '@/lib/session';
 import { formatDateTimeNY } from '@/lib/timezone';
 import { Laptop, LogOut, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 // Employee-facing (and Team Lead, who shares the Employee dashboard) view
 // of their own claimed device slots — see UserSessionSlot/
@@ -20,17 +21,22 @@ import { Laptop, LogOut, Loader2 } from 'lucide-react';
 // itself out, same mechanism as a "log out everywhere" forced login.
 export function LoggedInDevicesCard({ email }: { email: string }) {
   const router = useRouter();
-  const [sessions, setSessions] = useState<UserSessionSlot[] | null>(null);
-  const [myDeviceId, setMyDeviceId] = useState<string>('');
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const load = async () => {
-    const [all, deviceId] = await Promise.all([hrActions.getUserSessions(email), getOrCreateDeviceId()]);
-    setSessions(all.filter(s => hrActions.isSessionSlotLive(s)).sort((a, b) => (a.deviceId === deviceId ? -1 : b.deviceId === deviceId ? 1 : 0)));
-    setMyDeviceId(deviceId);
-  };
-
-  useEffect(() => { if (email) load(); }, [email]);
+  const { data, refetch } = useQuery({
+    queryKey: ['user_sessions', email.toLowerCase()],
+    enabled: !!email,
+    queryFn: async () => {
+      const [all, deviceId] = await Promise.all([hrActions.getUserSessions(email), getOrCreateDeviceId()]);
+      const sessions = all
+        .filter((s: UserSessionSlot) => hrActions.isSessionSlotLive(s))
+        .sort((a: UserSessionSlot, b: UserSessionSlot) => (a.deviceId === deviceId ? -1 : b.deviceId === deviceId ? 1 : 0));
+      return { sessions, myDeviceId: deviceId };
+    },
+  });
+  const sessions = data?.sessions ?? null;
+  const myDeviceId = data?.myDeviceId ?? '';
+  const load = async () => { await refetch(); };
 
   const handleLogOut = async (deviceId: string) => {
     if (removingId) return;

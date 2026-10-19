@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, TrackingSettings, TrackerHeartbeat, localShiftDate, hasStaleTrackerToken } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
-import { getSessionEmail } from '@/lib/session';
 import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmployeeActivityInsights } from '@/components/ui/lazy';
@@ -14,6 +13,10 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSessionEmail } from '@/lib/useSession';
+import { useIsClient } from '@/lib/useIsClient';
+import { setAdaptiveInterval, every } from '@/lib/idle';
 
 export default function TrackerPage() {
   // 'setup' is the existing tab (connection status + shift history) shown by
@@ -22,63 +25,85 @@ export default function TrackerPage() {
   // actually clicks that tab, never on page load/login, since
   // EmployeeActivityInsights isn't mounted until activeTab === 'activity'.
   const [activeTab, setActiveTab] = useState<'setup' | 'activity'>('setup');
+  const queryClient = useQueryClient();
+  const sessionEmail = useSessionEmail();
   const { data: allProfiles = [] } = useProfiles();
-  const { data: allTimesheets = [], refetch: refetchTimesheets } = useTimesheets({ email: getSessionEmail() || undefined, enabled: !!getSessionEmail() });
+  const { data: allTimesheets = [], refetch: refetchTimesheets } = useTimesheets({ email: sessionEmail || undefined, enabled: !!sessionEmail });
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [openShift, setOpenShift] = useState<TimesheetEntry | null>(null);
-  const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
-  const [elapsedLabel, setElapsedLabel] = useState('0h 0m 0s');
-  const [trackingSettings, setTrackingSettings] = useState<TrackingSettings | null>(null);
+  const profile: Profile | null = useMemo(
+    () => allProfiles.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
+    [allProfiles, sessionEmail],
+  );
+  const profileEmail = profile?.email ?? null;
+
+  // This person's shifts, newest first; the open one (if any) drives the live ticker.
+  const timesheetEntries: TimesheetEntry[] = useMemo(
+    () => (profileEmail
+      ? allTimesheets.filter(t => t.employeeEmail.toLowerCase() === profileEmail.toLowerCase()).sort((a, b) => (b.clockIn || '').localeCompare(a.clockIn || ''))
+      : []),
+    [allTimesheets, profileEmail],
+  );
+  const openShift: TimesheetEntry | null = useMemo(() => timesheetEntries.find(t => t.status === 'in_progress') || null, [timesheetEntries]);
+
+  // Poll for shift changes made elsewhere (e.g. geofence auto clock-in/out happening on the
+  // dashboard page) so this view stays in sync.
+  useEffect(() => {
+    if (!profileEmail) return;
+    return setAdaptiveInterval(() => { void refetchTimesheets(); }, 5000);
+  }, [profileEmail, refetchTimesheets]);
+
+  // Live elapsed-time ticker for the currently open shift, computed from the real clock-in
+  // timestamp — not a locally-simulated counter, so it stays correct across page reloads.
+  const [tickNow, setTickNow] = useState(0);
+  useEffect(() => {
+    if (!openShift) return;
+    const first = setTimeout(() => setTickNow(Date.now()), 0);
+    const timer = setInterval(() => setTickNow(Date.now()), 1000);
+    return () => { clearTimeout(first); clearInterval(timer); };
+  }, [openShift]);
+  const elapsedLabel = useMemo(() => {
+    if (!openShift || tickNow === 0) return '0h 0m 0s';
+    const diffSecs = Math.max(0, Math.floor((tickNow - new Date(openShift.clockIn).getTime()) / 1000));
+    return `${Math.floor(diffSecs / 3600)}h ${Math.floor((diffSecs % 3600) / 60)}m ${diffSecs % 60}s`;
+  }, [openShift, tickNow]);
+
+  // The live "is the desktop app actually connected" heartbeat, re-checked every 30s while this
+  // page is open so the badge updates on its own without the employee clicking Reconnect.
+  const heartbeatKey = ['tracker_heartbeat', (profileEmail || '').toLowerCase()] as const;
+  const { data: heartbeat = null, isFetching: heartbeatChecking, isFetched: heartbeatCheckedOnce, refetch: refetchHeartbeat } = useQuery<TrackerHeartbeat | null>({
+    queryKey: heartbeatKey,
+    enabled: !!profileEmail,
+    queryFn: async () => (await hrActions.getTrackerHeartbeat(profileEmail as string)) ?? null,
+    refetchInterval: every(30000),
+    staleTime: 0,
+  });
+
+  // Employee self-service: fetch (and if needed, create) this employee's own tracking settings
+  // row. Scoped strictly to their own logged-in email — never any other employee's. Creating an
+  // agentToken here does NOT turn tracking on; that "enabled" flag is still only ever flipped by
+  // HR/Admin or by this employee's own Start/End Shift buttons on the Dashboard page.
+  const { data: ownTrackingSettings, refetch: refetchOwnSettings } = useQuery<TrackingSettings | null>({
+    queryKey: ['own_tracking_settings', (profileEmail || '').toLowerCase()],
+    enabled: !!profileEmail,
+    queryFn: async () => {
+      let settings = await hrActions.getTrackingSettingsFor(profileEmail as string);
+      if (!settings.agentToken) settings = await hrActions.updateTrackingSettings(profileEmail as string, {});
+      return settings || null;
+    },
+  });
+  const trackingSettings = ownTrackingSettings ?? null;
+
+  const isClient = useIsClient();
+  const detectedOS: 'windows' | 'mac' | 'cros' | 'other' = isClient ? detectOS() : 'other';
   const [codeCopied, setCodeCopied] = useState(false);
-  const [heartbeat, setHeartbeat] = useState<TrackerHeartbeat | null>(null);
-  const [heartbeatChecking, setHeartbeatChecking] = useState(false);
-  const [heartbeatCheckedOnce, setHeartbeatCheckedOnce] = useState(false);
-  const [detectedOS, setDetectedOS] = useState<'windows' | 'mac' | 'cros' | 'other'>('other');
   const [forceDisconnecting, setForceDisconnecting] = useState(false);
   const [showForceDisconnectConfirm, setShowForceDisconnectConfirm] = useState(false);
   const [showRegenerateCodeConfirm, setShowRegenerateCodeConfirm] = useState(false);
   const [regeneratingCode, setRegeneratingCode] = useState(false);
 
-  useEffect(() => {
-    setDetectedOS(detectOS());
-  }, []);
-
-  useEffect(() => {
-    const email = getSessionEmail();
-    const employees = allProfiles;
-    const userProfile = employees.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase());
-    if (userProfile) {
-      setProfile(userProfile);
-      refreshShiftData(userProfile.email);
-      loadOwnTrackingSettings(userProfile.email);
-      refreshHeartbeat(userProfile.email);
-    }
-  }, [allProfiles]);
-
-  // Poll the live "is the desktop app actually connected" heartbeat while
-  // this page is open, so the badge below updates on its own without the
-  // employee needing to keep clicking Reconnect just to check.
-  useEffect(() => {
-    if (!profile?.email) return;
-    const interval = setInterval(() => refreshHeartbeat(profile.email), 30000);
-    return () => clearInterval(interval);
-  }, [profile]);
-
-  const refreshHeartbeat = async (email: string) => {
-    setHeartbeatChecking(true);
-    try {
-      const hb = await hrActions.getTrackerHeartbeat(email);
-      setHeartbeat(hb);
-    } finally {
-      setHeartbeatChecking(false);
-      setHeartbeatCheckedOnce(true);
-    }
-  };
-
   const handleReconnectCheck = () => {
     if (!profile) return;
-    refreshHeartbeat(profile.email);
+    void refetchHeartbeat();
   };
 
   // Escape hatch for "another device is active" / a stuck superseded state
@@ -97,25 +122,10 @@ export default function TrackerPage() {
     setForceDisconnecting(true);
     try {
       await hrActions.forceDisconnectAllTrackers(profile.email);
-      setHeartbeat(null);
-      setHeartbeatCheckedOnce(true);
+      queryClient.setQueryData(heartbeatKey, null); // show "not connected" immediately
     } finally {
       setForceDisconnecting(false);
     }
-  };
-
-  // Employee self-service: fetch (and if needed, create) this employee's own
-  // tracking settings row. Scoped strictly to their own logged-in email —
-  // never any other employee's — so this never grants or reveals access to
-  // anyone else's setup. Creating an agentToken here does NOT turn tracking
-  // on; that "enabled" flag is still only ever flipped by HR/Admin or by
-  // this employee's own Start/End Shift buttons on the Dashboard page.
-  const loadOwnTrackingSettings = async (email: string) => {
-    let settings = await hrActions.getTrackingSettingsFor(email);
-    if (!settings.agentToken) {
-      settings = await hrActions.updateTrackingSettings(email, {});
-    }
-    setTrackingSettings(settings || null);
   };
 
   const handleCopySetupCode = () => {
@@ -138,50 +148,11 @@ export default function TrackerPage() {
     setRegeneratingCode(true);
     try {
       await hrActions.regenerateAgentToken(profile.email);
-      loadOwnTrackingSettings(profile.email);
+      await refetchOwnSettings();
     } finally {
       setRegeneratingCode(false);
     }
   };
-
-  const refreshShiftData = async (email: string) => {
-    const { data } = await refetchTimesheets();
-    const all = (data || []).filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase());
-    const open = all.find(t => t.status === 'in_progress') || null;
-    setOpenShift(open);
-    setTimesheetEntries(all.sort((a, b) => (b.clockIn || '').localeCompare(a.clockIn || '')));
-  };
-
-  // Live elapsed-time ticker for the currently open shift, computed from the
-  // real clock-in timestamp — not a locally-simulated counter, so it stays
-  // correct even across page reloads.
-  useEffect(() => {
-    if (!openShift) {
-      setElapsedLabel('0h 0m 0s');
-      return;
-    }
-
-    const tick = () => {
-      const startMs = new Date(openShift.clockIn).getTime();
-      const diffSecs = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-      const hrs = Math.floor(diffSecs / 3600);
-      const mins = Math.floor((diffSecs % 3600) / 60);
-      const secs = diffSecs % 60;
-      setElapsedLabel(`${hrs}h ${mins}m ${secs}s`);
-    };
-
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [openShift]);
-
-  // Poll for shift changes made elsewhere (e.g. geofence auto clock-in/out
-  // happening on the dashboard page) so this view stays in sync.
-  useEffect(() => {
-    if (!profile) return;
-    const interval = setInterval(() => refreshShiftData(profile.email), 5000);
-    return () => clearInterval(interval);
-  }, [profile]);
 
   return (
     <div className="space-y-4 md:space-y-6 font-sans">
@@ -265,7 +236,7 @@ export default function TrackerPage() {
                 </h3>
               </div>
               <CardContent className="p-5 text-xs text-slate-500 font-semibold leading-relaxed">
-                Shift start/end for USA warehouse staff is fully automatic and based on your device's real GPS location relative to your assigned warehouse. Manage and view live geofence status from the Dashboard page.
+                Shift start/end for USA warehouse staff is fully automatic and based on your device&apos;s real GPS location relative to your assigned warehouse. Manage and view live geofence status from the Dashboard page.
               </CardContent>
             </Card>
           )}
@@ -351,7 +322,7 @@ export default function TrackerPage() {
                       <div className="space-y-1">
                         <p className="text-[11px] font-bold text-amber-900">Tracker Update Required — v{TRACKER_MIN_VERSION}</p>
                         <p className="text-[10px] text-amber-700 leading-relaxed">
-                          You're running v{heartbeat?.agentVersion ?? 'unknown'}. Download the latest installer below, run it, and your tracker will reconnect automatically.
+                          You&apos;re running v{heartbeat?.agentVersion ?? 'unknown'}. Download the latest installer below, run it, and your tracker will reconnect automatically.
                         </p>
                       </div>
                     </div>
@@ -371,7 +342,7 @@ export default function TrackerPage() {
                       <div className="space-y-1">
                         <p className="text-[11px] font-bold text-orange-900">Reconnect Required — Setup Code Changed</p>
                         <p className="text-[10px] text-orange-700 leading-relaxed">
-                          Your setup code was regenerated by HR/Admin. Copy the new code below and paste it into the DelCargo Tracker app on your computer to reconnect — your shift can't start with screen tracking until you do.
+                          Your setup code was regenerated by HR/Admin. Copy the new code below and paste it into the DelCargo Tracker app on your computer to reconnect — your shift can&apos;t start with screen tracking until you do.
                         </p>
                       </div>
                     </div>

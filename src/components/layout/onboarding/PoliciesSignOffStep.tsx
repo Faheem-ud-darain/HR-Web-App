@@ -97,7 +97,7 @@ export function PoliciesSignOffStep({ setActivePolicy, acceptedDocs, setAccepted
     
       <div className="space-y-3">
         <FieldLabel size="md">
-          Digital Signature <span className="text-slate-400 font-semibold text-[10px] lowercase">(Case-insensitive: must match your full name "{profile.fullName}" exactly)</span>
+          Digital Signature <span className="text-slate-400 font-semibold text-[10px] lowercase">(Case-insensitive: must match your full name &quot;{profile.fullName}&quot; exactly)</span>
         </FieldLabel>
         <Input 
           type="text" 
