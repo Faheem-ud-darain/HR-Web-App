@@ -212,14 +212,27 @@ export async function adminListAllPayroll(): Promise<any[]> {
 // (`~` server-side, exact check client-side-equivalent here) and date-range
 // filtering, just authenticated so hr_screenshots' List/View rules can be
 // locked down without breaking the Tracking page or the retention sweep.
+const SCREENSHOT_LIST_CAP = 5000;
+
 export async function adminListScreenshots(filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<any[]> {
   const filterParts: string[] = [];
   const toPbDate = (iso: string) => iso.replace('T', ' ').replace('Z', '');
   if (filters?.employeeEmail) filterParts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
   if (filters?.sinceISO) filterParts.push(pbFilter('captured_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
   if (filters?.untilISO) filterParts.push(pbFilter('captured_at <= {:until}', { until: toPbDate(filters.untilISO) }));
-  const query = filterParts.length ? `?filter=${encodeURIComponent(filterParts.join(' && '))}&perPage=500&sort=-captured_at` : '?perPage=500&sort=-captured_at';
-  const list = await pbAdminFetch(`/api/collections/hr_screenshots/records${query}`);
+  // Pages through the whole window instead of silently stopping at the first
+  // 500 rows (a month of 15-minute captures is ~900). Only the columns the
+  // callers use are requested. SCREENSHOT_LIST_CAP bounds a runaway query.
+  const base = `perPage=200&skipTotal=1&sort=-captured_at&fields=id,collectionId,employee_email,captured_at,image,device_label`
+    + (filterParts.length ? `&filter=${encodeURIComponent(filterParts.join(' && '))}` : '');
+  const all: any[] = [];
+  for (let page = 1; all.length < SCREENSHOT_LIST_CAP; page++) {
+    const res = await pbAdminFetch(`/api/collections/hr_screenshots/records?page=${page}&${base}`);
+    const batch: any[] = res?.items || [];
+    all.push(...batch);
+    if (batch.length < 200) break;
+  }
+  const list = { items: all };
   let items: any[] = list?.items || [];
   if (filters?.employeeEmail) {
     const wanted = filters.employeeEmail.toLowerCase();
@@ -266,8 +279,11 @@ export async function adminGetFileToken(): Promise<string> {
   return data.token;
 }
 
-export function adminFileUrl(collectionId: string, recordId: string, filename: string, fileToken: string): string {
-  return `${PB_URL}/api/files/${collectionId}/${recordId}/${filename}?token=${encodeURIComponent(fileToken)}`;
+// `thumb` (e.g. "300x180") asks PocketBase for a resized copy. It only takes
+// effect for sizes configured on the field (see ensureScreenshotThumbs in the
+// schema-migration route); otherwise PocketBase serves the original.
+export function adminFileUrl(collectionId: string, recordId: string, filename: string, fileToken: string, thumb?: string): string {
+  return `${PB_URL}/api/files/${collectionId}/${recordId}/${filename}?token=${encodeURIComponent(fileToken)}${thumb ? `&thumb=${encodeURIComponent(thumb)}` : ''}`;
 }
 
 // Authenticated mirror of hrActions.getAllTrackingSettings — used by the

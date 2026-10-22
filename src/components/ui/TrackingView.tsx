@@ -40,11 +40,8 @@ import { TrackerSetupModal } from "@/components/ui/tracking/TrackerSetupModal";
 import { TrackerEmployeeList } from "@/components/ui/tracking/TrackerEmployeeList";
 
 interface TrackingViewProps {
-  role: 'admin' | 'hr' | 'team_lead';
-  // Required when role === 'team_lead' — scopes the visible employee list
-  // to that team lead's own teammates (see `employees` below) and is used
-  // to look up their leadTeams. Ignored for admin/hr, who see everyone.
-  viewerEmail?: string;
+  // Screen Tracking is HR/Admin only — team leads and employees never get it.
+  role: 'admin' | 'hr';
 }
 
 export const AGENT_SCRIPT_PATH = '/delcargo_tracker_agent.py';
@@ -61,7 +58,7 @@ export const AGENT_SCRIPT_PATH = '/delcargo_tracker_agent.py';
 // in sync with America/New_York (where shift days are measured).
 export const localDateString = (d: Date = new Date()): string => getNYDateString(d);
 
-export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
+export function TrackingView({ role }: TrackingViewProps) {
   // Team Leads get read-only access to their own teammates' tracking data
   // (screenshots, mouse inactivity) — they can never see/change tracking
   // settings (enable/disable, interval, exclude-from-auto-delete) or the
@@ -91,7 +88,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   // Screenshot viewer modal
   const [viewerEmp, setViewerEmp] = useState<Profile | null>(null);
-  const [viewerRange, setViewerRange] = useState<'2days' | 'day' | 'week' | 'month'>('2days');
+  const [viewerRange, setViewerRange] = useState<'2days' | 'day' | 'week' | 'month'>('day');
   // Which calendar day to show when viewerRange === 'day' — defaults to
   // today, but HR/Admin can pick any past day to see that shift's activity.
   const [viewerDay, setViewerDay] = useState<string>(() => localDateString());
@@ -148,18 +145,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // an employee's currently open shift — see handleForceEndShift below.
   const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets();
 
-  // Team Lead's own profile — used to resolve which teams they lead, so
-  // their tracking view only ever shows their own teammates, never the
-  // whole company.
-  const viewerProfile = role === 'team_lead' ? (allProfiles || []).find(p => p.email.toLowerCase() === (viewerEmail || '').toLowerCase()) : null;
-
-  const employees = (allProfiles || []).filter(e => {
-    if (!(e.role === 'employee' || e.role === 'team_lead')) return false;
-    if (role !== 'team_lead') return true;
-    if (!viewerProfile) return false;
-    if (e.email.toLowerCase() === (viewerEmail || '').toLowerCase()) return false; // teammates only, not self
-    return e.teams?.some(t => viewerProfile.leadTeams?.includes(t));
-  });
+  const employees = (allProfiles || []).filter(e => e.role === 'employee' || e.role === 'team_lead');
   useEffect(() => {
     // Monthly retention sweep — fire-and-forget, runs once per HR/Admin
     // dashboard visit. Safe to call repeatedly; it no-ops once this month
@@ -498,15 +484,18 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   };
 
   const handleOpenViewer = async (emp: Profile) => {
+    // Screenshots are HR/Admin only (the API enforces this too).
+    if (!canManage) return;
     setViewerEmp(emp);
-    setViewerRange('2days');
+    setViewerRange('day');
     const today = localDateString();
     setViewerDay(today);
-    await loadViewerData(emp.email, '2days', today);
+    await loadViewerData(emp.email, 'day', today);
   };
 
   // Computes the [since, until) window for the current range/day selection.
-  // '2days' loads the last 2 days of activity by default (saves bandwidth & prevents server strain),
+  // The viewer opens on 'day' (today) by default to keep the first load small;
+  // '2days' is an optional wider window,
   // 'day' is a single calendar day, 'week'/'month' are 7-day and 30-day extended windows.
   const computeWindow = (range: '2days' | 'day' | 'week' | 'month', day: string): { since: Date; until: Date } => {
     if (range === 'day') {
@@ -717,7 +706,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
           <p className="text-xs md:text-sm text-slate-500 mt-1">
             {canManage
               ? 'Enable desktop screenshot monitoring per employee, set capture intervals, and manage the monthly retention policy.'
-              : "View screenshots and mouse-activity for your team — tracking settings (on/off, interval, retention) are managed by HR/Admin only."}
+              : "View mouse-activity for your team — screenshots and tracking settings (on/off, interval, retention) are managed by HR/Admin only."}
           </p>
         </div>
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg self-start">

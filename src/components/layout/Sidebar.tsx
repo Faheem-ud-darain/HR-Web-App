@@ -234,10 +234,6 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Team Chat', href: '/employee/chat', icon: MessageSquare },
     { name: 'HR Messages', href: '/employee/direct-messages', icon: MessageCircle },
     ...(isTeamLead ? [{ name: 'Team Tasks ⭐', href: '/employee/tasks', icon: Star }] : []),
-    // Read-only screenshots/mouse-activity viewer for their own teammates —
-    // Team Leads can never change tracking settings, only view. See
-    // TrackingView.tsx's canManage gating.
-    ...(isTeamLead ? [{ name: 'Team Tracking', href: '/employee/team-tracking', icon: Monitor }] : []),
   ];
 
   const navMap: Record<string, typeof adminItems> = {
