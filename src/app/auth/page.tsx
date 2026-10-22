@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -23,12 +23,22 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle, Smartphone } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
 import { OtpInput } from '@/components/ui/OtpInput';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+
+let supersededFlag: boolean | null = null;
+/** Reads and clears the "your session was superseded" flag the first time, then remembers the answer. */
+function readSupersededFlagOnce(): boolean {
+  if (supersededFlag === null) {
+    supersededFlag = typeof window !== 'undefined' && window.sessionStorage.getItem('session_superseded') === '1';
+    if (supersededFlag) window.sessionStorage.removeItem('session_superseded');
+  }
+  return supersededFlag;
+}
 
 export default function AuthPage() {
   // Same cold-start problem as the root page: if the WebView happens to
@@ -38,7 +48,12 @@ export default function AuthPage() {
   // password. Kept separate from the root page's check (not shared state)
   // since either page can be the first one to mount.
   const [checkingSession, setCheckingSession] = useState(true);
-  const [email, setEmail] = useState('');
+  // Pre-filled from a previous "Remember me" login (only the email is ever remembered —
+  // never the password; see lib/session.ts). Read straight from storage in the browser
+  // (empty on the server), and replaced as soon as the person types.
+  const [typedEmail, setEmail] = useState<string | null>(null);
+  const rememberedEmail = useSyncExternalStore(() => () => {}, () => getRememberedEmail() || '', () => '');
+  const email = typedEmail ?? rememberedEmail;
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -49,7 +64,6 @@ export default function AuthPage() {
   // sign in here" button shows up under the error message. Any other error
   // (wrong password, offboarded, etc.) leaves this false.
   const [sessionConflict, setSessionConflict] = useState(false);
-  const [notice, setNotice] = useState('');
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   // Forgot Password / OTP self-service flow — see
   // src/app/api/auth/forgot-password, src/app/api/auth/verify-reset-otp,
@@ -268,27 +282,13 @@ export default function AuthPage() {
     return () => { cancelled = true; };
   }, [router]);
 
-  // Pre-fill the email field from a previous "Remember me" login — this is
-  // the only thing that's actually remembered into the form itself; the
-  // password is never stored anywhere (see the comment in lib/session.ts).
-  // Survives an explicit logout, unlike the full session.
-  useEffect(() => {
-    const remembered = getRememberedEmail();
-    if (remembered) setEmail(remembered);
-  }, []);
-
-  // Shown once after (dashboard)/layout.tsx force-logs-out a session it
-  // detected was superseded by a login elsewhere (see the single-session
-  // heartbeat effect there). Uses a one-shot sessionStorage flag rather than
-  // a URL query param so this page doesn't need a Suspense boundary for
-  // useSearchParams under this app's static export build.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.sessionStorage.getItem('session_superseded') === '1') {
-      window.sessionStorage.removeItem('session_superseded');
-      setNotice('You were logged out because this account was signed in from another device.');
-    }
-  }, []);
+  // Shown once after (dashboard)/layout.tsx force-logs-out a session it detected was
+  // superseded by a login elsewhere (see the single-session heartbeat effect there).
+  // Uses a one-shot sessionStorage flag rather than a URL query param so this page
+  // doesn't need a Suspense boundary for useSearchParams under this app's static
+  // export build. The flag is read (and cleared) once per page load.
+  const supersededNotice = useSyncExternalStore(() => () => {}, readSupersededFlagOnce, () => false);
+  const notice = supersededNotice ? 'You were logged out because this account was signed in from another device.' : '';
 
   // `force` skips the single-session live-check and unconditionally claims
   // the session slot instead — used by the "Log out from everywhere and
@@ -579,7 +579,7 @@ export default function AuthPage() {
               <div className="flex items-start gap-3 bg-orange-50 border border-orange-100 p-4 rounded-xl">
                 <Mail className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                  Enter your account email and we'll send a 6-digit code you can use to set a new password.
+                  Enter your account email and we&apos;ll send a 6-digit code you can use to set a new password.
                 </p>
               </div>
               <div>
@@ -624,7 +624,7 @@ export default function AuthPage() {
                   disabled={forgotLoading || resendLoading}
                 />
                 <div className="flex items-center justify-between mt-2 px-1">
-                  <span className="text-[11px] text-slate-400 font-medium">Didn't receive the code?</span>
+                  <span className="text-[11px] text-slate-400 font-medium">Didn&apos;t receive the code?</span>
                   <button
                     type="button"
                     onClick={handleResendOtp}
@@ -754,7 +754,7 @@ export default function AuthPage() {
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-100 p-4 rounded-xl">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-              Your shift was still active when you last logged out, so it was automatically ended at that time. If you're continuing work, start a new shift from your dashboard.
+              Your shift was still active when you last logged out, so it was automatically ended at that time. If you&apos;re continuing work, start a new shift from your dashboard.
             </p>
           </div>
           <div className="flex justify-end pt-2 border-t border-slate-200">

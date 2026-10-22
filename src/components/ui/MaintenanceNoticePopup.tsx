@@ -5,6 +5,7 @@ import { Wrench, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { formatInViewerLocalTime } from '@/lib/timezone';
+import { useNow } from '@/lib/useNow';
 
 interface MaintenanceNoticePopupProps {
   email: string | null;
@@ -26,6 +27,7 @@ interface MaintenanceNoticePopupProps {
 //    this app uses — see the big comment block in timezone.ts for why this
 //    is a deliberate one-off exception rather than a bug.
 export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
+  const now = useNow(); // to ignore maintenance windows that already finished (see lib/useNow.ts)
   const { data: notices } = useMaintenanceNotices();
   const [readMap, setReadMap] = useState<Record<string, string[]>>({});
   const [marking, setMarking] = useState(false);
@@ -35,13 +37,12 @@ export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
     hrActions.getMaintenanceNoticeReadMap().then(setReadMap);
   }, [email, notices?.length]);
 
-  if (!email || !notices) return null;
+  if (!email || !notices || now === 0) return null;
 
   // Only bother blocking on a notice whose maintenance window hasn't
   // finished yet — no point interrupting someone's login to tell them
   // about maintenance that already happened. Newest-start-first so if
   // somehow more than one is still pending, the most relevant one leads.
-  const now = Date.now();
   const pending = notices
     .filter(n => new Date(n.endAt).getTime() > now && !hrActions.isMaintenanceNoticeRead(n, email, readMap))
     .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());

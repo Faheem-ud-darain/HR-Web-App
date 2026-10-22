@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/Badge';
 import { TableScroll, Table, THead, Th, TBody, Tr, Td } from '@/components/ui/Table';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface TimesheetReviewModalProps {

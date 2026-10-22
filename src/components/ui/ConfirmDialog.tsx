@@ -33,9 +33,13 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const [typedText, setTypedText] = React.useState('');
 
-  React.useEffect(() => {
+  // Start each time the dialog opens with an empty confirmation box. (Adjusting state
+  // while rendering is React's recommended way to reset state when a prop changes.)
+  const [wasOpen, setWasOpen] = React.useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
     if (isOpen) setTypedText('');
-  }, [isOpen]);
+  }
 
   if (!isOpen) return null;
 

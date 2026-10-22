@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
+import type { PbRow } from '@/lib/pbTypes';
 import {
   adminListScreenshots, adminGetKVByPrefix, adminDeleteRecords, adminDeleteKVByKeys,
   adminListTrackingSettings, adminAddNotification, adminFindByField, adminUpsertByField,
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
         adminListScreenshots({ untilISO: cutoffISO }),
         adminGetKVByPrefix('screenshot_'),
       ]);
-      const fresh = realRows.map((r: any) => ({ id: r.id, employeeEmail: r.employee_email, timestamp: r.captured_at, legacy: false }));
+      const fresh = realRows.map((r: PbRow) => ({ id: r.id, employeeEmail: r.employee_email, timestamp: r.captured_at, legacy: false }));
       const legacy = legacyRows
         .map((row) => ({ id: row.value.id, employeeEmail: row.value.employeeEmail, timestamp: row.value.timestamp, legacy: true }))
         .filter((s) => s.timestamp <= cutoffISO);

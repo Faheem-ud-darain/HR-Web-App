@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { adminListScreenshots, adminGetFileToken, adminFileUrl } from '@/lib/pbAdmin';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       adminGetFileToken(),
     ]);
 
-    const items = rows.map((r: any) => ({
+    const items = rows.map((r: PbRow) => ({
       id: r.id,
       employeeEmail: r.employee_email,
       timestamp: r.captured_at,

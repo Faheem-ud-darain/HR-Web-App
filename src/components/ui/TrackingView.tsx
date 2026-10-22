@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
-import { Badge } from '@/components/ui/Badge';
 import {
   Profile,
   TrackingSettings,
@@ -23,21 +22,16 @@ import {
   getCaptureHealth,
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
-import { formatTimeNY, formatShortDateNY, formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
-import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
+import { encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL, needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import { Monitor, Settings, Image as ImageIcon, Download, Copy, RefreshCw, ShieldAlert, Wifi, WifiOff, MousePointerClick, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Lock, ImageOff } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
-import { Switch } from '@/components/ui/Switch';
-import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
-import { Input } from '@/components/ui/Input';
+import { Monitor, RefreshCw, ShieldAlert, Wifi, WifiOff, ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCcw, AlertTriangle, Lock, ImageOff } from 'lucide-react';
 import { MouseActivityModal } from "@/components/ui/tracking/MouseActivityModal";
 import { ScreenshotsModal } from "@/components/ui/tracking/ScreenshotsModal";
 import { TrackerSetupModal } from "@/components/ui/tracking/TrackerSetupModal";
 import { TrackerEmployeeList } from "@/components/ui/tracking/TrackerEmployeeList";
+import { useIsClient } from '@/lib/useIsClient';
 
 interface TrackingViewProps {
   // Screen Tracking is HR/Admin only — team leads and employees never get it.
@@ -120,8 +114,7 @@ export function TrackingView({ role }: TrackingViewProps) {
   // lightbox is portaled straight to document.body (see below) instead of
   // rendered inline, so it can't get trapped inside any ancestor that
   // becomes an accidental containing block.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
 
   // Dedicated Mouse Activity modal — same Daily/Weekly/Monthly filter as the
   // screenshot viewer, but a full detail view of inactivity data on its own
@@ -135,7 +128,7 @@ export function TrackingView({ role }: TrackingViewProps) {
   const { data: allProfiles, isLoading: profilesLoading } = useProfiles();
   // Tracking settings live in the dedicated hr_tracking_settings collection
   // (one row per employee) — see useTrackingSettings in hrData.ts.
-  const { data: settingsList = [], refetch: refetchSettings } = useTrackingSettings();
+  const { data: settingsList = [], refetch: refetchSettings } = useTrackingSettings({ all: true });
   // Heartbeats are one KV row per device: tracker_heartbeat_<slug>. React
   // Query's own refetchInterval/staleness handles freshness here; no manual
   // refetch trigger is needed since this view doesn't mutate heartbeats.
@@ -152,20 +145,6 @@ export function TrackingView({ role }: TrackingViewProps) {
     // has already been checked (see checkScreenshotRetention in hrData.ts).
     hrActions.checkScreenshotRetention();
   }, []);
-
-  // Keyboard controls for the screenshot lightbox — Escape closes, arrow
-  // keys move between screenshots. Only attached while the lightbox is open.
-  useEffect(() => {
-    if (lightboxIndex === null) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeLightbox();
-      else if (e.key === 'ArrowLeft') lightboxNav(-1);
-      else if (e.key === 'ArrowRight') lightboxNav(1);
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lightboxIndex, viewerShots.length]);
 
   const heartbeatFor = (email: string): TrackerHeartbeat | null =>
     heartbeats.find(h => h.employeeEmail?.toLowerCase() === email.toLowerCase()) || null;
@@ -389,6 +368,12 @@ export function TrackingView({ role }: TrackingViewProps) {
     await hrActions.writeTrackerCommand(email, 'reload_settings');
   };
 
+  // Remote fix actions (v25+ trackers; older builds ignore them). Restart
+  // relaunches the packaged app in a few seconds without ending the shift.
+  const handleTrackerAction = async (email: string, type: 'reconnect' | 'restart') => {
+    await hrActions.writeTrackerCommand(email, type);
+  };
+
   const [pendingRegenerateTokenEmail, setPendingRegenerateTokenEmail] = useState<string | null>(null);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [pendingForceDisconnectEmail, setPendingForceDisconnectEmail] = useState<string | null>(null);
@@ -473,6 +458,7 @@ export function TrackingView({ role }: TrackingViewProps) {
       line('Last capture', diag.lastCaptureAt ? `${formatDateTimeNY(diag.lastCaptureAt)} (${diag.lastCaptureAt})` : 'never'),
       line('Last error', diag.lastError || 'none'),
       line('Update available', diag.updateAvailableVersion ? `v${diag.updateAvailableVersion}` : 'no'),
+      ...(diag.logTail ? ['', 'Recent tracker log:', diag.logTail.trimEnd()] : []),
     ];
     return lines.join('\n');
   };
@@ -655,6 +641,21 @@ export function TrackingView({ role }: TrackingViewProps) {
     setZoom(1);
   };
 
+  // Keyboard controls for the screenshot lightbox — Escape closes, arrow
+  // keys move between screenshots. Only attached while the lightbox is open.
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') lightboxNav(-1);
+      else if (e.key === 'ArrowRight') lightboxNav(1);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxIndex, viewerShots.length]);
+
+
   const handleExportZip = async () => {
     if (!viewerEmp || viewerShots.length === 0) return;
     setExporting(true);
@@ -825,7 +826,7 @@ export function TrackingView({ role }: TrackingViewProps) {
       )}
 
       {/* Setup Agent Modal */}
-      <TrackerSetupModal setupEmp={setupEmp} diagnosticsRequestIdRef={diagnosticsRequestIdRef} setSetupEmp={setSetupEmp} role={role} settingsFor={settingsFor} copySetupCode={copySetupCode} copied={copied} handleRegenerateToken={handleRegenerateToken} handleForceDisconnect={handleForceDisconnect} copyConfig={copyConfig} handleRunDiagnostics={handleRunDiagnostics} diagnosticsStatus={diagnosticsStatus} handleReloadSettingsNow={handleReloadSettingsNow} diagnosticsResult={diagnosticsResult} copyDiagnosticsReport={copyDiagnosticsReport} copiedDiagnostics={copiedDiagnostics} />
+      <TrackerSetupModal setupEmp={setupEmp} diagnosticsRequestIdRef={diagnosticsRequestIdRef} setSetupEmp={setSetupEmp} role={role} settingsFor={settingsFor} copySetupCode={copySetupCode} copied={copied} handleRegenerateToken={handleRegenerateToken} handleForceDisconnect={handleForceDisconnect} copyConfig={copyConfig} handleRunDiagnostics={handleRunDiagnostics} diagnosticsStatus={diagnosticsStatus} handleReloadSettingsNow={handleReloadSettingsNow} handleTrackerAction={handleTrackerAction} diagnosticsResult={diagnosticsResult} copyDiagnosticsReport={copyDiagnosticsReport} copiedDiagnostics={copiedDiagnostics} />
 
       {/* Screenshot Viewer Modal */}
       <ScreenshotsModal viewerEmp={viewerEmp} setViewerEmp={setViewerEmp} role={role} handleRangeChange={handleRangeChange} viewerRange={viewerRange} viewerDay={viewerDay} handleDayChange={handleDayChange} handleExportZip={handleExportZip} viewerShots={viewerShots} exporting={exporting} viewerLoading={viewerLoading} viewerInactivity={viewerInactivity} formatDuration={formatDuration} totalInactiveSeconds={totalInactiveSeconds} openLightbox={openLightbox} />

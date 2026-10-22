@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Profile,
@@ -24,10 +24,11 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { Avatar } from './Avatar';
 import { ImageLightbox } from './ImageLightbox';
 import { pushModal, popModal } from '@/lib/modalStack';
-import { X, User, Mail, Shield, ShieldAlert, Key, DollarSign, Calendar, MapPin, Landmark, Briefcase, FileText, CheckSquare, Square, Trash2, Download, Phone, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { X, User, Mail, Shield, ShieldAlert, DollarSign, Calendar, MapPin, Landmark, Trash2, Download, Phone, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from './Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { useIsClient } from '@/lib/useIsClient';
 
 // Detects the `pbkdf2$<iterations>$<salt>$<hash>` format hashPassword()
 // writes (see serverAuth.ts) — deliberately re-implemented here rather than
@@ -49,7 +50,6 @@ interface UserProfileModalProps {
 
 export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRole, currentUserEmail, onUpdate }: UserProfileModalProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isOffboarding, setIsOffboarding] = useState(false);
   const [showOffboardConfirm, setShowOffboardConfirm] = useState(false);
@@ -107,6 +107,11 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   const [notes, setNotes] = useState('');
 
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
+  // The signed-in viewer's own profile (drives which team-relationship rules apply below).
+  const currentUser = useMemo(
+    () => allProfiles?.find(e => e.email && currentUserEmail && e.email.toLowerCase() === currentUserEmail.toLowerCase()) || null,
+    [allProfiles, currentUserEmail],
+  );
   const { data: allWarehouses } = useWarehouses();
   // This employee's own leaves (all of them) — drives their PTO bank / payout.
   const { data: allLeaves } = useLeaves({ employeeName: profile?.fullName ?? null });
@@ -132,10 +137,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
     if (isOpen && employeeEmail && allProfiles) {
       const emps = allProfiles;
       const match = emps.find(e => e.email && employeeEmail && e.email.toLowerCase() === employeeEmail.toLowerCase());
-      const curr = emps.find(e => e.email && currentUserEmail && e.email.toLowerCase() === currentUserEmail.toLowerCase());
-      setCurrentUser(curr || null);
 
       if (match) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- seeds the editable form once from the loaded profile when the modal opens
         setProfile(match);
         setFullName(match.fullName);
         setEmail(match.email);
@@ -189,16 +193,11 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   // stuck `transform` behind) — pushing the card far down the page instead
   // of covering the real viewport. Portaling to document.body sidesteps
   // that class of bug entirely.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
 
   if (!isOpen || !profile || !mounted || typeof document === 'undefined') return null;
 
   // Access Control logic checks
-  const canEdit = 
-    currentUserRole === 'admin' || 
-    (currentUserRole === 'hr' && profile.role !== 'admin' && profile.role !== 'hr');
-
   // Admin can change HR, HR can change Employees
   const canManageThisProfile = 
     currentUserRole === 'admin' ||
@@ -812,14 +811,14 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <FieldLabel size="sm">Region / Base Location</FieldLabel>
-                  <Select value={region} onChange={e => setRegion(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
+                  <Select value={region} onChange={e => setRegion(e.target.value as Parameters<typeof setRegion>[0])} fieldSize="sm" className="cursor-pointer">
                     <option value="Pakistan">Pakistan</option>
                     <option value="USA">USA</option>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <FieldLabel size="sm">Gender</FieldLabel>
-                  <Select value={gender} onChange={e => setGender(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
+                  <Select value={gender} onChange={e => setGender(e.target.value as Parameters<typeof setGender>[0])} fieldSize="sm" className="cursor-pointer">
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                   </Select>
@@ -828,7 +827,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               
               <div className="space-y-1.5">
                 <FieldLabel size="sm">System Role *</FieldLabel>
-                <Select value={role} onChange={e => setRole(e.target.value as any)} fieldSize="sm" className="cursor-pointer">
+                <Select value={role} onChange={e => setRole(e.target.value as Parameters<typeof setRole>[0])} fieldSize="sm" className="cursor-pointer">
                   <option value="employee">Employee</option>
                   <option value="team_lead">Team Lead</option>
                   <option value="hr">HR Admin</option>
@@ -911,7 +910,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
               <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl space-y-1.5">
                 <p className="font-bold text-rose-800 text-xs flex items-center gap-1.5"><ShieldAlert className="h-4 w-4" /> Account Offboarding Checklist</p>
                 <p className="text-[11px] text-rose-700 font-semibold leading-relaxed">
-                  Completing this checklist deactivates this user's account and blocks all access to the workspace immediately.
+                  Completing this checklist deactivates this user&apos;s account and blocks all access to the workspace immediately.
                 </p>
               </div>
 

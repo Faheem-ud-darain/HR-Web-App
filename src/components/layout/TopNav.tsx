@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Search, X, User, CheckCircle2, Settings, LogOut, UserCircle, KeyRound, ClipboardList, HelpCircle, Users, BadgeHelp, Trash2, MapPin, Wallet, Clock, Briefcase, Megaphone } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Bell, Search, User, LogOut, UserCircle, ClipboardList, HelpCircle, Users, Trash2, MapPin, Wallet, Clock, Briefcase, Megaphone } from 'lucide-react';
 import {
   Notification, Profile, Task, Ticket, Team, Warehouse, PayrollRecord, LeaveApplication, CareerPosition, Announcement,
   hrActions, useProfiles, useTasks, useTickets, useNotifications, useTeams, useWarehouses, usePayroll, useLeaves, useCareers, useAnnouncements,
@@ -9,10 +9,12 @@ import {
 } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { useRouter, usePathname } from 'next/navigation';
-import { getSessionEmail, getSessionRole, clearSession } from '@/lib/session';
+import { clearSession } from '@/lib/session';
 import { logoutPush } from '@/lib/push';
 import { formatRelativeDateNY } from '@/lib/timezone';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { DEFAULT_NOTIFICATION_LIMIT } from '@/lib/hr/notifications';
+import { useSessionEmail, useSessionRole } from '@/lib/useSession';
 
 // The bell only ever showed a bare time-of-day string (e.g. "3:02 AM") with
 // no date — that's all `notification.timestamp` ever contained (see
@@ -36,7 +38,8 @@ export function TopNav() {
   const pathname = usePathname();
   const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats');
   const [search, setSearch] = useState('');
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  // Ids hidden from the bell right away (delete / clear-all) while the server catches up.
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
   // Per-user read/cleared maps live in the hr_delcargo_store KV overlay
   // (see hrActions.getNotificationReadMap / getNotificationClearedMap) —
   // fetched into local state so isNotificationRead/isNotificationCleared can
@@ -52,28 +55,15 @@ export function TopNav() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-  const [role, setRole] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string>('');
-  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const role = useSessionRole();
+  const email = useSessionEmail();
 
   const bellRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
-  const mobileSearchRef = useRef<HTMLDivElement>(null);
-
   // Search Results States (filtered by RBAC — see performSearch below for
   // exactly which roles can see which entity types; this mirrors what each
   // role's Sidebar actually gives them a page for, so search never surfaces
   // a result someone couldn't otherwise navigate to).
-  const [matchedEmployees, setMatchedEmployees] = useState<Profile[]>([]);
-  const [matchedTasks, setMatchedTasks] = useState<Task[]>([]);
-  const [matchedTickets, setMatchedTickets] = useState<Ticket[]>([]);
-  const [matchedTeams, setMatchedTeams] = useState<Team[]>([]);
-  const [matchedWarehouses, setMatchedWarehouses] = useState<Warehouse[]>([]);
-  const [matchedPayroll, setMatchedPayroll] = useState<PayrollRecord[]>([]);
-  const [matchedLeaves, setMatchedLeaves] = useState<LeaveApplication[]>([]);
-  const [matchedCareers, setMatchedCareers] = useState<CareerPosition[]>([]);
-  const [matchedAnnouncements, setMatchedAnnouncements] = useState<Announcement[]>([]);
   const [showResults, setShowResults] = useState(false);
 
   const { data: allProfiles } = useProfiles();
@@ -83,8 +73,8 @@ export function TopNav() {
   const [searchActive, setSearchActive] = useState(false);
   const searchEnabled = { enabled: searchActive };
   const { data: allTasks } = useTasks(searchEnabled);
-  const { data: allTickets } = useTickets();
-  const [notificationLimit, setNotificationLimit] = useState(50);
+  const { data: allTickets } = useTickets(50, undefined, searchEnabled);
+  const [notificationLimit, setNotificationLimit] = useState(DEFAULT_NOTIFICATION_LIMIT);
   const { data: allNotifications, isFetching: fetchingNotifications, refetch: refetchNotifications } = useNotifications(notificationLimit);
   const { data: allTeams } = useTeams();
   const { data: allWarehouses } = useWarehouses(searchEnabled);
@@ -92,9 +82,16 @@ export function TopNav() {
   const { data: allLeaves } = useLeaves(searchEnabled);
   const { data: allCareers } = useCareers(searchEnabled);
   const { data: allAnnouncements } = useAnnouncements(searchEnabled);
-  // Needed to scope an employee's own payroll record (PayrollRecord.employeeId
-  // matches Profile.id, not email — see src/app/(dashboard)/employee/salary/page.tsx).
-  const [profileId, setProfileId] = useState<string | null>(null);
+  // This person's own profile — the name/photo shown here, and (for payroll scoping)
+  // its id: PayrollRecord.employeeId matches Profile.id, not email — see
+  // src/app/(dashboard)/employee/salary/page.tsx.
+  const myProfile = useMemo(
+    () => allProfiles?.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase()),
+    [allProfiles, email],
+  );
+  const profileId = myProfile?.id ?? null;
+  const displayName = myProfile?.fullName ?? (email?.split('@')[0] || '');
+  const profilePicture = myProfile?.profilePicture || null;
 
   // Load the per-user read/cleared maps once on mount (KV overlay, not
   // localStorage — see hrData.ts).
@@ -109,32 +106,16 @@ export function TopNav() {
     })();
   }, []);
 
-  useEffect(() => {
-    const savedRole = getSessionRole();
-    const savedEmail = getSessionEmail();
-    setRole(savedRole);
-    setEmail(savedEmail);
-
-    if (savedEmail && allProfiles) {
-      const profile = allProfiles.find(e => e.email && savedEmail && e.email.toLowerCase() === savedEmail.toLowerCase());
-      if (profile) {
-        setDisplayName(profile.fullName);
-        setProfilePicture(profile.profilePicture || null);
-        setProfileId(profile.id);
-      } else {
-        setDisplayName(savedEmail?.split('@')[0] || '');
-      }
-    }
-
-    if (savedRole && savedEmail && allNotifications) {
-      const filtered = allNotifications.filter(n =>
-        (n.recipientEmail === savedEmail ||
-          (n.recipientRole === savedRole && n.recipientEmail === 'all')) &&
-        !hrActions.isNotificationCleared(n, savedEmail, clearedMap)
-      );
-      setNotifications(filtered);
-    }
-  }, [allProfiles, allNotifications, clearedMap]);
+  // The bell's list: what was addressed to this person (or broadcast to their role), minus
+  // what they've dismissed or just deleted.
+  const notifications = useMemo(() => {
+    if (!role || !email || !allNotifications) return [] as Notification[];
+    return allNotifications.filter(n =>
+      (n.recipientEmail === email || (n.recipientRole === role && n.recipientEmail === 'all')) &&
+      !hrActions.isNotificationCleared(n, email, clearedMap) &&
+      !hiddenIds.has(n.id)
+    );
+  }, [allNotifications, role, email, clearedMap, hiddenIds]);
 
   // Close elements when clicking outside
   useEffect(() => {
@@ -152,26 +133,23 @@ export function TopNav() {
   // signed-in role couldn't otherwise reach.
   const isPrivileged = role === 'hr' || role === 'admin';
 
-  const performSearch = (query: string) => {
-    if (!query.trim() || !role) {
-      setMatchedEmployees([]);
-      setMatchedTasks([]);
-      setMatchedTickets([]);
-      setMatchedTeams([]);
-      setMatchedWarehouses([]);
-      setMatchedPayroll([]);
-      setMatchedLeaves([]);
-      setMatchedCareers([]);
-      setMatchedAnnouncements([]);
-      setShowResults(false);
-      return;
+  // Search results (filtered by RBAC — see the per-section comments for exactly which
+  // roles can see which entity types; this mirrors what each role's Sidebar actually
+  // gives them a page for, so search never surfaces a result someone couldn't otherwise
+  // navigate to). Derived from the query + whatever datasets have loaded, so results
+  // fill in on their own as the lazily-fetched datasets arrive.
+  const searchResults = useMemo(() => {
+    if (!search.trim() || !role) {
+      return {
+        matchedEmployees: [] as Profile[], matchedTasks: [] as Task[], matchedTickets: [] as Ticket[],
+        matchedTeams: [] as Team[], matchedWarehouses: [] as Warehouse[], matchedPayroll: [] as PayrollRecord[],
+        matchedLeaves: [] as LeaveApplication[], matchedCareers: [] as CareerPosition[], matchedAnnouncements: [] as Announcement[],
+      };
     }
-
-    const q = query.toLowerCase();
-    setShowResults(true);
+    const q = search.toLowerCase();
 
     // Employees — HR/Admin only (staff directory access).
-    setMatchedEmployees(isPrivileged ? (allProfiles || []).filter(e =>
+    const matchedEmployees = (isPrivileged ? (allProfiles || []).filter(e =>
       e.fullName.toLowerCase().includes(q) ||
       e.email.toLowerCase().includes(q) ||
       (e.jobTitle || '').toLowerCase().includes(q)
@@ -179,7 +157,7 @@ export function TopNav() {
 
     // Tasks — full board for HR/Admin, only tasks assigned to me otherwise.
     const tasksScope = isPrivileged ? (allTasks || []) : (allTasks || []).filter(t => t.assignedEmail === email);
-    setMatchedTasks(tasksScope.filter(t =>
+    const matchedTasks = (tasksScope.filter(t =>
       t.title.toLowerCase().includes(q) ||
       t.description.toLowerCase().includes(q)
     ));
@@ -197,24 +175,24 @@ export function TopNav() {
         ticketsScope = ticketsScope.filter(t => t.employeeEmail.toLowerCase() === (email || '').toLowerCase());
       }
     }
-    setMatchedTickets(ticketsScope.filter(t =>
+    const matchedTickets = (ticketsScope.filter(t =>
       t.title.toLowerCase().includes(q) ||
       t.description.toLowerCase().includes(q)
     ));
 
     // Teams — HR only (Team Management page lives under /hr, not /admin —
     // see Sidebar.tsx hrItems vs adminItems).
-    setMatchedTeams(role === 'hr' ? (allTeams || []).filter(t => t.name.toLowerCase().includes(q)) : []);
+    const matchedTeams = (role === 'hr' ? (allTeams || []).filter(t => t.name.toLowerCase().includes(q)) : []);
 
     // Warehouses — Admin only (Warehouses page lives under /admin, not /hr).
-    setMatchedWarehouses(role === 'admin' ? (allWarehouses || []).filter(w => w.name.toLowerCase().includes(q)) : []);
+    const matchedWarehouses = (role === 'admin' ? (allWarehouses || []).filter(w => w.name.toLowerCase().includes(q)) : []);
 
     // Payroll — full ledger for HR/Admin, only my own record otherwise
     // (PayrollRecord.employeeId matches Profile.id, not email).
     let payrollScope: PayrollRecord[] = [];
     if (isPrivileged) payrollScope = allPayroll || [];
     else if (profileId) payrollScope = (allPayroll || []).filter(p => p.employeeId === profileId);
-    setMatchedPayroll(payrollScope.filter(p =>
+    const matchedPayroll = (payrollScope.filter(p =>
       p.name.toLowerCase().includes(q) || (p.role || '').toLowerCase().includes(q)
     ));
 
@@ -224,35 +202,31 @@ export function TopNav() {
     let leavesScope: LeaveApplication[] = [];
     if (isPrivileged) leavesScope = allLeaves || [];
     else if (displayName) leavesScope = (allLeaves || []).filter(l => l.employeeName === displayName);
-    setMatchedLeaves(leavesScope.filter(l =>
+    const matchedLeaves = (leavesScope.filter(l =>
       l.type.toLowerCase().includes(q) || l.reason.toLowerCase().includes(q) || l.status.toLowerCase().includes(q)
     ));
 
     // Career postings — the Career Board page exists for every role, so
     // open positions are searchable by everyone.
-    setMatchedCareers((allCareers || []).filter(c =>
+    const matchedCareers = ((allCareers || []).filter(c =>
       c.title.toLowerCase().includes(q) || c.department.toLowerCase().includes(q)
     ));
 
     // Announcements — shown on every role's dashboard Overview, so
     // searchable by everyone too.
-    setMatchedAnnouncements((allAnnouncements || []).filter(a =>
+    const matchedAnnouncements = ((allAnnouncements || []).filter(a =>
       a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q)
     ));
-  };
 
-  // Datasets load lazily on first search focus — re-run the current query when
-  // they arrive so results fill in without the user retyping.
-  useEffect(() => {
-    if (searchActive && search.trim()) performSearch(search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allTasks, allWarehouses, allPayroll, allLeaves, allCareers, allAnnouncements]);
+    return { matchedEmployees, matchedTasks, matchedTickets, matchedTeams, matchedWarehouses, matchedPayroll, matchedLeaves, matchedCareers, matchedAnnouncements };
+  }, [search, role, email, isPrivileged, profileId, displayName, allProfiles, allTasks, allTickets, allTeams, allWarehouses, allPayroll, allLeaves, allCareers, allAnnouncements]);
+  const { matchedEmployees, matchedTasks, matchedTickets, matchedTeams, matchedWarehouses, matchedPayroll, matchedLeaves, matchedCareers, matchedAnnouncements } = searchResults;
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => handleSearchValue(e.target.value);
 
   const handleSearchValue = (val: string) => {
     setSearch(val);
-    performSearch(val);
+    setShowResults(val.trim().length > 0 && !!role);
     window.dispatchEvent(new CustomEvent('globalSearch', { detail: val }));
   };
 
@@ -285,10 +259,33 @@ export function TopNav() {
       ]);
       setReadMap(rm);
       setClearedMap(cm);
-      setNotifications([]);
+      setHiddenIds(prev => new Set([...prev, ...notifications.map(x => x.id)]));
       setReadVersion(v => v + 1);
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  // Deletes one notification (personal ones are removed for real, broadcasts are
+  // dismissed for this user only — see deleteNotificationsFor). Removed from the
+  // list right away; the refetch then pulls the next-oldest one into the page.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const handleDeleteOne = async (n: Notification) => {
+    if (!email || !role || deletingId) return;
+    setDeletingId(n.id);
+    setHiddenIds(prev => new Set(prev).add(n.id));
+    try {
+      await hrActions.deleteNotificationFor(n, email, role);
+      const [rm, cm] = await Promise.all([hrActions.getNotificationReadMap(), hrActions.getNotificationClearedMap()]);
+      setReadMap(rm);
+      setClearedMap(cm);
+      setReadVersion(v => v + 1);
+      refetchNotifications();
+    } catch {
+      setHiddenIds(prev => { const next = new Set(prev); next.delete(n.id); return next; }); // put it back: the delete didn't go through
+      refetchNotifications();
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -325,7 +322,6 @@ export function TopNav() {
   // Referenced only to satisfy the dependency-tracking eslint rule; the
   // actual re-computation is triggered by readVersion bumping this render.
   void readVersion;
-  const initials = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
   const hasAnyResults = matchedEmployees.length > 0 || matchedTasks.length > 0 || matchedTickets.length > 0 || matchedTeams.length > 0
     || matchedWarehouses.length > 0 || matchedPayroll.length > 0 || matchedLeaves.length > 0 || matchedCareers.length > 0 || matchedAnnouncements.length > 0;
 
@@ -508,7 +504,7 @@ export function TopNav() {
   );
 
   // Shared search results dropdown content (desktop)
-  const SearchResults = () => (
+  const renderSearchResults = () => (
     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 max-h-[60vh] overflow-y-auto divide-y divide-slate-100 popover-enter">
       {renderResultGroups(4)}
     </div>
@@ -542,7 +538,7 @@ export function TopNav() {
             onFocus={() => { setSearchActive(true); if (search.trim()) setShowResults(true); }}
             placeholder="Search employees, tasks, payroll, leaves..."
           />
-          {showResults && search.trim().length > 0 && <SearchResults />}
+          {showResults && search.trim().length > 0 && renderSearchResults()}
         </div>
 
         {/* Mobile: Brand name or back button */}
@@ -619,24 +615,35 @@ export function TopNav() {
                     // see buildNotificationLink in hrData.ts) are clickable.
                     // Older notifications created before this field existed, and
                     // generic/'internal' ones with nothing to deep-link to, render
-                    // as a plain row same as before.
-                    if (n.link) {
-                      return (
-                        <button
-                          key={n.id}
-                          onClick={() => {
-                            setIsBellOpen(false);
-                            router.push(n.link!);
-                          }}
-                          className={`w-full text-left p-3.5 text-xs flex flex-col gap-1 transition-colors hover:bg-slate-50 ${isUnread ? 'bg-orange-50/40' : ''}`}
-                        >
-                          {content}
-                        </button>
-                      );
-                    }
+                    // as a plain row same as before. Every row has its own delete
+                    // button beside the content (a button can't sit inside the
+                    // clickable row's own <button>, hence the wrapper).
                     return (
-                      <div key={n.id} className={`p-3.5 text-xs flex flex-col gap-1 ${isUnread ? 'bg-orange-50/40' : ''}`}>
-                        {content}
+                      <div key={n.id} className={`flex items-start transition-colors ${isUnread ? 'bg-orange-50/40' : ''} ${n.link ? 'hover:bg-slate-50' : ''}`}>
+                        {n.link ? (
+                          <button
+                            onClick={() => {
+                              setIsBellOpen(false);
+                              router.push(n.link!);
+                            }}
+                            className="flex-1 min-w-0 text-left p-3.5 text-xs flex flex-col gap-1"
+                          >
+                            {content}
+                          </button>
+                        ) : (
+                          <div className="flex-1 min-w-0 p-3.5 text-xs flex flex-col gap-1">
+                            {content}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => handleDeleteOne(n)}
+                          disabled={deletingId === n.id}
+                          aria-label="Delete notification"
+                          title="Delete notification"
+                          className="shrink-0 mt-2.5 mr-2 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     );
                   })}
@@ -645,7 +652,7 @@ export function TopNav() {
                   )}
                   {(allNotifications?.length ?? 0) >= notificationLimit && (
                     <button
-                      onClick={() => setNotificationLimit(n => n + 50)}
+                      onClick={() => setNotificationLimit(n => n + DEFAULT_NOTIFICATION_LIMIT)}
                       disabled={fetchingNotifications}
                       className="w-full p-3 text-[11px] font-bold text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-60"
                     >

@@ -1,23 +1,20 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useProfiles, useNotifications, hrActions, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
-import { getSessionEmail } from '@/lib/session';
+import React, { useEffect } from 'react';
+import { useProfiles, hrActions, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { TeamChatView } from '@/components/ui/lazy';
+import { useHrAdminLineNotifications } from '@/lib/hr/notifications';
+import { useSessionEmail } from '@/lib/useSession';
 
 // See the identical comment block in hr/hr-admin/page.tsx — same fixed
 // synthetic single-channel team, same deliberate avoidance of
-// useAllMessages() for the sidebar dot.
+// the sidebar dot's activity feed.
 const HR_ADMIN_TEAMS = [{ id: HR_ADMIN_LINE_TEAM_ID, name: 'HR & Admin', members: [] as string[] }];
 
 export default function AdminHrAdminPage() {
   const { data: allProfiles = [] } = useProfiles();
-  const { data: allNotifications = [] } = useNotifications();
-  const [adminEmail, setAdminEmail] = useState('');
-
-  useEffect(() => {
-    setAdminEmail(getSessionEmail() || '');
-  }, []);
+  const { data: allNotifications = [] } = useHrAdminLineNotifications();
+  const adminEmail = useSessionEmail() || '';
 
   useEffect(() => {
     if (!adminEmail) return;

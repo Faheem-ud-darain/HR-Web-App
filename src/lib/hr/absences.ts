@@ -16,17 +16,18 @@ import {
   countAbsentWeekdays, detectAbsences, describeAbsence, findWeekendAbsenceRecords, findPreJoinAbsenceRecords,
 } from '../core/absences';
 import type { AbsenceRecord, MyAbsenceRecord, InactivityLog, Profile, TimesheetEntry, LeaveApplication } from './types';
-import { pbList, pbCreate, pbUpdate, pbDelete, formatMoney } from './shared';
+import { pbList, pbCreate, pbUpdate, formatMoney } from './shared';
 import { hrActions, fetchTimesheetsFresh, displayName } from '../hrData';
 
 export { countAbsentWeekdays };
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
+import type { PbRow } from '@/lib/pbTypes';
 
 // Columns toAbsenceRecord reads — keeps each fetched row small.
 const ABSENCE_FIELDS = 'id,employeeEmail,employeeName,date,reason,inactivityMinutes,workedMinutes,deductionAmount,createdAt,created,acknowledged,deleted,deletedAt';
 
-function toAbsenceRecord(r: any): AbsenceRecord {
+function toAbsenceRecord(r: PbRow): AbsenceRecord {
   return {
     id: r.id, employeeEmail: r.employeeEmail, employeeName: r.employeeName, date: r.date,
     reason: r.reason, inactivityMinutes: r.inactivityMinutes || undefined, workedMinutes: r.workedMinutes || undefined,
@@ -291,7 +292,7 @@ export const absenceActions = {
       fields: 'id,employee_email,start_at,end_at,duration_seconds,device_label',
       ...(filterParts.length ? { filter: filterParts.join(' && ') } : {}),
     });
-    let logs: InactivityLog[] = records.map((r: any) => ({
+    let logs: InactivityLog[] = records.map((r: PbRow) => ({
       id: r.id,
       employeeEmail: r.employee_email,
       startAt: r.start_at,

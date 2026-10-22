@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Profile, changeOwnPassword } from '@/lib/hrData';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
+import { errMsg } from '@/lib/errors';
 
 interface ForcedPasswordChangeModalProps {
   profile: Profile | null | undefined;
@@ -66,8 +67,8 @@ export function ForcedPasswordChangeModal({ profile, onChanged }: ForcedPassword
       setNewPass('');
       setConfirmPass('');
       onChanged();
-    } catch (err: any) {
-      setError(err?.message || 'Could not update your password. Please try again.');
+    } catch (err) {
+      setError(errMsg(err, 'Could not update your password. Please try again.'));
     } finally {
       setSaving(false);
     }

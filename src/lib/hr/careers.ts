@@ -12,8 +12,9 @@ import { getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import type { CareerPosition, CareerApplicationStatus, CareerApplication } from './types';
 import { pbList, pbCreate, pbDelete } from './shared';
+import type { PbRow } from '@/lib/pbTypes';
 
-function toCareer(c: any): CareerPosition {
+function toCareer(c: PbRow): CareerPosition {
   return { id: c.id, title: c.title, department: c.department, location: c.location, description: c.description, requirements: c.requirements || [] };
 }
 
@@ -46,7 +47,7 @@ export async function updateApplicationStatusAdmin(id: string, status: CareerApp
   }
 }
 
-export async function getCareerApplicationsForEmailAdmin(email: string): Promise<any[]> {
+export async function getCareerApplicationsForEmailAdmin(email: string): Promise<PbRow[]> {
   const token = getAuthToken();
   if (!token) return [];
   try {

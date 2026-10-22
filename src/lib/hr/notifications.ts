@@ -13,11 +13,13 @@ import type {
   Announcement, Profile, MaintenanceNotice, NotificationCategory,
   NotificationPrefs, Notification, NotificationReadMap,
 } from './types';
-import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField } from './shared';
+import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField, type ReadScope } from './shared';
 import { hrActions } from '../hrData';
 import { POLL_MS, POLL_OPTIONS } from './polling';
 import { getSessionEmail, getSessionRole } from '../session';
 import { pbFilter } from '../pbFilter';
+import { every } from '../idle';
+import type { PbRow } from '@/lib/pbTypes';
 
 // Shared "does this announcement apply to this person" check — the exact
 // targeting rule employee/page.tsx's dashboard feed widget already used
@@ -40,7 +42,7 @@ export function isAnnouncementForProfile(ann: Announcement, profile: Profile | n
 // row per notice) instead of one array-blob row; hr_maintenance_notice_reads
 // is a read-receipt collection (see shared.ts's pbGetReadMap/pbMarkRead)
 // instead of one shared map row.
-function toMaintenanceNotice(m: any): MaintenanceNotice {
+function toMaintenanceNotice(m: PbRow): MaintenanceNotice {
   return { id: m.id, title: m.title, message: m.message, startAt: m.start_at, endAt: m.end_at, createdBy: m.created_by, createdAt: m.created };
 }
 type MaintenanceNoticeReadMap = Record<string, string[]>;
@@ -101,11 +103,11 @@ export function buildNotificationLink(role: string, kind: 'ticket' | 'leave' | '
   return `${chatPath}?teamId=${id}`;
 }
 
-function toNotification(n: any): Notification {
+function toNotification(n: PbRow): Notification {
   return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, created: n.created, read: !!n.read, link: n.link || undefined, category: n.category || undefined };
 }
 
-function toAnnouncement(a: any): Announcement {
+function toAnnouncement(a: PbRow): Announcement {
   return { id: a.id, title: a.title, content: a.content, timestamp: a.timestamp, createdBy: a.created_by, target: a.target || a.target_role || 'all', important: !!a.pinned };
 }
 
@@ -113,8 +115,15 @@ function toAnnouncement(a: any): Announcement {
 // broadcast to their role (see TopNav's own filter), so ask the server for just
 // those instead of the whole table's latest rows and filtering client-side —
 // which also stops other people's traffic from pushing your own older
-// notifications out of the page. `limit` is the page size ("Load older" raises it).
-export const DEFAULT_NOTIFICATION_LIMIT = 50;
+// notifications out of the page. The bell starts with the latest 10 and its
+// "Load older" button asks for 10 more each time (`limit` is the page size).
+export const DEFAULT_NOTIFICATION_LIMIT = 10;
+
+function notificationScopeFilter(email: string | null, role: string | null): string | undefined {
+  return email && role
+    ? pbFilter('recipient_email = {:email} || (recipient_role = {:role} && recipient_email = "all")', { email, role })
+    : undefined;
+}
 
 export function useNotifications(limit: number = DEFAULT_NOTIFICATION_LIMIT) {
   const email = getSessionEmail();
@@ -123,9 +132,7 @@ export function useNotifications(limit: number = DEFAULT_NOTIFICATION_LIMIT) {
     queryKey: ['hr_notifications', (email || '').toLowerCase(), role || '', limit],
     queryFn: async () => {
       try {
-        const filter = email && role
-          ? pbFilter('recipient_email = {:email} || (recipient_role = {:role} && recipient_email = "all")', { email, role })
-          : undefined;
+        const filter = notificationScopeFilter(email, role);
         const res = await pb.collection('hr_notifications').getList(1, limit, { sort: '-created', requestKey: null, ...(filter ? { filter } : {}) });
         return res.items.map(toNotification);
       } catch (err) {
@@ -133,7 +140,36 @@ export function useNotifications(limit: number = DEFAULT_NOTIFICATION_LIMIT) {
         return [];
       }
     },
-    refetchInterval: POLL_MS.notifications,
+    // Keep showing the current page while a bigger one ("Load older") loads,
+    // instead of flashing an empty list.
+    placeholderData: (previous) => previous,
+    refetchInterval: every(POLL_MS.notifications),
+    ...POLL_OPTIONS,
+  });
+}
+
+// The HR & Admin line's "unseen" nav dot only needs that one category, but it
+// used to ride on the bell's general feed. Now that the bell loads just 10, it
+// gets its own small query (HR/Admin only) so the dot can't miss an older
+// message and employees don't fetch anything extra.
+export function useHrAdminLineNotifications(options: { enabled?: boolean } = {}) {
+  const email = getSessionEmail();
+  const role = getSessionRole();
+  return useQuery({
+    enabled: (options.enabled ?? true) && !!email && (role === 'hr' || role === 'admin'),
+    queryKey: ['hr_notifications', 'hr_admin_line', (email || '').toLowerCase(), role || ''],
+    queryFn: async () => {
+      try {
+        const scope = notificationScopeFilter(email, role);
+        const filter = scope ? `(${scope}) && category = "hr_admin_line"` : 'category = "hr_admin_line"';
+        const res = await pb.collection('hr_notifications').getList(1, 50, { sort: '-created', requestKey: null, filter });
+        return res.items.map(toNotification);
+      } catch (err) {
+        console.error('[hrData] getList error in hr_admin_line notifications:', err);
+        return [];
+      }
+    },
+    refetchInterval: every(POLL_MS.notifications),
     ...POLL_OPTIONS,
   });
 }
@@ -143,7 +179,7 @@ export function useAnnouncements(options: { enabled?: boolean } = {}) {
     enabled: options.enabled ?? true,
     queryKey: ['hr_announcements'],
     queryFn: async () => (await pbList('hr_announcements', { sort: '-created' })).map(toAnnouncement),
-    refetchInterval: POLL_MS.announcements,
+    refetchInterval: every(POLL_MS.announcements),
     ...POLL_OPTIONS,
   });
 }
@@ -152,7 +188,7 @@ export function useMaintenanceNotices() {
   return useQuery({
     queryKey: ['hr_maintenance_notices'],
     queryFn: () => hrActions.getMaintenanceNotices(),
-    refetchInterval: POLL_MS.maintenanceNotices,
+    refetchInterval: every(POLL_MS.maintenanceNotices),
     ...POLL_OPTIONS,
   });
 }
@@ -214,11 +250,31 @@ export const notificationActions = {
   },
   isNotificationCleared: (n: Notification, email: string, clearedMap: NotificationClearedMap): boolean =>
     (clearedMap[n.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
+  // "Delete" a notification for this user. A notification addressed to them
+  // personally is removed for real (it's theirs alone — this also keeps the
+  // table from growing forever); a role broadcast ("all") is shared, so it is
+  // only dismissed for this user via the per-user cleared list. If a real
+  // delete is refused, it falls back to the same per-user dismissal so the
+  // notification still disappears for them.
+  deleteNotificationFor: async (n: Notification, email: string, role: string): Promise<void> => {
+    await hrActions.deleteNotificationsFor([n], email, role);
+  },
+  deleteNotificationsFor: async (notifications: Notification[], email: string, role: string): Promise<void> => {
+    const lower = email.toLowerCase();
+    const personal = notifications.filter(n => n.recipientEmail.toLowerCase() === lower);
+    const broadcasts = notifications.filter(n => n.recipientEmail === 'all' && n.recipientRole === role);
+    const toDismiss = broadcasts.map(n => n.id);
+    await Promise.all(personal.map(async n => {
+      try { await pbDelete('hr_notifications', n.id); } catch { toDismiss.push(n.id); }
+    }));
+    if (broadcasts.length > 0) {
+      // Read too, so a dismissed broadcast can't keep the unread dot lit.
+      await pbMarkIdsInField('hr_notification_reads', 'read_ids', broadcasts.map(n => n.id), email);
+    }
+    if (toDismiss.length > 0) await pbMarkIdsInField('hr_notification_cleared', 'cleared_ids', toDismiss, email);
+  },
   clearAllNotificationsFor: async (notifications: Notification[], email: string, role: string): Promise<void> => {
-    await hrActions.markNotificationsAsRead(notifications, email, role);
-    const visible = notifications.filter(n => n.recipientEmail.toLowerCase() === email.toLowerCase() || (n.recipientEmail === 'all' && n.recipientRole === role));
-    if (visible.length === 0) return;
-    await pbMarkIdsInField('hr_notification_cleared', 'cleared_ids', visible.map(n => n.id), email);
+    await hrActions.deleteNotificationsFor(notifications, email, role);
   },
 
   // ── Push notification preferences (hr_notification_prefs_v1) ───────────
@@ -247,7 +303,7 @@ export const notificationActions = {
       target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
       timestamp: formatTimeNY(new Date()) + ' ' + formatDateNY(new Date()),
     }),
-  getAnnouncementReadMap: (): Promise<AnnouncementReadMap> => pbGetIdSetMap('hr_announcement_reads', 'read_ids'),
+  getAnnouncementReadMap: (scope: ReadScope = 'own'): Promise<AnnouncementReadMap> => pbGetIdSetMap('hr_announcement_reads', 'read_ids', scope),
   isAnnouncementRead: (ann: Announcement, email: string, readMap: AnnouncementReadMap): boolean =>
     (readMap[ann.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),
   // Explicit "I acknowledge this" action for AnnouncementPopup's blocking

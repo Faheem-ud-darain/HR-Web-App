@@ -19,6 +19,8 @@ import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { daysAgoNYDateString } from '@/lib/timezone';
 import { Input } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { useNow } from '@/lib/useNow';
+import { useQuery } from '@tanstack/react-query';
 
 
 interface AbsenceDetailsViewProps {
@@ -37,10 +39,12 @@ type AttendanceDayRow = {
   leaveType?: LeaveApplication['type'];
 };
 
+// A stable empty list (a fresh `[]` each render would defeat the memos that depend on it).
+const NO_ABSENCES: AbsenceRecord[] = [];
+
 export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProps) {
+  const now = useNow(); // for still-open shifts' running length (see lib/useNow.ts)
   const [activeTab, setActiveTab] = useState<'attendance' | 'absences'>('attendance');
-  const [absenceRecords, setAbsenceRecords] = useState<AbsenceRecord[]>([]);
-  const [loadingAbsences, setLoadingAbsences] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [pendingDeleteRecord, setPendingDeleteRecord] = useState<AbsenceRecord | null>(null);
@@ -72,16 +76,25 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const [selectedEmployeeAttendanceEmail, setSelectedEmployeeAttendanceEmail] = useState<string | null>(null);
   const [selectedEmployeeAbsencesEmail, setSelectedEmployeeAbsencesEmail] = useState<string | null>(null);
 
-  const loadAbsenceRecords = () => {
-    hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(historyDays), email: ownEmail }).then(all => {
-      setAbsenceRecords([...all].sort((a, b) => b.date.localeCompare(a.date)));
-      setLoadingAbsences(false);
-    });
-  };
+  // Absence records for the chosen history window (an employee's own page asks the server
+  // for just their own). Newest first.
+  const { data: fetchedAbsences, isLoading: loadingAbsences, refetch: refetchAbsences } = useQuery({
+    queryKey: ['absence_details_records', historyDays, ownEmail ?? 'all'],
+    queryFn: async () => {
+      const all = await hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(historyDays), email: ownEmail });
+      return [...all].sort((a, b) => b.date.localeCompare(a.date));
+    },
+  });
+  const absenceRecords: AbsenceRecord[] = fetchedAbsences ?? NO_ABSENCES;
+  const loadAbsenceRecords = () => { void refetchAbsences(); };
 
-  useEffect(() => {
-    loadAbsenceRecords();
-  }, [role, filterEmail, historyDays]);
+  // Filter absence records by date and query
+  const filteredAbsences = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return absenceRecords.filter(a =>
+      (!selectedDate || a.date === selectedDate) &&
+      (!q || a.employeeName.toLowerCase().includes(q) || a.employeeEmail.toLowerCase().includes(q)));
+  }, [absenceRecords, selectedDate, searchQuery]);
 
   const handleDeleteAbsenceRecord = (record: AbsenceRecord) => {
     // Never allow deleting an absence record that is actually an approved leave day —
@@ -188,7 +201,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         shiftMins = h * 60 + m;
       } else if (t.clockIn) {
         const start = new Date(t.clockIn).getTime();
-        const end = t.clockOut ? new Date(t.clockOut).getTime() : Date.now();
+        const end = t.clockOut ? new Date(t.clockOut).getTime() : (now || start);
         shiftMins = Math.max(0, Math.floor((end - start) / 60000));
       }
 
@@ -248,20 +261,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     }
 
     return Array.from(groupedMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-  }, [allTimesheets, allProfiles, leaves, role, filterEmail, selectedDate, searchQuery]);
-
-  // Filter absence records by date and query
-  const filteredAbsences = useMemo(() => {
-    let list = absenceRecords;
-    if (selectedDate) {
-      list = list.filter(a => a.date === selectedDate);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(a => a.employeeName.toLowerCase().includes(q) || a.employeeEmail.toLowerCase().includes(q));
-    }
-    return list;
-  }, [absenceRecords, selectedDate, searchQuery]);
+  }, [allTimesheets, allProfiles, leaves, role, filterEmail, selectedDate, searchQuery, now]);
 
   // A record whose date turned out to be covered by an approved leave
   // (approved after runAbsenceCheck already scanned it, see
@@ -311,7 +311,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
   const { page: absencePage, setPage: setAbsencePage, totalPages: absenceTotalPages, pageItems: absencePageItems } = usePagination(filteredAbsences, 25);
   const { page: summaryPage, setPage: setSummaryPage, totalPages: summaryTotalPages, pageItems: summaryPageItems } = usePagination(employeeAbsenceSummaries, 25);
-  useEffect(() => { setAbsencePage(1); setSummaryPage(1); }, [selectedDate, searchQuery]);
+  useEffect(() => { setAbsencePage(1); setSummaryPage(1); }, [selectedDate, searchQuery, setAbsencePage, setSummaryPage]);
 
   const selectedEmployeeAttendance = selectedEmployeeAttendanceEmail
     ? employeeAttendanceSummaries.find(e => e.employeeEmail.toLowerCase() === selectedEmployeeAttendanceEmail.toLowerCase()) || null

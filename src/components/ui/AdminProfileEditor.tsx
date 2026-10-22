@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -8,7 +8,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select } from '@/components/ui/Input';
 import { useProfiles, updateProfileAdmin } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { getSessionEmail } from '@/lib/session';
+import { useSessionEmail } from '@/lib/useSession';
 
 // "Edit System Profiles" — lets the admin edit their own profile or the shared
 // hr@ system account's name, gender and title. Renders its own trigger button
@@ -24,23 +24,26 @@ export function AdminProfileEditor() {
   const [editTitle, setEditTitle] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const [email, setEmail] = useState<string | null>(null);
-  useEffect(() => {
-    setEmail(getSessionEmail());
-  }, []);
+  const email = useSessionEmail();
 
   const profile = employees.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase()) || null;
   const hrProfile = employees.find(e => e.email && e.email.toLowerCase() === 'hr@delcargo.us') || null;
 
-  // Update Edit inputs when target changes
-  useEffect(() => {
-    const target = targetEmail === 'admin@delcargo.us' ? profile : hrProfile;
+  // Fill the edit form from the profile being edited — whenever that profile's own
+  // details change (not merely when the roster list is re-fetched, which would wipe
+  // what's being typed). Adjusting state while rendering is React's way of resetting
+  // state from props.
+  const target = targetEmail === 'admin@delcargo.us' ? profile : hrProfile;
+  const targetKey = target ? [target.id, target.fullName, target.gender, target.jobTitle].join('|') : '';
+  const [seededFrom, setSeededFrom] = useState('');
+  if (targetKey !== seededFrom) {
+    setSeededFrom(targetKey);
     if (target) {
       setEditName(target.fullName);
       setEditGender(target.gender === 'female' ? 'female' : 'male');
       setEditTitle(target.jobTitle || '');
     }
-  }, [targetEmail, profile, hrProfile]);
+  }
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +114,7 @@ export function AdminProfileEditor() {
           <FormField label="Gender" size="md">
             <Select
               value={editGender}
-              onChange={e => setEditGender(e.target.value as any)}
+              onChange={e => setEditGender(e.target.value as Parameters<typeof setEditGender>[0])}
               fieldSize="md"
             >
               <option value="male">Male</option>

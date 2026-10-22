@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch } from '@/lib/pbAdmin';
 import { parseLeaveDateStrings } from '@/lib/core/leaves';
+import { errMsg } from '@/lib/errors';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -212,7 +214,7 @@ const PHASE_3_PREEXISTING_COLLECTIONS = [
   'hr_notification_prefs',
 ];
 
-const PHASE_3_OTHER_COLLECTIONS: Array<{ name: string; schema: any[]; indexes: string[] }> = [
+const PHASE_3_OTHER_COLLECTIONS: Array<{ name: string; schema: PbRow[]; indexes: string[] }> = [
   {
     name: 'hr_maintenance_notices',
     schema: [
@@ -295,7 +297,7 @@ async function ensurePhase3Collections(): Promise<Record<string, string>> {
 // that exact collection name. Moving those keys requires a coordinated
 // agent-side code change AND a rollout to every already-running desktop
 // agent — done in its own dedicated pass, not bundled in here.
-const PHASE_4_COLLECTIONS: Array<{ name: string; schema: any[]; indexes: string[] }> = [
+const PHASE_4_COLLECTIONS: Array<{ name: string; schema: PbRow[]; indexes: string[] }> = [
   {
     name: 'hr_typing_indicators',
     schema: [
@@ -461,7 +463,7 @@ export async function POST(request: Request) {
   const { error } = await requireAdmin(request);
   if (error) return error;
 
-  let body: Record<string, any> = {};
+  let body: PbRow = {};
   try {
     body = await request.json();
   } catch {
@@ -543,17 +545,17 @@ export async function POST(request: Request) {
         : body.action === 'describePhase5Collections'
         ? PHASE_5_COLLECTIONS.map(c => c.name)
         : ['hr_tracker_signals'];
-      const results: Record<string, any> = {};
+      const results: PbRow = {};
       for (const name of names) {
         try {
           const schema = await pbAdminFetch(`/api/collections/${name}`);
           results[name] = {
-            fields: (schema?.schema || []).map((f: any) => ({ name: f.name, type: f.type, unique: f.unique, required: f.required })),
+            fields: (schema?.schema || []).map((f: PbRow) => ({ name: f.name, type: f.type, unique: f.unique, required: f.required })),
             indexes: schema?.indexes || [],
             listRule: schema?.listRule,
           };
-        } catch (err: any) {
-          results[name] = { error: String(err?.message || err) };
+        } catch (err) {
+          results[name] = { error: errMsg(err, String(err)) };
         }
       }
       return NextResponse.json({ ok: true, results });
@@ -570,7 +572,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         collection: name,
-        fields: (schema?.schema || []).map((f: any) => ({ name: f.name, type: f.type, unique: f.unique, required: f.required, options: f.options })),
+        fields: (schema?.schema || []).map((f: PbRow) => ({ name: f.name, type: f.type, unique: f.unique, required: f.required, options: f.options })),
         indexes: schema?.indexes || [],
         listRule: schema?.listRule,
         updateRule: schema?.updateRule,
@@ -627,14 +629,14 @@ export async function POST(request: Request) {
         `/api/collections/hr_delcargo_store/records?perPage=200&filter=${encodeURIComponent('key ~ "hr_profile_extra_"')}`
       );
       const allProfiles = await pbAdminFetch('/api/collections/hr_profiles/records?perPage=200&fields=id');
-      const profileIds = new Set<string>((allProfiles?.items || []).map((p: any) => p.id));
+      const profileIds = new Set<string>((allProfiles?.items || []).map((p: PbRow) => p.id));
       const allExtras = await pbAdminFetch('/api/collections/hr_profile_extras/records?perPage=200');
-      const extrasByProfileId = new Map<string, any>();
+      const extrasByProfileId = new Map<string, PbRow>();
       for (const rec of allExtras?.items || []) {
         if (rec.profile_id) extrasByProfileId.set(rec.profile_id, rec);
       }
 
-      const results: Array<Record<string, any>> = [];
+      const results: Array<PbRow> = [];
       for (const row of kvRows?.items || []) {
         const profileId = String(row.key || '').replace(/^hr_profile_extra_/, '');
         if (!profileId) continue;
@@ -646,7 +648,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        let kvData: Record<string, any> = {};
+        let kvData: PbRow = {};
         try {
           kvData = typeof row.value === 'string' ? JSON.parse(row.value) : (row.value || {});
         } catch {
@@ -692,7 +694,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'body.collection and body.field ({ name, type, ... }) are required.' }, { status: 400 });
       }
       const existing = await pbAdminFetch(`/api/collections/${name}`);
-      const already = (existing.schema || []).some((f: any) => f.name === field.name);
+      const already = (existing.schema || []).some((f: PbRow) => f.name === field.name);
       if (already) {
         return NextResponse.json({ ok: true, collection: name, field: field.name, result: 'already exists' });
       }
@@ -725,10 +727,10 @@ export async function POST(request: Request) {
       // fields or rows. Run backfillLeaveDates afterwards to fill old rows.
       const results: Record<string, string> = {};
       const existing = await pbAdminFetch('/api/collections/hr_leaves');
-      let schema: any[] = existing.schema || [];
+      let schema: PbRow[] = existing.schema || [];
       let changed = false;
       for (const name of ['start_date', 'end_date']) {
-        if (schema.some((f: any) => f.name === name)) { results[name] = 'already exists'; continue; }
+        if (schema.some((f: PbRow) => f.name === name)) { results[name] = 'already exists'; continue; }
         schema = [...schema, { name, type: 'text', required: false, unique: false, options: { min: null, max: 10, pattern: '' } }];
         results[name] = 'added';
         changed = true;
@@ -737,6 +739,156 @@ export async function POST(request: Request) {
         await pbAdminFetch(`/api/collections/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ schema }) });
       }
       return NextResponse.json({ ok: true, results });
+    }
+    if (body.action === 'ensureActivityCollections') {
+      // Creates the two tiny tables behind the navigation "unseen activity" dots
+      // (see src/lib/core/activity.ts):
+      //   hr_activity       one row per scope; each new event OVERWRITES it
+      //   hr_activity_seen  one row per person: what they last looked at
+      // Additive only. Defaults to a dry run — pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const text = (name: string, required = false) => ({ name, type: 'text', required, unique: false, options: { min: null, max: null, pattern: '' } });
+      const wanted = [
+        {
+          name: 'hr_activity',
+          schema: [{ ...text('scope', true), unique: true }, text('actor'), text('at')],
+          indexes: ['CREATE UNIQUE INDEX idx_hr_activity_scope ON hr_activity (scope)'],
+        },
+        {
+          name: 'hr_activity_seen',
+          schema: [{ ...text('email', true), unique: true }, { name: 'seen', type: 'json', required: false, unique: false, options: { maxSize: 20000 } }],
+          indexes: ['CREATE UNIQUE INDEX idx_hr_activity_seen_email ON hr_activity_seen (email)'],
+        },
+      ];
+      const results: Record<string, string> = {};
+      for (const { name, schema, indexes } of wanted) {
+        if (await collectionExists(name)) { results[name] = 'already exists'; continue; }
+        if (!dryRun) {
+          await pbAdminFetch('/api/collections', {
+            method: 'POST',
+            // Same open read/write rules as the app's other state tables (the browser talks to
+            // PocketBase directly); deleting stays admin-only.
+            body: JSON.stringify({ name, type: 'base', schema, indexes, listRule: '', viewRule: '', createRule: '', updateRule: '', deleteRule: null }),
+          });
+        }
+        results[name] = dryRun ? 'would create' : 'created';
+      }
+      return NextResponse.json({ ok: true, dryRun, results });
+    }
+    if (body.action === 'deleteActivityRows') {
+      // Maintenance helper for the two dot tables ONLY (their delete rule is admin-only on
+      // purpose, so the browser can't wipe them): removes the rows matching `filter`.
+      // Refuses any other collection and refuses an empty filter.
+      const name = body.collection;
+      if (name !== 'hr_activity' && name !== 'hr_activity_seen') {
+        return NextResponse.json({ error: 'Only hr_activity and hr_activity_seen are allowed.' }, { status: 400 });
+      }
+      if (typeof body.filter !== 'string' || !body.filter.trim()) {
+        return NextResponse.json({ error: 'A non-empty filter is required.' }, { status: 400 });
+      }
+      const found = await pbAdminFetch(`/api/collections/${name}/records?perPage=100&fields=id&filter=${encodeURIComponent(body.filter)}`);
+      const ids: string[] = (found?.items || []).map((r: PbRow) => r.id);
+      for (const id of ids) await pbAdminFetch(`/api/collections/${name}/records/${id}`, { method: 'DELETE' });
+      return NextResponse.json({ ok: true, deleted: ids.length });
+    }
+    if (body.action === 'previewRetention') {
+      // READ-ONLY. Reports how many rows each rule in pb_hooks/retention_cleanup.pb.js
+      // would delete right now (the hook itself caps each table per night). Keep the
+      // collections/filters here in sync with that file.
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const cutoff = (days: number) => new Date(Date.now() - days * DAY_MS).toISOString().replace('T', ' ');
+      const rules = [
+        { collection: 'hr_notifications', field: 'created', days: 60 },
+        { collection: 'hr_typing_indicators', field: 'updated', days: 1 },
+        { collection: 'hr_rate_limits', field: 'updated', days: 2 },
+      ];
+      const results: Array<{ collection: string; rule: string; wouldDelete: number | string; total: number | string }> = [];
+      for (const r of rules) {
+        try {
+          const old = await pbAdminFetch(`/api/collections/${r.collection}/records?perPage=1&fields=id&filter=${encodeURIComponent(`${r.field} < "${cutoff(r.days)}"`)}`);
+          const all = await pbAdminFetch(`/api/collections/${r.collection}/records?perPage=1&fields=id`);
+          results.push({ collection: r.collection, rule: `${r.field} older than ${r.days} day(s)`, wouldDelete: old?.totalItems ?? 0, total: all?.totalItems ?? 0 });
+        } catch (err) {
+          results.push({ collection: r.collection, rule: `${r.field} older than ${r.days} day(s)`, wouldDelete: `error: ${errMsg(err, String(err)).slice(0, 80)}`, total: '?' });
+        }
+      }
+      return NextResponse.json({ ok: true, results });
+    }
+    if (body.action === 'ensurePerformanceIndexes') {
+      // Adds plain (non-unique) indexes for the filters/sorts the app actually
+      // runs against its biggest, most-polled tables. Purely additive and
+      // idempotent: an index that already exists (by name) is left alone, a
+      // column that doesn't exist is skipped and reported, nothing is ever
+      // dropped, and no row data is touched. Defaults to a dry run — pass
+      // { dryRun: false } to apply.
+      const dryRun = body.dryRun !== false;
+      const wanted: Array<{ collection: string; columns: string[] }> = [
+        // Notifications are polled every 30s per open tab:
+        //   recipient_email = X || (recipient_role = R && recipient_email = "all") ORDER BY created DESC
+        { collection: 'hr_notifications', columns: ['recipient_email', 'created'] },
+        { collection: 'hr_notifications', columns: ['recipient_role', 'recipient_email'] },
+        // clock_out = "" || date >= {cutoff} ORDER BY created DESC
+        { collection: 'hr_timesheets', columns: ['clock_out'] },
+        { collection: 'hr_timesheets', columns: ['date'] },
+        { collection: 'hr_timesheets', columns: ['employee_id', 'date'] },
+        // status = "pending" || ... || end_date >= {cutoff}; employee_name = {name}
+        { collection: 'hr_leaves', columns: ['status'] },
+        { collection: 'hr_leaves', columns: ['end_date'] },
+        { collection: 'hr_leaves', columns: ['employee_name'] },
+        // status != "done" || created >= {cutoff}; assigned_email filters
+        { collection: 'hr_tasks', columns: ['assigned_email', 'status'] },
+        { collection: 'hr_tasks', columns: ['status', 'created'] },
+        { collection: 'hr_tickets', columns: ['status', 'created'] },
+        { collection: 'hr_tickets', columns: ['employee_email'] },
+        // deleted = false && date >= {since}
+        { collection: 'hr_absence_records', columns: ['date'] },
+        { collection: 'hr_profiles', columns: ['email'] },
+        // Legacy KV lookups by key (still used for a few settings)
+        { collection: 'hr_delcargo_store', columns: ['key'] },
+        // Read-state lookups are now scoped to one person (email = X) on every screen.
+        { collection: 'hr_notification_reads', columns: ['email'] },
+        { collection: 'hr_notification_cleared', columns: ['email'] },
+        { collection: 'hr_announcement_reads', columns: ['email'] },
+        { collection: 'hr_message_reads', columns: ['email'] },
+        { collection: 'hr_maintenance_notice_reads', columns: ['email'] },
+        // Chat receipts / maintenance reads are looked up by message/notice id.
+        { collection: 'hr_maintenance_notice_reads', columns: ['entity_id'] },
+      ];
+      const systemColumns = new Set(['id', 'created', 'updated']);
+      const byCollection = new Map<string, typeof wanted>();
+      for (const w of wanted) byCollection.set(w.collection, [...(byCollection.get(w.collection) || []), w]);
+      const results: Array<{ collection: string; index: string; result: string }> = [];
+      for (const [collection, items] of byCollection) {
+        let existing: PbRow;
+        try { existing = await pbAdminFetch(`/api/collections/${collection}`); }
+        catch { items.forEach(i => results.push({ collection, index: i.columns.join('+'), result: 'skipped: collection not found' })); continue; }
+        const fieldNames = new Set<string>((existing.schema || []).map((f: PbRow) => f.name));
+        const indexes: string[] = [...(existing.indexes || [])];
+        let changed = false;
+        for (const { columns } of items) {
+          const name = `idx_${collection}_${columns.join('_')}`;
+          const label = columns.join('+');
+          const missing = columns.filter(c => !fieldNames.has(c) && !systemColumns.has(c));
+          if (missing.length) { results.push({ collection, index: label, result: `skipped: no such column ${missing.join(',')}` }); continue; }
+          // Already covered by ANY existing index on exactly these columns (unique
+          // ones included, whatever they're named) — don't add a redundant twin.
+          const coveredBy = indexes.find(sql => {
+            if (sql.includes('`' + name + '`') || sql.includes(` ${name} `)) return true;
+            const cols = /ON\s+`?[\w]+`?\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/i.exec(sql)?.[1];
+            if (!cols) return false;
+            const normalized = cols.split(',').map(c => c.replace(/LOWER\(|\)|`|"/gi, '').trim().toLowerCase());
+            return normalized.length === columns.length && normalized.every((c, i) => c === columns[i].toLowerCase());
+          });
+          if (coveredBy) { results.push({ collection, index: label, result: 'already exists' }); continue; }
+          indexes.push(`CREATE INDEX \`${name}\` ON \`${collection}\` (${columns.map(c => '`' + c + '`').join(', ')})`);
+          results.push({ collection, index: label, result: dryRun ? 'would add' : 'added' });
+          changed = true;
+        }
+        if (changed && !dryRun) {
+          await pbAdminFetch(`/api/collections/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ indexes }) });
+        }
+      }
+      return NextResponse.json({ ok: true, dryRun, results });
     }
     if (body.action === 'backfillLeaveDates') {
       // Fills start_date / end_date on hr_leaves rows that don't have them yet by
@@ -749,7 +901,7 @@ export async function POST(request: Request) {
       const unparseable: Array<{ id: string; duration: string }> = [];
       for (let page = 1; page < 50; page++) {
         const res = await pbAdminFetch(`/api/collections/hr_leaves/records?perPage=200&page=${page}&filter=${filter}&fields=id,duration,start_date,end_date`);
-        const items: any[] = res?.items || [];
+        const items: PbRow[] = res?.items || [];
         for (const r of items) {
           const range = parseLeaveDateStrings(r.duration || '');
           if (range) updates.push({ id: r.id, duration: r.duration, start: range.start, end: range.end });
@@ -768,8 +920,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, dryRun, toUpdate: updates.length, unparseable, sample: updates.slice(0, 8) });
     }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/schema-migration] error:', err);
-    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 });
+    return NextResponse.json({ error: errMsg(err, String(err)) }, { status: 500 });
   }
 }

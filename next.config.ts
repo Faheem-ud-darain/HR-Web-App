@@ -94,9 +94,26 @@ const nextConfig: NextConfig = {
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      // No plugins/embeds anywhere in this app.
+      "object-src 'none'",
+      // Production only: browsers upgrade any stray http:// subresource to
+      // https://, but that would also rewrite http://localhost in dev.
+      ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
     ].join('; ');
 
+    // HTTP caching for files served from /public. Next already makes the
+    // hashed /_next/static bundles immutable, but public/ files keep their
+    // names, so by default browsers re-validate every one on every page load
+    // (max-age=0). Images/icons get a week plus a day of stale-while-
+    // revalidate — short enough that a replaced logo shows up within days.
+    const publicAssetCache = [
+      { key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' },
+    ];
+
     return [
+      { source: '/:all*(png|jpg|jpeg|webp|svg|ico|gif|avif)', headers: publicAssetCache },
+      // A service worker must always be re-checked for updates.
+      { source: '/OneSignalSDKWorker.js', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
       {
         source: '/:path*',
         headers: [
@@ -104,6 +121,19 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Browsers only ever use HTTPS for this host for a year after seeing
+          // this. Deliberately NOT includeSubDomains/preload: other
+          // *.delcargo.us hosts aren't this app's to commit to HTTPS-only.
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+          // Web features this app does not use are switched off outright;
+          // geolocation stays on for the app itself (web fallback of the
+          // geofence clock-in, see lib/backgroundGeolocation.ts).
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self), payment=(), usb=(), serial=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), interest-cohort=()' },
+          // Isolates this app's window from pages that open it, while still
+          // letting it open the Google sign-in popup and talk to it
+          // (GoogleIntegrationCard) — plain `same-origin` would sever that.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+          { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
         ],
       },
     ];

@@ -285,7 +285,7 @@ export interface TrackerStopCommand {
 
 export interface TrackerCommand {
   employeeEmail: string;
-  type: 'diagnostics' | 'reload_settings';
+  type: 'diagnostics' | 'reload_settings' | 'reconnect' | 'restart';
   issuedAt: string; // ISO — agent ignores commands older than ~60s
 }
 
@@ -307,6 +307,8 @@ export interface TrackerDiagnostics {
   intervalMinutes?: number;
   autostart: boolean;
   updateAvailableVersion?: string;
+  /** Last lines of the tracker's local log (v25+), secrets redacted by the agent. */
+  logTail?: string;
 }
 
 export interface UserSessionSlot {
@@ -340,11 +342,10 @@ export interface Notification {
   // Written on every row but, until the HR & Admin Line feature, never read
   // back into the app — nothing client-side needed it (the per-recipient
   // opt-out check happens server-side in pb_hooks/push_notifications.pb.js
-  // against the raw record). The HR & Admin Line sidebar unread-dot needs
-  // it to pick 'hr_admin_line' rows out of the notifications feed that's
-  // already loaded app-wide for the bell — see hasUnseenHrAdminLineActivity
-  // below — rather than fetching hr_notifications a second time just for
-  // that.
+  // against the raw record). It also lets the HR & Admin pages pick
+  // 'hr_admin_line' rows out of the notifications (see
+  // useHrAdminLineNotifications). The sidebar's unread dot for that line no
+  // longer uses this — it comes from the activity feed (core/activity.ts).
   category?: NotificationCategory;
 }
 
@@ -366,6 +367,8 @@ export interface CareerApplication {
 export interface TicketReply {
   id: string; senderName: string; senderRole: 'employee' | 'hr' | 'admin' | 'team_lead'; message: string; timestamp: string;
   attachmentName?: string; attachmentUrl?: string; attachmentSize?: number; senderEmail?: string;
+  /** Set on system entries recording who closed/reopened the ticket (no message body). */
+  event?: 'closed' | 'reopened';
 }
 
 export interface Ticket {
@@ -478,7 +481,7 @@ export interface ProfileSelf {
 }
 
 
-// Shared across notifications.ts and teams.ts (hasUnseenHrAdminLineActivity) —
+// Shared across the notification and team modules —
 // originally a private `type` in hrData.ts; exported here (visibility-only
 // change, no behavior change) so both domain modules can use it.
 export type NotificationReadMap = Record<string, string[]>;

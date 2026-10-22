@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, FileText } from 'lucide-react';
 import { pushModal, popModal } from '@/lib/modalStack';
+import { useIsClient } from '@/lib/useIsClient';
 
 interface DocumentPreviewModalProps {
   url: string | null;
@@ -26,8 +27,7 @@ export function DocumentPreviewModal({ url, name, onClose }: DocumentPreviewModa
     }
   }, [url]);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
 
   if (!url || !mounted || typeof document === 'undefined') return null;
 

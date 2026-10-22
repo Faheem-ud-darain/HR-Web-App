@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bell, X, ShieldAlert } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 import { pb } from '@/lib/pocketbase';
 import { getSessionEmail, getSessionRole } from '@/lib/session';
 
@@ -35,19 +35,20 @@ export function ToastNotification() {
       if (e.action === 'create') {
         const notif = e.record;
 
-        // This subscription already gets every new notification in real
-        // time — piggyback on it to invalidate the bell's query cache too,
-        // instead of leaving TopNav's unread count/list stuck at whatever it
-        // was when the layout first mounted (previously only a page reload
-        // or the 15s polling backstop would pick this up).
-        queryClient.invalidateQueries({ queryKey: ['hr_notifications'] });
-
         const savedRole = getSessionRole();
         const savedEmail = getSessionEmail();
         const isForMe =
           notif.recipient_email === savedEmail ||
           (notif.recipient_role === savedRole && notif.recipient_email === 'all');
         if (!isForMe) return;
+
+        // This subscription already gets every new notification in real
+        // time — piggyback on it to invalidate the bell's query cache too,
+        // instead of leaving TopNav's unread count/list stuck at whatever it
+        // was when the layout first mounted. Only for notifications addressed
+        // to THIS person: invalidating on everyone's events made every open tab
+        // in the company refetch its bell each time anyone got a notification.
+        queryClient.invalidateQueries({ queryKey: ['hr_notifications'] });
 
         const newToast: ToastMsg = {
           id: notif.id,
@@ -78,7 +79,7 @@ export function ToastNotification() {
         // Nothing to clean up if the subscription never actually connected.
       });
     };
-  }, []);
+  }, [queryClient]);
 
   const dismissToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));

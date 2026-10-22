@@ -31,6 +31,7 @@
 // harmless no-op there.
 
 import { Capacitor } from '@capacitor/core';
+import { clearPersistedCache } from './persistedCache';
 
 const EMAIL_KEY = 'user_email';
 const ROLE_KEY = 'user_role';
@@ -93,6 +94,11 @@ async function mirrorToNativePreferences(email: string | null, role: string | nu
   }
 }
 
+// Tells useSessionEmail()/useSessionRole() (lib/useSession.ts) that this tab's session changed.
+function notifySessionChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hr-session-changed'));
+}
+
 export async function setSession(email: string, role: string, remember: boolean, sessionToken?: string): Promise<void> {
   if (typeof window === 'undefined') return;
   const cleanEmail = (email || '').toLowerCase().trim();
@@ -109,6 +115,7 @@ export async function setSession(email: string, role: string, remember: boolean,
   window.sessionStorage.removeItem(TOKEN_KEY);
 
   await mirrorToNativePreferences(cleanEmail, role, sessionToken || null);
+  notifySessionChanged();
 }
 
 // Call once at app boot, before anything reads getSessionEmail()/
@@ -278,6 +285,7 @@ export function clearAuthToken(): void {
 }
 
 export function clearSession(): void {
+  clearPersistedCache(); // the saved copy of company lists never outlives the session
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(EMAIL_KEY);
   window.localStorage.removeItem(ROLE_KEY);
@@ -287,4 +295,5 @@ export function clearSession(): void {
   window.sessionStorage.removeItem(TOKEN_KEY);
   clearAuthToken();
   mirrorToNativePreferences(null, null, null);
+  notifySessionChanged();
 }

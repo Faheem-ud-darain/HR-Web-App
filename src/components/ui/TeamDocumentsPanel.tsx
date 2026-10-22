@@ -10,6 +10,7 @@ import {
   X, FolderOpen, File as FileIcon,
 } from 'lucide-react';
 import { Input, Textarea } from '@/components/ui/Input';
+import { safeHref } from '@/lib/sanitize';
 
 interface TeamDocumentsPanelProps {
   team: Team | null;
@@ -232,7 +233,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
                   </div>
                 </div>
                 {kind === 'image' && (
-                  <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="block mt-2">
+                  <a href={safeHref(doc.fileUrl)} target="_blank" rel="noreferrer" className="block mt-2">
                     <img src={doc.fileUrl} alt={doc.title} className="rounded-lg max-h-32 w-full object-cover" />
                   </a>
                 )}
@@ -241,7 +242,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
                 )}
                 <div className="flex items-center gap-2 mt-2">
                   <a
-                    href={doc.fileUrl}
+                    href={safeHref(doc.fileUrl)}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1 text-[10px] font-bold text-orange-700 hover:text-orange-800"

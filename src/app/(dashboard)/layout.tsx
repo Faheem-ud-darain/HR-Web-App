@@ -53,6 +53,10 @@ function PageTransition({ className, children }: { className: string; children: 
   );
 }
 
+// Lists that change rarely; they refresh on their own staleTime/polling, not on every resume.
+const SLOW_CHANGING_QUERIES = new Set(['hr_profiles', 'hr_teams', 'hr_warehouses', 'hr_announcements', 'hr_maintenance_notices', 'hr_leaves']);
+const RESUME_REFRESH_AFTER_MS = 30_000;
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Widened to include 'team_lead' — it's a real value Profile.role/session
   // can hold (see src/lib/hrData.ts), not just 'admin' | 'hr' | 'employee'.
@@ -167,7 +171,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         if (!isProfilesLoading && allProfiles) {
           setDbReady(true);
-          const userProfile = allProfiles.find(e => e && e.email && e.email.toLowerCase() === savedEmail.toLowerCase()) as any;
+          const userProfile = allProfiles.find(e => e && e.email && e.email.toLowerCase() === savedEmail.toLowerCase());
           if (userProfile) {
             setProfile(userProfile);
           }
@@ -215,9 +219,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // initNative) by re-attempting the login every time the app resumes, not
   // just once at first launch.
   useEffect(() => {
+    let hiddenAt = 0;
     const handleVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      queryClient.invalidateQueries();
+      if (document.visibilityState !== 'visible') { hiddenAt = Date.now(); return; }
+      // Resuming used to invalidate EVERY query — roster, teams, warehouses,
+      // announcements included — each time anyone switched back to the tab.
+      // Now: nothing at all after a brief absence, and after a longer one only
+      // the live data refreshes. Slow-changing lists keep their own staleTime/
+      // polling and refetch when they're actually stale.
+      const awayMs = hiddenAt ? Date.now() - hiddenAt : Infinity;
+      if (awayMs >= RESUME_REFRESH_AFTER_MS) {
+        queryClient.invalidateQueries({ predicate: q => !SLOW_CHANGING_QUERIES.has(String(q.queryKey[0])) });
+      }
       if (email) initPush(email);
     };
     document.addEventListener('visibilitychange', handleVisible);
@@ -412,7 +425,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <p className="font-semibold text-slate-800">Please review the following important HR policies:</p>
               
               <ol className="list-decimal pl-5 space-y-2.5">
-                <li>If you're on automatic GPS attendance, this app uses your device's location — including while the app is closed or your screen is locked — solely to detect when you arrive at or leave your assigned warehouse, so your shift can start/end automatically. It is not used to track you outside of that purpose. See our <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-600 underline font-semibold">Privacy Policy</a> for full details on what's collected and why.</li>
+                <li>If you&apos;re on automatic GPS attendance, this app uses your device&apos;s location — including while the app is closed or your screen is locked — solely to detect when you arrive at or leave your assigned warehouse, so your shift can start/end automatically. It is not used to track you outside of that purpose. See our <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-600 underline font-semibold">Privacy Policy</a> for full details on what&apos;s collected and why.</li>
                 <li>Your first month’s salary will be reserved and can be claimed upon resignation.</li>
                 <li>Kindly share your CV, clear front and back images of CNIC along with your bank account details.</li>
                 <li>You are entitled to 1 paid time-off (PTO) leave per month.</li>

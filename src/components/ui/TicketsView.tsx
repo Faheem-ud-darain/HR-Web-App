@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { useProfiles, useTickets, hrActions, Ticket, TicketPresence, TicketSeenState, Profile, markTicketActivitySeen, displayName, isTechnicalSupportMember } from '@/lib/hrData';
+import { useProfiles, useTickets, hrActions, TICKET_PRESENCE_STALE_MS, Ticket, TicketPresence, TicketSeenState, Profile, displayName, isTechnicalSupportMember } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { Plus, User, AlertCircle, Paperclip, X, FileText, Headset, Loader2, Forward } from 'lucide-react';
+import { Plus, User, AlertCircle, Paperclip, X, FileText, Headset, Loader2 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatDateNY } from '@/lib/timezone';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
@@ -17,9 +17,11 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { SearchInput } from '@/components/ui/SearchInput';
-import { BARE_TIME_ONLY, formatTicketDate, ticketActivityMs } from "@/components/ui/tickets/ticketHelpers";
+import { ticketActivityMs } from "@/components/ui/tickets/ticketHelpers";
 import { TicketListPanel } from "@/components/ui/tickets/TicketListPanel";
 import { TicketConversationPanel } from "@/components/ui/tickets/TicketConversationPanel";
+import { setAdaptiveInterval } from '@/lib/idle';
+import { useSessionEmail } from '@/lib/useSession';
 
 // Converts an uploaded attachment File to a storable data URL: images are
 // compressed to WebP (max 3 MB), PDFs are stored as-is after a size check
@@ -77,11 +79,16 @@ interface TicketsViewProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead';
 }
 
+// Typing indicator poll pace, and how fresh the ticket owner's "seen" marker must be (they
+// refresh it every 8s while a ticket is open) to count as online.
+const TYPING_POLL_MS = 5000;
+const OWNER_ONLINE_WINDOW_MS = 25_000;
+
 export function TicketsView({ role }: TicketsViewProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [currentEmail, setCurrentEmail] = useState('');
+  const currentEmail = useSessionEmail() || '';
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
 
   // Track native keyboard height so the ticket panel can pad itself above
@@ -142,12 +149,13 @@ export function TicketsView({ role }: TicketsViewProps) {
   // modalStack), rather than hiding the nav for the whole /tickets route
   // (which incorrectly hid it on the ticket list too, before any ticket
   // was open).
+  const hasSelectedTicket = !!selectedTicket;
   useEffect(() => {
-    if (selectedTicket) {
+    if (hasSelectedTicket) {
       pushModal();
       return () => popModal();
     }
-  }, [!!selectedTicket]);
+  }, [hasSelectedTicket]);
 
   const isTechnicalTeam = isTechnicalSupportMember(userProfile?.teams);
   const isPrivileged = role === 'hr' || role === 'admin' || isTechnicalTeam;
@@ -182,9 +190,11 @@ export function TicketsView({ role }: TicketsViewProps) {
   // count — otherwise clicking "Load More" a few times on Open and then
   // switching to Closed would carry over an inflated limit (e.g. 200) into
   // a tab that never asked for that many, fetching far more than needed.
-  useEffect(() => {
+  const [limitFor, setLimitFor] = useState(statusFilter);
+  if (statusFilter !== limitFor) {
+    setLimitFor(statusFilter);
     setTicketLimit(50);
-  }, [statusFilter]);
+  }
 
   const visibleTickets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -211,6 +221,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         );
       })
       .sort((a, b) => ticketActivityMs(b) - ticketActivityMs(a));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- nameFor is a stable lookup over `employees`, which is already a dependency
   }, [tickets, statusFilter, deptFilter, viewTab, searchQuery, employees, isPrivileged, isTechnicalTeam, currentEmail, role]);
 
   // Form states
@@ -234,7 +245,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // "X is typing…" for the currently-open ticket — see the effect below.
-  const [typingNames, setTypingNames] = useState<string[]>([]);
+  const [typingEntry, setTypingEntry] = useState<{ ticketId: string; names: string[] } | null>(null);
   const lastTypingTouchRef = useRef<number>(0);
 
   const appliedDeepLinkRef = useRef(false);
@@ -274,7 +285,7 @@ export function TicketsView({ role }: TicketsViewProps) {
     }
   };
 
-  const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
+  const { data: allProfiles } = useProfiles();
   const { data: allTickets, isLoading: ticketsLoading, refetch: refetchTickets, isFetching: isFetchingTickets } = useTickets(
     ticketLimit,
     statusFilter === 'all' ? undefined : statusFilter,
@@ -282,10 +293,10 @@ export function TicketsView({ role }: TicketsViewProps) {
 
   useEffect(() => {
     const email = getSessionEmail() || '';
-    setCurrentEmail(email);
     
     let currentProfile = userProfile;
     if (allProfiles) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirrors server query data into the role-scoped local list/selection (applyTickets also keeps the open ticket live and handles the one-shot deep link)
       setEmployees(allProfiles);
       currentProfile = allProfiles.find(e => e.email && email && e.email.toLowerCase() === email.toLowerCase()) || null;
       setUserProfile(currentProfile);
@@ -293,17 +304,14 @@ export function TicketsView({ role }: TicketsViewProps) {
 
     if (allTickets) {
       applyTickets(allTickets, email, currentProfile);
-      // Viewing this page clears the sidebar's unseen-activity dot for this
-      // role+email. Re-runs on every poll while the page stays open, so new
-      // activity that arrives elsewhere still lights the dot back up later.
-      markTicketActivitySeen(allTickets, role, email);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-sync only when the fetched profiles/tickets change; applyTickets/userProfile are derived from them
   }, [role, allProfiles, allTickets]);
 
   // Scroll chat to bottom when replies change
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedTicket?.replies, typingNames.length]);
+  }, [selectedTicket?.replies, typingEntry?.names.length]);
 
   // Best-effort sweep for attachments on tickets closed 15+ days ago — see
   // checkTicketAttachmentRetention in hrData.ts. There's no server cron in
@@ -314,6 +322,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   // from view immediately.
   useEffect(() => {
     hrActions.checkTicketAttachmentRetention().then(() => refetchTickets());
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only attachment retention sweep; refetchTickets is not a trigger
   }, []);
 
   // HR side: heartbeat "I have this ticket open" while it's selected, so
@@ -334,6 +343,7 @@ export function TicketsView({ role }: TicketsViewProps) {
       clearInterval(interval);
       hrActions.clearTicketPresence(ticketId);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the open ticket id/status so presence is not restarted on every reply
   }, [role, selectedTicket?.id, selectedTicket?.status, currentEmail]);
 
   // Employee/team-lead side: poll every ticket's live presence so the
@@ -359,8 +369,8 @@ export function TicketsView({ role }: TicketsViewProps) {
       if (!cancelled) setTicketPresences(all);
     };
     poll();
-    const interval = setInterval(poll, 8000);
-    return () => { cancelled = true; clearInterval(interval); };
+    const stop = setAdaptiveInterval(poll, 8000);
+    return () => { cancelled = true; stop(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, tickets.map(t => t.id).join(',')]);
 
@@ -369,63 +379,114 @@ export function TicketsView({ role }: TicketsViewProps) {
     return hrActions.isTicketPresenceLive(presence);
   };
 
-  // Employee/team-lead side: mark this ticket "seen as of now" while it's
-  // open, so HR/Admin can tell a reply was actually read (see
-  // TicketSeenState in hrData.ts). Re-touched on an interval — not just
-  // once on open — so it also advances past a reply that arrives while
-  // this ticket is already sitting open on screen. Unlike TicketPresence
-  // above, this is a durable marker: no cleanup/clear on unmount, since
-  // "last seen at this time" should stay true after the employee leaves.
+  // Owner side: mark this ticket "seen as of now" while the TICKET'S OWNER has
+  // it open, so HR/Admin can tell a reply was actually read (see
+  // TicketSeenState in hrData.ts). It is written ONLY by the owner's own view:
+  // HR/Admin reading a ticket — or a Technical Support teammate opening a
+  // colleague's ticket — must never make the owner look as if they'd seen it.
+  // Re-touched on an interval — not just once on open — so it also advances
+  // past a reply that arrives while the ticket is already sitting open.
+  // Unlike TicketPresence above, this is a durable marker: no cleanup on
+  // unmount, since "last seen at this time" should stay true after they leave.
+  const ticketOwnerEmail = selectedTicket?.employeeEmail?.toLowerCase() || '';
+  const viewerIsTicketOwner = !!ticketOwnerEmail && ticketOwnerEmail === (currentEmail || '').toLowerCase();
   useEffect(() => {
-    if ((role !== 'employee' && role !== 'team_lead') || !selectedTicket) return;
+    if (!viewerIsTicketOwner || !selectedTicket) return;
     const ticketId = selectedTicket.id;
     const touch = () => hrActions.touchTicketSeenByEmployee(ticketId);
     touch();
     const interval = setInterval(touch, 8000);
     return () => clearInterval(interval);
-  }, [role, selectedTicket?.id, selectedTicket?.replies.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on ticket id and reply count: read receipts must not re-fire on unrelated ticket edits
+  }, [viewerIsTicketOwner, selectedTicket?.id, selectedTicket?.replies.length]);
 
-  // HR/Admin side: poll the currently-open ticket's seen state so a "Seen"
-  // label can appear under HR's last message once the employee has
-  // actually read it, without needing a manual refresh.
-  const [ticketSeenState, setTicketSeenState] = useState<TicketSeenState | null>(null);
+  // HR/Admin side: poll the currently-open ticket's seen state so the receipt
+  // under their latest message ("Seen by …" / "Not seen yet") stays current
+  // without a manual refresh. Technical Support teammates poll it too, but only
+  // as the owner's "is online right now" signal for the typing indicator below
+  // (they get no receipt). Never polled for the ticket's own owner.
+  // The state the poll last fetched, tagged with the ticket it belongs to, so switching
+  // tickets never shows the previous ticket's state while the new one loads.
+  // undefined = still loading, null = loaded and the owner has never opened it.
+  const [seenEntry, setSeenEntry] = useState<{ ticketId: string; state: TicketSeenState | null } | null>(null);
+  const isHrOrAdmin = role === 'hr' || role === 'admin';
+  const watchesOwner = (isHrOrAdmin || isTechnicalTeam) && !viewerIsTicketOwner;
+  const ticketSeenState: TicketSeenState | null | undefined =
+    watchesOwner && seenEntry && seenEntry.ticketId === selectedTicket?.id ? seenEntry.state : undefined;
   useEffect(() => {
-    if (!isPrivileged || !selectedTicket) { setTicketSeenState(null); return; }
+    if (!watchesOwner || !selectedTicket) return;
     const ticketId = selectedTicket.id;
     let cancelled = false;
     const poll = async () => {
       const state = await hrActions.getTicketSeenState(ticketId);
-      if (!cancelled) setTicketSeenState(state);
+      if (!cancelled) setSeenEntry({ ticketId, state });
     };
     poll();
-    const interval = setInterval(poll, 8000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [isPrivileged, selectedTicket?.id]);
+    const stop = setAdaptiveInterval(poll, 8000);
+    return () => { cancelled = true; stop(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on ticket id: resets per-ticket UI state only when the open ticket changes
+  }, [watchesOwner, selectedTicket?.id]);
 
-  // "X is typing…" — poll the other side's typing state for the currently
-  // open ticket every 2s. Symmetric: both HR and the employee/team_lead can
-  // reply, so both sides run this same poll+clear-on-unmount effect, scoped
-  // per ticket like TicketPresence/TicketSeenState above. Admin is excluded
-  // — replies are disabled for Admin (read-only), so there's nothing for
-  // them to ever be typing.
+  // Is the OTHER side of this conversation here right now? Typing can only happen if so,
+  // so the typing poll below is switched off when they aren't.
+  //  - the owner looks for a live presence row left by someone else (HR/Technical
+  //    Support heartbeat it every 8s while they have the ticket open);
+  //  - staff look at the owner's "seen" marker, which the owner refreshes every
+  //    8s while they have it open.
+  // Freshness is judged against `clockNow`, a clock that ticks every few seconds while a
+  // ticket is open (state set from a timer callback, never during render).
+  const [clockNow, setClockNow] = useState(0);
   useEffect(() => {
-    setTypingNames([]);
-    if (role === 'admin' || !selectedTicket || selectedTicket.status === 'closed' || !currentEmail) return;
+    if (!selectedTicket) return;
+    const first = setTimeout(() => setClockNow(Date.now()), 0);
+    const stop = setAdaptiveInterval(() => setClockNow(Date.now()), 5000, { skipWhenHidden: false });
+    return () => { clearTimeout(first); stop(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on ticket id: resets per-ticket UI state only when the open ticket changes
+  }, [selectedTicket?.id]);
+  const otherPartyOnline = useMemo(() => {
+    if (!selectedTicket || clockNow === 0) return false;
+    const me = (currentEmail || '').toLowerCase();
+    if (viewerIsTicketOwner) {
+      return ticketPresences.some(p =>
+        p.ticketId === selectedTicket.id && (p.email || '').toLowerCase() !== me &&
+        clockNow - new Date(p.lastSeenAt).getTime() < TICKET_PRESENCE_STALE_MS);
+    }
+    const seenAt = ticketSeenState?.employeeSeenAt ? new Date(ticketSeenState.employeeSeenAt).getTime() : 0;
+    return seenAt > 0 && clockNow - seenAt < OWNER_ONLINE_WINDOW_MS;
+  }, [clockNow, ticketPresences, ticketSeenState, selectedTicket, viewerIsTicketOwner, currentEmail]);
+
+  // "X is typing…" — poll the other side's typing state for the currently open
+  // ticket, but only while they are actually here (see otherPartyOnline), every
+  // 5s, skipping hidden tabs and slowing down when this person is idle.
+  // Symmetric: both HR and the employee/team_lead can reply, so both sides run
+  // this. Admin is excluded — replies are disabled for Admin (read-only), so
+  // there's nothing for them to ever be typing.
+  const typingPollActive = !(role === 'admin' || !selectedTicket || selectedTicket.status === 'closed' || !currentEmail);
+  const typingNames: string[] =
+    typingPollActive && otherPartyOnline && typingEntry && typingEntry.ticketId === selectedTicket?.id ? typingEntry.names : [];
+  useEffect(() => {
+    if (!typingPollActive || !otherPartyOnline || !selectedTicket) return;
     const ticketId = selectedTicket.id;
     let cancelled = false;
     const poll = () => {
       hrActions.getTypingUsers('ticket', ticketId, currentEmail).then(rows => {
-        if (!cancelled) setTypingNames(rows.map(r => r.displayName));
+        if (!cancelled) setTypingEntry({ ticketId, names: rows.map(r => r.displayName) });
       }).catch(() => {});
     };
     poll();
-    const interval = setInterval(poll, 2000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      hrActions.clearTypingState('ticket', ticketId, currentEmail).catch(() => {});
-    };
-  }, [role, selectedTicket?.id, selectedTicket?.status, currentEmail]);
+    const stop = setAdaptiveInterval(poll, TYPING_POLL_MS);
+    return () => { cancelled = true; stop(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- typing poll is keyed on the open ticket id, not the whole ticket object
+  }, [typingPollActive, otherPartyOnline, selectedTicket?.id, currentEmail]);
+
+  // Clear THIS person's own typing marker when they leave the ticket (separate
+  // from the poll above so the poll switching on/off doesn't write anything).
+  useEffect(() => {
+    if (!typingPollActive || !selectedTicket) return;
+    const ticketId = selectedTicket.id;
+    return () => { hrActions.clearTypingState('ticket', ticketId, currentEmail).catch(() => {}); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- typing poll is keyed on the open ticket id, not the whole ticket object
+  }, [typingPollActive, selectedTicket?.id, currentEmail]);
 
   const handleNewTicketFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -590,7 +651,7 @@ export function TicketsView({ role }: TicketsViewProps) {
     if (!ticket) return;
     setUpdatingTicketStatusId(id);
     try {
-      await hrActions.updateTicketStatus(ticket, action);
+      await hrActions.updateTicketStatus(ticket, action, { name: userProfile?.fullName || (role === 'hr' ? 'HR' : role === 'admin' ? 'Admin' : 'Employee'), role, email: currentEmail });
       refetchTickets();
     } finally {
       setUpdatingTicketStatusId(null);
@@ -604,7 +665,6 @@ export function TicketsView({ role }: TicketsViewProps) {
 
   const isClosed = selectedTicket?.status === 'closed';
   const isAdmin = role === 'admin';
-  const isHR = role === 'hr';
   const isEmp = role === 'employee' || role === 'team_lead';
   // An employee can close (but not re-open) a ticket they filed themselves —
   // e.g. once their issue is resolved, without waiting on HR/Technical to

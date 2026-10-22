@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { triggerHaptic } from '@/lib/haptics';
+import { useIsClient } from '@/lib/useIsClient';
 
 interface ModalProps {
   isOpen: boolean;
@@ -19,46 +20,39 @@ interface ModalProps {
 const EXIT_DURATION_MS = 180;
 
 function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    onChange => {
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    },
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    () => false,
+  );
 }
 
 export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
   // Mount/exit state machine (plan 002) — Modal used to unmount instantly on
   // close with no exit transition; this keeps it mounted for the exit
-  // animation's duration before actually unmounting.
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const [closing, setClosing] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // animation's duration before actually unmounting. `exiting` is set the
+  // moment `isOpen` flips (adjusting state while rendering), cleared by a timer.
+  const [exiting, setExiting] = useState(false);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    setExiting(!isOpen);
+  }
+  const shouldRender = isOpen || exiting;
+  const closing = exiting && !isOpen;
   const reducedMotion = usePrefersReducedMotion();
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
 
   useEffect(() => {
-    if (isOpen) {
-      if (closeTimer.current) clearTimeout(closeTimer.current);
-      setClosing(false);
-      setShouldRender(true);
-    } else if (shouldRender) {
-      setClosing(true);
-      closeTimer.current = setTimeout(() => {
-        setShouldRender(false);
-        setClosing(false);
-      }, EXIT_DURATION_MS);
-    }
-    return () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+    if (!exiting) return;
+    const timer = setTimeout(() => setExiting(false), EXIT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [exiting]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

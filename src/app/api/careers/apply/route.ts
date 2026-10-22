@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminHasAppliedForPosition, adminCreateCareerApplication } from '@/lib/pbAdmin';
+import { rateLimitByIp } from '@/lib/rateLimit';
+import { cleanText, cleanEmail } from '@/lib/sanitize';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -11,27 +14,30 @@ export const runtime = 'edge';
 // locked down (plan 012, Phase 1). Validates and writes server-side via
 // the admin client instead of the old public `pb.collection(...)` calls.
 export async function POST(request: Request) {
-  let body: Record<string, any>;
+  const limited = await rateLimitByIp(request, 'careers-apply', 5, 60 * 60 * 1000);
+  if (limited) return limited;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const positionId = typeof body?.positionId === 'string' ? body.positionId.trim() : '';
-  const positionTitle = typeof body?.positionTitle === 'string' ? body.positionTitle.trim() : '';
-  const applicantName = typeof body?.applicantName === 'string' ? body.applicantName.trim() : '';
-  const applicantEmail = typeof body?.applicantEmail === 'string' ? body.applicantEmail.trim() : '';
-  const coverLetter = typeof body?.coverLetter === 'string' ? body.coverLetter : '';
+  // Public, unauthenticated form: every field is normalised and capped here,
+  // regardless of what the client-side inputs already enforce.
+  const positionId = cleanText(body?.positionId, { max: 64 });
+  const positionTitle = cleanText(body?.positionTitle, { max: 150 });
+  const applicantName = cleanText(body?.applicantName, { max: 100 });
+  const applicantEmail = cleanEmail(body?.applicantEmail);
+  const coverLetter = cleanText(body?.coverLetter, { max: 5000, multiline: true });
 
   if (!positionId || !positionTitle || !applicantName || !applicantEmail) {
+    // cleanEmail() returns '' for anything that isn't a plausible address.
+    const hasEmailInput = typeof body?.applicantEmail === 'string' && body.applicantEmail.trim() !== '';
+    if (positionId && positionTitle && applicantName && hasEmailInput) {
+      return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
+    }
     return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
-  }
-  // Same lightweight shape check the HTML5 `type="email"` input on the
-  // client already enforces — this route can be hit directly, so it can't
-  // rely on that alone.
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicantEmail)) {
-    return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
   }
 
   try {
@@ -46,7 +52,7 @@ export async function POST(request: Request) {
     await adminCreateCareerApplication({ positionId, positionTitle, applicantName, applicantEmail, coverLetter });
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[careers/apply] error:', err);
     return NextResponse.json({ error: 'Could not submit your application. Please try again.' }, { status: 500 });
   }

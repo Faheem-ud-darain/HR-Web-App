@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
-import { GripVertical, Clock, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
+import { GripVertical, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
 import { LEAVE_TYPE_COLORS, LeaveStatusBadge } from '@/components/ui/StatusBadges';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
@@ -173,7 +173,7 @@ export default function HRLeavesPage() {
     setOverCol(null);
     if (!id) return;
 
-    const leaf = leaves.find((l: any) => l.id === id);
+    const leaf = leaves.find((l) => l.id === id);
     if (!leaf) return;
     await moveLeaveTo(leaf, targetStatus);
   };

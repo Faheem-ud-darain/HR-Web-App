@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useProfiles, useLeaves, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, Profile, formatMoney, buildNotificationLink } from '@/lib/hrData';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useProfiles, useLeaves, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Clock, PlusCircle, AlertCircle, HelpCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
+import { PlusCircle, AlertCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -17,15 +17,23 @@ import { StatCard } from '@/components/ui/StatCard';
 import { TableSkeletonRows } from '@/components/ui/Skeleton';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { FieldLabel } from '@/components/ui/FieldLabel';
+import { useSessionEmail } from '@/lib/useSession';
 
 export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
   const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
   const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
 
-  const [leaves, setLeaves] = useState<LeaveApplication[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  const sessionEmail = useSessionEmail();
+  const userProfile = useMemo(
+    () => allProfiles?.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
+    [allProfiles, sessionEmail],
+  );
+  const leaves: LeaveApplication[] = useMemo(
+    () => (userProfile && allLeaves ? allLeaves.filter(l => l.employeeName === userProfile.fullName) : []),
+    [allLeaves, userProfile],
+  );
 
   // Modal state
   const [isLeaveOpen, setIsLeaveOpen] = useState(false);
@@ -48,21 +56,14 @@ export default function EmployeeLeavesPage() {
   const [cashoutDays, setCashoutDays] = useState(0);
   const [simRollover, setSimRollover] = useState(0);
 
+  // The header search box (TopNav) broadcasts what's typed as a window event.
   useEffect(() => {
-    const email = getSessionEmail();
-    if (!email || !allProfiles || !allLeaves) return;
-    const profile = allProfiles.find(e => e.email && e.email.toLowerCase() === email.toLowerCase());
-    if (profile) {
-      setUserProfile(profile);
-      setLeaves(allLeaves.filter(l => l.employeeName === profile.fullName) as any);
-    }
-
     const handleSearch = (e: Event) => {
       setSearchQuery((e as CustomEvent).detail || '');
     };
     window.addEventListener('globalSearch', handleSearch);
     return () => window.removeEventListener('globalSearch', handleSearch);
-  }, [allProfiles, allLeaves]);
+  }, []);
 
   // Sync cashout days input limit with remaining PTO balance. Uses the
   // shared getRemainingPTO helper (hrData.ts) instead of an inline
@@ -75,12 +76,17 @@ export default function EmployeeLeavesPage() {
   const remainingPTO = userProfile && userProfile.joinedDate
     ? getRemainingPTO(allLeaves || [], userProfile.fullName, getPTOAccrualDate(userProfile))
     : 0;
-  useEffect(() => {
+  // Start the simulator at the full remaining balance, and again whenever that
+  // balance changes (adjusting state while rendering = React's way of resetting
+  // state from a changed value).
+  const [simulatedFor, setSimulatedFor] = useState(0);
+  if (remainingPTO !== simulatedFor) {
+    setSimulatedFor(remainingPTO);
     if (remainingPTO > 0) {
       setCashoutDays(Math.floor(remainingPTO));
       setSimRollover(Math.max(0, Math.min(5, Math.floor(remainingPTO - Math.floor(remainingPTO)))));
     }
-  }, [remainingPTO]);
+  }
 
   const handleLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,7 +478,7 @@ export default function EmployeeLeavesPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            This will permanently withdraw your leave request. This is only possible while it's
+            This will permanently withdraw your leave request. This is only possible while it&apos;s
             still pending — once HR or Admin acts on it, it can no longer be deleted.
           </p>
           {deleteError && (

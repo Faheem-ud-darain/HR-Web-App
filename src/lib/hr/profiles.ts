@@ -14,14 +14,15 @@ import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import { pbFilter } from '../pbFilter';
 import {
-  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField,
-  pbGetKV, pbSetKV, pbDeleteKVByKeys, withTimeout,
+  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys,
   looksLikeRealId,
 } from './shared';
 import {
   hrActions, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin,
   getCareerApplicationsForEmailAdmin, deleteCareerApplicationsForEmailAdmin,
 } from '../hrData';
+import { mapProfileRecord } from '../core/profiles';
+import type { PbRow } from '@/lib/pbTypes';
 
 export function isTechnicalSupportMember(teams?: string[] | null): boolean {
   if (!teams || !Array.isArray(teams)) return false;
@@ -101,49 +102,18 @@ export async function saveProfileDocuments(profileId: string, docs: Partial<Prof
   await pbUpsertByField(PROFILE_DOCS_COLLECTION, 'profile_id', profileId, { data: { ...existing, ...docs } });
 }
 
-function toProfile(p: any, extras: Partial<Profile> = {}): Profile {
-  return {
-    id: p.id,
-    fullName: p.full_name,
-    email: p.email,
-    role: p.role,
-    joinedDate: p.joined_date,
-    onboardingCompleted: !!p.onboarding_completed,
-    baseSalary: Number(p.base_salary) || 0,
-    teams: p.teams || [],
-    password: p.password,
-    isTeamLead: p.is_team_lead === true || p.is_team_lead === 'true',
-    leadTeams: p.lead_teams || [],
-    isWarehouseLead: !!p.is_warehouse_lead,
-    managedWarehouses: p.managed_warehouses || [],
-    jobTitle: p.job_title,
-    gender: p.gender,
-    bankName: p.bank_name,
-    accountNumber: p.account_number,
-    iban: p.iban,
-    // Prefer the real PocketBase file field (profile_picture_file) — a
-    // proper uploaded file served via PocketBase's own file URL — over the
-    // legacy `profile_picture` text column, which used to hold the entire
-    // picture as an inline base64 string (see uploadProfilePicture below for
-    // why that had to change: OneSignal's push notification large-icon
-    // field needs a real fetchable URL, and every profile list load was
-    // downloading everyone's full-size encoded photo whether or not it was
-    // even being displayed). Falls back to the old text field for any
-    // profile that hasn't been migrated yet — see
-    // migration_data/migrate_profile_pictures_to_files.mjs.
-    profilePicture: p.profile_picture_file
-      ? pb.files.getURL(p, p.profile_picture_file)
-      : (p.profile_picture || undefined),
-    region: p.region,
-    assignedWarehouses: p.assigned_warehouses || [],
-    trackingEnabled: !!p.tracking_enabled,
-    salaryStartDate: p.salary_start_date || p.joined_date || '',
-    ...extras,
-  };
+function toProfile(p: PbRow, extras: Partial<Profile> = {}): Profile {
+  // Prefer the real PocketBase file field (profile_picture_file) — a proper
+  // uploaded file served via PocketBase's own file URL — over the legacy
+  // `profile_picture` text column that used to hold the whole picture as a
+  // base64 string (OneSignal's push large-icon needs a real fetchable URL, and
+  // every profile list load was downloading everyone's full-size photo).
+  const pictureUrl = p.profile_picture_file ? pb.files.getURL(p, p.profile_picture_file) : undefined;
+  return mapProfileRecord(p, extras, pictureUrl);
 }
 
-function fromProfileFields(p: Partial<Profile>): any {
-  const fields: any = {};
+function fromProfileFields(p: Partial<Profile>): PbRow {
+  const fields: PbRow = {};
   if (p.fullName !== undefined) fields.full_name = p.fullName;
   // Normalize to lowercase on write — every downstream lookup (timesheets,
   // tasks, tickets, tracking settings, absence records, etc.) assumes a
@@ -196,14 +166,32 @@ const OVERLAY_KEYS: (keyof Profile)[] = [
 export function useProfiles() {
   return useQuery({
     queryKey: ['hr_profiles'],
-    queryFn: async () => {
+    // The roster changes rarely and is read by almost every page; mutations
+    // invalidate this key, so a longer freshness window only saves refetches
+    // on navigation. See also teams/warehouses in ./teams.ts.
+    staleTime: 2 * 60 * 1000,
+    queryFn: async (): Promise<Profile[]> => {
+      // Normal path: the server builds the roster for THIS caller (own record
+      // in full, colleagues' public fields only; HR/Admin everything but
+      // password hashes) — see /api/roster.
+      const token = getAuthToken();
+      if (token) {
+        try {
+          const res = await fetch(`${API_BASE}/api/roster`, { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) return ((await res.json()).profiles || []) as Profile[];
+          // 401/403 mean "you're not allowed" — don't paper over that.
+          if (res.status === 401 || res.status === 403) return [];
+        } catch { /* offline / server not updated yet — fall through */ }
+      }
+      // Fallback for a server that doesn't have /api/roster yet (e.g. a native
+      // app talking to an older deployment): the previous direct read.
       const [records, extraRows] = await Promise.all([
         pbList('hr_profiles', { sort: 'full_name' }),
         pbList(PROFILE_EXTRAS_COLLECTION),
       ]);
       const extrasById: Record<string, Partial<Profile>> = {};
-      extraRows.forEach((row: any) => { extrasById[row.profile_id] = row.data || {}; });
-      return records.map((r: any) => toProfile(r, extrasById[r.id] || {}));
+      extraRows.forEach((row: PbRow) => { extrasById[row.profile_id] = row.data || {}; });
+      return records.map((r: PbRow) => toProfile(r, extrasById[r.id] || {}));
     },
   });
 }
@@ -270,8 +258,8 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
 
 async function adminProfileRequest(
   method: 'POST' | 'PUT' | 'PATCH',
-  body: Record<string, any>
-): Promise<any> {
+  body: PbRow
+): Promise<PbRow> {
   const token = getAuthToken();
   if (!token) throw new Error('Not signed in.');
   const res = await fetch(`${API_BASE}/api/admin/profile`, {
@@ -293,7 +281,7 @@ async function adminProfileRequest(
 // through a hashed write instead of ever writing it in plaintext (see the
 // route's comment on this — the old client path silently rewrote the
 // plaintext password on every profile save, whether or not it changed).
-export async function updateProfileAdmin(profileId: string, updates: Record<string, any>): Promise<void> {
+export async function updateProfileAdmin(profileId: string, updates: PbRow): Promise<void> {
   await adminProfileRequest('POST', { profileId, updates });
 }
 
@@ -335,7 +323,7 @@ export async function applyIncrementServer(profile: Profile, currentBaseSalary: 
 }
 
 export async function addEmployeeServer(emp: Omit<Profile, 'id' | 'onboardingCompleted'>): Promise<{ id: string; tempPassword?: string }> {
-  return adminProfileRequest('PATCH', { action: 'addEmployee', profile: emp });
+  return adminProfileRequest('PATCH', { action: 'addEmployee', profile: emp }) as Promise<{ id: string; tempPassword?: string }>;
 }
 
 export async function updateEmployeeTeamsAdmin(profileId: string, newTeams: string[]): Promise<void> {
@@ -376,9 +364,9 @@ export const profileActions = {
       // profilePicture never goes through the plain-JSON `real` path — see
       // uploadProfilePicture below, called separately a few lines down.
       if (k === 'profilePicture') return;
-      if (PROFILE_DOC_KEYS.includes(k)) (docs as any)[k] = (updates as any)[k];
-      else if (OVERLAY_KEYS.includes(k)) (overlay as any)[k] = (updates as any)[k];
-      else (real as any)[k] = (updates as any)[k];
+      if (PROFILE_DOC_KEYS.includes(k)) (docs as PbRow)[k] = (updates as PbRow)[k];
+      else if (OVERLAY_KEYS.includes(k)) (overlay as PbRow)[k] = (updates as PbRow)[k];
+      else (real as PbRow)[k] = (updates as PbRow)[k];
     });
     if (Object.keys(real).length > 0) await pbUpdate('hr_profiles', profileId, fromProfileFields(real));
     if (Object.keys(overlay).length > 0) await saveProfileExtras(profileId, overlay);
@@ -464,7 +452,7 @@ export const profileActions = {
     if (email) {
       const settingsRow = await pbFindByField('hr_tracking_settings', 'employeeEmail', lower)
         ?? (await pbList('hr_tracking_settings', { filter: pbFilter('employeeEmail ~ {:email}', { email: lower }) }))
-          .find((r: any) => (r.employeeEmail || '').toLowerCase() === lower);
+          .find((r: PbRow) => (r.employeeEmail || '').toLowerCase() === lower);
       if (settingsRow) await pbDelete('hr_tracking_settings', settingsRow.id);
       await pbDeleteByField('hr_tracker_signals', 'email', lower);
     }
@@ -485,19 +473,19 @@ export const profileActions = {
 
     // Everything else, deleted in parallel — each resource type is
     // independent, so one failing shouldn't block the others.
-    const deletions: Promise<any>[] = [];
+    const deletions: Promise<unknown>[] = [];
     if (email) {
       deletions.push(
         deletePayrollForEmployeeAdmin(id),
         pbListByEmailField('hr_timesheets', 'employee_id', email)
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_timesheets', r.id)))),
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_timesheets', r.id)))),
         pbListByEmailField('hr_tasks', 'assigned_email', email)
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_tasks', r.id)))),
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_tasks', r.id)))),
         pbListByEmailField('hr_tickets', 'employee_email', email)
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_tickets', r.id)))),
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_tickets', r.id)))),
         deleteCareerApplicationsForEmailAdmin(email),
         pbListByEmailField('hr_notifications', 'recipient_email', email)
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_notifications', r.id)))),
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_notifications', r.id)))),
       );
     }
     if (fullName) {
@@ -505,7 +493,7 @@ export const profileActions = {
       // this app (see getApprovedLeaveDays/getRemainingPTO), so do the same here.
       deletions.push(
         pbList('hr_leaves', { filter: pbFilter('employee_name = {:name}', { name: fullName }) })
-          .then(rows => Promise.allSettled(rows.map((r: any) => pbDelete('hr_leaves', r.id))))
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_leaves', r.id))))
       );
     }
     if (email) {
@@ -514,8 +502,8 @@ export const profileActions = {
       deletions.push(
         pbList('hr_teams').then(teams => Promise.allSettled(
           teams
-            .filter((t: any) => (t.members || []).some((m: string) => (m || '').toLowerCase() === lower))
-            .map((t: any) => pbUpdate('hr_teams', t.id, { members: (t.members || []).filter((m: string) => (m || '').toLowerCase() !== lower) }))
+            .filter((t: PbRow) => (t.members || []).some((m: string) => (m || '').toLowerCase() === lower))
+            .map((t: PbRow) => pbUpdate('hr_teams', t.id, { members: (t.members || []).filter((m: string) => (m || '').toLowerCase() !== lower) }))
         ))
       );
       // Per-user notification/announcement/message read-state rows (plan
@@ -573,7 +561,7 @@ export const profileActions = {
     const zip = new JSZip();
     const email = profile.email;
 
-    const { password, ...profileMeta } = profile as any;
+    const { password, ...profileMeta } = profile as PbRow;
     zip.file('profile.json', JSON.stringify(profileMeta, null, 2));
 
     // Documents no longer travel with the Profile object (see
@@ -795,10 +783,10 @@ export const profileActions = {
           // and it's what lets this notification carry the same name+alias+
           // profile-picture treatment as every other shift event.
           let actorLabel = email;
-          let actorEmailForPush: string | undefined = email;
+          const actorEmailForPush: string | undefined = email;
           try {
             const rawMatches = await pbList('hr_profiles', { filter: pbFilter('email ~ {:email}', { email }) });
-            const rawProfile = rawMatches.find((r: any) => (r.email || '').toLowerCase() === email.toLowerCase());
+            const rawProfile = rawMatches.find((r: PbRow) => (r.email || '').toLowerCase() === email.toLowerCase());
             if (rawProfile) {
               const extras = await getProfileExtras(rawProfile.id);
               actorLabel = displayName(toProfile(rawProfile, extras), 'hr');

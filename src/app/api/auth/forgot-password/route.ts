@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findProfileByEmail, createAndStoreOtp } from '@/lib/passwordResetOtp';
 import { sendOtpEmail } from '@/lib/serverEmail';
+import { rateLimitByIp } from '@/lib/rateLimit';
+import { cleanEmail } from '@/lib/sanitize';
 
 // Enabled Edge runtime for Cloudflare Pages support (uses fetch-based Resend API).
 export const runtime = 'edge';
@@ -16,15 +18,17 @@ export const dynamic = 'force-dynamic';
 // so this isn't hiding much, but there's no reason to make enumeration any
 // easier than it needs to be from this one endpoint either.
 export async function POST(req: NextRequest) {
+  const limited = await rateLimitByIp(req, 'forgot-password', 10, 60 * 60 * 1000);
+  if (limited) return limited;
   let email: string;
   try {
     const body = await req.json();
-    email = String(body?.email || '').trim();
+    email = cleanEmail(body?.email);
   } catch {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  if (!email || !email.includes('@')) {
+  if (!email) {
     return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
   }
 

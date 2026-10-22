@@ -34,7 +34,9 @@ export function NotificationPreferencesCard({ email }: { email: string }) {
   // for OneSignal to deliver anything to), so they're locked until this is
   // granted, per how this card is meant to work now: master switch first,
   // per-category preferences only make sense once it's on.
-  const [osPermission, setOsPermission] = useState<boolean | null>(null);
+  const [osPermissionState, setOsPermission] = useState<boolean | null>(null);
+  // With push not configured there is nothing to gate on, so treat it as granted.
+  const osPermission = isPushConfigured() ? osPermissionState : true;
   const [requesting, setRequesting] = useState(false);
 
   const refreshPermission = () => { isPushEnabled().then(setOsPermission); };
@@ -45,7 +47,7 @@ export function NotificationPreferencesCard({ email }: { email: string }) {
   }, [email]);
 
   useEffect(() => {
-    if (!isPushConfigured()) { setOsPermission(true); return; } // nothing to gate on
+    if (!isPushConfigured()) return; // nothing to gate on (see pushGateOpen below)
     refreshPermission();
     // Re-check whenever the tab/app regains focus — catches a permission
     // that was revoked from the phone's own Settings while the app sat in

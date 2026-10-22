@@ -3,17 +3,22 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { getModalCount } from '@/lib/modalStack';
+import type { PbRow } from '@/lib/pbTypes';
 
-let CapacitorApp: any = null;
-let CapacitorKeyboard: any = null;
+let CapacitorApp: PbRow | null = null;
+let CapacitorKeyboard: PbRow | null = null;
 
 if (typeof window !== 'undefined') {
   try {
+    // Loaded lazily inside this guard on purpose: server rendering and the plain web build
+    // must never evaluate native-plugin code, which a top-level import would do.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { App } = require('@capacitor/app');
     CapacitorApp = App;
   } catch { /* Web fallback */ }
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Keyboard } = require('@capacitor/keyboard');
     CapacitorKeyboard = Keyboard;
   } catch { /* Web fallback */ }
@@ -27,7 +32,7 @@ export function useNativeBackButtonHandler() {
   useEffect(() => {
     if (!CapacitorKeyboard) return;
 
-    let showListener: any = null;
+    let showListener: PbRow | null = null;
 
     (async () => {
       try {
@@ -57,10 +62,10 @@ export function useNativeBackButtonHandler() {
   useEffect(() => {
     if (!CapacitorApp) return;
 
-    let listener: any = null;
+    let listener: PbRow | null = null;
 
     (async () => {
-      listener = await CapacitorApp.addListener('backButton', (event: { canGoBack: boolean }) => {
+      listener = await CapacitorApp.addListener('backButton', () => {
         // Priority 1: Close open Modal / Sheet overlay
         if (getModalCount() > 0) {
           window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

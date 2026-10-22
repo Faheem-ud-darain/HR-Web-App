@@ -21,6 +21,7 @@
 import { pbAdminFetch, adminFindByField, adminUpsertByField, adminDeleteByField } from './pbAdmin';
 import { hashPassword } from './serverAuth';
 import { pbFilter } from '@/lib/pbFilter';
+import type { PbRow, PbJson } from '@/lib/pbTypes';
 
 const OTP_COLLECTION = 'hr_password_reset_otps';
 const RATE_LIMIT_COLLECTION = 'hr_rate_limits';
@@ -57,12 +58,12 @@ function rateLimitKey(email: string): string {
   return `otp_ratelimit_${email.toLowerCase().trim()}`;
 }
 
-async function getOtpRecord(email: string): Promise<{ id: string; value: any } | null> {
+async function getOtpRecord(email: string): Promise<{ id: string; value: PbJson } | null> {
   const row = await adminFindByField(OTP_COLLECTION, 'email', otpEmailKey(email));
   return row ? { id: row.id, value: row.data } : null;
 }
 
-async function setOtpRecord(email: string, value: any): Promise<void> {
+async function setOtpRecord(email: string, value: PbJson): Promise<void> {
   await adminUpsertByField(OTP_COLLECTION, 'email', otpEmailKey(email), value);
 }
 
@@ -70,12 +71,12 @@ async function deleteOtpRecord(email: string): Promise<void> {
   await adminDeleteByField(OTP_COLLECTION, 'email', otpEmailKey(email));
 }
 
-async function getRlRecord(rlKey: string): Promise<{ id: string; value: any } | null> {
+async function getRlRecord(rlKey: string): Promise<{ id: string; value: PbJson } | null> {
   const row = await adminFindByField(RATE_LIMIT_COLLECTION, 'rate_key', rlKey);
   return row ? { id: row.id, value: row.data } : null;
 }
 
-async function setRlRecord(rlKey: string, value: any): Promise<void> {
+async function setRlRecord(rlKey: string, value: PbJson): Promise<void> {
   await adminUpsertByField(RATE_LIMIT_COLLECTION, 'rate_key', rlKey, value);
 }
 
@@ -93,7 +94,7 @@ export async function findProfileByEmail(email: string): Promise<{ id: string; e
   const clean = email.toLowerCase().trim();
   const encoded = encodeURIComponent(pbFilter('email ~ {:email}', { email: clean }));
   const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=20`);
-  const items: any[] = list?.items || [];
+  const items: PbRow[] = list?.items || [];
   const item = items.find((p) => (p.email || '').toLowerCase().trim() === clean);
   return item ? { id: item.id, email: item.email, fullName: item.full_name } : null;
 }

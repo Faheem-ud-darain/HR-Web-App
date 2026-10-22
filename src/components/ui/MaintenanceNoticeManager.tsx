@@ -11,6 +11,7 @@ import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input, Textarea } from '@/components/ui/Input';
+import { useNow } from '@/lib/useNow';
 
 interface MaintenanceNoticeManagerProps {
   createdBy: string;
@@ -25,6 +26,7 @@ interface MaintenanceNoticeManagerProps {
 // fields (a real start/end window, entered as Pakistan time) — see
 // MaintenanceNotice in hrData.ts for why.
 export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManagerProps) {
+  const now = useNow(); // to tell finished maintenance windows from upcoming ones (see lib/useNow.ts)
   const { data: notices = [], refetch } = useMaintenanceNotices();
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -104,7 +106,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
             .slice()
             .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
             .map(n => {
-              const isPast = new Date(n.endAt).getTime() < Date.now();
+              const isPast = now > 0 && new Date(n.endAt).getTime() < now;
               return (
                 <div key={n.id} className="p-4 md:px-6 flex flex-col gap-2">
                   <div className="flex items-start justify-between gap-2">
@@ -195,7 +197,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
           <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
             <p className="text-[11px] text-sky-800 font-semibold leading-relaxed">
               Enter the time in Pakistan Standard Time — every employee, HR, and Admin will see it automatically
-              converted to their own device's local time, plus a blocking popup and push notification.
+              converted to their own device&apos;s local time, plus a blocking popup and push notification.
             </p>
           </div>
 

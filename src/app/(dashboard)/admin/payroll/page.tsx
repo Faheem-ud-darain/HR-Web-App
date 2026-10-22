@@ -55,17 +55,17 @@ export default function AdminPayrollPage() {
   // every render.
   const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords), [employees, rawPayroll, leaves, timesheets, absenceRecords]);
   const { page, setPage, totalPages, pageItems } = usePagination(payroll, 25);
-  const [summaries, setSummaries] = useState<PayrollSummary[]>([]);
   const [isReleasing, setIsReleasing] = useState(false);
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
   const [isNetPayableOpen, setIsNetPayableOpen] = useState(false);
   const [netPayableRecord, setNetPayableRecord] = useState<PayrollRecord | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Group dynamically by employee teams/departments
+  // Per-department totals: grouped dynamically by employee teams/departments.
+  const summaries: PayrollSummary[] = useMemo(() => {
+
     const depts = Array.from(new Set(employees.flatMap(e => e.teams)));
-    const calculatedSummaries = depts.map(dept => {
+    return depts.map(dept => {
       const deptEmployees = employees.filter(e => e.teams.includes(dept));
       const deptPayroll = payroll.filter(p => deptEmployees.some(e => e.id === p.employeeId));
       const usdPayroll = deptPayroll.filter(p => p.region === 'USA');
@@ -91,8 +91,6 @@ export default function AdminPayrollPage() {
         totalNetPKR: pkrPayroll.reduce((acc, p) => acc + netOf(p), 0)
       };
     });
-
-    setSummaries(calculatedSummaries);
   }, [payroll, employees]);
 
   // Real status — derived from actual payroll records, not a local toggle.

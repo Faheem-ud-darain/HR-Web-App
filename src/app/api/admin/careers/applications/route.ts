@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { adminListCareerApplications, adminUpdateCareerApplicationStatus, adminListCareerApplicationsForEmail, adminDeleteCareerApplicationsForEmail } from '@/lib/pbAdmin';
+import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
-function toCareerApplication(a: any) {
+function toCareerApplication(a: PbRow) {
   return {
     id: a.id, positionId: a.position_id, positionTitle: a.position_title, applicantName: a.applicant_name,
     applicantEmail: a.applicant_email, coverLetter: a.cover_letter, submittedAt: a.submitted_at,
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
     const email = new URL(request.url).searchParams.get('email');
     const rows = email ? await adminListCareerApplicationsForEmail(email) : await adminListCareerApplications();
     return NextResponse.json({ applications: rows.map(toCareerApplication) });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/careers/applications GET] error:', err);
     return NextResponse.json({ error: 'Could not load applications.' }, { status: 500 });
   }
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not authorized.' }, { status: 403 });
   }
 
-  let body: Record<string, any>;
+  let body: PbRow;
   try {
     body = await request.json();
   } catch {
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
   try {
     await adminUpdateCareerApplicationStatus(id, status);
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/careers/applications POST] error:', err);
     return NextResponse.json({ error: 'Could not update application status.' }, { status: 500 });
   }
@@ -87,7 +88,7 @@ export async function DELETE(request: Request) {
   try {
     await adminDeleteCareerApplicationsForEmail(email);
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[admin/careers/applications DELETE] error:', err);
     return NextResponse.json({ error: 'Could not delete applications.' }, { status: 500 });
   }

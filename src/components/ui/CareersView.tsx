@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useActionToast } from '@/components/ui/ActionToastHost';
@@ -15,11 +15,13 @@ import {
   getCareerApplicationsAdmin,
   updateApplicationStatusAdmin,
 } from '@/lib/hrData';
-import { MapPin, Plus, Trash2, CheckCircle2, ArrowRight, X, Briefcase, FileText, Users, AlertTriangle, Gift, Loader2 } from 'lucide-react';
+import { MapPin, Plus, Trash2, CheckCircle2, ArrowRight, Users, AlertTriangle, Gift, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useQuery } from '@tanstack/react-query';
+import { errMsg } from '@/lib/errors';
 
 const STATUS_OPTIONS: { value: CareerApplicationStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -57,17 +59,15 @@ export function CareersView({ role }: CareersViewProps) {
   // hook" way admin/insights fetches absence records. Only fetched at all
   // when the signed-in user is actually HR/Admin — an Employee or Team
   // Lead never even issues the request.
-  const [allApplications, setAllApplications] = useState<CareerApplication[] | null>(null);
-  const refetchApplications = React.useCallback(async () => {
-    if (role !== 'hr' && role !== 'admin') return;
-    try {
-      setAllApplications(await getCareerApplicationsAdmin());
-    } catch {
-      // best-effort — the Applications modal just shows nothing/stale data
-    }
-  }, [role]);
-  useEffect(() => { refetchApplications(); }, [refetchApplications]);
-  const applications = (role === 'hr' || role === 'admin') ? (allApplications || []) : [];
+  const isStaff = role === 'hr' || role === 'admin';
+  const { data: allApplications, refetch: refetchApplicationsQuery } = useQuery({
+    queryKey: ['career_applications_admin'],
+    enabled: isStaff,
+    queryFn: getCareerApplicationsAdmin,
+  });
+  // Best-effort, like before: a failed refresh just leaves the modal showing the last data.
+  const refetchApplications = React.useCallback(async () => { if (isStaff) await refetchApplicationsQuery(); }, [isStaff, refetchApplicationsQuery]);
+  const applications: CareerApplication[] = isStaff ? (allApplications || []) : [];
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
@@ -166,8 +166,8 @@ export function CareersView({ role }: CareersViewProps) {
           applicantEmail,
           coverLetter,
         });
-      } catch (err: any) {
-        setApplyError(err?.message || 'Could not submit your application. Please try again.');
+      } catch (err) {
+        setApplyError(errMsg(err, 'Could not submit your application. Please try again.'));
         return;
       }
       // The Applications review panel is available to HR and Admin alike
@@ -307,7 +307,7 @@ export function CareersView({ role }: CareersViewProps) {
                   <div className="space-y-2 pt-1">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Requirements</p>
                     <ul className="space-y-1.5">
-                      {job.requirements.map((req: any, idx: number) => (
+                      {job.requirements.map((req, idx: number) => (
                         <li key={idx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
                           <span className="h-1.5 w-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />
                           <span>{req}</span>

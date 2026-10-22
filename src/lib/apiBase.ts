@@ -1,4 +1,5 @@
-// The native Capacitor build (Android/iOS) is a static export with no
+
+import type { PbRow } from '@/lib/pbTypes';// The native Capacitor build (Android/iOS) is a static export with no
 // server of its own — it already talks to PocketBase directly at a
 // hardcoded https://pb.delcargo.us for that reason (see src/lib/pocketbase.ts).
 // Next.js API routes (e.g. /api/auth/forgot-password) have the same
@@ -15,7 +16,7 @@
 // editing this file — then only a rebuild is needed, no code change.
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://hub.delcargo.us';
 
-const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.();
+const isNative = typeof window !== 'undefined' && (window as unknown as PbRow).Capacitor?.isNativePlatform?.();
 
 // Prefix to use for same-app API route calls (Next.js API routes under
 // src/app/api/**, NOT PocketBase — that still goes through `pb` from

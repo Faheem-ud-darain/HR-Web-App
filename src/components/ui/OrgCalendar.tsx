@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, AlertTriangle, Calendar, Briefcase, FileText, X, Palmtree, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, Calendar, Palmtree, ClipboardList } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { LeaveApplication, Task, Profile } from '@/lib/hrData';

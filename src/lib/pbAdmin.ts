@@ -24,6 +24,8 @@
 
 import { formatDateNY, formatTimeNY } from '@/lib/timezone';
 import { pbFilter } from '@/lib/pbFilter';
+import { sanitizeForWrite } from './sanitize';
+import type { PbRow, PbJson } from '@/lib/pbTypes';
 
 const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
@@ -72,8 +74,14 @@ async function getAdminToken(): Promise<string> {
 
 // Generic authenticated PocketBase REST call. `path` is anything after the
 // base URL, e.g. `/api/collections/hr_profiles/records?filter=...`.
-export async function pbAdminFetch(path: string, init?: RequestInit): Promise<any> {
+export async function pbAdminFetch(path: string, init?: RequestInit): Promise<PbJson> {
   const token = await getAdminToken();
+  // Every JSON write made on the server passes through here, so strip control/
+  // spoofing characters from its strings once, centrally (see sanitizeForWrite:
+  // passwords/tokens/hashes, data: URLs and huge blobs are left alone).
+  if (typeof init?.body === 'string' && init.body.startsWith('{')) {
+    try { init = { ...init, body: JSON.stringify(sanitizeForWrite(JSON.parse(init.body))) }; } catch { /* not JSON — send as-is */ }
+  }
   const res = await fetch(`${PB_URL}${path}`, {
     ...init,
     headers: {
@@ -110,29 +118,29 @@ export async function pbAdminFetch(path: string, init?: RequestInit): Promise<an
 // robust regardless of stored casing, and the JS-side equality check after
 // the fetch prevents a false match on some other profile whose email merely
 // contains this address as a substring.
-export async function adminFindProfileByEmail(email: string): Promise<any | null> {
+export async function adminFindProfileByEmail(email: string): Promise<PbJson | null> {
   const clean = email.toLowerCase().trim();
   const encoded = encodeURIComponent(pbFilter('email ~ {:email}', { email: clean }));
   const list = await pbAdminFetch(`/api/collections/hr_profiles/records?filter=${encoded}&perPage=20`);
-  const items: any[] = list?.items || [];
+  const items: PbRow[] = list?.items || [];
   return items.find((p) => (p.email || '').toLowerCase().trim() === clean) || null;
 }
 
-export async function adminGetKV(key: string): Promise<{ id: string; value: any } | null> {
+export async function adminGetKV(key: string): Promise<{ id: string; value: PbJson } | null> {
   const encoded = encodeURIComponent(pbFilter('key = {:key}', { key }));
   const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, value: item.value } : null;
 }
 
-export async function adminUpdateProfile(profileId: string, fields: Record<string, any>): Promise<void> {
+export async function adminUpdateProfile(profileId: string, fields: PbRow): Promise<void> {
   await pbAdminFetch(`/api/collections/hr_profiles/records/${profileId}`, {
     method: 'PATCH',
     body: JSON.stringify(fields),
   });
 }
 
-export async function adminListPayrollForEmployee(employeeId: string): Promise<any[]> {
+export async function adminListPayrollForEmployee(employeeId: string): Promise<PbRow[]> {
   const encoded = encodeURIComponent(pbFilter('employee_id = {:employeeId}', { employeeId }));
   const list = await pbAdminFetch(`/api/collections/hr_payroll/records?filter=${encoded}&perPage=50&sort=-created`);
   return list?.items || [];
@@ -144,13 +152,13 @@ export async function adminListPayrollForEmployee(employeeId: string): Promise<a
 // are locked to admins-only, plan 012 Phase 1).
 export async function adminDeletePayrollForEmployee(employeeId: string): Promise<void> {
   const rows = await adminListPayrollForEmployee(employeeId);
-  await Promise.allSettled(rows.map((r: any) => pbAdminFetch(`/api/collections/hr_payroll/records/${r.id}`, { method: 'DELETE' })));
+  await Promise.allSettled(rows.map((r: PbRow) => pbAdminFetch(`/api/collections/hr_payroll/records/${r.id}`, { method: 'DELETE' })));
 }
 
 // Upsert into the hr_delcargo_store KV collection — mirrors setKvRecord in
 // src/lib/passwordResetOtp.ts, just authenticated with the admin token
 // instead of relying on hr_delcargo_store staying public.
-export async function adminSetKV(key: string, value: any): Promise<void> {
+export async function adminSetKV(key: string, value: PbJson): Promise<void> {
   const existing = await adminGetKV(key);
   if (existing) {
     await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${existing.id}`, {
@@ -190,7 +198,7 @@ export async function adminUploadProfilePicture(profileId: string, dataUrl: stri
   }
 }
 
-export async function adminListAllProfiles(): Promise<any[]> {
+export async function adminListAllProfiles(): Promise<PbRow[]> {
   // hr_profiles is small enough (employee headcount, not a big-data table)
   // that a single bounded page comfortably covers the whole company — same
   // 500-row ceiling already used elsewhere in this app (see useTimesheets in
@@ -200,7 +208,7 @@ export async function adminListAllProfiles(): Promise<any[]> {
   return list?.items || [];
 }
 
-export async function adminListAllPayroll(): Promise<any[]> {
+export async function adminListAllPayroll(): Promise<PbRow[]> {
   const list = await pbAdminFetch(`/api/collections/hr_payroll/records?perPage=500&sort=-created`);
   return list?.items || [];
 }
@@ -214,7 +222,7 @@ export async function adminListAllPayroll(): Promise<any[]> {
 // locked down without breaking the Tracking page or the retention sweep.
 const SCREENSHOT_LIST_CAP = 5000;
 
-export async function adminListScreenshots(filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<any[]> {
+export async function adminListScreenshots(filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<PbRow[]> {
   const filterParts: string[] = [];
   const toPbDate = (iso: string) => iso.replace('T', ' ').replace('Z', '');
   if (filters?.employeeEmail) filterParts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
@@ -225,15 +233,15 @@ export async function adminListScreenshots(filters?: { employeeEmail?: string; s
   // callers use are requested. SCREENSHOT_LIST_CAP bounds a runaway query.
   const base = `perPage=200&skipTotal=1&sort=-captured_at&fields=id,collectionId,employee_email,captured_at,image,device_label`
     + (filterParts.length ? `&filter=${encodeURIComponent(filterParts.join(' && '))}` : '');
-  const all: any[] = [];
+  const all: PbRow[] = [];
   for (let page = 1; all.length < SCREENSHOT_LIST_CAP; page++) {
     const res = await pbAdminFetch(`/api/collections/hr_screenshots/records?page=${page}&${base}`);
-    const batch: any[] = res?.items || [];
+    const batch: PbRow[] = res?.items || [];
     all.push(...batch);
     if (batch.length < 200) break;
   }
   const list = { items: all };
-  let items: any[] = list?.items || [];
+  let items: PbRow[] = list.items;
   if (filters?.employeeEmail) {
     const wanted = filters.employeeEmail.toLowerCase();
     items = items.filter((r) => (r.employee_email || '').toLowerCase() === wanted);
@@ -241,15 +249,15 @@ export async function adminListScreenshots(filters?: { employeeEmail?: string; s
   return items;
 }
 
-// Same KV-prefix scan as pbGetKVByPrefix in hrData.ts, authenticated. Used
+// Authenticated KV-prefix scan (the browser-side equivalent was removed). Used
 // for the legacy base64-in-KV screenshot rows (key prefix `screenshot_`,
 // predates the real hr_screenshots collection — see getScreenshots' comment)
 // so the authenticated route below can return the exact same combined
 // result the old public client-side call used to.
-export async function adminGetKVByPrefix(prefix: string): Promise<{ key: string; value: any; id: string }[]> {
+export async function adminGetKVByPrefix(prefix: string): Promise<{ key: string; value: PbJson; id: string }[]> {
   const encoded = encodeURIComponent(pbFilter('key ~ {:prefix}', { prefix }));
   const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=500`);
-  return (list?.items || []).map((r: any) => ({ key: r.key, value: r.value, id: r.id }));
+  return (list?.items || []).map((r: PbRow) => ({ key: r.key, value: r.value, id: r.id }));
 }
 
 export async function adminDeleteRecords(collection: string, ids: string[]): Promise<void> {
@@ -289,9 +297,9 @@ export function adminFileUrl(collectionId: string, recordId: string, filename: s
 // Authenticated mirror of hrActions.getAllTrackingSettings — used by the
 // screenshot-retention route to know which employees are excluded from
 // auto-delete.
-export async function adminListTrackingSettings(): Promise<any[]> {
+export async function adminListTrackingSettings(): Promise<PbRow[]> {
   const list = await pbAdminFetch(`/api/collections/hr_tracking_settings/records?perPage=500`);
-  return (list?.items || []).map((t: any) => ({
+  return (list?.items || []).map((t: PbRow) => ({
     employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
     excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
   }));
@@ -337,14 +345,14 @@ export async function adminDeleteKVByKeys(keys: string[]): Promise<void> {
 // of them rather than writing four near-identical ones.
 const adminUpsertIdCache = new Map<string, string>();
 
-export async function adminFindByField(collection: string, field: string, value: string): Promise<{ id: string; data: any } | null> {
+export async function adminFindByField(collection: string, field: string, value: string): Promise<{ id: string; data: PbJson } | null> {
   const encoded = encodeURIComponent(pbFilter(`${field} = {:value}`, { value }));
   const list = await pbAdminFetch(`/api/collections/${collection}/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, data: item.data } : null;
 }
 
-export async function adminUpsertByField(collection: string, field: string, value: string, data: any): Promise<void> {
+export async function adminUpsertByField(collection: string, field: string, value: string, data: PbJson): Promise<void> {
   const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
   const cachedId = adminUpsertIdCache.get(cacheKey);
   if (cachedId) {
@@ -384,7 +392,7 @@ export async function adminDeleteByField(collection: string, field: string, valu
 // adminHasAppliedForPosition. Listing and status changes stay HR/Admin-only
 // via src/app/api/admin/careers/applications, same requireSession()
 // pattern as everything else in this file.
-export async function adminListCareerApplications(): Promise<any[]> {
+export async function adminListCareerApplications(): Promise<PbRow[]> {
   const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?perPage=500&sort=-created`);
   return list?.items || [];
 }
@@ -423,11 +431,11 @@ export async function adminUpdateCareerApplicationStatus(id: string, status: str
 // ?email=... — that route is the only caller). Same case-insensitive `~` +
 // exact-match-filter pattern as adminListAbsenceRecordsForEmail, since
 // PocketBase's `=` filter is case-sensitive.
-export async function adminListCareerApplicationsForEmail(email: string): Promise<any[]> {
+export async function adminListCareerApplicationsForEmail(email: string): Promise<PbRow[]> {
   const encoded = encodeURIComponent(pbFilter('applicant_email ~ {:email}', { email }));
   const list = await pbAdminFetch(`/api/collections/hr_career_applications/records?filter=${encoded}&sort=-created`);
   const wanted = email.trim().toLowerCase();
-  return (list?.items || []).filter((r: any) => (r.applicant_email || '').toLowerCase() === wanted);
+  return (list?.items || []).filter((r: PbRow) => (r.applicant_email || '').toLowerCase() === wanted);
 }
 
 // Purge every application submitted under one email — used only by
@@ -436,7 +444,7 @@ export async function adminListCareerApplicationsForEmail(email: string): Promis
 // before being hired). Best-effort per row, same as adminDeleteRecords.
 export async function adminDeleteCareerApplicationsForEmail(email: string): Promise<void> {
   const rows = await adminListCareerApplicationsForEmail(email);
-  await Promise.allSettled(rows.map((r: any) => pbAdminFetch(`/api/collections/hr_career_applications/records/${r.id}`, { method: 'DELETE' })));
+  await Promise.allSettled(rows.map((r: PbRow) => pbAdminFetch(`/api/collections/hr_career_applications/records/${r.id}`, { method: 'DELETE' })));
 }
 
 // Employee's own absence/deduction records (hr_absence_records) — for the
@@ -444,9 +452,9 @@ export async function adminDeleteCareerApplicationsForEmail(email: string): Prom
 // same case-insensitive `~` + exact-match-filter pattern used elsewhere in
 // this file (see adminListScreenshots), since PocketBase's `=` filter is
 // case-sensitive and emails have drifted in casing before.
-export async function adminListAbsenceRecordsForEmail(email: string): Promise<any[]> {
+export async function adminListAbsenceRecordsForEmail(email: string): Promise<PbRow[]> {
   const encoded = encodeURIComponent(pbFilter('employeeEmail ~ {:email} && deleted = false', { email }));
   const list = await pbAdminFetch(`/api/collections/hr_absence_records/records?filter=${encoded}&perPage=200&sort=-date`);
   const wanted = email.toLowerCase();
-  return (list?.items || []).filter((r: any) => (r.employeeEmail || '').toLowerCase() === wanted);
+  return (list?.items || []).filter((r: PbRow) => (r.employeeEmail || '').toLowerCase() === wanted);
 }
