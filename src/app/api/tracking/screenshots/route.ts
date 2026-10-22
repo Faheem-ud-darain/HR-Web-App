@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { adminListScreenshots, adminGetFileToken, adminFileUrl } from '@/lib/pbAdmin';
+import { adminListScreenshots, adminListScreenshotsPage, adminGetFileToken, adminFileUrl } from '@/lib/pbAdmin';
 import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
@@ -8,6 +8,10 @@ export const runtime = 'edge';
 const SCREENSHOT_THUMB = '300x180';
 
 // Authenticated screenshot listing for ONE employee and a date range.
+//
+// Paginated: `page` (default 1) returns at most 50 items plus the window's
+// totalItems/totalPages. `all=1` returns the whole window (capped) and is for
+// the explicit ZIP-export / profile-download flows only.
 //
 // Access: HR and Admin only. Nobody else — not team leads, and not the
 // employee themselves — may list or download screenshots. hr_screenshots'
@@ -32,13 +36,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'employeeEmail is required.' }, { status: 400 });
   }
 
+  const wantsAll = searchParams.get('all') === '1';
+  const page = Math.max(1, Number(searchParams.get('page')) || 1);
+
   try {
-    const [rows, fileToken] = await Promise.all([
-      adminListScreenshots({ employeeEmail, sinceISO, untilISO }),
+    const [result, fileToken] = await Promise.all([
+      wantsAll
+        ? adminListScreenshots({ employeeEmail, sinceISO, untilISO }).then((rows) => ({ items: rows, page: 1, totalItems: rows.length, totalPages: 1 }))
+        : adminListScreenshotsPage({ employeeEmail, sinceISO, untilISO }, page),
       adminGetFileToken(),
     ]);
 
-    const items = rows.map((r: PbRow) => ({
+    const items = result.items.map((r: PbRow) => ({
       id: r.id,
       employeeEmail: r.employee_email,
       timestamp: r.captured_at,
@@ -46,7 +55,7 @@ export async function GET(request: Request) {
       thumbUrl: r.image ? adminFileUrl(r.collectionId, r.id, r.image, fileToken, SCREENSHOT_THUMB) : '',
       deviceLabel: r.device_label || undefined,
     }));
-    return NextResponse.json({ items });
+    return NextResponse.json({ items, page: result.page, totalItems: result.totalItems, totalPages: result.totalPages });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

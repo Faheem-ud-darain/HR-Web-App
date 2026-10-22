@@ -88,6 +88,15 @@ export function TrackingView({ role }: TrackingViewProps) {
   const [viewerDay, setViewerDay] = useState<string>(() => localDateString());
   const [viewerShots, setViewerShots] = useState<Screenshot[]>([]);
   const [viewerLoading, setViewerLoading] = useState(false);
+  // Pagination: the viewer loads 50 at a time; these track what's been
+  // fetched for the current employee/window and how many exist in total.
+  const [viewerPage, setViewerPage] = useState(1);
+  const [viewerTotal, setViewerTotal] = useState(0);
+  const [viewerTotalPages, setViewerTotalPages] = useState(1);
+  const [viewerLoadingMore, setViewerLoadingMore] = useState(false);
+  // The exact [since, until] the first page was loaded with — later pages and
+  // the ZIP export reuse it so a rolling 'week'/'month' window can't drift.
+  const viewerWindowRef = useRef<{ since: string; until: string } | null>(null);
   const [exporting, setExporting] = useState(false);
 
   // Inactivity summary (loaded alongside screenshots for the same
@@ -506,14 +515,42 @@ export function TrackingView({ role }: TrackingViewProps) {
     setViewerLoading(true);
     try {
       const { since, until } = computeWindow(range, day);
-      const [shots, inactivity] = await Promise.all([
-        hrActions.getScreenshots({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }),
+      viewerWindowRef.current = { since: since.toISOString(), until: until.toISOString() };
+      const [first, inactivity] = await Promise.all([
+        hrActions.getScreenshotsPage({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }, 1),
         hrActions.getInactivityLogs({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }),
       ]);
-      setViewerShots(shots);
+      setViewerShots(first.items);
+      setViewerPage(1);
+      setViewerTotal(first.totalItems);
+      setViewerTotalPages(first.totalPages);
       setViewerInactivity(inactivity);
     } finally {
       setViewerLoading(false);
+    }
+  };
+
+  // Appends the next page of the current window. De-duplicates by id in case
+  // new captures shifted the page boundary between requests.
+  const loadMoreViewerShots = async () => {
+    if (!viewerEmp || viewerLoadingMore || viewerPage >= viewerTotalPages) return;
+    setViewerLoadingMore(true);
+    try {
+      const win = viewerWindowRef.current;
+      if (!win) return;
+      const next = await hrActions.getScreenshotsPage(
+        { employeeEmail: viewerEmp.email, sinceISO: win.since, untilISO: win.until },
+        viewerPage + 1,
+      );
+      setViewerShots(prev => {
+        const seen = new Set(prev.map(x => x.id));
+        return [...prev, ...next.items.filter(x => !seen.has(x.id))];
+      });
+      setViewerPage(next.page);
+      setViewerTotal(next.totalItems);
+      setViewerTotalPages(next.totalPages);
+    } finally {
+      setViewerLoadingMore(false);
     }
   };
 
@@ -636,6 +673,8 @@ export function TrackingView({ role }: TrackingViewProps) {
   const lightboxNav = (delta: number) => {
     if (lightboxIndex === null) return;
     const next = lightboxIndex + delta;
+    // Stepping past the last loaded shot pulls the next page in the background.
+    if (next >= viewerShots.length - 1 && viewerPage < viewerTotalPages) void loadMoreViewerShots();
     if (next < 0 || next >= viewerShots.length) return;
     setLightboxIndex(next);
     setZoom(1);
@@ -657,16 +696,20 @@ export function TrackingView({ role }: TrackingViewProps) {
 
 
   const handleExportZip = async () => {
-    if (!viewerEmp || viewerShots.length === 0) return;
+    if (!viewerEmp || viewerTotal === 0) return;
     setExporting(true);
     try {
+      // The grid only holds the pages loaded so far; the export covers the
+      // whole selected window, fetched in full on demand.
+      const win = viewerWindowRef.current;
+      const allShots = await hrActions.getScreenshots({ employeeEmail: viewerEmp.email, sinceISO: win?.since, untilISO: win?.until });
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       const manifestRows = ['Timestamp,Filename'];
       // imageUrl is either a data: URL (legacy captures) or a real
       // PocketBase file URL (current captures) — fetch() handles both
       // uniformly, so we no longer need to special-case base64 extraction.
-      await Promise.all(viewerShots.map(async (s, i) => {
+      await Promise.all(allShots.map(async (s, i) => {
         const ts = new Date(s.timestamp);
         const res = await fetch(s.imageUrl);
         const blob = await res.blob();
@@ -829,7 +872,7 @@ export function TrackingView({ role }: TrackingViewProps) {
       <TrackerSetupModal setupEmp={setupEmp} diagnosticsRequestIdRef={diagnosticsRequestIdRef} setSetupEmp={setSetupEmp} role={role} settingsFor={settingsFor} copySetupCode={copySetupCode} copied={copied} handleRegenerateToken={handleRegenerateToken} handleForceDisconnect={handleForceDisconnect} copyConfig={copyConfig} handleRunDiagnostics={handleRunDiagnostics} diagnosticsStatus={diagnosticsStatus} handleReloadSettingsNow={handleReloadSettingsNow} handleTrackerAction={handleTrackerAction} diagnosticsResult={diagnosticsResult} copyDiagnosticsReport={copyDiagnosticsReport} copiedDiagnostics={copiedDiagnostics} />
 
       {/* Screenshot Viewer Modal */}
-      <ScreenshotsModal viewerEmp={viewerEmp} setViewerEmp={setViewerEmp} role={role} handleRangeChange={handleRangeChange} viewerRange={viewerRange} viewerDay={viewerDay} handleDayChange={handleDayChange} handleExportZip={handleExportZip} viewerShots={viewerShots} exporting={exporting} viewerLoading={viewerLoading} viewerInactivity={viewerInactivity} formatDuration={formatDuration} totalInactiveSeconds={totalInactiveSeconds} openLightbox={openLightbox} />
+      <ScreenshotsModal viewerEmp={viewerEmp} setViewerEmp={setViewerEmp} role={role} handleRangeChange={handleRangeChange} viewerRange={viewerRange} viewerDay={viewerDay} handleDayChange={handleDayChange} handleExportZip={handleExportZip} viewerShots={viewerShots} viewerTotal={viewerTotal} hasMoreShots={viewerPage < viewerTotalPages} loadMoreShots={loadMoreViewerShots} loadingMoreShots={viewerLoadingMore} exporting={exporting} viewerLoading={viewerLoading} viewerInactivity={viewerInactivity} formatDuration={formatDuration} totalInactiveSeconds={totalInactiveSeconds} openLightbox={openLightbox} />
 
       {/* Mouse Activity Modal — dedicated detail view of inactivity data,
           separate from the Screenshots modal's compact summary. */}
@@ -850,7 +893,7 @@ export function TrackingView({ role }: TrackingViewProps) {
               this lightbox. */}
           <div className="flex items-center justify-between px-4 py-3 text-white" onClick={e => e.stopPropagation()}>
             <span className="text-xs font-semibold text-slate-200">
-              {formatDateTimeNY(viewerShots[lightboxIndex].timestamp)} · {lightboxIndex + 1} / {viewerShots.length}
+              {formatDateTimeNY(viewerShots[lightboxIndex].timestamp)} · {lightboxIndex + 1} / {viewerTotal}
             </span>
             <div className="flex items-center gap-1.5">
               <button onClick={zoomOut} disabled={zoom <= 1} className="p-2 rounded-lg bg-black/40 backdrop-blur-md hover:bg-black/55 disabled:opacity-40 transition-colors">
