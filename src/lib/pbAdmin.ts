@@ -322,11 +322,8 @@ export async function adminGetFileToken(): Promise<string> {
   return data.token;
 }
 
-// `thumb` (e.g. "300x180") asks PocketBase for a resized copy. It only takes
-// effect for sizes configured on the field (see ensureScreenshotThumbs in the
-// schema-migration route); otherwise PocketBase serves the original.
-export function adminFileUrl(collectionId: string, recordId: string, filename: string, fileToken: string, thumb?: string): string {
-  return `${PB_URL}/api/files/${collectionId}/${recordId}/${filename}?token=${encodeURIComponent(fileToken)}${thumb ? `&thumb=${encodeURIComponent(thumb)}` : ''}`;
+export function adminFileUrl(collectionId: string, recordId: string, filename: string, fileToken: string): string {
+  return `${PB_URL}/api/files/${collectionId}/${recordId}/${filename}?token=${encodeURIComponent(fileToken)}`;
 }
 
 // Authenticated mirror of hrActions.getAllTrackingSettings — used by the

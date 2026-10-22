@@ -5,8 +5,6 @@ import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
-const SCREENSHOT_THUMB = '300x180';
-
 // Authenticated screenshot listing for ONE employee and a date range.
 //
 // Paginated: `page` (default 1) returns at most 50 items plus the window's
@@ -52,7 +50,6 @@ export async function GET(request: Request) {
       employeeEmail: r.employee_email,
       timestamp: r.captured_at,
       imageUrl: r.image ? adminFileUrl(r.collectionId, r.id, r.image, fileToken) : '',
-      thumbUrl: r.image ? adminFileUrl(r.collectionId, r.id, r.image, fileToken, SCREENSHOT_THUMB) : '',
       deviceLabel: r.device_label || undefined,
     }));
     return NextResponse.json({ items, page: result.page, totalItems: result.totalItems, totalPages: result.totalPages });

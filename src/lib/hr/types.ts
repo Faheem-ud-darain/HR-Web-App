@@ -315,7 +315,7 @@ export interface UserSessionSlot {
   deviceId: string; deviceLabel: string; sessionToken: string; loggedInAt: string; lastSeenAt: string;
 }
 
-export interface Screenshot { id: string; employeeEmail: string; timestamp: string; imageUrl: string; /** Small preview for grids; falls back to imageUrl. */ thumbUrl?: string; deviceLabel?: string; legacy?: boolean; }
+export interface Screenshot { id: string; employeeEmail: string; timestamp: string; imageUrl: string; deviceLabel?: string; legacy?: boolean; }
 
 export interface InactivityLog {
   id: string; employeeEmail: string; startAt: string; endAt: string; durationSeconds: number; deviceLabel?: string;

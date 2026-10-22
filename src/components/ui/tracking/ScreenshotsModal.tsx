@@ -136,7 +136,7 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
                 >
                   <div className="relative overflow-hidden rounded-lg border border-slate-200 group-hover:border-orange-300 transition-colors">
                     <OptimizedImage
-                      src={shot.thumbUrl || shot.imageUrl}
+                      src={shot.imageUrl}
                       alt="Screenshot"
                       width={300}
                       height={180}

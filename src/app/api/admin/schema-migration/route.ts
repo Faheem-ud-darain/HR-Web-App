@@ -733,22 +733,6 @@ export async function POST(request: Request) {
       await pbAdminFetch(`/api/collections/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ indexes }) });
       return NextResponse.json({ ok: true, result: 'updated', added, dropped, indexes });
     }
-    if (body.action === 'ensureScreenshotThumbs') {
-      // Lets PocketBase serve ?thumb=300x180 for hr_screenshots.image so the
-      // screenshot grid downloads small previews instead of full-size WebPs.
-      // Only edits the file field's `thumbs` option; existing files get their
-      // thumbnail generated lazily on first request.
-      const size = '300x180';
-      const existing = await pbAdminFetch('/api/collections/hr_screenshots');
-      const schema: PbRow[] = existing.schema || [];
-      const field = schema.find((f: PbRow) => f.name === 'image');
-      if (!field) return NextResponse.json({ error: 'hr_screenshots.image not found' }, { status: 404 });
-      const thumbs: string[] = field.options?.thumbs || [];
-      if (thumbs.includes(size)) return NextResponse.json({ ok: true, result: 'already configured', thumbs });
-      field.options = { ...(field.options || {}), thumbs: [...thumbs, size] };
-      await pbAdminFetch(`/api/collections/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ schema }) });
-      return NextResponse.json({ ok: true, result: 'added', thumbs: field.options.thumbs });
-    }
     if (body.action === 'ensureLeaveDateFields') {
       // Adds hr_leaves.start_date / end_date ("YYYY-MM-DD" text) so leaves can be
       // filtered by date server-side. Purely additive — never touches existing
