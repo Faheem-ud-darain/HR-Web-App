@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Profile,
@@ -29,6 +29,7 @@ import { Button } from './Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useIsClient } from '@/lib/useIsClient';
+import type { ArchiveProgress } from '@/lib/hrData';
 
 // Detects the `pbkdf2$<iterations>$<salt>$<hash>` format hashPassword()
 // writes (see serverAuth.ts) — deliberately re-implemented here rather than
@@ -62,6 +63,12 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   // is opened, see the effect below.
   const [hasDownloadedArchive, setHasDownloadedArchive] = useState(false);
   const [isExportingArchive, setIsExportingArchive] = useState(false);
+  // Live status of the employee-data export, so HR can tell "working" from "stuck" (it can take
+  // minutes for an employee with thousands of screenshots), and a way to cancel it.
+  const [archiveProgress, setArchiveProgress] = useState<ArchiveProgress | null>(null);
+  const [archiveNote, setArchiveNote] = useState('');
+  const archiveAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => archiveAbortRef.current?.abort(), []); // closing the modal stops an export in flight
   const [isApplyingIncrement, setIsApplyingIncrement] = useState(false);
   const [showApplyIncrementConfirm, setShowApplyIncrementConfirm] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -329,9 +336,16 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
   const handleDownloadArchive = async () => {
     if (!profile) return;
+    const controller = new AbortController();
+    archiveAbortRef.current = controller;
     setIsExportingArchive(true);
+    setArchiveNote('');
+    setArchiveProgress({ phase: 'records', label: 'Starting…', percent: 1 });
     try {
-      const { filename, blob } = await hrActions.exportEmployeeArchive(profile);
+      const { filename, blob, screenshotsTotal, screenshotsSkipped } = await hrActions.exportEmployeeArchive(profile, {
+        onProgress: setArchiveProgress,
+        signal: controller.signal,
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -341,11 +355,22 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       setHasDownloadedArchive(true);
+      setArchiveNote(
+        screenshotsSkipped > 0
+          ? `Downloaded. ${screenshotsSkipped} of ${screenshotsTotal} screenshots could not be fetched (expired or too slow) and are not in the file.`
+          : `Downloaded${screenshotsTotal ? ` with ${screenshotsTotal} screenshots` : ''}.`
+      );
     } catch (err) {
-      console.error('Employee data export failed:', err);
-      alert('Could not prepare the data export. See console for details — deletion is still blocked until this succeeds.');
+      if (controller.signal.aborted) {
+        setArchiveNote('Download cancelled.');
+      } else {
+        console.error('Employee data export failed:', err);
+        alert('Could not prepare the data export. See console for details — deletion is still blocked until this succeeds.');
+      }
     } finally {
+      archiveAbortRef.current = null;
       setIsExportingArchive(false);
+      setArchiveProgress(null);
     }
   };
 
@@ -752,6 +777,24 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                         <Download className="h-3.5 w-3.5" />
                         {isExportingArchive ? 'Preparing download…' : hasDownloadedArchive ? 'Re-download Employee Data' : 'Download Employee Data First'}
                       </Button>
+                      {isExportingArchive && archiveProgress && (
+                        <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3" role="status" aria-live="polite">
+                          <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-slate-600">
+                            <span className="min-w-0 truncate">{archiveProgress.label}</span>
+                            <span className="shrink-0 tabular-nums">{archiveProgress.percent}%</span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                            <div className="h-full rounded-full bg-orange-500 transition-all duration-300" style={{ width: `${archiveProgress.percent}%` }} />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[10px] font-medium text-slate-400">Large accounts with many screenshots can take a few minutes. Keep this window open.</p>
+                            <button type="button" onClick={() => archiveAbortRef.current?.abort()} className="shrink-0 text-[11px] font-bold text-rose-600 hover:underline">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                      {!isExportingArchive && archiveNote && (
+                        <p className="text-[11px] font-semibold text-slate-500 text-center" role="status">{archiveNote}</p>
+                      )}
                       <button
                         onClick={() => setShowDeleteConfirm(true)}
                         disabled={!hasDownloadedArchive}

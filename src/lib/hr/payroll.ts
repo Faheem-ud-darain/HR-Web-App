@@ -125,7 +125,7 @@ import type { PbRow } from '@/lib/pbTypes';
 export { getMissedIncrementEvents, getPendingIncrement, getIncrementHistory, getPendingIncrementForPayrollMonth };
 export type { IncrementEvent } from '../incrementMath';
 
-export { getFinalLeavePayout, getAbsenceDeductionForMonth, getShiftShortfallDeduction } from '../core/payroll';
+export { getFinalLeavePayout, getAbsenceDeductionForMonth, getShiftShortfallDeduction, canReviewPreviousMonthPayroll, previousPayrollMonthKey } from '../core/payroll';
 
 export const payrollActions = {
   // computePayrollView is pure (no writes) and lives in ../core/payroll so the

@@ -49,13 +49,17 @@ in this same folder — so employees never need to install Python themselves.
 import base64
 import binascii
 import ctypes
+import hashlib
 import io
 import json
+import logging
+import logging.handlers
 import os
 import platform
 import plistlib
 import random
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -120,6 +124,8 @@ if platform.system() == "Darwin":
 APP_NAME = "DelCargo Tracker"
 APP_DIR = os.path.join(os.path.expanduser("~"), ".delcargo_tracker")
 CONFIG_FILE = os.path.join(APP_DIR, "config.json")
+LOG_DIR = os.path.join(APP_DIR, "logs")
+LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 
 # ── Auto-update ───────────────────────────────────────────────────────────
 # Bump APP_VERSION and push a matching "tracker-agent-vX.Y" git tag (see
@@ -128,7 +134,19 @@ CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "24"  # Bumped 23 -> 24 (2026-09-13): the 8-signal tracker
+APP_VERSION = "25"  # Bumped 24 -> 25 (2026-10-14). Fully compatible with v24, so
+# MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
+#   Lighter server load: realtime subscription scoped to this employee's own
+#   hr_tracker_signals row; cached row id (heartbeat = 2 requests, not 3); idle
+#   settings poll 60s (was 20s); one shared HTTP session (keep-alive); retries
+#   back off with jitter instead of every tracker retrying on the same beat.
+#   Updates: background download + forced restart prompt, SHA-256 verified.
+#   One instance only: native OS lock + port, second launch shows the window.
+#   Reliability: idle auto-absence now writes to hr_absence_records (was the
+#   retired KV blob); inactivity logs retry and park on disk; rotating log file
+#   whose tail is included in Run Diagnostics; remote Reconnect/Restart actions;
+#   multi-monitor screenshots keep one screen-width per monitor.
+# Bumped 23 -> 24 (2026-09-13): the 8-signal tracker
 # reliability system (heartbeat, shift_stop_signal, quit_intent, ping, pong,
 # stop_cmd, command, diagnostics) moved off 8 separate hr_delcargo_store KV
 # keys per employee onto one row per employee in a new hr_tracker_signals
@@ -210,8 +228,10 @@ GITHUB_MAC_ZIP_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download
 MAX_WIDTH = 1280
 WEBP_QUALITY = 80  # WebP at 80 looks visually equivalent to (often better than) JPEG
                    # at much higher settings, while producing a smaller file
-SETTINGS_POLL_SECONDS = 20  # how often we re-check tracking/shift status (was 60s — this is how
-                            # quickly the app notices you clocked in and flips to "Tracking Active")
+SETTINGS_POLL_SECONDS = 60  # fallback re-check of tracking/shift status. A clock-in/out is
+                            # normally noticed within ~1s via the realtime (SSE) wake_event; this poll
+                            # only matters if that connection is down (was 20s — most of it ran while
+                            # the tracker sat idle between shifts, 6 requests/min per open tracker)
 
 MOUSE_POLL_SECONDS = 5       # how often we sample the cursor position
 INACTIVITY_THRESHOLD_SECONDS = 180  # 3 minutes — matches the HR/Admin-facing spec
@@ -486,25 +506,208 @@ def decode_setup_code(code):
 # an OS-level socket bind is automatically released the instant the process
 # actually exits, crash or not.
 
-SINGLE_INSTANCE_PORT = 47231  # arbitrary local-only port, used purely as a lock — never listens for real traffic
+# ── Local log file (added v25) ──────────────────────────────────────────────
+# The packaged build is windowed, so print() output used to vanish. Everything
+# written to stdout/stderr (the existing print() calls, tracebacks) and any
+# uncaught exception now also goes to a small rotating log under
+# ~/.delcargo_tracker/logs, and Run Diagnostics sends the tail of it to HR.
+_log_handler = None
+
+
+class _LogStream:
+    """File-like stdout/stderr replacement that writes lines to the log (and
+    still to the original stream when there is one, e.g. running from source)."""
+
+    def __init__(self, level, original):
+        self._level = level
+        self._original = original
+        self._buffer = ""
+
+    def write(self, text):
+        if self._original:
+            try:
+                self._original.write(text)
+            except Exception:
+                pass
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if line.strip():
+                try:
+                    logging.getLogger("tracker").log(self._level, line.rstrip())
+                except Exception:
+                    pass
+        return len(text)
+
+    def flush(self):
+        if self._original:
+            try:
+                self._original.flush()
+            except Exception:
+                pass
+
+    def isatty(self):
+        return False
+
+
+def setup_logging():
+    """Starts the rotating log (512 KB x 3) and routes stdout/stderr and uncaught
+    exceptions into it. Never raises: logging must not be able to stop the app."""
+    global _log_handler
+    if _log_handler is not None:
+        return
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=512 * 1024, backupCount=3, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger = logging.getLogger("tracker")
+        logger.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        logger.propagate = False
+        _log_handler = handler
+        sys.stdout = _LogStream(logging.INFO, sys.stdout)
+        sys.stderr = _LogStream(logging.ERROR, sys.stderr)
+
+        def _log_uncaught(exc_type, exc, tb):
+            logger.error("Uncaught exception", exc_info=(exc_type, exc, tb))
+        sys.excepthook = _log_uncaught
+        threading.excepthook = lambda a: logger.error(
+            "Uncaught exception in thread %s", getattr(a.thread, "name", "?"),
+            exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
+        logger.info("---- DelCargo Tracker v%s starting (%s) ----", APP_VERSION, platform.platform())
+    except Exception:
+        pass
+
+
+_SECRET_PATTERNS = (
+    re.compile(r"agt_[A-Za-z0-9]+"),                      # agent setup token
+    re.compile(r"(token|authorization)=[^&\s]+", re.I),   # query-string tokens in request URLs
+)
+
+
+def read_log_tail(max_lines=40, max_chars=6000):
+    """Last lines of the log for Run Diagnostics, with anything token-like
+    redacted (the diagnostics row is readable from the portal)."""
+    try:
+        with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()[-max_lines:]
+        text = "".join(lines)
+        for pattern in _SECRET_PATTERNS:
+            text = pattern.sub("[redacted]", text)
+        return text[-max_chars:]
+    except Exception:
+        return ""
+
+
+SINGLE_INSTANCE_PORT = 47231  # local-only port: lock for older builds, plus the "show your window" channel below
+SINGLE_INSTANCE_MUTEX = "Global\\DelCargoTrackerSingleInstance"  # Windows: machine-wide, so a second user session is blocked too
 _single_instance_socket = None  # kept alive for the process lifetime so the OS never releases the port early
+_single_instance_os_lock = None  # Windows mutex handle / open lock-file; same lifetime rule
+
+
+def _acquire_os_instance_lock():
+    """Native single-instance lock: a named mutex on Windows, an exclusive
+    flock on a lock file elsewhere. The OS releases either the instant the
+    process dies, however it dies. Returns False only when another instance
+    definitely holds it; any unexpected error returns True (fail open — the
+    port lock below still guards, and a lock bug must never stop the tracker
+    from running at all)."""
+    global _single_instance_os_lock
+    try:
+        if platform.system() == "Windows":
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            k32.CreateMutexW.restype = ctypes.c_void_p
+            k32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
+            k32.CloseHandle.argtypes = [ctypes.c_void_p]
+            handle = k32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+            err = ctypes.get_last_error()
+            if not handle:
+                return err != 5  # ERROR_ACCESS_DENIED: another user's instance owns it
+            if err == 183:  # ERROR_ALREADY_EXISTS
+                k32.CloseHandle(handle)
+                return False
+            _single_instance_os_lock = handle
+            return True
+        import fcntl
+        os.makedirs(APP_DIR, exist_ok=True)
+        lock_file = open(os.path.join(APP_DIR, "instance.lock"), "w")
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            lock_file.close()
+            return False
+        _single_instance_os_lock = lock_file
+        return True
+    except Exception as e:
+        print(f"[warn] Native instance lock unavailable, relying on the port lock: {e}")
+        return True
 
 
 def acquire_single_instance_lock():
     """Returns True if this is the only running instance (and claims the
     lock for the rest of the process's life). Returns False if another
-    instance already holds it."""
+    instance already holds it. Two layers, both must pass: the native OS
+    lock above, and the loopback port (which older v24 builds also hold, so
+    old and new builds still exclude each other)."""
     global _single_instance_socket
+    if not _acquire_os_instance_lock():
+        return False
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
+        # On Mac/Linux SO_REUSEADDR only lets us bind past lingering TIME_WAIT
+        # leftovers (it still refuses while a live listener holds the port).
+        # On Windows it would allow a SECOND live bind, so it stays off there —
+        # Windows doesn't block binds on TIME_WAIT in the first place.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0 if platform.system() == "Windows" else 1)
         s.bind(("127.0.0.1", SINGLE_INSTANCE_PORT))
-        s.listen(1)
+        s.listen(5)
     except OSError:
         s.close()
         return False
     _single_instance_socket = s
     return True
+
+
+def signal_existing_instance():
+    """Asks the already-running instance to bring its window to the front.
+    Returns True if it answered (v25+ only; an older build never replies, so
+    the caller falls back to a popup)."""
+    try:
+        with socket.create_connection(("127.0.0.1", SINGLE_INSTANCE_PORT), timeout=1.5) as c:
+            c.sendall(b"show\n")
+            c.settimeout(1.5)
+            return c.recv(8).startswith(b"ok")
+    except OSError:
+        return False
+
+
+def start_single_instance_listener(on_show):
+    """First instance only: answers "show" requests from a second launch.
+    on_show is called from a background thread — hand it to the Tk thread."""
+    sock = _single_instance_socket
+    if sock is None:
+        return
+
+    def loop():
+        while True:
+            try:
+                conn, _addr = sock.accept()
+            except OSError:
+                return
+            try:
+                conn.settimeout(1.0)
+                if conn.recv(16).startswith(b"show"):
+                    conn.sendall(b"ok")
+                    on_show()
+                    # Let the caller hang up first, so the lingering TIME_WAIT
+                    # state lands on its side and not on our listening port.
+                    conn.recv(1)
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+    threading.Thread(target=loop, daemon=True).start()
 
 
 # ─────────────────────────── local config storage ───────────────────────────
@@ -603,12 +806,46 @@ def set_autostart(enabled):
 PB_COLLECTION = "hr_delcargo_store"
 JSON_HEADERS = {"Content-Type": "application/json"}
 
+# One shared HTTP session for every PocketBase call: keeps connections alive,
+# so each heartbeat/poll reuses an established TCP+TLS connection instead of
+# paying a fresh handshake (CPU on Caddy + 0.2-0.6s of latency) every time.
+# The long-lived realtime (SSE) stream and the GitHub update calls deliberately
+# stay on plain `requests` — they don't benefit from pooling. Retries cover
+# only failures to CONNECT (never a request that may have been received), so a
+# POST can't be duplicated.
+_http = requests.Session()
+_http.mount("https://", requests.adapters.HTTPAdapter(
+    pool_connections=2, pool_maxsize=8,
+    max_retries=requests.adapters.Retry(total=2, connect=2, read=0, status=0, backoff_factor=0.2),
+))
+_http.mount("http://", requests.adapters.HTTPAdapter(pool_connections=2, pool_maxsize=8))
+
+
+class _Backoff:
+    """Exponential backoff with jitter for retry loops that talk to the server.
+    After an outage every tracker used to retry on the same fixed 20/60s beat,
+    hitting the recovering droplet all at once; this spreads them out and backs
+    off further the longer the server stays down. reset() on any success."""
+
+    def __init__(self, base_seconds, cap_seconds=300.0):
+        self.base = float(base_seconds)
+        self.cap = float(cap_seconds)
+        self.failures = 0
+
+    def next_delay(self):
+        delay = min(self.cap, self.base * (2 ** self.failures))
+        self.failures += 1
+        return random.uniform(delay * 0.5, delay)
+
+    def reset(self):
+        self.failures = 0
+
 
 def pb_get_kv(base_url, key):
     """Fetch a single key from hr_delcargo_store. Returns (record_id, value) or (None, None)."""
     url = f"{base_url}/api/collections/{PB_COLLECTION}/records"
     params = {"filter": f'(key="{key}")', "perPage": 1}
-    resp = requests.get(url, params=params, timeout=15)
+    resp = _http.get(url, params=params, timeout=15)
     resp.raise_for_status()
     items = resp.json().get("items", [])
     if not items:
@@ -623,10 +860,10 @@ def pb_set_kv(base_url, key, value):
     payload = json.dumps({"key": key, "value": value})
     if record_id:
         url = f"{base_url}/api/collections/{PB_COLLECTION}/records/{record_id}"
-        resp = requests.patch(url, headers=JSON_HEADERS, data=payload, timeout=20)
+        resp = _http.patch(url, headers=JSON_HEADERS, data=payload, timeout=20)
     else:
         url = f"{base_url}/api/collections/{PB_COLLECTION}/records"
-        resp = requests.post(url, headers=JSON_HEADERS, data=payload, timeout=20)
+        resp = _http.post(url, headers=JSON_HEADERS, data=payload, timeout=20)
     resp.raise_for_status()
 
 
@@ -641,6 +878,16 @@ def pb_set_kv(base_url, key, value):
 TRACKER_SIGNALS_COLLECTION = "hr_tracker_signals"
 
 
+# Row ids never change for an employee's hr_tracker_signals row, so remember
+# them: every heartbeat write used to look the row up again just to learn an id
+# we already knew. Dropped (and re-fetched) if PocketBase ever 404s on it.
+_TRACKER_SIGNAL_ROW_IDS = {}
+
+
+def _tracker_signals_cache_key(base_url, employee_email):
+    return (base_url, (employee_email or "").strip().lower())
+
+
 def _tracker_signals_get_record(base_url, employee_email):
     """Fetch this employee's whole hr_tracker_signals row. Returns
     (record_id, record_dict) or (None, None) if they don't have one yet.
@@ -652,12 +899,45 @@ def _tracker_signals_get_record(base_url, employee_email):
     key = (employee_email or "").strip().lower()
     url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records"
     params = {"filter": f'(email="{key}")', "perPage": 1}
-    resp = requests.get(url, params=params, timeout=15)
+    resp = _http.get(url, params=params, timeout=15)
     resp.raise_for_status()
     items = resp.json().get("items", [])
     if not items:
+        _TRACKER_SIGNAL_ROW_IDS.pop(_tracker_signals_cache_key(base_url, employee_email), None)
         return None, None
+    _TRACKER_SIGNAL_ROW_IDS[_tracker_signals_cache_key(base_url, employee_email)] = items[0].get("id")
     return items[0].get("id"), items[0]
+
+
+def ensure_tracker_signals_row_id(base_url, employee_email):
+    """Returns this employee's hr_tracker_signals row id, creating an empty row
+    if they don't have one yet (the realtime subscription is scoped to the row
+    id, so it must exist before we can subscribe). Returns None on any failure
+    — callers fall back to the old collection-wide subscription."""
+    key = (employee_email or "").strip().lower()
+    if not key:
+        return None
+    cached = _TRACKER_SIGNAL_ROW_IDS.get(_tracker_signals_cache_key(base_url, key))
+    if cached:
+        return cached
+    try:
+        record_id, _ = _tracker_signals_get_record(base_url, key)
+        if record_id:
+            return record_id
+        resp = _http.post(
+            f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records",
+            headers=JSON_HEADERS, data=json.dumps({"email": key}), timeout=20,
+        )
+        if resp.ok:
+            record_id = resp.json().get("id")
+            if record_id:
+                _TRACKER_SIGNAL_ROW_IDS[_tracker_signals_cache_key(base_url, key)] = record_id
+                return record_id
+        # Lost a race with the heartbeat creating the row (unique email index).
+        record_id, _ = _tracker_signals_get_record(base_url, key)
+        return record_id
+    except Exception:
+        return None
 
 
 def get_tracker_signal_field(base_url, employee_email, field):
@@ -685,14 +965,28 @@ def set_tracker_signal_field(base_url, employee_email, field, value):
     sibling signal (e.g. writing a fresh heartbeat can't wipe out a still-
     pending ping)."""
     key = (employee_email or "").strip().lower()
-    record_id, _ = _tracker_signals_get_record(base_url, employee_email)
+    cache_key = _tracker_signals_cache_key(base_url, employee_email)
     payload = json.dumps({"email": key, field: value})
+    records_url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records"
+
+    record_id = _TRACKER_SIGNAL_ROW_IDS.get(cache_key)
     if record_id:
-        url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records/{record_id}"
-        resp = requests.patch(url, headers=JSON_HEADERS, data=payload, timeout=20)
+        resp = _http.patch(f"{records_url}/{record_id}", headers=JSON_HEADERS, data=payload, timeout=20)
+        if resp.status_code != 404:
+            resp.raise_for_status()
+            return
+        # Cached id is stale (row was deleted/recreated) — fall through to a fresh lookup.
+        _TRACKER_SIGNAL_ROW_IDS.pop(cache_key, None)
+
+    record_id, _ = _tracker_signals_get_record(base_url, employee_email)
+    if record_id:
+        resp = _http.patch(f"{records_url}/{record_id}", headers=JSON_HEADERS, data=payload, timeout=20)
     else:
-        url = f"{base_url}/api/collections/{TRACKER_SIGNALS_COLLECTION}/records"
-        resp = requests.post(url, headers=JSON_HEADERS, data=payload, timeout=20)
+        resp = _http.post(records_url, headers=JSON_HEADERS, data=payload, timeout=20)
+        if resp.ok:
+            created_id = resp.json().get("id")
+            if created_id:
+                _TRACKER_SIGNAL_ROW_IDS[cache_key] = created_id
     resp.raise_for_status()
 
 
@@ -731,7 +1025,7 @@ def get_tracking_settings(base_url, _unused_key, agent_token):
         return None
     url = f"{base_url}/api/collections/hr_tracking_settings/records"
     params = {"filter": f'(agentToken="{agent_token}")', "perPage": 1}
-    resp = requests.get(url, params=params, timeout=15)
+    resp = _http.get(url, params=params, timeout=15)
     resp.raise_for_status()
     items = resp.json().get("items", [])
     return items[0] if items else None
@@ -751,7 +1045,7 @@ def check_active_shift(base_url, _unused_key, employee_email):
         return False
     url = f"{base_url}/api/collections/hr_timesheets/records"
     params = {"filter": '(clock_out="")', "perPage": 200}
-    resp = requests.get(url, params=params, timeout=15)
+    resp = _http.get(url, params=params, timeout=15)
     resp.raise_for_status()
     items = resp.json().get("items", [])
     # employee_id on hr_timesheets actually stores the employee's email
@@ -787,7 +1081,7 @@ def auto_clock_out(base_url, employee_email):
     # exactly (still case-insensitively) below to guard against a substring
     # false-match from the `~` filter.
     params = {"filter": f'(employee_id~"{employee_email}" && clock_out="")', "perPage": 10}
-    resp = requests.get(url, params=params, timeout=15)
+    resp = _http.get(url, params=params, timeout=15)
     resp.raise_for_status()
     items = [i for i in resp.json().get("items", []) if (i.get("employee_id") or "").lower() == employee_email.lower()]
     if not items:
@@ -799,7 +1093,7 @@ def auto_clock_out(base_url, employee_email):
         "clock_out": now_iso,
         "duration": _format_duration_between(record.get("clock_in"), now_iso),
     }
-    resp = requests.patch(patch_url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
+    resp = _http.patch(patch_url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
     resp.raise_for_status()
     return True
 
@@ -993,6 +1287,7 @@ def write_diagnostics(base_url, employee_email, state_snapshot, cfg):
         "intervalMinutes": state_snapshot.get("interval"),
         "autostart": bool((cfg or {}).get("autostart")),
         "updateAvailableVersion": state_snapshot.get("update_available_version"),
+        "logTail": read_log_tail(),
     }
     try:
         set_tracker_signal_field(base_url, employee_email, "diagnostics", payload)
@@ -1175,6 +1470,9 @@ def _get_system_idle_seconds():
     return None
 
 
+_last_monitor_count = 1  # monitors in the most recent mss capture — widens the size cap below
+
+
 def _grab_with_mss():
     """Captures the full virtual desktop (every monitor, correctly offset)
     via mss's native per-OS APIs (Windows Desktop Duplication / GDI,
@@ -1182,10 +1480,12 @@ def _grab_with_mss():
     ImageGrab path. Returns a Pillow Image, or None if mss isn't installed
     or the capture fails for any reason — callers fall back to pyautogui.
     """
+    global _last_monitor_count
     if mss is None:
         return None
     try:
         with mss.mss() as sct:
+            _last_monitor_count = max(1, len(sct.monitors) - 1)
             # monitors[0] is the union of every monitor (the whole virtual
             # desktop) — monitors[1:] would be individual screens.
             raw = sct.grab(sct.monitors[0])
@@ -1277,12 +1577,19 @@ def capture_and_encode():
         raise RuntimeError("Screen capture returned a black frame from both capture engines")
 
     w, h = img.size
-    if w > MAX_WIDTH:
-        new_h = int(h * (MAX_WIDTH / w))
-        img = img.resize((MAX_WIDTH, new_h), Image.LANCZOS)
-        w, h = MAX_WIDTH, new_h
+    # The capture is every monitor side by side. Capping that union at one
+    # screen's width (1280px) shrank each monitor of a 2-3 screen setup to an
+    # unreadable 430-640px, so allow one screen-width per monitor (up to 3) and
+    # trade a little quality to keep multi-monitor files from ballooning.
+    monitors = min(max(_last_monitor_count, 1), 3)
+    max_width = MAX_WIDTH * monitors
+    quality = WEBP_QUALITY if monitors == 1 else max(65, WEBP_QUALITY - 10)
+    if w > max_width:
+        new_h = int(h * (max_width / w))
+        img = img.resize((max_width, new_h), Image.LANCZOS)
+        w, h = max_width, new_h
     buf = io.BytesIO()
-    img.convert("RGB").save(buf, format="WEBP", quality=WEBP_QUALITY, method=6)
+    img.convert("RGB").save(buf, format="WEBP", quality=quality, method=6)
     return buf.getvalue(), w, h
 
 
@@ -1308,7 +1615,7 @@ def upload_screenshot(base_url, employee_email, webp_bytes, width, height, devic
     if agent_token:
         data["agent_token"] = agent_token
     files = {"image": (filename, webp_bytes, "image/webp")}
-    resp = requests.post(url, data=data, files=files, timeout=30)
+    resp = _http.post(url, data=data, files=files, timeout=30)
     resp.raise_for_status()
     return timestamp
 
@@ -1362,8 +1669,94 @@ def upload_inactivity(base_url, employee_email, start_dt, end_dt, device_id=None
         data["device_label"] = device_label
     if agent_token:
         data["agent_token"] = agent_token
-    resp = requests.post(url, headers=JSON_HEADERS, data=json.dumps(data), timeout=20)
+    resp = _http.post(url, headers=JSON_HEADERS, data=json.dumps(data), timeout=20)
     resp.raise_for_status()
+
+
+# ── Reliable inactivity-log delivery (added v25) ────────────────────────────
+# Inactivity logs feed the web app's absence decisions, and a single failed POST
+# used to lose one for good. Uploads now retry in the background (never blocking
+# the mouse-polling loop) and, if the server stays unreachable, are parked in a
+# small file on disk and sent later. The agent token is never written to that
+# file — it's re-read from the live config at send time.
+PENDING_INACTIVITY_FILE = os.path.join(APP_DIR, "pending_inactivity.json")
+PENDING_INACTIVITY_MAX = 100
+_pending_inactivity_lock = threading.Lock()
+
+
+def _load_pending_inactivity():
+    try:
+        with open(PENDING_INACTIVITY_FILE, "r", encoding="utf-8") as f:
+            items = json.load(f)
+        return items if isinstance(items, list) else []
+    except Exception:
+        return []
+
+
+def _save_pending_inactivity(items):
+    try:
+        os.makedirs(APP_DIR, exist_ok=True)
+        tmp = PENDING_INACTIVITY_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(items[-PENDING_INACTIVITY_MAX:], f)
+        os.replace(tmp, PENDING_INACTIVITY_FILE)
+    except Exception as e:
+        print(f"[warn] Couldn't save pending inactivity logs: {e}")
+
+
+def flush_pending_inactivity(cfg, employee_email):
+    """Sends any parked inactivity logs; keeps the ones that still fail."""
+    with _pending_inactivity_lock:
+        items = _load_pending_inactivity()
+        if not items:
+            return
+        remaining = []
+        for item in items:
+            try:
+                upload_inactivity(
+                    cfg["url"], employee_email,
+                    datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"]),
+                    device_id=item.get("device_id"), device_label=item.get("device_label"),
+                    agent_token=cfg.get("token"),
+                )
+            except Exception:
+                remaining.append(item)
+        _save_pending_inactivity(remaining)
+
+
+def upload_inactivity_reliably(cfg, employee_email, start_dt, end_dt, max_attempts=3):
+    """Uploads one inactivity interval with bounded, jittered retries; parks it
+    on disk if every attempt fails. Meant to run on a background thread.
+    Returns True if it was delivered."""
+    for attempt in range(max_attempts):
+        try:
+            upload_inactivity(
+                cfg["url"], employee_email, start_dt, end_dt,
+                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
+                agent_token=cfg.get("token"),
+            )
+            flush_pending_inactivity(cfg, employee_email)  # server is reachable — drain anything parked earlier
+            return True
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                time.sleep(2.0 + random.uniform(0.5, 2.0) * (attempt + 1))
+            else:
+                print(f"[warn] Inactivity log upload failed after {max_attempts} attempts, parked for later: {e}")
+    with _pending_inactivity_lock:
+        items = _load_pending_inactivity()
+        items.append({
+            "start": start_dt.isoformat(), "end": end_dt.isoformat(),
+            "device_id": cfg.get("device_id"), "device_label": cfg.get("device_label"),
+        })
+        _save_pending_inactivity(items)
+    return False
+
+
+def submit_inactivity(cfg, employee_email, start_dt, end_dt):
+    """Fire-and-forget wrapper used by the inactivity loop."""
+    threading.Thread(
+        target=upload_inactivity_reliably, args=(cfg, employee_email, start_dt, end_dt), daemon=True,
+    ).start()
 
 
 # ── Real-time inactivity auto-absence ────────────────────────────────────
@@ -1403,7 +1796,7 @@ def _fetch_profile_for_deduction(base_url, employee_email):
         # `~` + exact case-insensitive re-check, not a plain `=` — same
         # mixed-case-email footgun as auto_clock_out above.
         params = {"filter": f'(email~"{employee_email}")', "perPage": 10}
-        resp = requests.get(url, params=params, timeout=15)
+        resp = _http.get(url, params=params, timeout=15)
         resp.raise_for_status()
         items = [i for i in resp.json().get("items", []) if (i.get("email") or "").lower() == employee_email.lower()]
         if not items:
@@ -1415,40 +1808,62 @@ def _fetch_profile_for_deduction(base_url, employee_email):
         return employee_email, 0
 
 
+def _pb_quote(value):
+    """Escapes a value for use inside a double-quoted PocketBase filter string."""
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
 def create_inactivity_absence_record(base_url, employee_email, employee_name, inactivity_minutes, deduction_amount):
-    """Directly creates an AbsenceRecord (see AbsenceRecord/runAbsenceCheck in
-    src/lib/hrData.ts) for a real-time inactivity-triggered absence. This
-    mirrors what runAbsenceCheck() would eventually create server-side from
-    a completed hr_inactivity_logs row, but fires immediately from here —
-    only the agent can observe "still idle right now"; hr_inactivity_logs
-    only gets a completed interval once the mouse moves again, which would
-    be too late for a live stop. Same record `id` shape
-    (`${email}_${date}`) as the web-side system, so this is naturally
-    idempotent (e.g. if the agent restarts mid-idle-stretch, it won't create
-    a duplicate for a date already recorded) and shows up identically on the
-    Absent Details pages and folds into payroll the same way regardless of
-    which side created it."""
+    """Creates the AbsenceRecord (one row per employee per day in the
+    hr_absence_records collection — see absenceActions in src/lib/hr/absences.ts)
+    for a real-time inactivity-triggered absence. This mirrors what the web
+    app's runAbsenceCheck() would eventually create from a completed
+    hr_inactivity_logs row, but fires immediately: only the agent can observe
+    "still idle right now"; the inactivity log only gets written once the
+    mouse moves again, which would be too late for a live stop.
+
+    v25: this used to append to the retired hr_absence_records_v1 KV blob in
+    hr_delcargo_store, which the portal no longer reads — the employee was told
+    they'd been marked absent but nothing reached the portal until a later
+    dashboard check. Returns True if a record was created, False if that
+    employee/day already has one (including a soft-deleted one HR removed —
+    never resurrect it, same rule as runAbsenceCheck)."""
     date_str = _get_ny_date_string()
-    record_id = f"{employee_email.lower()}_{date_str}"
+    email = (employee_email or "").strip()
+    url = f"{base_url}/api/collections/hr_absence_records/records"
     try:
-        _, existing = pb_get_kv(base_url, "hr_absence_records_v1")
-        records = existing if isinstance(existing, list) else []
-    except Exception:
-        records = []
-    if any((r or {}).get("id") == record_id for r in records):
-        return False  # already recorded for today — don't duplicate
-    records.append({
-        "id": record_id,
-        "employeeEmail": employee_email,
-        "employeeName": employee_name or employee_email,
+        resp = _http.get(url, params={
+            "filter": f'(employeeEmail~"{_pb_quote(email)}" && date="{date_str}")',
+            "perPage": 20, "fields": "id,employeeEmail",
+        }, timeout=15)
+        resp.raise_for_status()
+        for row in resp.json().get("items", []):
+            if (row.get("employeeEmail") or "").strip().lower() == email.lower():
+                return False  # already recorded for today (possibly soft-deleted) — don't duplicate
+    except Exception as e:
+        # Can't tell — better to risk a duplicate (the table's unique index on
+        # active rows rejects it below) than to skip recording the absence.
+        print(f"[warn] absence duplicate check failed, creating anyway: {e}")
+    payload = {
+        "employeeEmail": email,
+        "employeeName": employee_name or email,
         "date": date_str,
         "reason": "inactivity",
         "inactivityMinutes": inactivity_minutes,
+        "workedMinutes": 0,
         "deductionAmount": deduction_amount,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "acknowledged": False,
-    })
-    pb_set_kv(base_url, "hr_absence_records_v1", records)
+        "deleted": False,
+    }
+    resp = _http.post(url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
+    if resp.status_code == 400:
+        # Unique (employeeEmail, date) index on active rows: someone else (the
+        # web app's own check) got there first — same outcome as "already recorded".
+        # Logged because a 400 can also mean a real schema mismatch worth seeing.
+        print(f"[info] absence record not created (400): {resp.text[:200]}")
+        return False
+    resp.raise_for_status()
     return True
 
 
@@ -1469,9 +1884,9 @@ def create_notification(base_url, recipient_email, recipient_role, message, cate
             "push_title": "",
             "sender_email": "",
             "link": "",
-            "timestamp": datetime.now(timezone.utc).strftime("%I:%M %p"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        resp = requests.post(url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
+        resp = _http.post(url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
         resp.raise_for_status()
     except Exception as e:
         print(f"[warn] create_notification failed: {e}")
@@ -1624,6 +2039,7 @@ def _download_with_progress(url, dest_path, on_progress=None):
             downloaded += len(chunk)
             if on_progress:
                 on_progress(downloaded, total)
+    return downloaded, total
 
 
 def _perform_update(root, latest_version):
@@ -1720,6 +2136,193 @@ def _perform_update(root, latest_version):
             "into your Applications folder, replacing the old one.",
             parent=root,
         )
+
+
+# ── Self-restart (added v25) ────────────────────────────────────────────────
+# Used by HR's remote "Restart Tracker" action. The new process is told to wait
+# for this one to exit before it claims the single-instance lock, so the two
+# never overlap. Like an update, a restart never clocks anyone out.
+WAIT_FOR_PID_ARG = "--wait-for-pid"
+
+
+def _wait_for_pid_exit(pid, timeout_seconds=30):
+    """Blocks until process `pid` has exited (or the timeout passes)."""
+    try:
+        if platform.system() == "Windows":
+            SYNCHRONIZE = 0x00100000
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(SYNCHRONIZE, False, int(pid))
+            if handle:
+                kernel32.WaitForSingleObject(handle, int(timeout_seconds * 1000))
+                kernel32.CloseHandle(handle)
+            return
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            try:
+                os.kill(int(pid), 0)
+            except (ProcessLookupError, PermissionError):
+                return
+            time.sleep(0.25)
+    except Exception as e:
+        print(f"[warn] Waiting for the previous instance failed: {e}")
+
+
+def relaunch_self():
+    """Starts a fresh copy of this packaged app that waits for us to exit.
+    Returns True if it was started (the caller must then exit right away);
+    False when not running as a packaged build or the platform isn't supported."""
+    if not getattr(sys, "frozen", False):
+        return False
+    try:
+        if platform.system() == "Windows":
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+            # PYINSTALLER_RESET_ENVIRONMENT stops the child from reusing this
+            # process's temp extraction dir, which is deleted when we exit.
+            env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
+            subprocess.Popen([sys.executable, WAIT_FOR_PID_ARG, str(os.getpid())],
+                             env=env, close_fds=True, creationflags=flags)
+            return True
+        if platform.system() == "Darwin":
+            bundle = os.path.abspath(sys.executable)
+            while bundle and not bundle.endswith(".app"):
+                parent = os.path.dirname(bundle)
+                if parent == bundle:
+                    return False
+                bundle = parent
+            if not bundle.endswith(".app"):
+                return False
+            subprocess.Popen(["open", "-n", "-a", bundle, "--args", WAIT_FOR_PID_ARG, str(os.getpid())],
+                             start_new_session=True, close_fds=True,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+    except Exception as e:
+        print(f"[warn] Couldn't relaunch: {e}")
+    return False
+
+
+# ── Background auto-update (added v25) ──────────────────────────────────────
+# While the app is running it quietly checks for a newer release, downloads it
+# in the background, and once the download is complete shows a restart prompt
+# that can't be dismissed (it also restarts on its own when the countdown ends).
+# Restarting applies the update — on Windows the silent installer replaces the
+# app and relaunches it. Never clocks the employee out: an active shift stays
+# open on the server and the relaunched tracker simply resumes it.
+UPDATE_CHECK_INTERVAL_SECONDS = 60 * 60          # unauthenticated GitHub API: stay far under 60 req/h per IP
+UPDATE_FIRST_CHECK_DELAY_SECONDS = (120, 300)    # let startup settle, and stagger machines
+UPDATE_RESTART_DEADLINE_SECONDS = 5 * 60         # forced restart countdown once the update is staged
+
+
+def _verify_sha256(file_path, checksum_url):
+    """Checks a downloaded update against the SHA-256 the release workflow
+    publishes next to it. Fails CLOSED: if the checksum can't be fetched or
+    doesn't match, the update is rejected (and retried on the next pass)."""
+    resp = requests.get(checksum_url, timeout=20)
+    resp.raise_for_status()
+    expected = (resp.text.strip().split() or [""])[0].lower()
+    if len(expected) != 64:
+        raise IOError("release has no usable SHA-256 checksum")
+    digest = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != expected:
+        raise IOError("downloaded update does not match its published SHA-256")
+
+
+def stage_update_download(latest_version):
+    """Downloads the installer for this platform into the temp dir with no UI.
+    Returns the staged file's path, or None if nothing was staged (unsupported
+    platform, download failed or incomplete, or a previous Mac install attempt
+    for this version failed). Never raises. The file only gets its final name
+    after the whole download is verified, so a half-written file is never
+    mistaken for a ready update."""
+    try:
+        system = platform.system()
+        if system == "Windows":
+            url, stem, ext = GITHUB_WINDOWS_INSTALLER_URL, "DelCargo_Tracker_Setup", ".exe"
+        elif system == "Darwin":
+            url, stem, ext = GITHUB_MAC_ZIP_URL, "DelCargo-Tracker-Mac", ".zip"
+        else:
+            return None
+        tmp = tempfile.gettempdir()
+        if os.path.exists(os.path.join(tmp, f"delcargo_update_failed_v{latest_version}")):
+            return None  # the Mac helper couldn't swap the app for this version — don't loop on it
+        final_path = os.path.join(tmp, f"{stem}_v{latest_version}{ext}")
+        if os.path.exists(final_path):
+            return final_path  # already downloaded and verified on an earlier pass
+        part_path = final_path + ".part"
+        try:
+            downloaded, total = _download_with_progress(url, part_path)
+            if downloaded < 1024 * 1024 or (total is not None and downloaded != total):
+                raise IOError(f"incomplete download ({downloaded} of {total} bytes)")
+            _verify_sha256(part_path, url + ".sha256")
+            os.replace(part_path, final_path)
+            return final_path
+        except Exception:
+            try:
+                os.remove(part_path)
+            except OSError:
+                pass
+            raise
+    except Exception as e:
+        print(f"[info] Background update download failed, will retry later: {e}")
+        return None
+
+
+def launch_staged_update(staged_path, version):
+    """Starts the platform's installer/updater for an already-downloaded
+    update. Returns True if it was launched — the caller must then exit right
+    away so the installer can replace this process's files. Returns False if
+    this platform/install can't be updated automatically."""
+    system = platform.system()
+    try:
+        if system == "Windows":
+            # Detached so the installer's own taskkill of the old process tree
+            # can't take the installer down with it.
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+            subprocess.Popen(
+                [staged_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+                close_fds=True, creationflags=flags,
+            )
+            return True
+        if system == "Darwin" and getattr(sys, "frozen", False):
+            app_bundle = os.path.abspath(sys.executable)
+            while app_bundle and not app_bundle.endswith(".app"):
+                parent = os.path.dirname(app_bundle)
+                if parent == app_bundle:
+                    return False
+                app_bundle = parent
+            if not app_bundle.endswith(".app"):
+                return False
+            version_marker = os.path.join(tempfile.gettempdir(), f"delcargo_update_failed_v{version}")
+            q = shlex.quote
+            # Runs after this process exits: swap the app bundle for the new
+            # one (keeping the old copy until the swap succeeds), then reopen.
+            script = "\n".join([
+                "#!/bin/sh",
+                f"while kill -0 {os.getpid()} 2>/dev/null; do sleep 0.5; done",
+                'TMP=$(mktemp -d) || exit 1',
+                f'fail() {{ touch {q(version_marker)}; [ -d {q(app_bundle + ".old")} ] && [ ! -d {q(app_bundle)} ] && mv {q(app_bundle + ".old")} {q(app_bundle)}; open {q(app_bundle)}; exit 1; }}',
+                f'/usr/bin/ditto -x -k {q(staged_path)} "$TMP" || fail',
+                'NEW=$(find "$TMP" -maxdepth 2 -name "*.app" | head -1)',
+                '[ -d "$NEW" ] || fail',
+                f'rm -rf {q(app_bundle + ".old")}',
+                f'mv {q(app_bundle)} {q(app_bundle + ".old")} || fail',
+                f'mv "$NEW" {q(app_bundle)} || fail',
+                f'xattr -dr com.apple.quarantine {q(app_bundle)} 2>/dev/null',
+                f'rm -rf {q(app_bundle + ".old")} "$TMP"',
+                f'open {q(app_bundle)}',
+            ]) + "\n"
+            script_path = os.path.join(tempfile.gettempdir(), "delcargo_apply_update.sh")
+            with open(script_path, "w") as f:
+                f.write(script)
+            os.chmod(script_path, 0o700)
+            subprocess.Popen(["/bin/sh", script_path], start_new_session=True, close_fds=True,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+    except Exception as e:
+        print(f"[warn] Couldn't launch the staged update: {e}")
+    return False
 
 
 def _check_and_prompt_update():
@@ -1894,7 +2497,103 @@ class TrackerApp:
         if pystray:
             self._start_tray()
 
+        # Background auto-update: independent of the tracking worker's own
+        # stop_event (which is swapped on every reconnect).
+        self._update_prompted = False
+        threading.Thread(target=self._update_loop, daemon=True).start()
+
         self.root.after(500, self._tick)
+
+    # ── Background auto-update (see stage_update_download above) ───────────
+    def _update_loop(self):
+        """Quietly checks for a newer release, downloads it, then hands off to
+        the main thread for the forced-restart prompt. Runs for the life of the
+        process; every step swallows its own errors."""
+        time.sleep(random.uniform(*UPDATE_FIRST_CHECK_DELAY_SECONDS))
+        while True:
+            try:
+                if not self._update_prompted:
+                    latest = check_for_update()
+                    if latest:
+                        staged = stage_update_download(latest)
+                        if staged:
+                            self._update_prompted = True
+                            self.root.after(0, lambda v=latest, f=staged: self._show_forced_update_dialog(v, f))
+            except Exception as e:
+                print(f"[info] Background update check failed: {e}")
+            time.sleep(UPDATE_CHECK_INTERVAL_SECONDS + random.uniform(0, 300))
+
+    def _show_forced_update_dialog(self, version, staged_path):
+        """Mandatory restart prompt: no close button, always on top, and it
+        restarts into the new version by itself when the countdown ends."""
+        win = tk.Toplevel(self.root)
+        win.title(APP_NAME)
+        win.geometry("380x200")
+        win.resizable(False, False)
+        win.configure(bg=BG)
+        win.attributes("-topmost", True)
+        win.protocol("WM_DELETE_WINDOW", lambda: None)  # can't be dismissed
+        tk.Label(win, text="Update ready", bg=BG, fg=INK, font=(FONT, 13, "bold")).pack(pady=(22, 6))
+        tk.Label(
+            win,
+            text=f"DelCargo Tracker v{version} has been downloaded.\n"
+                 "Restart now to apply it — your shift keeps running.",
+            bg=BG, fg=MUTED, font=(FONT, 10), justify="center",
+        ).pack()
+        remaining = [UPDATE_RESTART_DEADLINE_SECONDS]
+        countdown = tk.StringVar()
+        tk.Label(win, textvariable=countdown, bg=BG, fg=INK, font=(FONT, 9)).pack(pady=(10, 8))
+
+        def restart():
+            win.destroy()
+            self._apply_staged_update(version, staged_path)
+
+        tk.Button(
+            win, text="Restart & Update", command=restart, bg=ACCENT, fg="white",
+            activebackground=ACCENT_HOVER, activeforeground="white", relief="flat",
+            font=(FONT, 10, "bold"), padx=18, pady=6, cursor="hand2",
+        ).pack()
+
+        def tick():
+            if not win.winfo_exists():
+                return
+            if remaining[0] <= 0:
+                restart()
+                return
+            m, sec = divmod(remaining[0], 60)
+            countdown.set(f"Restarting automatically in {m}:{sec:02d}")
+            remaining[0] -= 1
+            win.after(1000, tick)
+
+        tick()
+        win.lift()
+        win.focus_force()
+        try:
+            win.grab_set()
+        except Exception:
+            pass
+
+    def _apply_staged_update(self, version, staged_path):
+        """Hands the staged installer the baton and exits. Deliberately does NOT
+        clock the employee out or clear their heartbeat: the shift stays open on
+        the server and the relaunched tracker picks it straight back up."""
+        if not launch_staged_update(staged_path, version):
+            # Couldn't apply automatically (e.g. a Mac copy not running from an
+            # .app) — fall back to the manual instructions and try again later.
+            self._update_prompted = False
+            try:
+                if platform.system() == "Darwin":
+                    subprocess.run(["open", "-R", staged_path], check=False)
+                messagebox.showinfo(
+                    APP_NAME,
+                    f"DelCargo Tracker v{version} was downloaded to:\n{staged_path}\n\n"
+                    "Quit this app and install it to finish updating.",
+                )
+            except Exception:
+                pass
+            return
+        self.stop_event.set()
+        os._exit(0)
 
     def _on_scroll_configure(self, _evt=None):
         self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
@@ -2507,6 +3206,20 @@ class TrackerApp:
                 args=(self.cfg["url"], employee_email),
                 daemon=True,
             ).start()
+        elif command_type == "reconnect":
+            # HR-triggered equivalent of the tracker's own Reconnect button:
+            # re-claim this device's slot and refresh the heartbeat now.
+            self.root.after(0, self._handle_reconnect)
+            threading.Thread(target=clear_command, args=(self.cfg["url"], employee_email), daemon=True).start()
+        elif command_type == "restart":
+            def restart_worker():
+                # Clear the command FIRST so the fresh process can't act on it too.
+                clear_command(self.cfg["url"], employee_email)
+                if relaunch_self():
+                    self.stop_event.set()
+                    os._exit(0)
+                print("[info] Restart requested but this isn't a packaged build — ignored.")
+            threading.Thread(target=restart_worker, daemon=True).start()
         else:
             print(f"[info] Unknown command type ignored: {command_type}")
             threading.Thread(
@@ -2516,22 +3229,26 @@ class TrackerApp:
             ).start()
 
     def _heartbeat_loop(self, cfg, stop_event):
+        # _checkin() handles its own errors (it records them in state rather
+        # than raising), so "did this beat fail" is read from that state. A
+        # failed beat backs off with jitter instead of retrying on the fixed
+        # minute every other tracker is also on; a healthy beat is jittered a
+        # little so trackers don't all write at the same second.
+        backoff = _Backoff(60.0, cap_seconds=120.0)
         while not stop_event.is_set():
-            # Retry heartbeat up to 3 times on network/timeout error.
-            # PocketBase screenshot uploads can block the server for 30s+,
-            # making a single heartbeat attempt time out. Retrying with a
-            # short pause keeps lastSeenAt fresh even under server load.
-            for attempt in range(3):
-                try:
-                    self._checkin(cfg)
-                    break  # success — no more retries needed
-                except Exception as e:
-                    if attempt < 2:
-                        print(f"[info] Heartbeat attempt {attempt + 1} failed, retrying in 5s: {e}")
-                        stop_event.wait(5.0)
-                    else:
-                        print(f"[warn] Heartbeat failed after 3 attempts: {e}")
-            stop_event.wait(60.0)
+            try:
+                self._checkin(cfg)
+            except Exception as e:
+                print(f"[warn] Heartbeat raised: {e}")
+                with self.state_lock:
+                    self.state["connection_status"] = "disconnected"
+            with self.state_lock:
+                failed = self.state.get("connection_status") == "disconnected"
+            if failed:
+                stop_event.wait(backoff.next_delay())
+            else:
+                backoff.reset()
+                stop_event.wait(random.uniform(54.0, 66.0))
 
     def _worker_loop(self, cfg, stop_event):
         # cfg and stop_event are captured as explicit arguments (a snapshot
@@ -2553,6 +3270,7 @@ class TrackerApp:
         # applies once, to that first capture after tracking turns on — not
         # to every loop iteration.
         was_capture_enabled = False
+        server_backoff = _Backoff(SETTINGS_POLL_SECONDS)
         while not stop_event.is_set():
             with self.state_lock:
                 superseded = (self.state.get("connection_status") == "superseded")
@@ -2567,8 +3285,9 @@ class TrackerApp:
             except Exception as e:
                 with self.state_lock:
                     self.state["last_error"] = _short_error(e)
-                stop_event.wait(SETTINGS_POLL_SECONDS)
+                stop_event.wait(server_backoff.next_delay())
                 continue
+            server_backoff.reset()
 
             if settings is None:
                 with self.state_lock:
@@ -2585,7 +3304,7 @@ class TrackerApp:
             except Exception as e:
                 with self.state_lock:
                     self.state["last_error"] = _short_error(f"Shift check failed: {e}")
-                stop_event.wait(SETTINGS_POLL_SECONDS)
+                stop_event.wait(server_backoff.next_delay())
                 continue
 
             enabled = enabled_by_hr and shift_active
@@ -2756,16 +3475,27 @@ class TrackerApp:
                     if event_name == "PB_CONNECT" and client_id is None:
                         client_id = data.get("clientId")
                         if client_id:
+                            signals_row_id = ensure_tracker_signals_row_id(base_url, employee_email)
+                            signals_topic = (
+                                f"{TRACKER_SIGNALS_COLLECTION}/{signals_row_id}"
+                                if signals_row_id else TRACKER_SIGNALS_COLLECTION
+                            )
                             try:
-                                sub_resp = requests.post(
+                                sub_resp = _http.post(
                                     f"{base_url}/api/realtime",
                                     headers=JSON_HEADERS,
                                     data=json.dumps({
                                         "clientId": client_id,
-                                        # Subscribe to both hr_timesheets (shift start/stop)
-                                        # and hr_tracker_signals (ping/stop_cmd/command —
-                                        # plan 027 Phase 4b; was hr_delcargo_store)
-                                        "subscriptions": ["hr_timesheets", "hr_tracker_signals"],
+                                        # Subscribe to hr_timesheets (shift start/stop; a new
+                                        # row per shift, so it can't be scoped to one id on
+                                        # PocketBase 0.22 — and it only fires on clock-in/out)
+                                        # and to THIS employee's own hr_tracker_signals row
+                                        # (ping/stop_cmd/command — plan 027 Phase 4b). Scoping
+                                        # that one to the row id stops every other employee's
+                                        # heartbeat writes from being broadcast to this agent
+                                        # (N writers x N listeners). Falls back to the
+                                        # collection-wide topic if the id can't be resolved.
+                                        "subscriptions": ["hr_timesheets", signals_topic],
                                     }),
                                     timeout=15,
                                 )
@@ -2783,7 +3513,9 @@ class TrackerApp:
                         if record_email and record_email == employee_email:
                             self.wake_event.set()
 
-                    elif event_name == "hr_tracker_signals":
+                    elif event_name and event_name.split("/", 1)[0] == TRACKER_SIGNALS_COLLECTION:
+                        # Topic is either "hr_tracker_signals" (fallback,
+                        # every row) or "hr_tracker_signals/<our row id>".
                         # This collection holds ALL employees' rows, so every
                         # field update on ANYONE's row (including our own
                         # heartbeat writes) fires an event here — filter to
@@ -2880,6 +3612,12 @@ class TrackerApp:
         # moment AUTO_ABSENT_INACTIVITY_SECONDS is crossed.
         auto_absent_fired = False
 
+        # Send any inactivity logs parked on disk by an earlier failed upload
+        # (e.g. the app was closed before the server came back).
+        threading.Thread(
+            target=flush_pending_inactivity, args=(cfg, cfg.get("employee_email")), daemon=True,
+        ).start()
+
         while not stop_event.is_set():
             stop_event.wait(MOUSE_POLL_SECONDS)
             if stop_event.is_set():
@@ -2945,15 +3683,7 @@ class TrackerApp:
                     if last_idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
                         end_wall = datetime.now(timezone.utc)
                         start_wall = end_wall - timedelta(seconds=last_idle_seconds)
-                        try:
-                            upload_inactivity(
-                                cfg["url"], employee_email, start_wall, end_wall,
-                                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                                agent_token=cfg.get("token"),
-                            )
-                        except Exception as e:
-                            with self.state_lock:
-                                self.state["last_error"] = _short_error(f"Inactivity log upload failed: {e}")
+                        submit_inactivity(cfg, employee_email, start_wall, end_wall)
                     auto_absent_fired = False  # activity resumed — a fresh idle stretch starts from here
 
                 last_idle_seconds = idle_seconds
@@ -2980,15 +3710,7 @@ class TrackerApp:
                     if idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
                         end_wall = datetime.now(timezone.utc)
                         start_wall = end_wall - timedelta(seconds=idle_seconds)
-                        try:
-                            upload_inactivity(
-                                cfg["url"], employee_email, start_wall, end_wall,
-                                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                                agent_token=cfg.get("token"),
-                            )
-                        except Exception as e:
-                            with self.state_lock:
-                                self.state["last_error"] = _short_error(f"Inactivity log upload failed: {e}")
+                        submit_inactivity(cfg, employee_email, start_wall, end_wall)
                     last_pos = pos
                     last_move_time = now
                     auto_absent_fired = False  # mouse moved — a fresh idle stretch starts from here
@@ -3324,9 +4046,35 @@ def _apply_tk_dpi_scaling(root):
 
 
 def main():
+    setup_logging()
+
+    # Relaunched by a restart/update hand-off: let the previous process exit
+    # completely before we try to claim the single-instance lock below.
+    if WAIT_FOR_PID_ARG in sys.argv:
+        try:
+            _wait_for_pid_exit(sys.argv[sys.argv.index(WAIT_FOR_PID_ARG) + 1])
+        except (IndexError, ValueError):
+            pass
+
     # Must run before the very first tk.Tk() anywhere in this process — see
     # the docstring above for why.
     _enable_windows_dpi_awareness()
+
+    # Single instance FIRST — before the permission prompt, update check or
+    # anything else a second copy could do (download an update, show prompts,
+    # start a loop). A second launch just brings the running window forward.
+    if not acquire_single_instance_lock():
+        if not signal_existing_instance():
+            # Older build that can't be signalled — fall back to a clear popup.
+            root = tk.Tk()
+            _apply_tk_dpi_scaling(root)
+            root.withdraw()
+            messagebox.showwarning(
+                APP_NAME,
+                f"{APP_NAME} is already running.\n\n" + tray_location_hint(),
+            )
+            root.destroy()
+        sys.exit(0)
 
     # Trigger macOS native permission prompt on launch if running on Darwin.
     # Stashed and handed to TrackerApp below so a denied permission shows up
@@ -3335,31 +4083,15 @@ def main():
     # docstring).
     mac_permission_warning = request_mac_permissions()
 
-    # The very first thing this app does on every launch: check GitHub for a
-    # newer release and offer to update before anything else happens (before
-    # the single-instance check, before loading saved config, before any
-    # tracking/heartbeat work starts). Never blocks startup on failure —
-    # check_for_update() swallows every error and just returns None.
+    # Check GitHub for a newer release and offer to update before the real
+    # app starts. Never blocks startup on failure — check_for_update()
+    # swallows every error and just returns None.
     _check_and_prompt_update()
-
-    if not acquire_single_instance_lock():
-        # Another copy is already running — surface a clear popup instead of
-        # silently opening a second window (which would run a second,
-        # redundant capture/heartbeat loop and fight the first instance for
-        # the device-connection slot).
-        root = tk.Tk()
-        _apply_tk_dpi_scaling(root)
-        root.withdraw()
-        messagebox.showwarning(
-            APP_NAME,
-            f"{APP_NAME} is already running.\n\n" + tray_location_hint(),
-        )
-        root.destroy()
-        sys.exit(0)
 
     root = tk.Tk()
     _apply_tk_dpi_scaling(root)
-    TrackerApp(root, initial_warning=mac_permission_warning)
+    app = TrackerApp(root, initial_warning=mac_permission_warning)
+    start_single_instance_listener(lambda: root.after(0, app.show_window))
     root.mainloop()
 
 

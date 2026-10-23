@@ -20,6 +20,7 @@ import {
 } from './shared';
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
+import { sanitizeForWrite } from '../sanitize';
 import { coalesce, invalidateCache } from '../requestCache';
 import { getSessionEmail, getSessionRole } from '../session';
 import { isStaffRole } from '../core/profiles';
@@ -247,18 +248,25 @@ export const timesheetActions = {
     // the base for anything `updates` doesn't touch. The hard-coded
     // `defaults` (including a freshly-random agentToken) now only apply
     // when there is no existing row at all — genuine first-time creation.
-    const existing = await hrActions.getTrackingSettingsFor(email);
-    const base = existing.agentToken
-      ? { enabled: existing.enabled, intervalMinutes: existing.intervalMinutes, excludeFromAutoDelete: existing.excludeFromAutoDelete, agentToken: existing.agentToken }
-      : {
-          enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
-          agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
-        };
-    // Write employeeEmail lowercased on create — otherwise a caller passing
-    // a mixed-case email here (e.g. from a not-yet-normalized profile) would
-    // seed a mixed-case row that every OTHER lookup in this file then has to
-    // work around via a `~` filter + client-side lowercase check.
-    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...base, ...updates, employeeEmail: email.toLowerCase() });
+    // STRICT read: pbList()/getTrackingSettingsFor() swallow errors and return an empty list, which
+    // looks exactly like "this employee has no row yet". Using that here made a PocketBase hiccup
+    // (502, timeout) fall through to the first-time defaults below — enabled: false and a brand-new
+    // random agentToken — and overwrite a real row, silently switching tracking OFF and invalidating
+    // the employee's setup code. So a failed read must throw (nothing is written), and an existing
+    // row only ever receives the fields the caller actually passed.
+    const matches = await pb.collection('hr_tracking_settings').getFullList({ filter: pbFilter('employeeEmail ~ {:email}', { email }), requestKey: null });
+    const found = (matches as PbRow[]).find(r => (r.employeeEmail || '').toLowerCase() === email.toLowerCase());
+    let row: PbRow;
+    if (found) {
+      row = Object.keys(updates).length > 0 ? await pb.collection('hr_tracking_settings').update(found.id, sanitizeForWrite({ ...updates, employeeEmail: email.toLowerCase() }), { requestKey: null }) : found;
+    } else {
+      // Genuine first-time creation: only now do the defaults (and a fresh token) apply.
+      const defaults = {
+        enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
+        agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
+      };
+      row = await pb.collection('hr_tracking_settings').create(sanitizeForWrite({ ...defaults, ...updates, employeeEmail: email.toLowerCase() }), { requestKey: null });
+    }
     invalidateCache('tset:');
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
@@ -543,10 +551,10 @@ export const timesheetActions = {
         const name = displayName({ fullName: shift.employeeEmail }, 'hr');
         const employeeMsg = noActivityAfterClockIn
           ? "Your shift was automatically ended with 0 minutes credited because the DelCargo Tracker reported no activity after you clocked in. If you were working, contact HR."
-          : "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR.";
+          : `Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. Credited: ${formatDurationBetween(shift.clockIn, closeAtIso)} (clock-in to the tracker's last report). If you were still working, reconnect the tracker and contact HR.`;
         const staffMsg = noActivityAfterClockIn
           ? `${name}'s shift was auto-closed with 0 minutes — the tracker reported no activity after clock-in. Review it if they report having worked.`
-          : `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`;
+          : `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open. Credited ${formatDurationBetween(shift.clockIn, closeAtIso)}.`;
         await hrActions.addNotification(shift.employeeEmail, 'employee', employeeMsg).catch(() => {});
         await hrActions.addNotification('all', 'hr', staffMsg, 'shift', name, shift.employeeEmail).catch(() => {});
         // Dashboard-only for Admin — HR already got the pushable copy above.

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CheckCircle2, AlertCircle, Download, RefreshCw, Loader2 } from 'lucide-react';
-import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord, countApprovedLeaveRequestsInMonth } from '@/lib/hrData';
+import { formatMoney, hrActions, useLeaves, useProfiles, usePayroll, useTimesheets, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, PayrollRecord, countApprovedLeaveRequestsInMonth, canReviewPreviousMonthPayroll, previousPayrollMonthKey } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { NetPayableModal } from '@/components/ui/lazy';
 import { PaginationControls } from '@/components/ui/PaginationControls';
@@ -34,6 +34,12 @@ export default function HRPayrollPage() {
   const [localEdits, setLocalEdits] = useState<Record<string, { bonus?: number; deductions?: number }>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'processed'>('all');
+  // Salaries are paid by an external process, so days 4–10 of a month also offer last month's
+  // payroll as its own tab, to check an unpaid salary (days 1–3 the main view already is last month).
+  const canReviewPrev = canReviewPreviousMonthPayroll();
+  const [monthView, setMonthView] = useState<'current' | 'previous'>('current');
+  const showPrevious = canReviewPrev && monthView === 'previous';
+  const prevMonthLabel = new Date(`${previousPayrollMonthKey()}-15T12:00:00Z`).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const [isSyncing, setIsSyncing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isNetPayableOpen, setIsNetPayableOpen] = useState(false);
@@ -99,7 +105,7 @@ export default function HRPayrollPage() {
   // Server-computed payroll view (base salary, increments, onboarding
   // penalties, urgent-leave deductions) with any in-flight local edits
   // for bonus/deductions layered on top.
-  const compiledPayrollData = hrActions.computePayrollView(employees, payrollRecords, leavesList, timesheets, absenceRecords).map(r => ({
+  const compiledPayrollData = hrActions.computePayrollView(employees, payrollRecords, leavesList, timesheets, absenceRecords, new Date(), showPrevious).map(r => ({
     ...r,
     bonus: localEdits[r.employeeId]?.bonus ?? r.bonus,
     deductions: localEdits[r.employeeId]?.deductions ?? r.deductions,
@@ -186,6 +192,18 @@ export default function HRPayrollPage() {
             <Download className="h-3.5 w-3.5" /> Export CSV
           </Button>
           
+          {canReviewPrev && (
+            <Tabs
+              variant="segmented"
+              aria-label="Payroll month"
+              value={monthView}
+              onChange={setMonthView}
+              items={[
+                { value: 'current', label: 'This month' },
+                { value: 'previous', label: `Previous month (${prevMonthLabel})` },
+              ]}
+            />
+          )}
           <Tabs
             variant="segmented"
             value={activeTab}

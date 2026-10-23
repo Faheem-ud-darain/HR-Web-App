@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { DollarSign, CheckCircle2, TrendingUp } from 'lucide-react';
-import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin } from '@/lib/hrData';
+import { usePayroll, useProfiles, useLeaves, useTimesheets, hrActions, formatMoney, PayrollRecord, AbsenceRecord, applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin, canReviewPreviousMonthPayroll, previousPayrollMonthKey } from '@/lib/hrData';
+import { Tabs } from '@/components/ui/Tabs';
 import { NetPayableModal } from '@/components/ui/lazy';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
@@ -53,7 +54,13 @@ export default function AdminPayrollPage() {
   // payroll records already exist server-side. Memoized so it doesn't
   // produce a fresh array reference (and re-trigger the summary effect) on
   // every render.
-  const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords), [employees, rawPayroll, leaves, timesheets, absenceRecords]);
+  // Salaries are paid by an external process, so days 4–10 of a month also offer last month's
+  // payroll as its own tab, to check an unpaid salary (days 1–3 the main view already is last month).
+  const canReviewPrev = canReviewPreviousMonthPayroll();
+  const [monthView, setMonthView] = useState<'current' | 'previous'>('current');
+  const showPrevious = canReviewPrev && monthView === 'previous';
+  const prevMonthLabel = new Date(`${previousPayrollMonthKey()}-15T12:00:00Z`).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const payroll = useMemo(() => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords, new Date(), showPrevious), [employees, rawPayroll, leaves, timesheets, absenceRecords, showPrevious]);
   const { page, setPage, totalPages, pageItems } = usePagination(payroll, 25);
   const [isReleasing, setIsReleasing] = useState(false);
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
@@ -219,6 +226,19 @@ export default function AdminPayrollPage() {
           </Badge>
         )}
       </div>
+
+      {canReviewPrev && (
+        <Tabs
+          variant="segmented"
+          aria-label="Payroll month"
+          value={monthView}
+          onChange={setMonthView}
+          items={[
+            { value: 'current', label: 'This month' },
+            { value: 'previous', label: `Previous month (${prevMonthLabel})` },
+          ]}
+        />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
         <StatCard label="Total Net Outflow" value={formatMoney(grandNetUSD, 'USA')} size="md" trailing={<DollarSign className="h-5 w-5" />}>

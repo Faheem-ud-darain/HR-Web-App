@@ -42,7 +42,7 @@ export {
   usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
   upsertPayrollRecordAdmin, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
   getPendingIncrementForPayrollMonth, getFinalLeavePayout, getAbsenceDeductionForMonth,
-  getShiftShortfallDeduction,
+  getShiftShortfallDeduction, canReviewPreviousMonthPayroll, previousPayrollMonthKey,
 } from './hr/payroll';
 export type { IncrementEvent } from './hr/payroll';
 import {
@@ -57,6 +57,7 @@ export {
   applyIncrementServer, addEmployeeServer, updateEmployeeTeamsAdmin,
   setTeamLeadAdmin,
 } from './hr/profiles';
+export type { ArchiveProgress } from './hr/profiles';
 export {
   useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued, getAccruedPTOForDisplay,
   getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,

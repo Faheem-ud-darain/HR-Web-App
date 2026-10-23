@@ -1,100 +1,85 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
+  <dict>
     <key>CAPACITOR_DEBUG</key>
-	<string>$(CAPACITOR_DEBUG)</string>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
-	<key>CFBundleDisplayName</key>
-        <string>Delcargo Internal</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
-	<!-- NSAllowsArbitraryLoads (blanket ATS exception) removed — it disabled
-	     HTTPS certificate validation for every domain the app talks to, not
-	     just PocketBase, and Apple App Review commonly flags/rejects this
-	     for apps handling personal data. It's no longer needed once
-	     PocketBase is served over a real HTTPS domain (see
-	     src/lib/pocketbase.ts) instead of a bare HTTP IP — ATS's defaults
-	     allow any HTTPS connection with a valid certificate with no
-	     exception required. -->
-	<!-- Required for location access generally (the initial permission
-	     prompt uses this string). Without an NSLocation*UsageDescription
-	     string at all, iOS terminates the app the moment location access is
-	     requested instead of showing a denial. -->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Delcargo Internal uses your location to confirm you're at a warehouse when you clock in or out.</string>
-	<!-- USA employees are auto clocked in/out by GPS geofence (see
-	     src/lib/geofence.ts + src/lib/backgroundGeolocation.ts) — this has
-	     to keep working after the app is backgrounded or the phone is
-	     locked, or an employee who leaves a warehouse with the app closed
-	     never gets auto clocked-out. That needs "Always" authorization, not
-	     just "When In Use". iOS shows this exact string as the second
-	     ("upgrade to Always") permission prompt.
-
-	     Heads up for App Review: Apple scrutinizes Always-location requests
-	     closely (Guideline 5.1.1) and may ask you to justify it during
-	     review — have this attendance/clock-in use case ready to explain,
-	     and make sure the in-app disclosure (src/app/privacy/page.tsx +
-	     the first-run consent gate in (dashboard)/layout.tsx) says the same
-	     thing. Employees who aren't on USA/GPS-based auto clock-in never
-	     trigger this prompt at all — they use manual Start/End Shift
-	     buttons instead. -->
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Delcargo Internal uses your location — including while the app is in the background or your device is locked — to automatically start and end your shift as you arrive at or leave your assigned warehouse.</string>
-	<!-- Lets iOS keep delivering location updates to the app while it's
-	     backgrounded, which @capgo/background-geolocation needs for the
-	     auto clock-in/out geofence to keep working when the app isn't in
-	     the foreground. -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
-	<!-- Required because ticket attachments, avatar upload, and career
-	     document upload use <input type="file" accept="image/*" ...>, which
-	     WKWebView can route through the native camera/photo picker. Without
-	     these, tapping "Take Photo" or "Photo Library" from that picker
-	     crashes the app instead of prompting for permission. -->
-	<key>NSCameraUsageDescription</key>
-	<string>Delcargo Internal lets you take a photo to attach to tickets, your profile, or career documents.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Delcargo Internal lets you choose a photo from your library to attach to tickets, your profile, or career documents.</string>
-</dict>
+    <string>$(CAPACITOR_DEBUG)</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Delcargo Internal</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>UILaunchStoryboardName</key>
+    <string>LaunchScreen</string>
+    <key>UIMainStoryboardFile</key>
+    <string>Main</string>
+    <key>UIRequiredDeviceCapabilities</key>
+    <array>
+      <string>arm64</string>
+    </array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+      <string>UIInterfaceOrientationPortrait</string>
+      <string>UIInterfaceOrientationLandscapeLeft</string>
+      <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+      <string>UIInterfaceOrientationPortrait</string>
+      <string>UIInterfaceOrientationPortraitUpsideDown</string>
+      <string>UIInterfaceOrientationLandscapeLeft</string>
+      <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UIViewControllerBasedStatusBarAppearance</key>
+    <true/>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Delcargo Internal uses your location to confirm you're at a warehouse when you clock in or out.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Delcargo Internal uses your location — including while the app is in the background or your device is locked — to automatically start and end your shift as you arrive at or leave your assigned warehouse.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>location</string>
+      <string>remote-notification</string>
+    </array>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>NSCameraUsageDescription</key>
+    <string>Delcargo Internal lets you take a photo to attach to tickets, your profile, or career documents.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Delcargo Internal lets you choose a photo from your library to attach to tickets, your profile, or career documents.</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+      <key>UIApplicationSupportsMultipleScenes</key>
+      <false/>
+      <key>UISceneConfigurations</key>
+      <dict>
+        <key>UIWindowSceneSessionRoleApplication</key>
+        <array>
+          <dict>
+            <key>UISceneConfigurationName</key>
+            <string>Default Configuration</string>
+            <key>UISceneDelegateClassName</key>
+            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+            <key>UISceneStoryboardFile</key>
+            <string>Main</string>
+          </dict>
+        </array>
+      </dict>
+    </dict>
+  </dict>
 </plist>

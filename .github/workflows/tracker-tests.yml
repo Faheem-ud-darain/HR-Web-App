@@ -1,0 +1,25 @@
+name: Tracker Tests
+
+# Runs the tracker agent's unit tests on every change that touches it (the
+# release build in build-tracker-agent.yml runs the same tests before packaging).
+
+on:
+  push:
+    paths: ['tracker-agent/**']
+  pull_request:
+    paths: ['tracker-agent/**']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tracker-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-dev.txt
+      - run: python -m py_compile agent_gui.py
+      - run: python -m pytest tests -q

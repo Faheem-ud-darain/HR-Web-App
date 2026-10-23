@@ -152,17 +152,35 @@ export function getShiftShortfallDeduction(
 // `timesheets` (2026-09-03) now also feeds getShiftShortfallDeduction —
 // the day-by-day worked-hours/8-hours proration for shifts that ran
 // short of a full day without qualifying as absent (4h-8h range).
-export function computePayrollView(employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[] = [], absenceRecords: AbsenceRecord[] = [], now: Date = new Date()): PayrollRecord[] {
+// Payroll is paid by an external process, so HR/Admin keep looking at last month's figures
+// for the first PAYROLL_REVIEW_DAYS days of a month. Days 1–3 the main view already shows the
+// previous month; days 4–10 it has moved on, so a separate "Previous month" tab offers it.
+export const PAYROLL_REVIEW_DAYS = 10;
+const PAYROLL_PROCESSING_DAYS = 3;
+
+/** True when the previous month's payroll should be offered as its own tab (NY days 4–10). */
+export function canReviewPreviousMonthPayroll(now: Date = new Date()): boolean {
+  const day = parseInt(getNYDateString(now).split('-')[2], 10);
+  return day > PAYROLL_PROCESSING_DAYS && day <= PAYROLL_REVIEW_DAYS;
+}
+
+/** "YYYY-MM" of the calendar month before `now`'s New York month. */
+export function previousPayrollMonthKey(now: Date = new Date()): string {
+  const [y, m] = getNYDateString(now).split('-').map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+export function computePayrollView(employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[] = [], absenceRecords: AbsenceRecord[] = [], now: Date = new Date(), previousMonth = false): PayrollRecord[] {
   const today = new Date(now);
   const dayOfMonth = parseInt(getNYDateString(today).split('-')[2], 10);
   
   // When payroll is accessed during the processing window (Days 1–3 of the month),
   // the target month being processed is the PREVIOUS month (e.g. Aug 1-3 processes July).
-  const targetMonthDate = new Date(today);
-  if (dayOfMonth >= 1 && dayOfMonth <= 3) {
-    targetMonthDate.setMonth(targetMonthDate.getMonth() - 1);
-  }
-  const targetMonthKey = getNYDateString(targetMonthDate).slice(0, 7);
+  const inProcessingWindow = dayOfMonth >= 1 && dayOfMonth <= PAYROLL_PROCESSING_DAYS;
+  // `previousMonth` is only honoured outside the processing window (inside it the default already is last month).
+  const targetMonthKey = inProcessingWindow || previousMonth
+    ? previousPayrollMonthKey(today)
+    : getNYDateString(today).slice(0, 7);
 
   return employees
     .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
