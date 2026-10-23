@@ -336,6 +336,13 @@ export async function adminFindByField(collection: string, field: string, value:
   return item ? { id: item.id, data: item.data } : null;
 }
 
+// Lets a caller that has JUST looked a row up tell adminUpsertByField its id, so the upsert that
+// follows is one PATCH instead of a second lookup + PATCH (each round trip to the database is
+// ~0.5–0.7 s from the edge, so this matters on the login path).
+export function rememberAdminUpsertId(collection: string, field: string, value: string, id: string): void {
+  adminUpsertIdCache.set(`${collection}:${field}:${value.toLowerCase()}`, id);
+}
+
 export async function adminUpsertByField(collection: string, field: string, value: string, data: PbJson): Promise<void> {
   const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
   const cachedId = adminUpsertIdCache.get(cacheKey);

@@ -48,11 +48,18 @@ export async function POST(request: Request) {
   // Per ADDRESS as well (60 per 15 minutes — an office of ~20 people sharing
   // one IP logs in well under that): the per-email limit below stops one
   // account being guessed, this stops one machine spraying many accounts.
-  const ipLimited = await rateLimitByIp(request, 'login', 60, 15 * 60 * 1000);
-  if (ipLimited) return ipLimited;
-
+  // The two limit checks and the profile lookup don't depend on each other, so they run together:
+  // each database round trip is ~0.5–0.7 s from the edge, and doing them one after another used to
+  // add up to several seconds before the password was even checked. (A failed profile lookup is
+  // not an error yet: it is awaited — and handled — inside the try block below.)
   const rateLimitKey = `login_ratelimit_${email}`;
-  const rl = await checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
+  const profilePromise = adminFindProfileByEmail(email);
+  profilePromise.catch(() => { /* surfaced where it is awaited below */ });
+  const [ipLimited, rl] = await Promise.all([
+    rateLimitByIp(request, 'login', 60, 15 * 60 * 1000),
+    checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000),
+  ]);
+  if (ipLimited) return ipLimited;
   if (!rl.allowed) {
     const minutes = Math.ceil((rl.retryAfterSeconds || 0) / 60);
     return tooManyRequests(
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
     }
 
     // ── Regular hr_profiles login ────────────────────────────────────────
-    const profile = await adminFindProfileByEmail(email);
+    const profile = await profilePromise;
     if (!profile) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
@@ -101,6 +108,10 @@ export async function POST(request: Request) {
     // ('123') that should ever authenticate it. Treat it as a
     // never-matches case rather than special-casing a shared default.
     const storedPassword: string | undefined = profile.password;
+    // The offboarded lookup below only needs the profile id, so it runs while the (CPU-heavy)
+    // password hash is being checked instead of after it.
+    const extrasPromise: Promise<{ data?: PbRow } | null> = adminFindByField('hr_profile_extras', 'profile_id', profile.id);
+    extrasPromise.catch(() => { /* handled where it is awaited */ });
     const matches = storedPassword
       ? await verifyPassword(password, storedPassword)
       : false;
@@ -119,7 +130,7 @@ export async function POST(request: Request) {
     // check, not the primary credential check above it.
     let extras: { data?: PbRow } | null = null;
     try {
-      extras = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
+      extras = await extrasPromise;
     } catch (err) {
       console.error('[login] offboarded-check storage error, allowing login:', err);
     }
