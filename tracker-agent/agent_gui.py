@@ -3769,6 +3769,13 @@ class TrackerApp:
                 self.status_var.set("⏸ Tracking Paused")
                 self.detail_var.set("Waiting for your shift to start.\nTracking will automatically resume when you clock in.")
                 tray_mode = "paused"
+            elif s.get("shift_active") and not s.get("enabled_by_hr"):
+                # On shift, but tracking is switched off for this account — nothing is being
+                # captured. Say so plainly (this is how a mid-shift setting change used to go
+                # unnoticed for hours); the employee can tell HR right away.
+                self.status_var.set("⚠ Tracking is OFF during your shift")
+                self.detail_var.set("Tracking is turned off for your account, so no screenshots are being captured.\nPlease tell HR/Admin now so it can be switched back on.")
+                tray_mode = "off"
             else:
                 self.status_var.set("⚪ Tracking Off")
                 self.detail_var.set("Waiting for HR/Admin to enable tracking for your account.\nNothing is being captured right now.")

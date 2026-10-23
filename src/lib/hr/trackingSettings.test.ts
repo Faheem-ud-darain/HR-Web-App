@@ -1,64 +1,52 @@
-// Regression test for the "tracking switches itself off" bug: updateTrackingSettings used to build its
-// write from a read that swallows errors, so a PocketBase hiccup made an existing row look missing and the
-// first-time defaults (enabled: false + a new random agentToken) overwrote it.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// Regression tests for "tracking switches itself off": a failed read must never be mistaken for
+// "no settings row", and saving goes through the server route (which writes only what was sent).
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-type Row = { id: string; employeeEmail: string; enabled: boolean; intervalMinutes: number; excludeFromAutoDelete: boolean; agentToken: string };
-let rows: Row[] = [];
 let failReads = false;
-const updateMock = vi.fn(async (id: string, data: Partial<Row>) => { const r = rows.find(x => x.id === id)!; Object.assign(r, data); return { ...r }; });
-const createMock = vi.fn(async (data: Omit<Row, 'id'>) => { const r = { id: 'new', ...data } as Row; rows.push(r); return { ...r }; });
+const getFullListMock = vi.fn(async () => { if (failReads) throw new Error('502 Bad Gateway'); return []; });
+const writeMock = vi.fn();
 
 vi.mock('../pocketbase', () => ({
-  pb: {
-    collection: () => ({
-      getFullList: async () => { if (failReads) throw new Error('502 Bad Gateway'); return rows.map(r => ({ ...r })); },
-      update: updateMock,
-      create: createMock,
-    }),
-  },
+  pb: { collection: () => ({ getFullList: getFullListMock, update: writeMock, create: writeMock }) },
 }));
 vi.mock('../hrData', () => ({ hrActions: {}, displayName: () => '' }));
+vi.mock('../session', () => ({ getAuthToken: () => 'tok', getSessionEmail: () => 'hr@x.us', getSessionRole: () => 'hr' }));
 vi.mock('./shared', () => ({
-  pbList: vi.fn(async () => []), pbCreate: vi.fn(), pbUpdate: vi.fn(), pbUpsertByField: vi.fn(), pbFindByField: vi.fn(), pbDeleteByField: vi.fn(),
+  pbList: vi.fn(async () => []),
+  pbListStrict: async () => getFullListMock(),
+  pbCreate: vi.fn(), pbUpdate: vi.fn(), pbUpsertByField: vi.fn(), pbFindByField: vi.fn(), pbDeleteByField: vi.fn(),
   withTimeout: vi.fn(), pbGetTrackerSignal: vi.fn(), pbGetAllTrackerSignals: vi.fn(), pbSetTrackerSignal: vi.fn(), pbClearTrackerSignal: vi.fn(),
   pbClearTrackerSignalFields: vi.fn(), formatDurationBetween: vi.fn(),
 }));
 
 import { timesheetActions } from './timesheets';
 
-beforeEach(() => {
-  rows = [{ id: 'r1', employeeEmail: 'alex@x.us', enabled: true, intervalMinutes: 5, excludeFromAutoDelete: false, agentToken: 'agt_keepme' }];
-  failReads = false;
-  updateMock.mockClear(); createMock.mockClear();
+beforeEach(() => { failReads = false; writeMock.mockClear(); });
+afterEach(() => vi.unstubAllGlobals());
+
+describe('reading tracking settings', () => {
+  it('throws when the database read fails instead of returning "no row" defaults', async () => {
+    failReads = true;
+    await expect(timesheetActions.getTrackingSettingsFor('alex@x.us')).rejects.toThrow();
+    await expect(timesheetActions.getAllTrackingSettings()).rejects.toThrow();
+  });
 });
 
 describe('updateTrackingSettings', () => {
-  it('writes nothing when the read fails (never falls back to first-time defaults)', async () => {
-    failReads = true;
-    await expect(timesheetActions.updateTrackingSettings('alex@x.us', {})).rejects.toThrow();
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(createMock).not.toHaveBeenCalled();
-    expect(rows[0]).toMatchObject({ enabled: true, agentToken: 'agt_keepme' });
+  it('posts to the server route with only the requested fields and never writes from the browser', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ settings: { employeeEmail: 'alex@x.us', enabled: true, intervalMinutes: 5, excludeFromAutoDelete: false, agentToken: 'agt_x', id: 'r1' } }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const out = await timesheetActions.updateTrackingSettings('alex@x.us', { agentToken: 'agt_new1234567' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain('/api/tracking/settings');
+    expect(JSON.parse(String(init.body))).toEqual({ email: 'alex@x.us', updates: { agentToken: 'agt_new1234567' } });
+    expect(writeMock).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ enabled: true, agentToken: 'agt_x' });
   });
 
-  it('only sends the fields the caller passed, so regenerating a token cannot turn tracking off', async () => {
-    await timesheetActions.updateTrackingSettings('alex@x.us', { agentToken: 'agt_new' });
-    expect(updateMock).toHaveBeenCalledTimes(1);
-    expect(Object.keys(updateMock.mock.calls[0][1]).sort()).toEqual(['agentToken', 'employeeEmail']);
-    expect(rows[0]).toMatchObject({ enabled: true, intervalMinutes: 5, agentToken: 'agt_new' });
-  });
-
-  it('does not touch an existing row for an empty update', async () => {
-    const out = await timesheetActions.updateTrackingSettings('Alex@X.us', {});
-    expect(updateMock).not.toHaveBeenCalled();
-    expect(out).toMatchObject({ enabled: true, agentToken: 'agt_keepme' });
-  });
-
-  it('applies defaults and a new token only when the employee really has no row', async () => {
-    const out = await timesheetActions.updateTrackingSettings('new@x.us', {});
-    expect(createMock).toHaveBeenCalledTimes(1);
-    expect(out).toMatchObject({ enabled: false, intervalMinutes: 15 });
-    expect(out.agentToken).toMatch(/^agt_/);
+  it('surfaces a server failure as an error (nothing was changed)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Could not reach the database. Nothing was changed.' }), { status: 502 })));
+    await expect(timesheetActions.updateTrackingSettings('alex@x.us', {})).rejects.toThrow(/Nothing was changed/);
   });
 });

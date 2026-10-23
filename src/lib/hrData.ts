@@ -29,7 +29,7 @@ import {
   timesheetActions
 } from './hr/timesheets';
 export {
-  hasStaleTrackerToken, getCaptureHealth, TRACKER_HEARTBEAT_STALE_MS,
+  hasStaleTrackerToken, getCaptureHealth, getCaptureGap, TRACKER_HEARTBEAT_STALE_MS,
   SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
   useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, fetchTimesheetsFresh,
 } from './hr/timesheets';

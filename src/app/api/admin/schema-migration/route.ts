@@ -759,6 +759,28 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, dryRun, results });
     }
+    if (body.action === 'ensureTrackingSettingsLog') {
+      // Audit trail for hr_tracking_settings: one row per change (who, when, what it was and
+      // what it became), written only by /api/tracking/settings with the admin token — so both
+      // rules are null (admin-only): the browser can neither read nor write it.
+      // Additive only. Defaults to a dry run — pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_tracking_settings_log';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string) => ({ name: n, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: [text('employeeEmail'), text('actor'), text('actorRole'), text('action'), { name: 'changes', type: 'json', required: false, unique: false, options: { maxSize: 20000 } }],
+            indexes: ['CREATE INDEX idx_hr_tracking_settings_log_email ON hr_tracking_settings_log (employeeEmail)'],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
     if (body.action === 'deleteActivityRows') {
       // Maintenance helper for the two dot tables ONLY (their delete rule is admin-only on
       // purpose, so the browser can't wipe them): removes the rows matching `filter`.

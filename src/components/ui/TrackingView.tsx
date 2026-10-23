@@ -18,8 +18,8 @@ import {
   useTimesheets,
   hrActions,
   displayName,
-  updateProfileAdmin,
   getCaptureHealth,
+  getCaptureGap,
 } from '@/lib/hrData';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { formatDateTimeNY, getNYDateString, getNYMidnight } from '@/lib/timezone';
@@ -280,11 +280,31 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // aligns it against the employee's name/email.
   const TrackerStatusBadge = ({ hb, settings, align }: { hb: TrackerHeartbeat | null; settings: TrackingSettings; align: 'center' | 'end' }) => {
     const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
+    // Warn when someone is on shift but nothing is being captured (tracking switched off, or the
+    // tracker is connected yet silent) — see getCaptureGap.
+    const openShift = openShiftFor(settings.employeeEmail);
+    const gap = getCaptureGap({
+      onShift: !!openShift, trackingOn: settings.enabled, heartbeatLive: isLive,
+      lastCaptureAt: hb?.lastCaptureAt, shiftStartedAt: openShift?.clockIn, intervalMinutes: settings.intervalMinutes,
+      captureReported: hb?.captureEnabled !== undefined,
+    });
+    const gapBadge = gap.status === 'tracking_off' ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full" title="This employee is on shift but tracking is turned off, so no screenshots are being taken.">
+        <AlertTriangle className="h-3 w-3" /> On shift, tracking OFF
+      </span>
+    ) : gap.status === 'no_captures' ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full" title="The tracker is connected but has not captured a screenshot for longer than two intervals.">
+        <AlertTriangle className="h-3 w-3" /> No screenshots for {gap.minutes} min
+      </span>
+    ) : null;
     if (!isLive) {
       return (
-        <span className={`inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full ${align === 'end' ? 'shrink-0' : ''}`}>
-          <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
-        </span>
+        <div className={`flex flex-col ${align === 'end' ? 'items-end shrink-0' : 'items-center'} gap-1`}>
+          <span className={`inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full ${align === 'end' ? 'shrink-0' : ''}`}>
+            <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
+          </span>
+          {gapBadge}
+        </div>
       );
     }
     return (
@@ -298,6 +318,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
           </span>
         )}
         <CaptureHealthBadge hb={hb} />
+        {gapBadge}
       </div>
     );
   };
@@ -307,16 +328,9 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     || { employeeEmail: email, enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false, agentToken: '' };
 
   const handleToggle = async (email: string, enabled: boolean) => {
+    // The server route also keeps hr_profiles.tracking_enabled (the profile flag) in step, so
+    // there is nothing else to write here.
     await hrActions.updateTrackingSettings(email, { enabled });
-    // Keep hr_profiles.tracking_enabled in sync with this toggle. That
-    // separate flag is what Sidebar.tsx checks to decide whether to show
-    // the employee's "Timesheet Tracker" nav link (and therefore whether
-    // they ever see the agent download button / setup code on that page)
-    // — without this, flipping tracking on here left employees unable to
-    // find the download link at all, even though tracking was "on" behind
-    // the scenes.
-    const emp = employees.find(e => e.email.toLowerCase() === email.toLowerCase());
-    if (emp) await updateProfileAdmin(emp.id, { trackingEnabled: enabled });
     refetchSettings();
   };
 

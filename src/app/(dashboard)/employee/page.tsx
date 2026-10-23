@@ -19,6 +19,7 @@ import { EmployeeMainColumn } from "@/app/(dashboard)/employee/_components/Emplo
 import { ShiftControlCard } from "@/app/(dashboard)/employee/_components/ShiftControlCard";
 import { useNow } from '@/lib/useNow';
 import { useSessionEmail } from '@/lib/useSession';
+import { isTrackingOn } from '@/lib/core/trackingSettings';
 
 // Stable empties, so memos and effects that depend on them don't re-run every render.
 const NO_ANNOUNCEMENTS: Announcement[] = [];
@@ -53,7 +54,7 @@ export default function EmployeeDashboard() {
   // flag alone.
   const { data: trackingSettingsList = [] } = useTrackingSettings();
   const isTrackingLiveFor = (emp: Profile) =>
-    !!emp.trackingEnabled || !!trackingSettingsList.find(s => s.employeeEmail?.toLowerCase() === emp.email?.toLowerCase())?.enabled;
+    isTrackingOn(emp.trackingEnabled, trackingSettingsList.find(s => s.employeeEmail?.toLowerCase() === emp.email?.toLowerCase()));
 
   const router = useRouter();
   // Everything below is derived from the queries above — not copied into state by an effect.
