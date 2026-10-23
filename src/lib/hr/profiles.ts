@@ -821,10 +821,13 @@ export const profileActions = {
   // audit, so an unauthenticated fetch here would now just 401/403. The
   // route replicates the exact same real-collection + legacy-KV merge this
   // function used to do client-side; see that route's own comment.
+  // The WHOLE window (`all=1`) — only for flows that truly need every row:
+  // ZIP export, the profile download and the employee-purge cleanup. The
+  // interactive viewer uses getScreenshotsPage so it never loads 1,000+ at once.
   getScreenshots: async (filters: { employeeEmail: string; sinceISO?: string; untilISO?: string }): Promise<Screenshot[]> => {
     const token = getAuthToken();
     if (!token) return [];
-    const params = new URLSearchParams({ employeeEmail: filters.employeeEmail });
+    const params = new URLSearchParams({ employeeEmail: filters.employeeEmail, all: '1' });
     if (filters.sinceISO) params.set('sinceISO', filters.sinceISO);
     if (filters.untilISO) params.set('untilISO', filters.untilISO);
     const res = await fetch(`${API_BASE}/api/tracking/screenshots?${params.toString()}`, {
@@ -833,6 +836,24 @@ export const profileActions = {
     if (!res.ok) return [];
     const data = await res.json();
     return (data.items || []) as Screenshot[];
+  },
+  // One page (50 max) of a window, newest first, plus the window's total.
+  getScreenshotsPage: async (
+    filters: { employeeEmail: string; sinceISO?: string; untilISO?: string },
+    page = 1,
+  ): Promise<{ items: Screenshot[]; page: number; totalItems: number; totalPages: number }> => {
+    const empty = { items: [] as Screenshot[], page, totalItems: 0, totalPages: 1 };
+    const token = getAuthToken();
+    if (!token) return empty;
+    const params = new URLSearchParams({ employeeEmail: filters.employeeEmail, page: String(page) });
+    if (filters.sinceISO) params.set('sinceISO', filters.sinceISO);
+    if (filters.untilISO) params.set('untilISO', filters.untilISO);
+    const res = await fetch(`${API_BASE}/api/tracking/screenshots?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return empty;
+    const data = await res.json();
+    return { items: (data.items || []) as Screenshot[], page: data.page ?? page, totalItems: data.totalItems ?? 0, totalPages: data.totalPages ?? 1 };
   },
   // Retained for the deleteEmployee purge flow (still on the public client
   // for now — see the standing note on that migration in

@@ -21,6 +21,11 @@ interface ScreenshotsModalProps {
   handleDayChange: (day: string) => void;
   handleExportZip: () => Promise<void>;
   viewerShots: Screenshot[];
+  /** All captures in the selected window (the grid only holds the loaded pages). */
+  viewerTotal: number;
+  hasMoreShots: boolean;
+  loadMoreShots: () => void;
+  loadingMoreShots: boolean;
   exporting: boolean;
   viewerLoading: boolean;
   viewerInactivity: InactivityLog[];
@@ -29,7 +34,7 @@ interface ScreenshotsModalProps {
   openLightbox: (index: number) => void;
 }
 
-export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeChange, viewerRange, viewerDay, handleDayChange, handleExportZip, viewerShots, exporting, viewerLoading, viewerInactivity, formatDuration, totalInactiveSeconds, openLightbox }: ScreenshotsModalProps) {
+export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeChange, viewerRange, viewerDay, handleDayChange, handleExportZip, viewerShots, viewerTotal, hasMoreShots, loadMoreShots, loadingMoreShots, exporting, viewerLoading, viewerInactivity, formatDuration, totalInactiveSeconds, openLightbox }: ScreenshotsModalProps) {
   return (
     <Modal isOpen={!!viewerEmp} onClose={() => setViewerEmp(null)} title={viewerEmp ? `Screenshots — ${displayName(viewerEmp, role)}` : 'Screenshots'}>
       {viewerEmp && (
@@ -76,9 +81,9 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
               variant="primary"
               size="md"
               onClick={handleExportZip}
-              disabled={viewerShots.length === 0 || exporting}
+              disabled={viewerTotal === 0 || exporting}
             >
-              <Download className="h-3.5 w-3.5" /> {exporting ? 'Exporting…' : `Export ${viewerShots.length} as ZIP`}
+              <Download className="h-3.5 w-3.5" /> {exporting ? 'Exporting…' : `Export ${viewerTotal} as ZIP`}
             </Button>
           </div>
     
@@ -144,6 +149,18 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
                   <p className="text-[9px] text-slate-400 font-semibold text-center">{formatDateTimeNY(shot.timestamp)}</p>
                 </button>
               ))}
+            </div>
+          )}
+          {viewerShots.length > 0 && (
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <p className="text-[11px] font-semibold text-slate-500">
+                Showing {viewerShots.length} of {viewerTotal}
+              </p>
+              {hasMoreShots && (
+                <Button variant="secondary" size="sm" onClick={loadMoreShots} disabled={loadingMoreShots}>
+                  {loadingMoreShots ? 'Loading…' : `Load next ${Math.min(50, viewerTotal - viewerShots.length)}`}
+                </Button>
+              )}
             </div>
           )}
         </div>

@@ -106,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // left the rightmost columns (Status/Action) cropped off-screen on normal
   // desktop widths, with no visible cue that a horizontal scrollbar existed
   // to reach them.
-  const isWideTableScreen = pathname?.endsWith('/tracking') || pathname?.endsWith('/team-tracking') || pathname?.endsWith('/hr/payroll');
+  const isWideTableScreen = pathname?.endsWith('/tracking') || pathname?.endsWith('/hr/payroll');
   // When the ticket conversation panel is open it calls pushModal() (see
   // TicketsView.tsx) — subscribe to that signal so we can switch the tickets
   // screen's <main> to overflow-hidden while it's open. Without this, the

@@ -705,6 +705,34 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ ok: true, collection: name, field: field.name, result: 'added' });
     }
+    if (body.action === 'ensureScreenshotIndexes') {
+      // Indexes behind the paginated screenshot viewer and the retention sweep:
+      // every query filters by a captured_at range (+ optionally one employee)
+      // and sorts newest-first. Purely additive; existing indexes are kept.
+      const wanted = [
+        'CREATE INDEX idx_hr_screenshots_captured_at ON hr_screenshots (captured_at)',
+        'CREATE INDEX idx_hr_screenshots_email_captured_at ON hr_screenshots (employee_email, captured_at)',
+      ];
+      // Indexes are compared by their column list, not their name, so an
+      // equivalent index created earlier under another name isn't duplicated.
+      // Any exact-duplicate column sets are collapsed, keeping the first.
+      const columnsOf = (sql: string) => (sql.match(/\(([^)]*)\)\s*$/)?.[1] || '').replace(/[`\s]/g, '').toLowerCase();
+      const existing = await pbAdminFetch('/api/collections/hr_screenshots');
+      const current: string[] = existing.indexes || [];
+      const seen = new Set<string>();
+      const indexes: string[] = [];
+      const dropped: string[] = [];
+      for (const sql of [...current, ...wanted]) {
+        const cols = columnsOf(sql);
+        if (seen.has(cols)) { if (current.includes(sql)) dropped.push(sql); continue; }
+        seen.add(cols);
+        indexes.push(sql);
+      }
+      const added = indexes.filter((sql) => !current.includes(sql));
+      if (added.length === 0 && dropped.length === 0) return NextResponse.json({ ok: true, result: 'already configured', indexes: current });
+      await pbAdminFetch(`/api/collections/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ indexes }) });
+      return NextResponse.json({ ok: true, result: 'updated', added, dropped, indexes });
+    }
     if (body.action === 'ensureLeaveDateFields') {
       // Adds hr_leaves.start_date / end_date ("YYYY-MM-DD" text) so leaves can be
       // filtered by date server-side. Purely additive — never touches existing

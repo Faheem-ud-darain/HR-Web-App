@@ -34,11 +34,8 @@ import { TrackerEmployeeList } from "@/components/ui/tracking/TrackerEmployeeLis
 import { useIsClient } from '@/lib/useIsClient';
 
 interface TrackingViewProps {
-  role: 'admin' | 'hr' | 'team_lead';
-  // Required when role === 'team_lead' — scopes the visible employee list
-  // to that team lead's own teammates (see `employees` below) and is used
-  // to look up their leadTeams. Ignored for admin/hr, who see everyone.
-  viewerEmail?: string;
+  // Screen Tracking is HR/Admin only — team leads and employees never get it.
+  role: 'admin' | 'hr';
 }
 
 export const AGENT_SCRIPT_PATH = '/delcargo_tracker_agent.py';
@@ -55,7 +52,7 @@ export const AGENT_SCRIPT_PATH = '/delcargo_tracker_agent.py';
 // in sync with America/New_York (where shift days are measured).
 export const localDateString = (d: Date = new Date()): string => getNYDateString(d);
 
-export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
+export function TrackingView({ role }: TrackingViewProps) {
   // Team Leads get read-only access to their own teammates' tracking data
   // (screenshots, mouse inactivity) — they can never see/change tracking
   // settings (enable/disable, interval, exclude-from-auto-delete) or the
@@ -85,12 +82,21 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
   // Screenshot viewer modal
   const [viewerEmp, setViewerEmp] = useState<Profile | null>(null);
-  const [viewerRange, setViewerRange] = useState<'2days' | 'day' | 'week' | 'month'>('2days');
+  const [viewerRange, setViewerRange] = useState<'2days' | 'day' | 'week' | 'month'>('day');
   // Which calendar day to show when viewerRange === 'day' — defaults to
   // today, but HR/Admin can pick any past day to see that shift's activity.
   const [viewerDay, setViewerDay] = useState<string>(() => localDateString());
   const [viewerShots, setViewerShots] = useState<Screenshot[]>([]);
   const [viewerLoading, setViewerLoading] = useState(false);
+  // Pagination: the viewer loads 50 at a time; these track what's been
+  // fetched for the current employee/window and how many exist in total.
+  const [viewerPage, setViewerPage] = useState(1);
+  const [viewerTotal, setViewerTotal] = useState(0);
+  const [viewerTotalPages, setViewerTotalPages] = useState(1);
+  const [viewerLoadingMore, setViewerLoadingMore] = useState(false);
+  // The exact [since, until] the first page was loaded with — later pages and
+  // the ZIP export reuse it so a rolling 'week'/'month' window can't drift.
+  const viewerWindowRef = useRef<{ since: string; until: string } | null>(null);
   const [exporting, setExporting] = useState(false);
 
   // Inactivity summary (loaded alongside screenshots for the same
@@ -141,18 +147,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   // an employee's currently open shift — see handleForceEndShift below.
   const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets();
 
-  // Team Lead's own profile — used to resolve which teams they lead, so
-  // their tracking view only ever shows their own teammates, never the
-  // whole company.
-  const viewerProfile = role === 'team_lead' ? (allProfiles || []).find(p => p.email.toLowerCase() === (viewerEmail || '').toLowerCase()) : null;
-
-  const employees = (allProfiles || []).filter(e => {
-    if (!(e.role === 'employee' || e.role === 'team_lead')) return false;
-    if (role !== 'team_lead') return true;
-    if (!viewerProfile) return false;
-    if (e.email.toLowerCase() === (viewerEmail || '').toLowerCase()) return false; // teammates only, not self
-    return e.teams?.some(t => viewerProfile.leadTeams?.includes(t));
-  });
+  const employees = (allProfiles || []).filter(e => e.role === 'employee' || e.role === 'team_lead');
   useEffect(() => {
     // Monthly retention sweep — fire-and-forget, runs once per HR/Admin
     // dashboard visit. Safe to call repeatedly; it no-ops once this month
@@ -484,15 +479,18 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   };
 
   const handleOpenViewer = async (emp: Profile) => {
+    // Screenshots are HR/Admin only (the API enforces this too).
+    if (!canManage) return;
     setViewerEmp(emp);
-    setViewerRange('2days');
+    setViewerRange('day');
     const today = localDateString();
     setViewerDay(today);
-    await loadViewerData(emp.email, '2days', today);
+    await loadViewerData(emp.email, 'day', today);
   };
 
   // Computes the [since, until) window for the current range/day selection.
-  // '2days' loads the last 2 days of activity by default (saves bandwidth & prevents server strain),
+  // The viewer opens on 'day' (today) by default to keep the first load small;
+  // '2days' is an optional wider window,
   // 'day' is a single calendar day, 'week'/'month' are 7-day and 30-day extended windows.
   const computeWindow = (range: '2days' | 'day' | 'week' | 'month', day: string): { since: Date; until: Date } => {
     if (range === 'day') {
@@ -517,14 +515,42 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     setViewerLoading(true);
     try {
       const { since, until } = computeWindow(range, day);
-      const [shots, inactivity] = await Promise.all([
-        hrActions.getScreenshots({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }),
+      viewerWindowRef.current = { since: since.toISOString(), until: until.toISOString() };
+      const [first, inactivity] = await Promise.all([
+        hrActions.getScreenshotsPage({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }, 1),
         hrActions.getInactivityLogs({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }),
       ]);
-      setViewerShots(shots);
+      setViewerShots(first.items);
+      setViewerPage(1);
+      setViewerTotal(first.totalItems);
+      setViewerTotalPages(first.totalPages);
       setViewerInactivity(inactivity);
     } finally {
       setViewerLoading(false);
+    }
+  };
+
+  // Appends the next page of the current window. De-duplicates by id in case
+  // new captures shifted the page boundary between requests.
+  const loadMoreViewerShots = async () => {
+    if (!viewerEmp || viewerLoadingMore || viewerPage >= viewerTotalPages) return;
+    setViewerLoadingMore(true);
+    try {
+      const win = viewerWindowRef.current;
+      if (!win) return;
+      const next = await hrActions.getScreenshotsPage(
+        { employeeEmail: viewerEmp.email, sinceISO: win.since, untilISO: win.until },
+        viewerPage + 1,
+      );
+      setViewerShots(prev => {
+        const seen = new Set(prev.map(x => x.id));
+        return [...prev, ...next.items.filter(x => !seen.has(x.id))];
+      });
+      setViewerPage(next.page);
+      setViewerTotal(next.totalItems);
+      setViewerTotalPages(next.totalPages);
+    } finally {
+      setViewerLoadingMore(false);
     }
   };
 
@@ -647,6 +673,8 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
   const lightboxNav = (delta: number) => {
     if (lightboxIndex === null) return;
     const next = lightboxIndex + delta;
+    // Stepping past the last loaded shot pulls the next page in the background.
+    if (next >= viewerShots.length - 1 && viewerPage < viewerTotalPages) void loadMoreViewerShots();
     if (next < 0 || next >= viewerShots.length) return;
     setLightboxIndex(next);
     setZoom(1);
@@ -668,16 +696,20 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
 
 
   const handleExportZip = async () => {
-    if (!viewerEmp || viewerShots.length === 0) return;
+    if (!viewerEmp || viewerTotal === 0) return;
     setExporting(true);
     try {
+      // The grid only holds the pages loaded so far; the export covers the
+      // whole selected window, fetched in full on demand.
+      const win = viewerWindowRef.current;
+      const allShots = await hrActions.getScreenshots({ employeeEmail: viewerEmp.email, sinceISO: win?.since, untilISO: win?.until });
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       const manifestRows = ['Timestamp,Filename'];
       // imageUrl is either a data: URL (legacy captures) or a real
       // PocketBase file URL (current captures) — fetch() handles both
       // uniformly, so we no longer need to special-case base64 extraction.
-      await Promise.all(viewerShots.map(async (s, i) => {
+      await Promise.all(allShots.map(async (s, i) => {
         const ts = new Date(s.timestamp);
         const res = await fetch(s.imageUrl);
         const blob = await res.blob();
@@ -718,7 +750,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
           <p className="text-xs md:text-sm text-slate-500 mt-1">
             {canManage
               ? 'Enable desktop screenshot monitoring per employee, set capture intervals, and manage the monthly retention policy.'
-              : "View screenshots and mouse-activity for your team — tracking settings (on/off, interval, retention) are managed by HR/Admin only."}
+              : "View mouse-activity for your team — screenshots and tracking settings (on/off, interval, retention) are managed by HR/Admin only."}
           </p>
         </div>
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg self-start">
@@ -840,7 +872,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
       <TrackerSetupModal setupEmp={setupEmp} diagnosticsRequestIdRef={diagnosticsRequestIdRef} setSetupEmp={setSetupEmp} role={role} settingsFor={settingsFor} copySetupCode={copySetupCode} copied={copied} handleRegenerateToken={handleRegenerateToken} handleForceDisconnect={handleForceDisconnect} copyConfig={copyConfig} handleRunDiagnostics={handleRunDiagnostics} diagnosticsStatus={diagnosticsStatus} handleReloadSettingsNow={handleReloadSettingsNow} handleTrackerAction={handleTrackerAction} diagnosticsResult={diagnosticsResult} copyDiagnosticsReport={copyDiagnosticsReport} copiedDiagnostics={copiedDiagnostics} />
 
       {/* Screenshot Viewer Modal */}
-      <ScreenshotsModal viewerEmp={viewerEmp} setViewerEmp={setViewerEmp} role={role} handleRangeChange={handleRangeChange} viewerRange={viewerRange} viewerDay={viewerDay} handleDayChange={handleDayChange} handleExportZip={handleExportZip} viewerShots={viewerShots} exporting={exporting} viewerLoading={viewerLoading} viewerInactivity={viewerInactivity} formatDuration={formatDuration} totalInactiveSeconds={totalInactiveSeconds} openLightbox={openLightbox} />
+      <ScreenshotsModal viewerEmp={viewerEmp} setViewerEmp={setViewerEmp} role={role} handleRangeChange={handleRangeChange} viewerRange={viewerRange} viewerDay={viewerDay} handleDayChange={handleDayChange} handleExportZip={handleExportZip} viewerShots={viewerShots} viewerTotal={viewerTotal} hasMoreShots={viewerPage < viewerTotalPages} loadMoreShots={loadMoreViewerShots} loadingMoreShots={viewerLoadingMore} exporting={exporting} viewerLoading={viewerLoading} viewerInactivity={viewerInactivity} formatDuration={formatDuration} totalInactiveSeconds={totalInactiveSeconds} openLightbox={openLightbox} />
 
       {/* Mouse Activity Modal — dedicated detail view of inactivity data,
           separate from the Screenshots modal's compact summary. */}
@@ -861,7 +893,7 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
               this lightbox. */}
           <div className="flex items-center justify-between px-4 py-3 text-white" onClick={e => e.stopPropagation()}>
             <span className="text-xs font-semibold text-slate-200">
-              {formatDateTimeNY(viewerShots[lightboxIndex].timestamp)} · {lightboxIndex + 1} / {viewerShots.length}
+              {formatDateTimeNY(viewerShots[lightboxIndex].timestamp)} · {lightboxIndex + 1} / {viewerTotal}
             </span>
             <div className="flex items-center gap-1.5">
               <button onClick={zoomOut} disabled={zoom <= 1} className="p-2 rounded-lg bg-black/40 backdrop-blur-md hover:bg-black/55 disabled:opacity-40 transition-colors">

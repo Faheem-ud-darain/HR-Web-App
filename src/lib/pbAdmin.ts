@@ -220,20 +220,68 @@ export async function adminListAllPayroll(): Promise<PbRow[]> {
 // (`~` server-side, exact check client-side-equivalent here) and date-range
 // filtering, just authenticated so hr_screenshots' List/View rules can be
 // locked down without breaking the Tracking page or the retention sweep.
-export async function adminListScreenshots(filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string }): Promise<PbRow[]> {
-  const filterParts: string[] = [];
+const SCREENSHOT_LIST_CAP = 5000;
+const SCREENSHOT_FIELDS = 'id,collectionId,employee_email,captured_at,image,device_label';
+export const SCREENSHOT_PAGE_SIZE = 50;
+
+type ScreenshotFilters = { employeeEmail?: string; sinceISO?: string; untilISO?: string };
+
+function screenshotFilter(filters?: ScreenshotFilters): string {
+  const parts: string[] = [];
   const toPbDate = (iso: string) => iso.replace('T', ' ').replace('Z', '');
-  if (filters?.employeeEmail) filterParts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
-  if (filters?.sinceISO) filterParts.push(pbFilter('captured_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
-  if (filters?.untilISO) filterParts.push(pbFilter('captured_at <= {:until}', { until: toPbDate(filters.untilISO) }));
-  const query = filterParts.length ? `?filter=${encodeURIComponent(filterParts.join(' && '))}&perPage=500&sort=-captured_at` : '?perPage=500&sort=-captured_at';
-  const list = await pbAdminFetch(`/api/collections/hr_screenshots/records${query}`);
-  let items: PbRow[] = list?.items || [];
-  if (filters?.employeeEmail) {
-    const wanted = filters.employeeEmail.toLowerCase();
-    items = items.filter((r) => (r.employee_email || '').toLowerCase() === wanted);
+  if (filters?.employeeEmail) parts.push(pbFilter('employee_email ~ {:email}', { email: filters.employeeEmail }));
+  if (filters?.sinceISO) parts.push(pbFilter('captured_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
+  if (filters?.untilISO) parts.push(pbFilter('captured_at <= {:until}', { until: toPbDate(filters.untilISO) }));
+  return parts.join(' && ');
+}
+
+// `~` is a case-insensitive "contains" — drop substring false-matches.
+function exactEmailOnly(items: PbRow[], employeeEmail?: string): PbRow[] {
+  if (!employeeEmail) return items;
+  const wanted = employeeEmail.toLowerCase();
+  return items.filter((r) => (r.employee_email || '').toLowerCase() === wanted);
+}
+
+// ONE page of a window (newest first) for the viewer: a single PocketBase
+// request of at most `perPage` rows plus the window's total, so opening a
+// month with 1,000+ captures only loads 50 at a time. Backed by the
+// (employee_email, captured_at) / captured_at indexes — see
+// ensureScreenshotIndexes in the schema-migration route.
+export async function adminListScreenshotsPage(
+  filters: ScreenshotFilters,
+  page = 1,
+  perPage = SCREENSHOT_PAGE_SIZE,
+): Promise<{ items: PbRow[]; page: number; perPage: number; totalItems: number; totalPages: number }> {
+  const safePerPage = Math.min(Math.max(1, perPage), SCREENSHOT_PAGE_SIZE);
+  const filter = screenshotFilter(filters);
+  const res = await pbAdminFetch(
+    `/api/collections/hr_screenshots/records?page=${Math.max(1, page)}&perPage=${safePerPage}&sort=-captured_at&fields=${SCREENSHOT_FIELDS}`
+      + (filter ? `&filter=${encodeURIComponent(filter)}` : ''),
+  );
+  return {
+    items: exactEmailOnly(res?.items || [], filters.employeeEmail),
+    page: res?.page ?? page,
+    perPage: safePerPage,
+    totalItems: res?.totalItems ?? 0,
+    totalPages: res?.totalPages ?? 1,
+  };
+}
+
+// The WHOLE window (capped at SCREENSHOT_LIST_CAP), for the flows that really
+// need everything: ZIP export, the profile download/purge and the monthly
+// retention sweep. Never used for the interactive viewer.
+export async function adminListScreenshots(filters?: ScreenshotFilters): Promise<PbRow[]> {
+  const filter = screenshotFilter(filters);
+  const base = `perPage=200&skipTotal=1&sort=-captured_at&fields=${SCREENSHOT_FIELDS}`
+    + (filter ? `&filter=${encodeURIComponent(filter)}` : '');
+  const all: PbRow[] = [];
+  for (let page = 1; all.length < SCREENSHOT_LIST_CAP; page++) {
+    const res = await pbAdminFetch(`/api/collections/hr_screenshots/records?page=${page}&${base}`);
+    const batch: PbRow[] = res?.items || [];
+    all.push(...batch);
+    if (batch.length < 200) break;
   }
-  return items;
+  return exactEmailOnly(all, filters?.employeeEmail);
 }
 
 // Authenticated KV-prefix scan (the browser-side equivalent was removed). Used

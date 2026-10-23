@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/Badge';
 import { TableScroll, Table, THead, Th, TBody, Tr, Td } from '@/components/ui/Table';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface TimesheetReviewModalProps {
@@ -99,19 +98,6 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
           </div>
         </div>
       </div>
-      <div className="space-y-3">
-        <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Workspace Screenshots</h4>
-        <div className="border border-slate-200 p-6 rounded-xl bg-slate-50/50 text-center space-y-2 font-sans">
-          <Monitor className="h-6 w-6 text-slate-400 mx-auto" />
-          <div>
-            <h5 className="text-xs font-bold text-slate-700">Desktop Capture Offline</h5>
-            <p className="text-[10px] text-slate-500 leading-relaxed font-semibold mt-1">
-              This feature will be available soon (requires Windows client agent installation).
-            </p>
-          </div>
-        </div>
-      </div>
-    
       <div className="flex justify-end pt-4 border-t border-slate-200">
         <Button
           variant="secondary"
