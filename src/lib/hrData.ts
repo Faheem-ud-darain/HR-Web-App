@@ -51,7 +51,7 @@ import {
 export {
   isTechnicalSupportMember, displayName, MAX_USER_SESSION_DEVICES,
   USER_SESSION_STALE_MS, getProfileExtras, saveProfileExtras,
-  getProfileDocuments, saveProfileDocuments, useProfiles, useProfileDocuments,
+  getProfileDocuments, saveProfileDocuments, useProfiles, useMyProfile, useProfileDocuments,
   useProfileSelf, updateProfileSelf, changeOwnPassword, updateProfileAdmin,
   approveOnboardingServer, rejectOnboardingServer, resetPasswordServer,
   applyIncrementServer, addEmployeeServer, updateEmployeeTeamsAdmin,

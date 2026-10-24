@@ -9,7 +9,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
-import { getOrCreateDeviceId, getAuthToken } from '../session';
+import { getOrCreateDeviceId, getAuthToken, getSessionEmail } from '../session';
 import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import { pbFilter } from '../pbFilter';
@@ -162,6 +162,30 @@ const OVERLAY_KEYS: (keyof Profile)[] = [
 // ---------------------------------------------------------------------------
 // QUERY HOOKS — the only supported way to read data. In-memory cache only.
 // ---------------------------------------------------------------------------
+
+// The signed-in user's own profile via /api/me — two small lookups instead of the whole company
+// roster. Lets the dashboard shell and the user's own data requests start straight away instead of
+// after the (much larger) roster has downloaded. The key starts with 'hr_profiles', so everything
+// that invalidates the roster (profile edits, the realtime listener) refreshes this too.
+export function useMyProfile() {
+  const email = (getSessionEmail() || '').toLowerCase();
+  return useQuery({
+    queryKey: ['hr_profiles', 'me', email],
+    enabled: !!email,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async (): Promise<Profile | null> => {
+      const token = getAuthToken();
+      if (!token) return null;
+      try {
+        const res = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return null; // older server without /api/me, or not allowed: the roster path still works
+        return ((await res.json()).profile || null) as Profile | null;
+      } catch {
+        return null;
+      }
+    },
+  });
+}
 
 export function useProfiles() {
   return useQuery({

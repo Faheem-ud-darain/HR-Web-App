@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
-import { Profile, hrActions, useProfiles, updateProfileSelf } from '@/lib/hrData';
+import { Profile, hrActions, useProfiles, useMyProfile, updateProfileSelf } from '@/lib/hrData';
 import { getSessionEmail, getSessionRole, clearSession, hydrateSessionFromNativeStorage, isValidRole, dashboardSectionForRole, SessionRole } from '@/lib/session';
 import { initPush } from '@/lib/push';
 import { Modal } from '@/components/ui/Modal';
@@ -117,6 +117,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isTicketPanelOpen = isTicketsScreen && anyModalOpen;
 
   const { data: allProfiles, isLoading: isProfilesLoading } = useProfiles();
+  // The user's own profile arrives long before the full roster; the shell only needs this one.
+  const { data: myProfile } = useMyProfile();
 
   // Redirect if unauthorized.
   //
@@ -169,9 +171,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setRole(savedRole);
         setEmail(savedEmail);
 
-        if (!isProfilesLoading && allProfiles) {
+        // Ready as soon as EITHER the roster or just the user's own profile has arrived.
+        if ((!isProfilesLoading && allProfiles) || myProfile) {
           setDbReady(true);
-          const userProfile = allProfiles.find(e => e && e.email && e.email.toLowerCase() === savedEmail.toLowerCase());
+          const userProfile = allProfiles?.find(e => e && e.email && e.email.toLowerCase() === savedEmail.toLowerCase()) ?? myProfile ?? undefined;
           if (userProfile) {
             setProfile(userProfile);
           }
@@ -189,7 +192,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     })();
     return () => { cancelled = true; };
-  }, [router, allProfiles, isProfilesLoading]);
+  }, [router, allProfiles, isProfilesLoading, myProfile]);
 
   // Register this device/browser for push notifications and link it to the
   // signed-in user (as OneSignal's "external ID") so they can be targeted
