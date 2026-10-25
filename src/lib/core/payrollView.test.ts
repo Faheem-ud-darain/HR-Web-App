@@ -81,3 +81,14 @@ describe('payPeriod', () => {
     expect(payPeriod('bad')).toEqual({ salaryMonth: 'bad', paidMonth: '' });
   });
 });
+
+describe('new-joiner payments on the screen', () => {
+  it('net pay includes the earlier part-month pay', () => {
+    expect(netPay(rec({ baseSalary: 35000, earlierPay: 19194 }))).toBe(54194);
+  });
+  it('a set-aside part-month is not flagged as "zero pay", and is grouped as paid with a later salary', () => {
+    const stub = rec({ baseSalary: 19194, deductions: 19194, deferredThisMonth: 19194, deductionBreakdown: [{ label: 'Part-month pay — paid with the October 2026 salary', amount: 19194 }] });
+    expect(payrollFlags(stub, bank)).toEqual([]);
+    expect(groupDeductions(stub.deductionBreakdown).map(g => g.key)).toEqual(['later']);
+  });
+});

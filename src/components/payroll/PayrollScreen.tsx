@@ -177,8 +177,8 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   };
   const downloadFullReport = () => {
     downloadCsv(`DelCargo_Payroll_${GROUP_REGION[group]}_${currentMonth}.csv`, [
-      ['Employee', 'Role', 'Salary for', 'Monthly salary', 'Increment', 'Bonus', 'Deductions', 'Amount to pay', 'Status'],
-      ...inGroup.map(r => [r.name, r.role, monthLabel(r.month), r.baseSalary, r.incrementAmount, r.bonus, r.deductions, netPay(r), r.processed ? 'Paid' : 'Not paid yet']),
+      ['Employee', 'Role', 'Salary for', 'Monthly salary', 'Increment', 'Bonus', 'Earlier part-month pay', 'Deductions', 'Amount to pay', 'Status'],
+      ...inGroup.map(r => [r.name, r.role, monthLabel(r.month), r.baseSalary, r.incrementAmount, r.bonus, r.earlierPay || 0, r.deductions, netPay(r), r.processed ? 'Paid' : 'Not paid yet']),
     ]);
   };
 

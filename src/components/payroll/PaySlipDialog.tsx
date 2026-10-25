@@ -105,6 +105,9 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
           {record.bonus > 0 && (
             <div className="flex justify-between text-emerald-700"><span className="font-semibold">Bonus</span><span className="font-bold">+{money(record.bonus)}</span></div>
           )}
+          {(record.earlierPay || 0) > 0 && (
+            <div className="flex justify-between gap-3 text-emerald-700"><span className="font-semibold">{record.earlierPayLabel || 'Earlier part-month pay'}</span><span className="shrink-0 font-bold">+{money(record.earlierPay || 0)}</span></div>
+          )}
           {groups.map(g => (
             <details key={g.key} className="group rounded-lg border border-slate-200 bg-white px-3 py-2">
               <summary className="flex cursor-pointer list-none items-center justify-between text-rose-700">

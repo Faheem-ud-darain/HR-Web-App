@@ -4,12 +4,12 @@
 // deduction reasons in plain groups, and which people need a look before anyone pays them.
 import type { PayrollRecord, Profile } from '../hr/types';
 
-/** What the person is paid: base + increment + bonus − deductions. The ONE definition used by rows, cards, exports and the pay slip. */
-export function netPay(r: Pick<PayrollRecord, 'baseSalary' | 'incrementAmount' | 'bonus' | 'deductions'>): number {
-  return (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) - (Number(r.deductions) || 0);
+/** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions. The ONE definition used by rows, cards, exports and the pay slip. */
+export function netPay(r: Pick<PayrollRecord, 'baseSalary' | 'incrementAmount' | 'bonus' | 'deductions'> & { earlierPay?: number }): number {
+  return (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0);
 }
 
-export type PayrollGroupKey = 'hours' | 'absence' | 'leave' | 'other' | 'held';
+export type PayrollGroupKey = 'hours' | 'absence' | 'leave' | 'other' | 'held' | 'later';
 
 export interface DeductionGroup {
   key: PayrollGroupKey;
@@ -26,14 +26,16 @@ const GROUP_LABELS: Record<PayrollGroupKey, string> = {
   leave: 'Leave taken',
   other: 'Other',
   held: 'Held back (first month)',
+  later: 'Paid with a later salary',
 };
-const GROUP_ORDER: PayrollGroupKey[] = ['hours', 'absence', 'leave', 'other', 'held'];
+const GROUP_ORDER: PayrollGroupKey[] = ['hours', 'absence', 'leave', 'other', 'later', 'held'];
 
 function groupOf(label: string): PayrollGroupKey {
   if (label.startsWith('Partial Shifts')) return 'hours';
   if (label.startsWith('Absence')) return 'absence';
   if (label.startsWith('Urgent Leave') || label.startsWith('Normal Leave')) return 'leave';
   if (label.startsWith('First-Month Reserve')) return 'held';
+  if (label.startsWith('Part-month pay')) return 'later';
   return 'other';
 }
 
@@ -69,7 +71,7 @@ export function payrollFlags(record: PayrollRecord, profile: Pick<Profile, 'bank
   if (!hasBankDetails(profile)) flags.push({ kind: 'no_bank', label: 'No bank details', detail: "This employee's profile has no bank name and account number or IBAN, so there is nowhere to send the money." });
   if (record.pendingArrears > 0) flags.push({ kind: 'arrears', label: 'Earlier month unpaid', detail: 'An earlier month for this employee has still not been marked as paid.' });
   // A first-month hold (everything is held back) legitimately pays nothing, so don't call that a problem.
-  if (netPay(record) <= 0 && record.reservedThisMonth <= 0) flags.push({ kind: 'zero_net', label: 'Pay is zero or less', detail: 'The deductions cancel out the whole salary. Check the reasons before paying.' });
+  if (netPay(record) <= 0 && record.reservedThisMonth <= 0 && !(record.deferredThisMonth && record.deferredThisMonth > 0)) flags.push({ kind: 'zero_net', label: 'Pay is zero or less', detail: 'The deductions cancel out the whole salary. Check the reasons before paying.' });
   if (record.baseSalary > 0 && record.reservedThisMonth <= 0 && record.deductions >= record.baseSalary * BIG_DEDUCTION_SHARE && netPay(record) > 0) {
     flags.push({ kind: 'big_deduction', label: 'Large deduction', detail: 'Half or more of the month’s salary is being deducted. Worth a quick check.' });
   }

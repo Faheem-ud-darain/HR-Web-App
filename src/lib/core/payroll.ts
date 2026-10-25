@@ -10,6 +10,7 @@ import {
 } from './leaves';
 import { getPendingIncrementForPayrollMonth } from '../incrementMath';
 import { elapsedMinutes } from './timesheets';
+import { monthLabel } from './payrollView';
 
 // Standard full shift length — a day worked for this many minutes (8h)
 // earns the full daily rate; less than this (but at/above the 4h absent
@@ -182,6 +183,29 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
     ? previousPayrollMonthKey(today)
     : getNYDateString(today).slice(0, 7);
 
+  return computePayrollForMonth(employees, existingPayroll, leaves, timesheets, absenceRecords, today, targetMonthKey);
+}
+
+// New joiners and their first pay (rule from the owner, Oct 2026):
+//  - Joined on the 1st–5th: that month is the "first month" and is held back in full (reserved);
+//    the next month is paid normally.
+//  - Joined after the 5th (e.g. 15 Aug): the part-month pay (15–31 Aug) is set aside and paid together
+//    with the salary two months later (October); the first FULL month (September) is the one held
+//    back in full; October is paid normally plus the set-aside part-month pay.
+// FIRST_MONTH_CUTOFF_DAY is the last day of the month that still counts as "joined at the start".
+export const FIRST_MONTH_CUTOFF_DAY = 5;
+
+const monthIndex = (key: string): number => {
+  const [y, m] = key.split('-').map(Number);
+  return y * 12 + (m - 1);
+};
+function addMonths(key: string, n: number): string {
+  const idx = monthIndex(key) + n;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`;
+}
+
+/** The payroll records for ONE calendar month (see computePayrollView for how that month is chosen). */
+function computePayrollForMonth(employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[], absenceRecords: AbsenceRecord[], today: Date, targetMonthKey: string, resolveStub = true): PayrollRecord[] {
   return employees
     .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
     .map(emp => {
@@ -204,23 +228,39 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
       // salary reserve below (item 3), regardless of which day in that
       // month they actually joined.
       let isEmployeesFirstMonth = false;
+      // New-joiner pay timing (see FIRST_MONTH_CUTOFF_DAY above).
+      let isStubMonth = false; // the part-month pay of a late joiner is set aside this month
+      let stubSource: { monthKey: string; day: number } | null = null; // this month ALSO pays that part-month pay
 
       if (emp.joinedDate) {
+        // The joining date is a calendar date ("2026-08-15"), so read its year/month/day as written.
+        // (It used to be parsed as midnight UTC and then shown in New York time, which is the evening
+        // of the 14th — pay was counted from a day too early and a joiner on the 6th looked like the 5th.)
         const joinedDateObj = new Date(emp.joinedDate);
-        const joinedMonthKey = getNYDateString(joinedDateObj).slice(0, 7);
+        const joinedParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(emp.joinedDate);
+        const joinedYear = joinedParts ? Number(joinedParts[1]) : Number(getNYDateString(joinedDateObj).slice(0, 4));
+        const joinedMonthNum = joinedParts ? Number(joinedParts[2]) : Number(getNYDateString(joinedDateObj).slice(5, 7));
+        const joinDayAll = joinedParts ? Number(joinedParts[3]) : parseInt(getNYDateString(joinedDateObj).split('-')[2], 10);
+        const joinedMonthKey = `${joinedYear}-${String(joinedMonthNum).padStart(2, '0')}`;
+        if (joinDayAll > FIRST_MONTH_CUTOFF_DAY) {
+          const monthsSinceJoin = monthIndex(targetMonthKey) - monthIndex(joinedMonthKey);
+          if (monthsSinceJoin === 1) isEmployeesFirstMonth = true; // the first FULL month is the one held back
+          if (monthsSinceJoin === 2) stubSource = { monthKey: joinedMonthKey, day: joinDayAll };
+        }
 
         // Check if employee joined in this current month
         if (joinedMonthKey === targetMonthKey) {
-          isEmployeesFirstMonth = true;
-          const joinDayOfMonth = parseInt(getNYDateString(joinedDateObj).split('-')[2], 10);
+          const joinDayOfMonth = joinDayAll;
+          // Joined at the start of the month: this month is held back in full. Joined later: only the
+          // part-month pay exists this month and it is set aside (see isStubMonth below), not held.
+          isEmployeesFirstMonth = joinDayOfMonth <= FIRST_MONTH_CUTOFF_DAY;
+          isStubMonth = joinDayOfMonth > FIRST_MONTH_CUTOFF_DAY;
 
           // Rule:
           // - If joined in month's first 5 days (joinDayOfMonth <= 5): Processed normally with full base salary.
           // - If joined after a week (joinDayOfMonth > 5): Prorated for days worked, and carried over if unpaid.
           if (joinDayOfMonth > 5) {
-            const year = joinedDateObj.getFullYear();
-            const month = joinedDateObj.getMonth();
-            const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+            const totalDaysInMonth = new Date(joinedYear, joinedMonthNum, 0).getDate();
             const daysWorkedInMonth = totalDaysInMonth - joinDayOfMonth + 1;
             const dailyRate = emp.baseSalary / totalDaysInMonth;
             effectiveBaseSalary = Math.round(daysWorkedInMonth * dailyRate);
@@ -311,9 +351,27 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
       const reservedThisMonth = isEmployeesFirstMonth ? Math.round(effectiveBaseSalary) : 0;
 
       const rawCombinedDeductions = urgentDeduction + normalDeduction + absenceDeduction + shiftShortfallDeduction + onboardingPenalty + reservedThisMonth;
-      const combinedDeductions = Number.isFinite(rawCombinedDeductions)
+      let combinedDeductions = Number.isFinite(rawCombinedDeductions)
         ? Math.max(0, Math.min(rawCombinedDeductions, effectiveBaseSalary))
         : 0;
+
+      // A late joiner's part-month pay is not paid now: whatever is left of it after this month's own
+      // deductions is withheld here (so net pay is 0) and paid with the salary two months later.
+      let deferredThisMonth = 0;
+      if (isStubMonth) {
+        const stubBase = Math.round(effectiveBaseSalary);
+        deferredThisMonth = Math.max(0, stubBase - combinedDeductions);
+        combinedDeductions = combinedDeductions + deferredThisMonth;
+      }
+      // …and two months after joining, that set-aside amount is added to this month's pay.
+      let earlierPay = 0;
+      let earlierPayLabel = '';
+      if (stubSource && resolveStub) {
+        const stubRecord = computePayrollForMonth([emp], [], leaves, timesheets, absenceRecords, today, stubSource.monthKey, false)[0];
+        earlierPay = stubRecord?.deferredThisMonth || 0;
+        const joined = new Date(Date.UTC(Number(stubSource.monthKey.slice(0, 4)), Number(stubSource.monthKey.slice(5, 7)) - 1, stubSource.day)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+        earlierPayLabel = `Part-month pay for ${monthLabel(stubSource.monthKey)} (joined ${joined})`;
+      }
 
       // Itemized breakdown — "show the reason to employee and HR why
       // salary is deducted" (explicit product decision, 2026-09-03).
@@ -331,6 +389,7 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
       if (absenceDeduction > 0) deductionBreakdown.push({ label: 'Absence (no-show / under 4h / inactivity)', amount: absenceDeduction });
       if (shiftShortfallDeduction > 0) deductionBreakdown.push({ label: 'Partial Shifts (worked under 8h, at/above 4h)', amount: shiftShortfallDeduction });
       if (onboardingPenalty > 0) deductionBreakdown.push({ label: 'Onboarding Not Completed', amount: onboardingPenalty });
+      if (deferredThisMonth > 0) deductionBreakdown.push({ label: `Part-month pay — paid with the ${monthLabel(addMonths(targetMonthKey, 2))} salary`, amount: deferredThisMonth });
       if (reservedThisMonth > 0) deductionBreakdown.push({ label: 'First-Month Reserve (not lost — paid at resignation/termination)', amount: reservedThisMonth });
 
       if (existing) {
@@ -342,6 +401,9 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
           incrementAmount: existing.processed ? existing.incrementAmount : pendingIncrement,
           month: targetMonthKey,
           reservedThisMonth,
+          deferredThisMonth,
+          earlierPay,
+          earlierPayLabel,
           deductionBreakdown,
           pendingArrears,
         };
@@ -362,6 +424,9 @@ export function computePayrollView(employees: Profile[], existingPayroll: Payrol
         month: targetMonthKey,
         pendingArrears,
         reservedThisMonth,
+        deferredThisMonth,
+        earlierPay,
+        earlierPayLabel,
         deductionBreakdown,
       };
     });

@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       unpaid_leaves: record.unpaidLeaves,
       bonus: record.bonus,
       deductions: record.deductions,
-      net_pay: record.baseSalary + record.bonus - record.deductions + record.incrementAmount,
+      net_pay: record.baseSalary + record.bonus - record.deductions + record.incrementAmount + (Number(record.earlierPay) || 0),
       increment_amount: record.incrementAmount,
       processed: record.processed,
       status: record.processed ? 'paid' : 'pending',
@@ -99,6 +99,11 @@ export async function POST(request: Request) {
       await adminUpsertByField('hr_payroll_breakdowns', 'breakdown_key', payrollBreakdownKey(record.employeeId, record.month), {
         deductionBreakdown: Array.isArray(record.deductionBreakdown) ? record.deductionBreakdown : [],
         reservedThisMonth: Number(record.reservedThisMonth) || 0,
+        // New-joiner pay timing (see core/payroll.ts): the part-month pay set aside this month, and the
+        // earlier part-month pay added to this month. Stored so a later reader sees what was paid.
+        deferredThisMonth: Number(record.deferredThisMonth) || 0,
+        earlierPay: Number(record.earlierPay) || 0,
+        earlierPayLabel: typeof record.earlierPayLabel === 'string' ? record.earlierPayLabel.slice(0, 120) : '',
       });
     }
 

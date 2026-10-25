@@ -40,7 +40,75 @@ function record(over: Partial<PayrollRecord>): PayrollRecord {
 }
 const run = (employees: Profile[], opts: { existing?: PayrollRecord[]; leaves?: LeaveApplication[]; timesheets?: TimesheetEntry[]; absences?: AbsenceRecord[] } = {}) =>
   computePayrollView(employees, opts.existing ?? [], opts.leaves ?? [], opts.timesheets ?? [], opts.absences ?? [], NOW, true);
-const net = (r: PayrollRecord) => r.baseSalary + r.incrementAmount + r.bonus - r.deductions;
+const net = (r: PayrollRecord) => r.baseSalary + r.incrementAmount + r.bonus + (r.earlierPay || 0) - r.deductions;
+
+// Pay month "Sept 5" etc.: `now` early in the month AFTER the month being looked at, previousMonth=true.
+const runAt = (nowIso: string, employees: Profile[], opts: { absences?: AbsenceRecord[] } = {}) =>
+  computePayrollView(employees, [], [], [], opts.absences ?? [], new Date(nowIso), true);
+
+describe('payroll pins — new joiners (rule set by the owner, Oct 2026)', () => {
+  // Joined on the 15th of August on 35,000 a month. August has 31 days, so the 17 days from the 15th are
+  // round(17 x 35000 / 31) = 19,194.
+  const aabru = emp({ id: 'a1', fullName: 'Aabru Z', email: 'aabru@x.us', baseSalary: 35000, joinedDate: '2026-08-15' });
+
+  it('joined after the 5th: the part-month pay is set aside in the joining month (net pay 0) and is NOT held in reserve', () => {
+    const [r] = runAt('2026-09-05T16:00:00Z', [aabru]);
+    expect(r.month).toBe('2026-08');
+    expect(r).toMatchObject({ baseSalary: 19194, deferredThisMonth: 19194, deductions: 19194, reservedThisMonth: 0, earlierPay: 0 });
+    expect(net(r)).toBe(0);
+    expect(r.deductionBreakdown).toEqual([{ label: 'Part-month pay — paid with the October 2026 salary', amount: 19194 }]);
+  });
+
+  it('the first FULL month (September) is the one held back in full', () => {
+    const [r] = runAt('2026-10-05T16:00:00Z', [aabru]);
+    expect(r.month).toBe('2026-09');
+    expect(r).toMatchObject({ baseSalary: 35000, reservedThisMonth: 35000, deductions: 35000, deferredThisMonth: 0 });
+    expect(net(r)).toBe(0);
+    expect(r.deductionBreakdown.some(d => d.label.startsWith('First-Month Reserve'))).toBe(true);
+  });
+
+  it('two months after joining (October) she is paid that month in full PLUS the set-aside part-month pay', () => {
+    const [r] = runAt('2026-11-05T16:00:00Z', [aabru]);
+    expect(r.month).toBe('2026-10');
+    expect(r).toMatchObject({ baseSalary: 35000, deductions: 0, earlierPay: 19194, reservedThisMonth: 0 });
+    expect(r.earlierPayLabel).toBe('Part-month pay for August 2026 (joined 15 Aug)');
+    expect(net(r)).toBe(35000 + 19194);
+  });
+
+  it('from the next month on she is paid normally', () => {
+    const [r] = runAt('2026-12-05T16:00:00Z', [aabru]);
+    expect(r).toMatchObject({ month: '2026-11', baseSalary: 35000, deductions: 0, earlierPay: 0, reservedThisMonth: 0 });
+  });
+
+  it('deductions that belong to the part-month reduce the amount that is paid later', () => {
+    // one absence on Tue 18 Aug: 2 x 35000 / 21 weekdays in August = 3,333
+    const absences = [absence('aabru@x.us', 'Aabru Z', '2026-08-18')];
+    const [aug] = runAt('2026-09-05T16:00:00Z', [aabru], { absences });
+    expect(aug.deferredThisMonth).toBe(19194 - 3333);
+    expect(aug.deductions).toBe(19194);
+    expect(net(aug)).toBe(0);
+    const [oct] = runAt('2026-11-05T16:00:00Z', [aabru], { absences });
+    expect(oct.earlierPay).toBe(19194 - 3333);
+  });
+
+  it('joined on the 1st–5th: that month is the one held back (in full), and the next month is paid normally', () => {
+    const early = emp({ id: 'e1', email: 'early@x.us', fullName: 'Early Bird', joinedDate: '2026-08-03', baseSalary: 44000 });
+    const [aug] = runAt('2026-09-05T16:00:00Z', [early]);
+    expect(aug).toMatchObject({ month: '2026-08', baseSalary: 44000, reservedThisMonth: 44000, deductions: 44000, deferredThisMonth: 0 });
+    expect(net(aug)).toBe(0);
+    const [sep] = runAt('2026-10-05T16:00:00Z', [early]);
+    expect(sep).toMatchObject({ month: '2026-09', baseSalary: 44000, deductions: 0, reservedThisMonth: 0, earlierPay: 0 });
+    expect(net(sep)).toBe(44000);
+  });
+
+  it('the 5th still counts as the start of the month, the 6th does not', () => {
+    const fifth = emp({ id: 'f5', email: 'f5@x.us', joinedDate: '2026-08-05', baseSalary: 44000 });
+    const sixth = emp({ id: 'f6', email: 'f6@x.us', joinedDate: '2026-08-06', baseSalary: 44000 });
+    expect(runAt('2026-09-05T16:00:00Z', [fifth])[0].reservedThisMonth).toBe(44000);
+    expect(runAt('2026-09-05T16:00:00Z', [sixth])[0]).toMatchObject({ reservedThisMonth: 0 });
+    expect(runAt('2026-09-05T16:00:00Z', [sixth])[0].deferredThisMonth).toBeGreaterThan(0);
+  });
+});
 
 describe('payroll pins — October 2026', () => {
   it('a normal month: full base salary, nothing deducted', () => {
@@ -116,16 +184,6 @@ describe('payroll pins — October 2026', () => {
     const [r] = run([emp({ onboardingCompleted: false })]);
     expect(r.deductions).toBe(200);
     expect(r.unpaidLeaves).toBe(2);
-  });
-
-  it('first month of employment: pay is prorated by days from joining, and the whole amount is held in reserve', () => {
-    const [r] = run([emp({ joinedDate: '2026-10-15' })]);
-    expect(r.reservedThisMonth).toBeGreaterThan(0);
-    expect(r.reservedThisMonth).toBe(r.baseSalary);
-    expect(r.baseSalary).toBeLessThan(44000);
-    expect(r.deductions).toBe(r.baseSalary); // reserve is folded into deductions, so nothing is paid out this month
-    expect(net(r)).toBe(0);
-    expect(r.deductionBreakdown.some(d => d.label.startsWith('First-Month Reserve'))).toBe(true);
   });
 
   it('deductions can never exceed the month\'s base salary or go negative', () => {

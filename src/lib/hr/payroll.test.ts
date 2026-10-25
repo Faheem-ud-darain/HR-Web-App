@@ -48,48 +48,37 @@ describe('computePayrollView — normal full-month employee', () => {
 });
 
 describe('computePayrollView — mid-month joiner proration (own documented threshold)', () => {
-  // NOTE on the joinedDate strings below: computePayrollView reads
-  // joinDayOfMonth via `getNYDateString(new Date(emp.joinedDate))`. A plain
-  // "YYYY-MM-DD" string parses as UTC midnight; converting THAT to
-  // America/New_York (EDT, UTC-4 in September) rolls it back to the
-  // previous evening — e.g. "2026-09-07T00:00:00Z" reads as NY calendar day
-  // 6, not 7. This is the exact same date-only-string/NY-conversion caveat
-  // documented in absences.ts (see its joinedStr comments) — production
-  // behavior, not something this test suite should paper over — so each
-  // joinedDate below is deliberately one calendar day AHEAD of the
-  // joinDayOfMonth it's meant to test, confirmed against the actual output.
-  it('joining within the first 5 days of the month (joinDayOfMonth <= 5) is processed at full base salary, not prorated', () => {
-    // "2026-09-06" reads back as NY calendar day 5 — the boundary itself,
-    // per the comment's own "<= 5" wording — must still be a full-salary month.
-    const emp = makeProfile({ joinedDate: '2026-09-06', baseSalary: 30000 });
+  // The joining date is a calendar date ("2026-09-06"), read exactly as written. (It used to be parsed as
+  // midnight UTC and shown in New York time, i.e. the previous evening, so every joinedDate in these tests
+  // had to be written one day ahead — that was fixed on 2026-10-25 together with the new-joiner pay rule.)
+  it('joining within the first 5 days of the month (day <= 5) is processed at full base salary, not prorated', () => {
+    // The 5th itself is the boundary and still counts as "joined at the start of the month".
+    const emp = makeProfile({ joinedDate: '2026-09-05', baseSalary: 30000 });
     const [record] = payrollActions.computePayrollView([emp], [], [], [], []);
     expect(record.baseSalary).toBe(30000);
-    // Still their first calendar month of employment though, so the whole
-    // (unprorated) amount is withheld into the first-month reserve.
+    // Still their first calendar month of employment, so the whole (unprorated) amount is held back.
     expect(record.reservedThisMonth).toBe(30000);
   });
 
-  it('joining after the first 5 days of the month (joinDayOfMonth > 5) is prorated for days actually worked', () => {
-    // "2026-09-07" reads back as NY calendar day 6 — one day past the
-    // threshold above — must be prorated. September 2026 has 30 days;
-    // daysWorkedInMonth = 30 - 6 + 1 = 25.
-    const emp = makeProfile({ joinedDate: '2026-09-07', baseSalary: 30000 });
+  it('joining after the first 5 days of the month (day > 5) is prorated for days actually worked, and set aside to be paid later (not held)', () => {
+    // The 6th is one day past the boundary. September 2026 has 30 days; days worked = 30 - 6 + 1 = 25.
+    const emp = makeProfile({ joinedDate: '2026-09-06', baseSalary: 30000 });
     const [record] = payrollActions.computePayrollView([emp], [], [], [], []);
-    const expectedDailyRate = 30000 / 30;
-    const expectedProrated = Math.round(25 * expectedDailyRate);
+    const expectedProrated = Math.round(25 * (30000 / 30));
     expect(record.baseSalary).toBe(expectedProrated);
     expect(record.baseSalary).toBeLessThan(30000);
-    // First-month reserve withholds the PRORATED amount, not the full salary.
-    expect(record.reservedThisMonth).toBe(expectedProrated);
+    // New-joiner rule: the part-month pay is withheld this month and paid with the salary two months
+    // later; it is NOT held in the reserve (the first FULL month is the one held back).
+    expect(record.reservedThisMonth).toBe(0);
+    expect(record.deferredThisMonth).toBe(expectedProrated);
+    expect(record.deductions).toBe(expectedProrated);
   });
 
   it('joining well into the month (e.g. the 20th) prorates down further than joining on the 6th', () => {
-    // "2026-09-21" reads back as NY calendar day 20.
-    const emp = makeProfile({ joinedDate: '2026-09-21', baseSalary: 30000 });
+    const emp = makeProfile({ joinedDate: '2026-09-20', baseSalary: 30000 });
     const [record] = payrollActions.computePayrollView([emp], [], [], [], []);
-    // daysWorkedInMonth = 30 - 20 + 1 = 11
-    const expected = Math.round(11 * (30000 / 30));
-    expect(record.baseSalary).toBe(expected);
+    // days worked = 30 - 20 + 1 = 11
+    expect(record.baseSalary).toBe(Math.round(11 * (30000 / 30)));
   });
 });
 
