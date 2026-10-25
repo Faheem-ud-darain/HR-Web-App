@@ -902,6 +902,10 @@ export async function POST(request: Request) {
       // whose duration can't be parsed are reported and left untouched. Defaults
       // to a dry run — pass { dryRun: false } to write.
       const dryRun = body.dryRun !== false;
+      // One call writes at most BACKFILL_BATCH rows (an edge function has a limited number of
+      // outgoing requests per call, so hundreds of sequential PATCHes could stop half-way). Run it
+      // again until `remaining` is 0 — rows already filled no longer match the filter.
+      const BACKFILL_BATCH = 40;
       const filter = encodeURIComponent('start_date = "" || end_date = ""');
       const updates: Array<{ id: string; duration: string; start: string; end: string }> = [];
       const unparseable: Array<{ id: string; duration: string }> = [];
@@ -915,15 +919,20 @@ export async function POST(request: Request) {
         }
         if (items.length < 200) break;
       }
+      const batch = updates.slice(0, BACKFILL_BATCH);
       if (!dryRun) {
-        for (const u of updates) {
+        for (const u of batch) {
           await pbAdminFetch(`/api/collections/hr_leaves/records/${u.id}`, {
             method: 'PATCH',
             body: JSON.stringify({ start_date: u.start, end_date: u.end }),
           });
         }
       }
-      return NextResponse.json({ ok: true, dryRun, toUpdate: updates.length, unparseable, sample: updates.slice(0, 8) });
+      return NextResponse.json({
+        ok: true, dryRun, toUpdate: updates.length, written: dryRun ? 0 : batch.length,
+        remaining: Math.max(0, updates.length - (dryRun ? 0 : batch.length)),
+        unparseable, sample: updates.slice(0, 8),
+      });
     }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err) {

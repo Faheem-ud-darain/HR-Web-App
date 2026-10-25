@@ -64,7 +64,7 @@ export default function AdminTasksPage() {
         </div>
       </div>
 
-      <LoadMoreHistory days={doneDays} maxDays={365} loading={tasksFetching} noun="completed tasks" onLoadMore={() => setDoneDays(d => d + 60)} />
+      <LoadMoreHistory days={doneDays} maxDays={365} loading={tasksFetching} noun="completed tasks" onLoadMore={() => setDoneDays(d => Math.min(365, d + 60))} />
 
       {tasksLoading ? <ListSkeleton rows={5} /> : (
       <TaskBoard

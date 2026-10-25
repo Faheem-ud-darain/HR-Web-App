@@ -121,7 +121,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
   );
   const { data: allWarehouses } = useWarehouses();
   // This employee's own leaves (all of them) — drives their PTO bank / payout.
-  const { data: allLeaves } = useLeaves({ employeeName: profile?.fullName ?? null });
+  // isSuccess/isError matter: this query can't start until the profile has loaded, and an unloaded (or
+  // failed) list must never be read as "this employee has taken no leave" when the final payout is worked out.
+  const { data: allLeaves, isSuccess: leavesLoaded, isError: leavesFailed } = useLeaves({ employeeName: profile?.fullName ?? null });
   const warehouses = allWarehouses || [];
   const leaves = allLeaves || [];
 
@@ -293,6 +295,13 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
 
   const confirmOffboard = async () => {
     if (isConfirmingOffboard) return;
+    // The final PTO/Sick payout is worked out from the employee's leave history, so wait for it.
+    if (!leavesLoaded) {
+      alert(leavesFailed
+        ? "This employee's leave history could not be loaded, so the final payout can't be worked out. Close this and reopen the profile, then try again."
+        : "This employee's leave history is still loading. Please wait a moment, then confirm again.");
+      return;
+    }
     setIsConfirmingOffboard(true);
     try {
       // Company policy: full payout of the remaining combined PTO/Sick bank
@@ -1063,7 +1072,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
         onClose={() => setShowOffboardConfirm(false)}
         onConfirm={confirmOffboard}
         title="Offboard this employee?"
-        message={`This will deactivate ${profile.fullName}'s account and immediately block all access to the workspace. A final PTO/Sick bank payout of ${formatMoney(getFinalLeavePayout(profile, leaves), profile.region)} will be recorded. Their record stays in the system as "Offboarded" and can be reactivated later.`}
+        message={`This will deactivate ${profile.fullName}'s account and immediately block all access to the workspace. A final PTO/Sick bank payout of ${formatMoney(getFinalLeavePayout(profile, leaves), profile.region)} will be recorded. Their record stays in the system as "Offboarded" and can be reactivated later.${!leavesLoaded ? (leavesFailed ? ' WARNING: their leave history could not be loaded, so the payout above is not reliable.' : ' Note: their leave history is still loading, so the payout above may change.') : ''}`}
         confirmLabel={isConfirmingOffboard ? 'Offboarding…' : 'Yes, Offboard'}
         variant="warning"
         loading={isConfirmingOffboard}

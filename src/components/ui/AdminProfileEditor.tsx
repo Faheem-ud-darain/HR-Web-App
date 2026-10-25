@@ -18,7 +18,11 @@ export function AdminProfileEditor() {
   const { showToast } = useActionToast();
   // Profile Edit states
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [targetEmail, setTargetEmail] = useState('admin@delcargo.us');
+  // Which account is being edited: the signed-in admin's own ('self') or the shared hr@ account ('hr').
+  // A stable key, not an email: the admin's stored email can differ in case (or there can be a second
+  // admin), and comparing against a literal address made the editor silently fall through to the HR account.
+  const [targetWho, setTargetWho] = useState<'self' | 'hr'>('self');
+  const [editError, setEditError] = useState('');
   const [editName, setEditName] = useState('');
   const [editGender, setEditGender] = useState<'male' | 'female'>('male');
   const [editTitle, setEditTitle] = useState('');
@@ -33,11 +37,11 @@ export function AdminProfileEditor() {
   // details change (not merely when the roster list is re-fetched, which would wipe
   // what's being typed). Adjusting state while rendering is React's way of resetting
   // state from props.
-  const target = targetEmail === 'admin@delcargo.us' ? profile : hrProfile;
-  const targetKey = target ? [target.id, target.fullName, target.gender, target.jobTitle].join('|') : '';
+  const target = targetWho === 'self' ? profile : hrProfile;
+  const seedKey = target ? [target.id, target.fullName, target.gender, target.jobTitle].join('|') : '';
   const [seededFrom, setSeededFrom] = useState('');
-  if (targetKey !== seededFrom) {
-    setSeededFrom(targetKey);
+  if (seedKey !== seededFrom) {
+    setSeededFrom(seedKey);
     if (target) {
       setEditName(target.fullName);
       setEditGender(target.gender === 'female' ? 'female' : 'male');
@@ -49,24 +53,27 @@ export function AdminProfileEditor() {
     e.preventDefault();
     if (!editName || isSavingEdit) return;
 
+    setEditError('');
+    // Nothing to save to: say so, instead of closing the window with a success message.
+    if (!target) {
+      setEditError(targetWho === 'hr' ? 'The HR profile could not be found, so nothing was saved.' : 'Your profile could not be found, so nothing was saved.');
+      return;
+    }
     setIsSavingEdit(true);
     try {
-      const target = targetEmail === 'admin@delcargo.us' ? profile : hrProfile;
-      if (target) {
-        // targetEmail can point at either the admin's own account or the
-        // separate hr@ system account, so this can't always be "self" —
-        // routed through the HR/Admin-gated route rather than
-        // updateProfileSelf, same as any other admin-edits-a-profile call.
-        await updateProfileAdmin(target.id, {
-          fullName: editName,
-          gender: editGender,
-          jobTitle: editTitle
-        });
-      }
-
+      // Either the admin's own account or the separate hr@ system account, so this can't always be
+      // "self" — routed through the HR/Admin-gated route rather than updateProfileSelf.
+      await updateProfileAdmin(target.id, {
+        fullName: editName,
+        gender: editGender,
+        jobTitle: editTitle
+      });
       refetchProfiles();
       setIsEditOpen(false);
       showToast({ type: 'success', message: 'Profile updated successfully!' });
+    } catch (err) {
+      console.error('Profile update failed:', err);
+      setEditError('Could not save the changes. Please try again.');
     } finally {
       setIsSavingEdit(false);
     }
@@ -79,7 +86,8 @@ export function AdminProfileEditor() {
       <Button
         variant="primary"
         onClick={() => {
-          setTargetEmail(profile.email);
+          setTargetWho('self');
+          setEditError('');
           setIsEditOpen(true);
         }}
         className="shadow-md active:scale-97 transition-transform self-stretch sm:self-auto"
@@ -91,12 +99,12 @@ export function AdminProfileEditor() {
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <FormField label="Select Profile to Edit" size="md">
             <Select
-              value={targetEmail}
-              onChange={e => setTargetEmail(e.target.value)}
+              value={targetWho}
+              onChange={e => { setTargetWho(e.target.value as 'self' | 'hr'); setEditError(''); }}
               fieldSize="md"
             >
-              <option value="admin@delcargo.us">Admin Profile (admin@delcargo.us)</option>
-              <option value="hr@delcargo.us">HR Profile (hr@delcargo.us)</option>
+              <option value="self">Admin Profile ({profile.email})</option>
+              <option value="hr">HR Profile (hr@delcargo.us)</option>
             </Select>
           </FormField>
 
@@ -131,6 +139,8 @@ export function AdminProfileEditor() {
               placeholder="e.g. HR Director / System Administrator"
             />
           </FormField>
+
+          {editError && <p role="alert" className="text-xs font-semibold text-rose-600">{editError}</p>}
 
           <button
             type="submit"

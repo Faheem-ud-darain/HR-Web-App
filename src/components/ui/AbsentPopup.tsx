@@ -34,7 +34,11 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
   // this popup explaining a stale no-show/under-4h/inactivity reason for a
   // day that is really now an approved leave day. See
   // getApprovedLeaveOnDate's comment in hrData.ts.
-  const { data: leaves = [] } = useLeaves({ employeeName: records[0]?.employeeName ?? null });
+  // Scoped to the absence that is actually shown (the oldest unacknowledged one), not simply the first
+  // record: if the employee's name changed between records those can differ, and the leave that covers
+  // the shown day would then be missing from the query.
+  const shownName = records.filter(r => !r.acknowledged).sort((a, b) => a.date.localeCompare(b.date))[0]?.employeeName ?? null;
+  const { data: leaves = [] } = useLeaves({ employeeName: shownName });
 
   useEffect(() => {
     if (!email) return;
