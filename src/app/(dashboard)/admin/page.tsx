@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { StatCardSkeletonGrid, TableSkeletonRows } from '@/components/ui/Skeleton';
@@ -34,9 +35,6 @@ export default function AdminDashboard() {
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Monthly screenshot retention sweep — no-ops if already checked this
-    // month or nothing is due; see checkScreenshotRetention in hrData.ts.
-    hrActions.checkScreenshotRetention();
   }, []);
 
   // Same no-call-no-show / inactivity auto-absence check as hr/page.tsx —
@@ -275,7 +273,9 @@ export default function AdminDashboard() {
 
           {/* Mobile card stack */}
           <div className="md:hidden">
-            {hrApprovedLeaves.length === 0 ? (
+            {isLeavesLoading ? (
+              <div className="p-4"><ListSkeleton rows={3} /></div>
+            ) : hrApprovedLeaves.length === 0 ? (
               <EmptyState py={10} size="sm">No pending approvals — all leaves are processed.</EmptyState>
             ) : (
               <div className="space-y-3 p-4">

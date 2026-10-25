@@ -60,6 +60,48 @@ export function getCaptureHealth(hb: TrackerHeartbeat | null): { status: Capture
   }
   return { status: 'ok' };
 }
+/**
+ * "Is someone on shift with nothing being captured?" — the alert HR needed when an employee's
+ * tracking setting was switched off in the middle of a shift and ~4 hours of work went
+ * uncaptured with no warning anywhere.
+ *
+ * - 'tracking_off'  — on shift, but tracking is OFF for them, so no screenshots are being taken.
+ * - 'no_captures'   — on shift, tracking ON, tracker connected, but no capture for longer than
+ *                     two intervals (+ grace): e.g. permission revoked, tracker stuck.
+ * - 'none'          — nothing to flag (not on shift, or capturing normally, or the tracker
+ *                     is simply offline, which has its own "Offline/Disconnected" badge).
+ *
+ * `lastCaptureAt` older than the shift's own start is ignored (a capture from yesterday must
+ * not count for today's shift), and a shift younger than the allowed gap is never flagged.
+ */
+export function getCaptureGap(args: {
+  onShift: boolean;
+  trackingOn: boolean;
+  heartbeatLive: boolean;
+  lastCaptureAt?: string | null;
+  shiftStartedAt?: string | null;
+  intervalMinutes: number;
+  now?: number;
+  graceMinutes?: number;
+  /** False when this tracker never reports capture times (the Chromebook extension): then silence proves nothing. Default true. */
+  captureReported?: boolean;
+}): { status: 'none' | 'tracking_off' | 'no_captures'; minutes?: number } {
+  const { onShift, trackingOn, heartbeatLive, intervalMinutes } = args;
+  if (!onShift) return { status: 'none' };
+  if (!trackingOn) return { status: 'tracking_off' };
+  if (!heartbeatLive) return { status: 'none' };
+  if (args.captureReported === false) return { status: 'none' };
+  const now = args.now ?? Date.now();
+  const allowedMs = (Math.max(1, intervalMinutes) * 2 + (args.graceMinutes ?? 5)) * 60 * 1000;
+  const startedMs = args.shiftStartedAt ? new Date(args.shiftStartedAt).getTime() : NaN;
+  if (!isNaN(startedMs) && now - startedMs < allowedMs) return { status: 'none' };
+  const capturedMs = args.lastCaptureAt ? new Date(args.lastCaptureAt).getTime() : NaN;
+  const reference = !isNaN(capturedMs) && (isNaN(startedMs) || capturedMs >= startedMs) ? capturedMs : startedMs;
+  if (isNaN(reference)) return { status: 'none' };
+  if (now - reference > allowedMs) return { status: 'no_captures', minutes: Math.round((now - reference) / 60000) };
+  return { status: 'none' };
+}
+
 export const TRACKER_HEARTBEAT_STALE_MS = 3 * 60 * 1000;
 
 // A short-lived "this browser tab is actively viewing an in-progress manual

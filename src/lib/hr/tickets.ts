@@ -211,7 +211,15 @@ export const ticketActions = {
     const event: TicketReply | null = actor
       ? { id: `evt_${Date.now()}`, senderName: actor.name, senderRole: actor.role, senderEmail: actor.email, message: '', timestamp: new Date().toISOString(), event: status === 'closed' ? 'closed' : 'reopened' }
       : null;
-    await pbUpdate('hr_tickets', ticket.id, event ? { status, replies: [...ticket.replies, event] } : { status });
+    // Append to the replies as they are stored NOW, not the copy this screen loaded earlier: a reply
+    // posted while the close/reopen confirmation was open would otherwise be overwritten and lost.
+    if (event) {
+      const fresh = await pb.collection('hr_tickets').getOne(ticket.id, { requestKey: null });
+      const current: TicketReply[] = Array.isArray(fresh.replies) ? fresh.replies : [];
+      await pbUpdate('hr_tickets', ticket.id, { status, replies: [...current, event] });
+    } else {
+      await pbUpdate('hr_tickets', ticket.id, { status });
+    }
     void touchActivity(ticketEventScopes(ticket), actor?.email || '');
     const by = actor ? ` by ${actor.name} (${actor.role === 'team_lead' ? 'employee' : actor.role === 'hr' ? 'HR' : actor.role === 'admin' ? 'Admin' : 'employee'})` : '';
     await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}${by}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));

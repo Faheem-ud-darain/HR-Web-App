@@ -29,7 +29,7 @@ import {
   timesheetActions
 } from './hr/timesheets';
 export {
-  hasStaleTrackerToken, getCaptureHealth, TRACKER_HEARTBEAT_STALE_MS,
+  hasStaleTrackerToken, getCaptureHealth, getCaptureGap, TRACKER_HEARTBEAT_STALE_MS,
   SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
   useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, fetchTimesheetsFresh,
 } from './hr/timesheets';
@@ -40,9 +40,10 @@ import {
 } from './hr/payroll';
 export {
   usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
+  usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection,
   upsertPayrollRecordAdmin, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
   getPendingIncrementForPayrollMonth, getFinalLeavePayout, getAbsenceDeductionForMonth,
-  getShiftShortfallDeduction,
+  getShiftShortfallDeduction, canReviewPreviousMonthPayroll, previousPayrollMonthKey,
 } from './hr/payroll';
 export type { IncrementEvent } from './hr/payroll';
 import {
@@ -51,12 +52,14 @@ import {
 export {
   isTechnicalSupportMember, displayName, MAX_USER_SESSION_DEVICES,
   USER_SESSION_STALE_MS, getProfileExtras, saveProfileExtras,
-  getProfileDocuments, saveProfileDocuments, useProfiles, useProfileDocuments,
+  getProfileDocuments, saveProfileDocuments, useProfiles, useMyProfile, useProfileDocuments,
   useProfileSelf, updateProfileSelf, changeOwnPassword, updateProfileAdmin,
   approveOnboardingServer, rejectOnboardingServer, resetPasswordServer,
   applyIncrementServer, addEmployeeServer, updateEmployeeTeamsAdmin,
   setTeamLeadAdmin,
 } from './hr/profiles';
+export type { ArchiveProgress } from './hr/profiles';
+export type { PayrollCorrection } from './core/payrollCorrections';
 export {
   useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued, getAccruedPTOForDisplay,
   getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,

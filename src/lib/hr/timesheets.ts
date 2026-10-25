@@ -14,17 +14,19 @@ import type {
   TrackerStopCommand, TrackerCommand, TrackerDiagnostics, TrackingSettings,
 } from './types';
 import {
-  pbList, pbCreate, pbUpdate, pbUpsertByField, pbFindByField, pbDeleteByField,
+  pbList, pbListStrict, pbCreate, pbUpdate, pbUpsertByField, pbFindByField, pbDeleteByField,
   withTimeout,
   pbGetTrackerSignal, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields, formatDurationBetween,
 } from './shared';
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
 import { coalesce, invalidateCache } from '../requestCache';
-import { getSessionEmail, getSessionRole } from '../session';
+import { getSessionEmail, getSessionRole, getAuthToken } from '../session';
+import { API_BASE } from '../apiBase';
 import { isStaffRole } from '../core/profiles';
+import { isTrackingOn } from '../core/trackingSettings';
 import {
-  hasStaleTrackerToken, getCaptureHealth, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
+  hasStaleTrackerToken, getCaptureHealth, getCaptureGap, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
   TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
 } from '../core/timesheets';
 import { every } from '../idle';
@@ -34,7 +36,7 @@ import type { PbRow } from '@/lib/pbTypes';
 // ../core/timesheets (shared with the server); re-exported so existing
 // imports from this module and ../hrData keep working.
 export {
-  hasStaleTrackerToken, getCaptureHealth,
+  hasStaleTrackerToken, getCaptureHealth, getCaptureGap,
   TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
 };
 
@@ -204,7 +206,9 @@ export const timesheetActions = {
   // legitimately need everyone's settings at once (the dashboard-mount
   // safety-net sweeps); this one is for a single employee's settings.
   getTrackingSettingsFor: async (email: string): Promise<TrackingSettings> => {
-    const matches = await pbList('hr_tracking_settings', { filter: pbFilter('employeeEmail ~ {:email}', { email }) });
+    // pbListStrict: a failed read must surface as an error. pbList() turns it into an empty list,
+    // which looked exactly like "no settings row" (and then like "tracking is off").
+    const matches = await pbListStrict('hr_tracking_settings', { filter: pbFilter('employeeEmail ~ {:email}', { email }) });
     const found = matches.find((t: PbRow) => (t.employeeEmail || '').toLowerCase() === email.toLowerCase());
     return found
       ? { employeeEmail: found.employeeEmail, enabled: !!found.enabled, intervalMinutes: found.intervalMinutes, excludeFromAutoDelete: !!found.excludeFromAutoDelete, agentToken: found.agentToken, id: found.id }
@@ -214,52 +218,27 @@ export const timesheetActions = {
   // the full list on mount; updateTrackingSettings invalidates it.
   getAllTrackingSettings: (): Promise<TrackingSettings[]> =>
     coalesce('tset:all', 3000, async () =>
-      (await pbList('hr_tracking_settings')).map((t: PbRow) => ({
+      (await pbListStrict('hr_tracking_settings')).map((t: PbRow) => ({
         employeeEmail: t.employeeEmail, enabled: !!t.enabled, intervalMinutes: t.intervalMinutes,
         excludeFromAutoDelete: !!t.excludeFromAutoDelete, agentToken: t.agentToken, id: t.id,
       }))),
   updateTrackingSettings: async (email: string, updates: Partial<TrackingSettings>): Promise<TrackingSettings> => {
-    // CRITICAL FIX (2026-08-19): this used to build the write payload as
-    // `{...defaults, ...updates}` where `defaults` was a hard-coded
-    // {enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
-    // agentToken: <freshly random>} object — NOT "fall back to this only
-    // if creating a new row," but "always start from this, then layer the
-    // caller's partial update on top." Since pb.collection().update() is a
-    // real partial write (whatever keys are present in the payload get
-    // written, full stop), any caller that only intended to change ONE
-    // field silently overwrote every other field back to that hard-coded
-    // default on every single call. Concretely, this meant:
-    //   - regenerateAgentToken() (passes only {agentToken}) silently reset
-    //     enabled back to false and intervalMinutes back to 15 every time
-    //     an employee regenerated their own setup code.
-    //   - TrackingView.tsx's handleIntervalChange (only {intervalMinutes})
-    //     and handleExcludeToggle (only {excludeFromAutoDelete}) each
-    //     silently turned tracking OFF for that employee as a side effect
-    //     of an unrelated settings change.
-    //   - Even handleToggle (only {enabled}) silently regenerated a brand
-    //     new agentToken on every toggle, invalidating whatever setup code
-    //     the employee's desktop agent already had paired.
-    // Root-caused via olivia@delcargo.us's hr_tracking_settings row showing
-    // enabled: false, updated within seconds of her shift starting/agent
-    // reconnecting — consistent with someone regenerating her code around
-    // then and unknowingly flipping tracking off as a side effect.
-    // Fix: fetch the REAL existing row first and use ITS current values as
-    // the base for anything `updates` doesn't touch. The hard-coded
-    // `defaults` (including a freshly-random agentToken) now only apply
-    // when there is no existing row at all — genuine first-time creation.
-    const existing = await hrActions.getTrackingSettingsFor(email);
-    const base = existing.agentToken
-      ? { enabled: existing.enabled, intervalMinutes: existing.intervalMinutes, excludeFromAutoDelete: existing.excludeFromAutoDelete, agentToken: existing.agentToken }
-      : {
-          enabled: false, intervalMinutes: 15, excludeFromAutoDelete: false,
-          agentToken: `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`,
-        };
-    // Write employeeEmail lowercased on create — otherwise a caller passing
-    // a mixed-case email here (e.g. from a not-yet-normalized profile) would
-    // seed a mixed-case row that every OTHER lookup in this file then has to
-    // work around via a `~` filter + client-side lowercase check.
-    const row = await pbUpsertByField('hr_tracking_settings', 'employeeEmail', email, { ...base, ...updates, employeeEmail: email.toLowerCase() });
+    // All changes go through /api/tracking/settings (the only writer of this table). History: this
+    // used to write from the browser, and a failed read looked like "no row yet", so a save wrote
+    // first-time defaults — tracking OFF and a new setup code — over a real row (olivia, Aug 2026;
+    // alex, zara and sofia, Oct 2026). The server reads first (a failure is an error, not an empty
+    // result), writes only the fields sent, and decides who may change what.
+    const token = getAuthToken();
+    if (!token) throw new Error('Not signed in.');
+    const res = await fetch(`${API_BASE}/api/tracking/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ email, updates }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.settings) throw new Error(data.error || 'Could not save the tracking settings. Nothing was changed.');
     invalidateCache('tset:');
+    const row = data.settings as TrackingSettings;
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
   regenerateAgentToken: async (email: string): Promise<string> => {
@@ -435,8 +414,11 @@ export const timesheetActions = {
     // this function fell through to its own tracker check on a tolerance
     // tighter than the dedicated tracker-orphan logic elsewhere, and was
     // falsely clocking out employees who were still actively working.
-    const trackingSettings = await hrActions.getTrackingSettingsFor(profile.email);
-    if (trackingSettings.enabled) return false;
+    // If the settings can't be read, we can't tell whether this person is tracked — never close then.
+    let trackingSettings: TrackingSettings;
+    try { trackingSettings = await hrActions.getTrackingSettingsFor(profile.email); } catch { return false; }
+    // Either switch counts, so one bad value can't make a tracked employee look untracked.
+    if (isTrackingOn(profile.trackingEnabled, trackingSettings)) return false;
     const [tabHb, trackerHb] = await Promise.all([
       getShiftTabHeartbeatRow(profile.email),
       hrActions.getTrackerHeartbeat(profile.email),
@@ -444,18 +426,18 @@ export const timesheetActions = {
     if (hrActions.isShiftTabHeartbeatLive(tabHb) || hrActions.isHeartbeatLive(trackerHb)) return false;
     await hrActions.clockOut(profile.email);
     await hrActions.clearShiftTabHeartbeat(profile.email);
-    await hrActions.addNotification(profile.email, 'employee', 'Your shift was automatically ended because the app was closed.');
+    await hrActions.addNotification(profile.email, 'employee', 'Your shift was automatically ended because the DelCargo portal (browser tab or mobile app) was closed or stopped responding. If this looks wrong, contact HR.');
     // 'shift' category + pushTitle/senderEmail so this actually reaches
     // HR/Admin's phones (push_notifications.pb.js looks up profile.email's
     // profile_picture as the Android large icon) instead of only ever
     // showing up in the in-app bell, same treatment as the manual/GPS shift
     // notifications below.
     const shiftEndedName = displayName(profile, 'hr');
-    await hrActions.addNotification('all', 'hr', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, 'shift', shiftEndedName, profile.email);
+    await hrActions.addNotification('all', 'hr', `${shiftEndedName}'s portal (browser tab or mobile app) was closed or stopped responding while on shift — the shift was ended automatically.`, 'shift', shiftEndedName, profile.email);
     // Admin gets the same dashboard row but no push — HR already got
     // pushed for this exact event, and Admin doesn't need a phone buzz for
     // every single auto-ended shift company-wide on top of that.
-    await hrActions.addNotification('all', 'admin', `${shiftEndedName} closed the app while on shift — their shift was ended automatically.`, undefined, undefined, profile.email);
+    await hrActions.addNotification('all', 'admin', `${shiftEndedName}'s portal (browser tab or mobile app) was closed or stopped responding while on shift — the shift was ended automatically.`, undefined, undefined, profile.email);
     if (typeof window !== 'undefined') {
       try { window.localStorage.setItem(`shift_auto_stopped_${profile.email.toLowerCase()}`, '1'); } catch { /* ignore */ }
     }
@@ -543,10 +525,10 @@ export const timesheetActions = {
         const name = displayName({ fullName: shift.employeeEmail }, 'hr');
         const employeeMsg = noActivityAfterClockIn
           ? "Your shift was automatically ended with 0 minutes credited because the DelCargo Tracker reported no activity after you clocked in. If you were working, contact HR."
-          : "Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. If this looks wrong, contact HR.";
+          : `Your shift was automatically ended because the DelCargo Tracker app stopped reporting in while your shift was still open. Credited: ${formatDurationBetween(shift.clockIn, closeAtIso)} (clock-in to the tracker's last report). If you were still working, reconnect the tracker and contact HR.`;
         const staffMsg = noActivityAfterClockIn
           ? `${name}'s shift was auto-closed with 0 minutes — the tracker reported no activity after clock-in. Review it if they report having worked.`
-          : `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open.`;
+          : `${name}'s shift was auto-closed — their tracker stopped reporting in while the shift was still open. Credited ${formatDurationBetween(shift.clockIn, closeAtIso)}.`;
         await hrActions.addNotification(shift.employeeEmail, 'employee', employeeMsg).catch(() => {});
         await hrActions.addNotification('all', 'hr', staffMsg, 'shift', name, shift.employeeEmail).catch(() => {});
         // Dashboard-only for Admin — HR already got the pushable copy above.

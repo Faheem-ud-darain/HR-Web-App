@@ -15,6 +15,8 @@ import { Select } from '@/components/ui/Input';
 
 type TabView = 'queue' | 'history';
 
+const ALL_LEAVE_HISTORY_DAYS = 365 * 50; // effectively "everything"
+
 export default function AdminLeavesPage() {
   const [leaveWindowDays, setLeaveWindowDays] = useState(365);
   const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
@@ -127,10 +129,12 @@ export default function AdminLeavesPage() {
 
       <LoadMoreHistory
         days={leaveWindowDays}
-        maxDays={365 * 5}
+        maxDays={ALL_LEAVE_HISTORY_DAYS}
         loading={leavesFetching}
         noun="leaves"
-        onLoadMore={() => setLeaveWindowDays(d => d + 365)}
+        // A year at a time for the first few years, then one more press loads everything (older
+        // backfilled leaves used to be unreachable past five years, and missing from the HR CSV).
+        onLoadMore={() => setLeaveWindowDays(d => (d < 365 * 3 ? d + 365 : ALL_LEAVE_HISTORY_DAYS))}
       />
 
       {/* ── CEO QUEUE TAB ── */}

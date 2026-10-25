@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useProfiles, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
+import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
@@ -19,6 +19,7 @@ import { EmployeeMainColumn } from "@/app/(dashboard)/employee/_components/Emplo
 import { ShiftControlCard } from "@/app/(dashboard)/employee/_components/ShiftControlCard";
 import { useNow } from '@/lib/useNow';
 import { useSessionEmail } from '@/lib/useSession';
+import { isTrackingOn } from '@/lib/core/trackingSettings';
 
 // Stable empties, so memos and effects that depend on them don't re-run every render.
 const NO_ANNOUNCEMENTS: Announcement[] = [];
@@ -28,9 +29,11 @@ const NO_PROFILES: Profile[] = [];
 export default function EmployeeDashboard() {
   const now = useNow(); // wall clock for due-date checks (see lib/useNow.ts)
   const { data: allProfiles } = useProfiles();
+  // Own profile (small, fast) — lets this page and its own data requests start without waiting for the full roster.
+  const { data: myProfile } = useMyProfile();
   // Own leaves only (all of them — the PTO balance needs the full history).
   const sessionEmail = useSessionEmail() || undefined;
-  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (sessionEmail || '').toLowerCase())?.fullName;
+  const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (sessionEmail || '').toLowerCase())?.fullName ?? myProfile?.fullName;
   const { data: allLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
   // Own net-payable figure only, via the authenticated self-only
   // /api/payroll/me route (see usePayrollSelf's comment in hrData.ts) — not
@@ -53,13 +56,13 @@ export default function EmployeeDashboard() {
   // flag alone.
   const { data: trackingSettingsList = [] } = useTrackingSettings();
   const isTrackingLiveFor = (emp: Profile) =>
-    !!emp.trackingEnabled || !!trackingSettingsList.find(s => s.employeeEmail?.toLowerCase() === emp.email?.toLowerCase())?.enabled;
+    isTrackingOn(emp.trackingEnabled, trackingSettingsList.find(s => s.employeeEmail?.toLowerCase() === emp.email?.toLowerCase()));
 
   const router = useRouter();
   // Everything below is derived from the queries above — not copied into state by an effect.
   const userProfile: Profile | null = useMemo(
-    () => allProfiles?.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
-    [allProfiles, sessionEmail],
+    () => allProfiles?.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || myProfile || null,
+    [allProfiles, myProfile, sessionEmail],
   );
   const leaves: LeaveApplication[] = useMemo(
     () => (userProfile && allLeaves ? allLeaves.filter(l => l.employeeName === userProfile.fullName) : []),

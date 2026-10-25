@@ -11,7 +11,7 @@
 // Never import this from a 'use client' file — like pbAdmin.ts, it only
 // makes sense running server-side with the admin token.
 import { NextResponse } from 'next/server';
-import { adminFindByField, adminUpsertByField } from './pbAdmin';
+import { adminFindByField, adminUpsertByField, rememberAdminUpsertId } from './pbAdmin';
 
 const RATE_LIMIT_COLLECTION = 'hr_rate_limits';
 
@@ -44,6 +44,7 @@ export async function checkRateLimit(key: string, maxAttempts: number, windowMs:
   try {
     const now = Date.now();
     const existing = await adminFindByField(RATE_LIMIT_COLLECTION, 'rate_key', key);
+    if (existing?.id) rememberAdminUpsertId(RATE_LIMIT_COLLECTION, 'rate_key', key, existing.id); // the write below becomes one PATCH
     let record: RateLimitRecord = existing?.data || { count: 0, windowStart: now };
 
     // Window expired — start a fresh one rather than accumulating forever.

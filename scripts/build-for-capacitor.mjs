@@ -26,6 +26,18 @@ function syncVersionToNative() {
     const patch = parts[2] || 0;
     const versionCode = major * 10000 + minor * 100 + patch;
 
+    // 0. iOS: MARKETING_VERSION is the user-facing version and CURRENT_PROJECT_VERSION the build
+    // number App Store Connect requires to increase on every upload — keep both derived from
+    // package.json so an upload can never be rejected for a repeated build number.
+    const pbxPath = path.join(process.cwd(), 'ios', 'App', 'App.xcodeproj', 'project.pbxproj');
+    if (existsSync(pbxPath)) {
+      let pbx = readFileSync(pbxPath, 'utf8');
+      pbx = pbx.replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${version};`);
+      pbx = pbx.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${versionCode};`);
+      writeFileSync(pbxPath, pbx, 'utf8');
+      console.log(`[version-sync] Synced package.json v${version} -> iOS (MARKETING_VERSION ${version}, CURRENT_PROJECT_VERSION ${versionCode})`);
+    }
+
     // 1. Android build.gradle
     const gradlePath = path.join(process.cwd(), 'android', 'app', 'build.gradle');
     if (existsSync(gradlePath)) {

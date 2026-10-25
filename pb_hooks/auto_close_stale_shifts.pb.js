@@ -68,52 +68,62 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
   const MIN_SHIFT_AGE_MS = 45 * 60 * 1000; // reverted to 45 min on 2026-09-07 — at 25 min, Pass 2 (abandoned manual shifts) was becoming eligible to fire during completely normal, brief tracker/tab heartbeat gaps (laptop sleep, wifi blip), incorrectly closing shifts for employees who were still connected and working (confirmed via camila@delcargo.us: shift auto-closed at 16:00, tracker captured a screenshot at 16:04). 45 min gives enough margin above the 13-min tracker and 15-min tab heartbeat tolerances that a normal blip can't coincide with shift-age eligibility.
   const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000; // matches autoCloseStaleOpenShifts in hrData.ts
 
-  function slugify(email) {
-    return String(email || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
-  }
-
   function formatDurationBetween(startISO, endISO) {
     const ms = new Date(endISO).getTime() - new Date(startISO).getTime();
     const totalMinutes = Math.max(0, Math.round(ms / 60000));
     return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
   }
 
-  // Mirrors pbGetKV('tracker_heartbeat_<slug>') in hrData.ts.
+  // Dates come back either ISO ("2026-10-23T14:37:00.239Z") or PocketBase-style
+  // ("2026-10-23 14:37:00.239Z"); normalise before parsing so both read the same.
+  function parseMs(value) {
+    return new Date(String(value || "").replace(" ", "T")).getTime();
+  }
+
+  // Case-insensitive row lookup by email in a real collection ("~" narrows, the exact
+  // check confirms — same pattern as findProfileByEmail below). Returns null when the
+  // row genuinely does not exist; a failed read THROWS, and every caller is inside a
+  // per-shift try/catch, so an unreadable heartbeat means "skip this shift this run"
+  // and never "treat the employee as gone".
+  function findRowByEmail(dao, collection, email) {
+    const lower = String(email || "").toLowerCase();
+    const rows = dao.findRecordsByFilter(collection, "email ~ {:email}", "", 20, 0, { email: lower });
+    return rows.find((r) => String(r.get("email") || "").toLowerCase() === lower) || null;
+  }
+
+  // The tracker's heartbeat lives in hr_tracker_signals.heartbeat (JSON) since plan 027.
+  // This used to read the retired KV key tracker_heartbeat_<slug> in hr_delcargo_store,
+  // which stopped being written in September, so every tracker looked dead.
   function getTrackerHeartbeat(dao, email) {
-    try {
-      const row = dao.findFirstRecordByData("hr_delcargo_store", "key", `tracker_heartbeat_${slugify(email)}`);
-      const raw = row.get("value");
-      return raw && typeof raw === "object" ? raw : JSON.parse(raw || "null");
-    } catch (err) {
-      return null; // no row yet — never connected
-    }
+    const row = findRowByEmail(dao, "hr_tracker_signals", email);
+    if (!row) return null; // never connected
+    const raw = row.getString("heartbeat");
+    return raw ? JSON.parse(raw) : null;
   }
 
   function isTrackerHeartbeatLive(hb) {
     if (!hb || !hb.lastSeenAt) return false;
-    const lastSeenMs = new Date(hb.lastSeenAt).getTime();
+    const lastSeenMs = parseMs(hb.lastSeenAt);
     return !isNaN(lastSeenMs) && (Date.now() - lastSeenMs) < TRACKER_HEARTBEAT_LIVE_TOLERANCE_MS;
   }
 
-  // Mirrors pbGetKV('shift_tab_heartbeat_<slug>') / isShiftTabHeartbeatLive.
+  // The portal tab's heartbeat lives in hr_shift_tab_heartbeats.last_seen_at (one row per
+  // email) since plan 027 phase 5. This used to read the retired KV key
+  // shift_tab_heartbeat_<slug>, which is why every manual shift of an employee WITHOUT
+  // tracking looked abandoned and was closed ~50 minutes after it started.
   function isShiftTabHeartbeatLive(dao, email) {
-    try {
-      const row = dao.findFirstRecordByData("hr_delcargo_store", "key", `shift_tab_heartbeat_${slugify(email)}`);
-      const raw = row.get("value");
-      const hb = raw && typeof raw === "object" ? raw : JSON.parse(raw || "null");
-      if (!hb || !hb.lastSeenAt) return false;
-      const lastSeenMs = new Date(hb.lastSeenAt).getTime();
-      return !isNaN(lastSeenMs) && (Date.now() - lastSeenMs) < SHIFT_TAB_HEARTBEAT_STALE_MS;
-    } catch (err) {
-      return false; // no row — never had a manual shift tab heartbeat at all
-    }
+    const row = findRowByEmail(dao, "hr_shift_tab_heartbeats", email);
+    if (!row) return false; // never had a tab heartbeat
+    const lastSeenMs = parseMs(row.getString("last_seen_at"));
+    return !isNaN(lastSeenMs) && (Date.now() - lastSeenMs) < SHIFT_TAB_HEARTBEAT_STALE_MS;
   }
 
-  function deleteKvByKey(dao, key) {
+  function deleteTabHeartbeat(dao, email) {
     try {
-      dao.deleteRecord(dao.findFirstRecordByData("hr_delcargo_store", "key", key));
+      const row = findRowByEmail(dao, "hr_shift_tab_heartbeats", email);
+      if (row) dao.deleteRecord(row);
     } catch (err) {
-      // no such row — nothing to clean up
+      // best-effort cleanup — nothing to do
     }
   }
 
@@ -172,7 +182,7 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
     shift.set("duration", formatDurationBetween(clockIn, closeAtIso));
     shift.set("status", "completed");
     dao.saveRecord(shift);
-    deleteKvByKey(dao, `shift_tab_heartbeat_${slugify(shift.get("employee_id"))}`);
+    deleteTabHeartbeat(dao, shift.get("employee_id"));
   }
 
   function autoCloseStaleShifts() {
@@ -202,7 +212,7 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         const hb = getTrackerHeartbeat(dao, email);
         if (!hb || !hb.lastSeenAt) return; // never connected at all — ambiguous, don't guess
 
-        const lastSeenMs = new Date(hb.lastSeenAt).getTime();
+        const lastSeenMs = parseMs(hb.lastSeenAt);
         if (isNaN(lastSeenMs) || now - lastSeenMs < ORPHAN_SHIFT_GRACE_MS) return; // recent enough — genuinely active
 
         const closeAtIso = new Date(Math.max(lastSeenMs, clockInMs)).toISOString();
@@ -256,8 +266,13 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         // and others repeatedly losing shifts while their tracker kept
         // reporting in throughout. Tracked employees are Pass 1's
         // responsibility entirely; skip them here.
+        // Either switch counts: hr_tracking_settings.enabled (what the tracker obeys) or
+        // hr_profiles.tracking_enabled (what the dashboard shows). The two can drift apart,
+        // and one bad value must never turn a tracked employee into an "untracked" one whose
+        // shift gets closed for a missing portal heartbeat.
         const settings = settingsByEmail[String(email).toLowerCase()];
         if (settings && settings.get("enabled")) return;
+        if (profile.get("tracking_enabled")) return;
 
         if (isShiftTabHeartbeatLive(dao, email)) return;
         const hb = getTrackerHeartbeat(dao, email);
@@ -267,9 +282,9 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         closeShift(dao, shift, closeAtIso);
 
         const name = displayNameFor(profile, email);
-        addNotification(dao, email, "employee", "Your shift was automatically ended because the app was closed.");
-        addNotification(dao, "all", "hr", `${name} closed the app while on shift — their shift was ended automatically.`, "shift", name, email);
-        addNotification(dao, "all", "admin", `${name} closed the app while on shift — their shift was ended automatically.`, undefined, undefined, email);
+        addNotification(dao, email, "employee", "Your shift was automatically ended because the DelCargo portal (browser tab or mobile app) was closed or stopped responding for 15 minutes. If this looks wrong, contact HR.");
+        addNotification(dao, "all", "hr", `${name}'s portal (browser tab or mobile app) was closed or stopped responding while on shift — the shift was ended automatically.`, "shift", name, email);
+        addNotification(dao, "all", "admin", `${name}'s portal (browser tab or mobile app) was closed or stopped responding while on shift — the shift was ended automatically.`, undefined, undefined, email);
       } catch (err) {
         console.log("[auto_close_stale_shifts] pass2 error for shift", shift.id, err);
       }
@@ -290,7 +305,7 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         let closeAtMs = clockInMs + MAX_SHIFT_DURATION_MS;
         const hb = getTrackerHeartbeat(dao, email);
         if (hb && hb.lastSeenAt) {
-          const lastSeenMs = new Date(hb.lastSeenAt).getTime();
+          const lastSeenMs = parseMs(hb.lastSeenAt);
           if (!isNaN(lastSeenMs) && lastSeenMs > clockInMs && lastSeenMs < closeAtMs) closeAtMs = lastSeenMs;
         }
         const closeAtIso = new Date(closeAtMs).toISOString();

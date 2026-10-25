@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin } from '@/lib/hrData';
+import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin, hrActions } from '@/lib/hrData';
 import { FileText, Filter, Download, MapPin, Monitor, Landmark, Loader2 } from 'lucide-react';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
@@ -118,9 +118,13 @@ export default function ReportsPage() {
       await updateProfileAdmin(selectedEmp.id, {
         region: selectedRegion,
         assignedWarehouses: assignedWh,
-        trackingEnabled: trackingEnabled,
         exemptFromAbsenceCheck: exemptFromAbsenceCheck,
       });
+      // Tracking goes through the tracking-settings route (the single source of truth); it also
+      // keeps the profile flag in step. Writing the profile flag alone is how the two drifted apart.
+      if (trackingEnabled !== !!selectedEmp.trackingEnabled) {
+        await hrActions.updateTrackingSettings(selectedEmp.email, { enabled: trackingEnabled });
+      }
 
       refetchProfiles();
       setSelectedEmp(null);

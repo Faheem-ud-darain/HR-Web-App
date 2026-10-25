@@ -22,7 +22,7 @@ export function LoadMoreHistory({ days, onLoadMore, maxDays = 365, loading = fal
   return (
     <div className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-600 ${className}`.trim()}>
       <span className="font-semibold">
-        Showing {noun} from the last {days} days{atMax ? ' (maximum range)' : ''}.
+        {days >= 365 * 20 ? `Showing all ${noun}.` : `Showing ${noun} from the last ${days} days${atMax ? ' (maximum range)' : ''}.`}
       </span>
       {!atMax && (
         <Button variant="outline" size="sm" loading={loading} onClick={onLoadMore}>

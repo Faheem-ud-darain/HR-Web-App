@@ -4,6 +4,7 @@ const store = new Map<string, unknown>();
 vi.mock('./pbAdmin', () => ({
   adminFindByField: async (_c: string, _f: string, key: string) => (store.has(key) ? { data: store.get(key) } : null),
   adminUpsertByField: async (_c: string, _f: string, key: string, data: unknown) => { store.set(key, data); },
+  rememberAdminUpsertId: () => {},
 }));
 
 import { getClientIp, rateLimitByIp, tooManyRequests } from './rateLimit';

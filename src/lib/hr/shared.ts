@@ -57,6 +57,12 @@ export async function pbList(collection: string, opts: { sort?: string; filter?:
   }
 }
 
+// Like pbList, but a failed read THROWS instead of returning []. Use it wherever "no rows" would be
+// read as a fact — tracking settings, heartbeats, anything a safety net or a write decision builds on.
+export async function pbListStrict(collection: string, opts: { sort?: string; filter?: string; fields?: string } = {}): Promise<PbRow[]> {
+  return await pb.collection(collection).getFullList({ requestKey: null, batch: 200, ...opts });
+}
+
 // Looks up all rows in `collection` whose `field` matches `email`,
 // case-insensitively — a case-insensitive `~` filter narrows server-side,
 // then an exact (still case-insensitive) client-side check drops any

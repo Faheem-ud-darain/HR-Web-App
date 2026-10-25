@@ -46,6 +46,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   // actually need a forced acknowledgment, not routine updates.
   const [annImportant, setAnnImportant] = useState(false);
   const [annSuccess, setAnnSuccess] = useState('');
+  const [annPostError, setAnnPostError] = useState('');
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
   const [pendingDeleteAnnId, setPendingDeleteAnnId] = useState<string | null>(null);
@@ -107,6 +108,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
     if (!annTitle.trim() || !annContent.trim() || isPostingAnnouncement) return;
 
     setIsPostingAnnouncement(true);
+    setAnnPostError('');
     try {
       const targetVal = annTargetType === 'warehouses' ? annSelectedWarehouses : annTargetType;
       await hrActions.addAnnouncement(annTitle, annContent, targetVal, senderLabel, annImportant);
@@ -122,6 +124,11 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
         setAnnImportant(false);
         setAnnSuccess('');
       }, 1200);
+    } catch (err) {
+      // Without this the error went unhandled: the window stayed open and the person had no idea the post failed.
+      console.error('Post announcement failed:', err);
+      setAnnSuccess('');
+      setAnnPostError('Could not post that announcement. Please try again.');
     } finally {
       setIsPostingAnnouncement(false);
     }
@@ -262,6 +269,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
       {/* Announcement Modal */}
       <Modal isOpen={isCreateOpen} onClose={onCreateClose} title="Create New Announcement">
         <form onSubmit={handleAnnouncementSubmit} className="space-y-4 pt-1">
+          {annPostError && <p role="alert" className="text-xs font-semibold text-rose-600">{annPostError}</p>}
           {annSuccess && (
             <div className="p-3 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-semibold flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {annSuccess}

@@ -1,0 +1,4 @@
+# Everything needed to BUILD the packaged app (PyInstaller bundles the runtime
+# dependencies from requirements.txt into the executable).
+-r requirements.txt
+pyinstaller>=6.3,<7

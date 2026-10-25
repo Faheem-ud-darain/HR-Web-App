@@ -103,7 +103,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                 <div>
                   <span className="text-sm font-bold text-slate-900">2. Curriculum Vitae (CV) *</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">PDF or Word format under 5MB</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">PDF only, under 4MB</p>
                 </div>
                 {cvFile ? (
                   <span className="text-emerald-600 font-bold text-xs flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Uploaded</span>

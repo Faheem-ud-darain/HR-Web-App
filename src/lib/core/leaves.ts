@@ -23,16 +23,28 @@ const MONTHS: Record<string, number> = {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** Parses one day ("Sep 03, 2026", "September 3 2026" or "2026-09-03") to "YYYY-MM-DD", or null. */
+/** True when year-month-day is a real calendar day (rejects 2026-02-31, month 13, day 0). */
+function isRealDay(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1) return false;
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Parses one day ("Sep 03, 2026", "September 3 2026", "2026-09-03", or an ISO/PocketBase timestamp
+ * such as "2026-09-03T00:00:00.000Z" / "2026-09-03 00:00:00.000Z") to "YYYY-MM-DD", or null.
+ * The WHOLE text must be a valid date: trailing words, impossible days ("2026-02-31", "Feb 31, 2026")
+ * and anything else are rejected rather than guessed at, because the result is stored as the
+ * authoritative leave range.
+ */
 export function parseLeaveDay(text: string): string | null {
   const t = (text || '').trim();
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(t);
+  if (iso) return isRealDay(Number(iso[1]), Number(iso[2]), Number(iso[3])) ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
   const named = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(t);
   if (named) {
     const month = MONTHS[named[1].slice(0, 3).toLowerCase()];
     const day = Number(named[2]);
-    if (month && day >= 1 && day <= 31) return `${named[3]}-${pad2(month)}-${pad2(day)}`;
+    if (month && isRealDay(Number(named[3]), month, day)) return `${named[3]}-${pad2(month)}-${pad2(day)}`;
   }
   return null;
 }
@@ -42,6 +54,7 @@ export interface LeaveDateRange { start: string; end: string }
 /** Reads a free-text duration ("Sep 03, 2026 - Sep 04, 2026", or a single day) into day strings. */
 export function parseLeaveDateStrings(duration: string): LeaveDateRange | null {
   const parts = (duration || '').split(/\s+[-–]\s+/);
+  if (parts.length > 2) return null; // more than two endpoints: not a range we can trust
   const start = parseLeaveDay(parts[0]);
   if (!start) return null;
   const end = parts.length > 1 ? parseLeaveDay(parts[1]) : start;
@@ -191,7 +204,9 @@ export function countApprovedLeaveRequestsInMonth(
     if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
     const range = getLeaveRange(l);
     if (!range) continue;
-    if (range.start.slice(0, 7) === monthKey || range.end.slice(0, 7) === monthKey) count++;
+    // Counts when the leave's inclusive range touches the month at all — including one that starts
+    // before and ends after it (15 Aug – 15 Oct counts for September).
+    if (range.start.slice(0, 7) <= monthKey && range.end.slice(0, 7) >= monthKey) count++;
   }
   return count;
 }

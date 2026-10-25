@@ -6,7 +6,7 @@ REM .github/workflows/build-tracker-agent.yml does this automatically on a
 REM windows-latest runner if you don't want to build locally.
 
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-build.txt
 
 REM Sanity check: fail loudly here instead of PyInstaller silently packaging
 REM a build that crashes on launch with a SyntaxError (this happened once —

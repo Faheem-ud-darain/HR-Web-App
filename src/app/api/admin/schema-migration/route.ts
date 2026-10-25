@@ -787,6 +787,57 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, dryRun, results });
     }
+    if (body.action === 'ensureTrackingSettingsLog') {
+      // Audit trail for hr_tracking_settings: one row per change (who, when, what it was and
+      // what it became), written only by /api/tracking/settings with the admin token — so both
+      // rules are null (admin-only): the browser can neither read nor write it.
+      // Additive only. Defaults to a dry run — pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_tracking_settings_log';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string) => ({ name: n, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: [text('employeeEmail'), text('actor'), text('actorRole'), text('action'), { name: 'changes', type: 'json', required: false, unique: false, options: { maxSize: 20000 } }],
+            indexes: ['CREATE INDEX idx_hr_tracking_settings_log_email ON hr_tracking_settings_log (employeeEmail)'],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
+    if (body.action === 'ensurePayrollCorrections') {
+      // Corrections after payment (see src/app/api/admin/payroll/corrections/route.ts and
+      // lib/core/payrollCorrections.ts): one row per correction, admin-only (rules null) because the
+      // browser never touches it — only that route does, with the admin token. Additive only.
+      // Defaults to a dry run — pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_payroll_corrections';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string, required = false) => ({ name: n, type: 'text', required, unique: false, options: { min: null, max: null, pattern: '' } });
+        const number = (n: string) => ({ name: n, type: 'number', required: false, unique: false, options: { min: null, max: null, noDecimal: false } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: [
+              text('employee_id', true), text('employee_name'), text('month', true), text('region'),
+              number('previous_amount'), number('corrected_amount'), number('difference'), text('reason'),
+              text('created_by'), text('created_by_role'),
+              { name: 'settled', type: 'bool', required: false, unique: false, options: {} },
+              text('settled_at'), text('settled_by'), text('settlement_note'),
+            ],
+            indexes: ['CREATE INDEX idx_hr_payroll_corrections_emp_month ON hr_payroll_corrections (employee_id, month)'],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
     if (body.action === 'deleteActivityRows') {
       // Maintenance helper for the two dot tables ONLY (their delete rule is admin-only on
       // purpose, so the browser can't wipe them): removes the rows matching `filter`.
@@ -908,6 +959,10 @@ export async function POST(request: Request) {
       // whose duration can't be parsed are reported and left untouched. Defaults
       // to a dry run — pass { dryRun: false } to write.
       const dryRun = body.dryRun !== false;
+      // One call writes at most BACKFILL_BATCH rows (an edge function has a limited number of
+      // outgoing requests per call, so hundreds of sequential PATCHes could stop half-way). Run it
+      // again until `remaining` is 0 — rows already filled no longer match the filter.
+      const BACKFILL_BATCH = 40;
       const filter = encodeURIComponent('start_date = "" || end_date = ""');
       const updates: Array<{ id: string; duration: string; start: string; end: string }> = [];
       const unparseable: Array<{ id: string; duration: string }> = [];
@@ -921,15 +976,20 @@ export async function POST(request: Request) {
         }
         if (items.length < 200) break;
       }
+      const batch = updates.slice(0, BACKFILL_BATCH);
       if (!dryRun) {
-        for (const u of updates) {
+        for (const u of batch) {
           await pbAdminFetch(`/api/collections/hr_leaves/records/${u.id}`, {
             method: 'PATCH',
             body: JSON.stringify({ start_date: u.start, end_date: u.end }),
           });
         }
       }
-      return NextResponse.json({ ok: true, dryRun, toUpdate: updates.length, unparseable, sample: updates.slice(0, 8) });
+      return NextResponse.json({
+        ok: true, dryRun, toUpdate: updates.length, written: dryRun ? 0 : batch.length,
+        remaining: Math.max(0, updates.length - (dryRun ? 0 : batch.length)),
+        unparseable, sample: updates.slice(0, 8),
+      });
     }
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err) {

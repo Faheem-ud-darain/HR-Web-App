@@ -1,0 +1,4 @@
+# Runtime dependencies plus what's needed to run the tracker's tests:
+#   pip install -r requirements-dev.txt && python -m pytest tests
+-r requirements.txt
+pytest>=8,<9

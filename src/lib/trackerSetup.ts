@@ -135,6 +135,15 @@ export function isMobileDevice(): boolean {
   // UA string but is still a tablet — multi-touch is the tell a real Mac
   // laptop/desktop won't have.
   if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  // "Request desktop site" on an Android phone/tablet (and Samsung DeX-style modes) reports a
+  // plain Linux/desktop UA, so the checks above miss it. The tell is a touch-first device: the
+  // primary pointer is coarse and nothing can hover. A touch Chromebook or Windows touch laptop
+  // still has a fine, hover-capable primary pointer, so it is not caught here.
+  if (!/cros/i.test(ua) && (navigator.maxTouchPoints || 0) > 0 && typeof window.matchMedia === 'function') {
+    try {
+      if (window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches) return true;
+    } catch { /* matchMedia unavailable — fall through */ }
+  }
   return false;
 }
 

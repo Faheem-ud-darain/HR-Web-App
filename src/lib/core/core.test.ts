@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { getWeekdaysInMonth, isWeekday, localShiftDate } from './dates';
 import { getRemainingPTO, getAccruedPTOForDisplay, getApprovedLeaveDaysInMonth, getApprovedLeaveOnDate, parseLeaveDay, parseLeaveDateStrings, getLeaveRange, eachLeaveDay, leaveDayCount } from './leaves';
-import { elapsedMinutes, getCaptureHealth, hasStaleTrackerToken, isHeartbeatLive, isShiftTabHeartbeatLive } from './timesheets';
+import { elapsedMinutes, getCaptureHealth, getCaptureGap, hasStaleTrackerToken, isHeartbeatLive, isShiftTabHeartbeatLive } from './timesheets';
 import { detectAbsences, findWeekendAbsenceRecords, findPreJoinAbsenceRecords, describeAbsence, countAbsentWeekdays } from './absences';
 import { getAbsenceDeductionForMonth, getShiftShortfallDeduction, getFinalLeavePayout } from './payroll';
 import type { AbsenceRecord, InactivityLog, LeaveApplication, Profile, TimesheetEntry, TrackerHeartbeat } from '../hr/types';
@@ -189,5 +189,28 @@ describe('payroll helpers', () => {
   });
   it('final leave payout is 0 during the PTO freeze', () => {
     expect(getFinalLeavePayout(profile(), [], new Date('2026-09-15T12:00:00Z'))).toBe(0);
+  });
+});
+
+describe('getCaptureGap', () => {
+  const base = { onShift: true, trackingOn: true, heartbeatLive: true, intervalMinutes: 15, now: Date.parse('2026-10-22T20:00:00Z') };
+  it('flags an employee on shift with tracking switched OFF (the Zara case)', () => {
+    expect(getCaptureGap({ ...base, trackingOn: false, lastCaptureAt: '2026-10-22T17:59:00Z', shiftStartedAt: '2026-10-22T14:15:00Z' }).status).toBe('tracking_off');
+  });
+  it('flags a connected tracker that stopped capturing for more than two intervals', () => {
+    const r = getCaptureGap({ ...base, lastCaptureAt: '2026-10-22T18:00:00Z', shiftStartedAt: '2026-10-22T14:15:00Z' });
+    expect(r).toEqual({ status: 'no_captures', minutes: 120 });
+  });
+  it('is quiet when capturing normally, off shift, offline, or the shift is brand new', () => {
+    expect(getCaptureGap({ ...base, lastCaptureAt: '2026-10-22T19:50:00Z', shiftStartedAt: '2026-10-22T14:15:00Z' }).status).toBe('none');
+    expect(getCaptureGap({ ...base, onShift: false, trackingOn: false }).status).toBe('none');
+    expect(getCaptureGap({ ...base, heartbeatLive: false, lastCaptureAt: '2026-10-22T10:00:00Z', shiftStartedAt: '2026-10-22T09:00:00Z' }).status).toBe('none');
+    expect(getCaptureGap({ ...base, lastCaptureAt: null, shiftStartedAt: '2026-10-22T19:50:00Z' }).status).toBe('none');
+  });
+  it('stays quiet for a tracker that never reports capture times (the Chromebook extension)', () => {
+    expect(getCaptureGap({ ...base, captureReported: false, lastCaptureAt: null, shiftStartedAt: '2026-10-22T14:15:00Z' }).status).toBe('none');
+  });
+  it("does not count yesterday's last capture for today's shift", () => {
+    expect(getCaptureGap({ ...base, lastCaptureAt: '2026-10-21T21:00:00Z', shiftStartedAt: '2026-10-22T19:00:00Z' }).status).toBe('no_captures');
   });
 });

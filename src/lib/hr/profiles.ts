@@ -9,7 +9,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
-import { getOrCreateDeviceId, getAuthToken } from '../session';
+import { getOrCreateDeviceId, getAuthToken, getSessionEmail } from '../session';
 import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import { pbFilter } from '../pbFilter';
@@ -162,6 +162,30 @@ const OVERLAY_KEYS: (keyof Profile)[] = [
 // ---------------------------------------------------------------------------
 // QUERY HOOKS — the only supported way to read data. In-memory cache only.
 // ---------------------------------------------------------------------------
+
+// The signed-in user's own profile via /api/me — two small lookups instead of the whole company
+// roster. Lets the dashboard shell and the user's own data requests start straight away instead of
+// after the (much larger) roster has downloaded. The key starts with 'hr_profiles', so everything
+// that invalidates the roster (profile edits, the realtime listener) refreshes this too.
+export function useMyProfile() {
+  const email = (getSessionEmail() || '').toLowerCase();
+  return useQuery({
+    queryKey: ['hr_profiles', 'me', email],
+    enabled: !!email,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async (): Promise<Profile | null> => {
+      const token = getAuthToken();
+      if (!token) return null;
+      try {
+        const res = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return null; // older server without /api/me, or not allowed: the roster path still works
+        return ((await res.json()).profile || null) as Profile | null;
+      } catch {
+        return null;
+      }
+    },
+  });
+}
 
 export function useProfiles() {
   return useQuery({
@@ -333,6 +357,8 @@ export async function updateEmployeeTeamsAdmin(profileId: string, newTeams: stri
 export async function setTeamLeadAdmin(profileId: string, leadTeams: string[]): Promise<void> {
   await updateProfileAdmin(profileId, { isTeamLead: leadTeams.length > 0, leadTeams });
 }
+
+export type ArchiveProgress = { phase: 'records' | 'screenshots' | 'zip' | 'done'; label: string; percent: number; done?: number; total?: number };
 
 export const profileActions = {
   // ── Profiles ──────────────────────────────────────────────────────────
@@ -556,7 +582,14 @@ export const profileActions = {
   // image files. Meant to be offered right before "Delete Permanently"
   // (which is irreversible and, as of the fix above, actually purges all
   // of this).
-  exportEmployeeArchive: async (profile: Profile): Promise<{ filename: string; blob: Blob }> => {
+  exportEmployeeArchive: async (
+    profile: Profile,
+    opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal } = {},
+  ): Promise<{ filename: string; blob: Blob; screenshotsTotal: number; screenshotsSkipped: number }> => {
+    const { onProgress, signal } = opts;
+    const report = (p: ArchiveProgress) => onProgress?.(p);
+    const abortIfCancelled = () => { if (signal?.aborted) throw new DOMException('Export cancelled', 'AbortError'); };
+    report({ phase: 'records', label: 'Collecting profile, documents and records…', percent: 2 });
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
     const email = profile.email;
@@ -581,6 +614,7 @@ export const profileActions = {
       zip.file(`documents/${doc.name || `identity_${i}`}`, base64, { base64: true });
     });
 
+    abortIfCancelled();
     const [payrollRows, timesheetRows, taskRows, ticketRows, appRows, notifRows, leaveRows, shots] = await Promise.all([
       getPayrollForEmployeeAdmin(profile.id),
       pbListByEmailField('hr_timesheets', 'employee_id', email),
@@ -599,20 +633,59 @@ export const profileActions = {
     zip.file('notifications.json', JSON.stringify(notifRows, null, 2));
     zip.file('leaves.json', JSON.stringify(leaveRows, null, 2));
 
-    await Promise.all(shots.map(async (s, i) => {
-      try {
-        const res = await fetch(s.imageUrl);
-        const blob = await res.blob();
-        const ext = blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg';
-        zip.file(`screenshots/${new Date(s.timestamp).toISOString().replace(/[:.]/g, '-')}_${i}.${ext}`, blob);
-      } catch {
-        // Best-effort — one broken/expired image URL shouldn't abort the whole export.
+    // Screenshots can number in the thousands, so they are fetched through a small pool (not all at
+    // once, which stalls the browser and exhausts memory) with a per-image timeout and live progress.
+    const SCREENSHOT_CONCURRENCY = 6;
+    const SCREENSHOT_TIMEOUT_MS = 20_000;
+    let shotsDone = 0;
+    let shotsSkipped = 0;
+    const reportShots = () => report({
+      phase: 'screenshots',
+      label: `Downloading screenshots… ${shotsDone} of ${shots.length}`,
+      percent: 10 + (shots.length ? Math.round((shotsDone / shots.length) * 75) : 75),
+      done: shotsDone,
+      total: shots.length,
+    });
+    reportShots();
+    let nextShot = 0;
+    const worker = async () => {
+      while (nextShot < shots.length) {
+        abortIfCancelled();
+        const i = nextShot++;
+        const shot = shots[i];
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), SCREENSHOT_TIMEOUT_MS);
+        const onCancel = () => ctrl.abort();
+        signal?.addEventListener('abort', onCancel);
+        try {
+          const res = await fetch(shot.imageUrl, { signal: ctrl.signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const ext = blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg';
+          // Images are already compressed — store them as-is so zipping thousands stays fast.
+          zip.file(`screenshots/${new Date(shot.timestamp).toISOString().replace(/[:.]/g, '-')}_${i}.${ext}`, blob, { compression: 'STORE' });
+        } catch {
+          // Best-effort — one broken/expired/slow image shouldn't abort the whole export (a user
+          // cancel is re-raised just below).
+          shotsSkipped++;
+        } finally {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', onCancel);
+        }
+        shotsDone++;
+        reportShots();
       }
-    }));
+    };
+    await Promise.all(Array.from({ length: Math.min(SCREENSHOT_CONCURRENCY, Math.max(1, shots.length)) }, worker));
+    abortIfCancelled();
 
-    const blob = await zip.generateAsync({ type: 'blob' });
+    report({ phase: 'zip', label: 'Building the download file…', percent: 85 });
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }, meta => {
+      report({ phase: 'zip', label: `Building the download file… ${Math.round(meta.percent)}%`, percent: 85 + Math.round(meta.percent * 0.15) });
+    });
     const filename = `${profile.fullName.replace(/\s+/g, '_')}_data_export_${new Date().toISOString().split('T')[0]}.zip`;
-    return { filename, blob };
+    report({ phase: 'done', label: 'Ready', percent: 100 });
+    return { filename, blob, screenshotsTotal: shots.length, screenshotsSkipped: shotsSkipped };
   },
 
   updateOnboardingStatus: (profileId: string, completed: boolean) =>

@@ -12,6 +12,7 @@ import { triggerHaptic } from '@/lib/haptics';
 import { useNavDots } from '@/lib/hr/activity';
 import { useSessionEmail } from '@/lib/useSession';
 import { useIsClient } from '@/lib/useIsClient';
+import { isTrackingOn } from '@/lib/core/trackingSettings';
 
 interface SidebarProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead';
@@ -103,7 +104,7 @@ export function Sidebar({ role }: SidebarProps) {
   );
   const isTeamLead = !!(me?.isTeamLead && (me.leadTeams?.length ?? 0) > 0);
   const mySettings = (trackingSettingsRows || []).find((s: TrackingSettings) => s.employeeEmail?.toLowerCase() === userEmail.toLowerCase());
-  const trackingEnabled = !!me?.trackingEnabled || !!mySettings?.enabled;
+  const trackingEnabled = isTrackingOn(me?.trackingEnabled, mySettings);
   // Admin is auto-a-member of every team channel (see TeamChatView), so their "unseen"
   // activity spans every team. HR has the same "every team" oversight (see
   // hr/team-chats/page.tsx) — hr_profiles.teams is normally empty for HR, so without

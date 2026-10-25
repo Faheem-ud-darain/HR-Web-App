@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch, adminUpsertByField, adminListAllPayroll, adminListPayrollForEmployee, adminDeletePayrollForEmployee, adminFindProfileByEmail } from '@/lib/pbAdmin';
 import type { PbRow } from '@/lib/pbTypes';
+import { toPayrollRecordFromRow, toPayrollRowFields } from '@/lib/core/payrollMappers';
 
 // Same "why was I deducted" breakdown key scheme /api/payroll/me reads back
 // (see that route's comment) — not a real hr_payroll column (the live
@@ -59,23 +60,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const fields = {
-      employee_id: record.employeeId,
-      employee_name: record.name,
-      role: record.role,
-      region: record.region || 'Pakistan',
-      base_salary: record.baseSalary,
-      unpaid_leaves: record.unpaidLeaves,
-      bonus: record.bonus,
-      deductions: record.deductions,
-      net_pay: record.baseSalary + record.bonus - record.deductions + record.incrementAmount,
-      increment_amount: record.incrementAmount,
-      processed: record.processed,
-      status: record.processed ? 'paid' : 'pending',
-      paid_date: record.processed ? new Date().toISOString().split('T')[0] : '',
-      month: record.month || '',
-      year: record.month ? (Number(String(record.month).slice(0, 4)) || undefined) : undefined,
-    };
+    const fields = toPayrollRowFields(record, new Date().toISOString().split('T')[0]);
 
     if (looksLikeRealId(record.id)) {
       await pbAdminFetch(`/api/collections/hr_payroll/records/${record.id}`, {
@@ -99,6 +84,14 @@ export async function POST(request: Request) {
       await adminUpsertByField('hr_payroll_breakdowns', 'breakdown_key', payrollBreakdownKey(record.employeeId, record.month), {
         deductionBreakdown: Array.isArray(record.deductionBreakdown) ? record.deductionBreakdown : [],
         reservedThisMonth: Number(record.reservedThisMonth) || 0,
+        // New-joiner pay timing (see core/payroll.ts): the part-month pay set aside this month, and the
+        // earlier part-month pay added to this month. Stored so a later reader sees what was paid.
+        deferredThisMonth: Number(record.deferredThisMonth) || 0,
+        earlierPay: Number(record.earlierPay) || 0,
+        earlierPayLabel: typeof record.earlierPayLabel === 'string' ? record.earlierPayLabel.slice(0, 120) : '',
+        // Once a month is frozen (or paid) its numbers are final — see core/payroll.ts.
+        frozen: record.frozen === true || record.processed === true,
+        frozenAt: new Date().toISOString(),
       });
     }
 
@@ -117,18 +110,6 @@ export async function POST(request: Request) {
 // trivial enough that duplicating it here is simpler than restructuring
 // hrData.ts to share it, matching how the career-applications route
 // already keeps its own local toCareerApplication() mapper).
-function toPayrollRecord(p: PbRow) {
-  return {
-    id: p.id, employeeId: p.employee_id, name: p.employee_name, role: p.role, region: p.region,
-    baseSalary: Number(p.base_salary) || 0, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus: Number(p.bonus) || 0,
-    deductions: Number(p.deductions) || 0, incrementAmount: Number(p.increment_amount) || 0, processed: !!p.processed,
-    month: typeof p.month === 'string' ? p.month : '',
-    reservedThisMonth: 0,
-    deductionBreakdown: [],
-    pendingArrears: 0,
-  };
-}
-
 // GET — replaces the old public usePayroll() (pb.collection('hr_payroll').getFullList())
 // now that hr_payroll's PocketBase rules are locked to admins-only (plan 012
 // Phase 1). Two scopes, both authenticated by the verified session, never by
@@ -161,7 +142,17 @@ export async function GET(request: Request) {
       const profile = await adminFindProfileByEmail(session.email);
       rows = profile ? await adminListPayrollForEmployee(profile.id) : [];
     }
-    return NextResponse.json({ records: rows.map(toPayrollRecord) });
+    // Frozen months carry their stored breakdown (one list read; keyed employeeId_month).
+    const stored = new Map<string, PbRow>();
+    if (rows.some((r: PbRow) => r.month)) {
+      try {
+        const list = await pbAdminFetch('/api/collections/hr_payroll_breakdowns/records?perPage=500&fields=breakdown_key,data');
+        for (const b of list?.items || []) stored.set(String(b.breakdown_key), b.data || {});
+      } catch (err) {
+        console.error('[admin/payroll GET] breakdowns unavailable:', err);
+      }
+    }
+    return NextResponse.json({ records: rows.map((r: PbRow) => toPayrollRecordFromRow(r, stored.get(payrollBreakdownKey(r.employee_id, r.month || '')))) });
   } catch (err) {
     console.error('[admin/payroll GET] error:', err);
     return NextResponse.json({ error: 'Could not load payroll records.' }, { status: 500 });

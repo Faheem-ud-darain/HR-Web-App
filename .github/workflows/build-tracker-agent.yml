@@ -16,7 +16,22 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tracker-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-dev.txt
+      - run: python -m py_compile agent_gui.py
+      - run: python -m pytest tests -q
+
   build-windows:
+    needs: test
     runs-on: windows-latest
     defaults:
       run:
@@ -26,18 +41,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-build.txt
       - name: Generate icon.ico / icon.png from "Tracker Icon.png"
         run: python generate_icons.py
       - run: pyinstaller --onefile --windowed --name "DelCargo Tracker" --icon "icon.ico" --add-data "icon.png;." agent_gui.py
       - name: Compile Inno Setup Installer
         run: iscc setup.iss
+      - name: SHA-256 checksum (the in-app updater verifies the installer against this)
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist/DelCargo_Tracker_Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  DelCargo_Tracker_Setup.exe" | Out-File -Encoding ascii -NoNewline dist/DelCargo_Tracker_Setup.exe.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: DelCargo-Tracker-Windows
-          path: tracker-agent/dist/DelCargo_Tracker_Setup.exe
+          path: |
+            tracker-agent/dist/DelCargo_Tracker_Setup.exe
+            tracker-agent/dist/DelCargo_Tracker_Setup.exe.sha256
 
   build-macos:
+    needs: test
     runs-on: macos-latest
     defaults:
       run:
@@ -47,7 +70,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-build.txt
       - name: Generate icon.icns / icon.png from "Tracker Icon.png"
         run: python3 generate_icons.py
       - run: pyinstaller --onefile --windowed --name "DelCargo Tracker" --icon "icon.icns" --add-data "icon.png:." agent_gui.py
@@ -71,11 +94,14 @@ jobs:
           ln -s /Applications dmg_staging/Applications
           hdiutil create -volname "DelCargo Tracker" -srcfolder dmg_staging -ov -format UDZO "DelCargo_Tracker_Setup.dmg"
           zip -r "DelCargo-Tracker-Mac.zip" "DelCargo Tracker.app"
+          # The in-app updater verifies the zip against this before using it.
+          shasum -a 256 DelCargo-Tracker-Mac.zip > DelCargo-Tracker-Mac.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: DelCargo-Tracker-Mac
           path: |
             tracker-agent/dist/DelCargo-Tracker-Mac.zip
+            tracker-agent/dist/DelCargo-Tracker-Mac.zip.sha256
             tracker-agent/dist/DelCargo_Tracker_Setup.dmg
 
   release:
@@ -93,6 +119,8 @@ jobs:
         with:
           files: |
             artifacts/DelCargo-Tracker-Windows/DelCargo_Tracker_Setup.exe
+            artifacts/DelCargo-Tracker-Windows/DelCargo_Tracker_Setup.exe.sha256
             artifacts/DelCargo-Tracker-Mac/DelCargo-Tracker-Mac.zip
+            artifacts/DelCargo-Tracker-Mac/DelCargo-Tracker-Mac.zip.sha256
             artifacts/DelCargo-Tracker-Mac/DelCargo_Tracker_Setup.dmg
           generate_release_notes: true

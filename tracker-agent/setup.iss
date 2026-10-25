@@ -1,3 +1,8 @@
+; Single source for this installer's version — keep in sync with APP_VERSION in
+; agent_gui.py. Used for AppVersion below AND for the "already up to date"
+; check in InitializeSetup (ISPP is part of the standard iscc).
+#define AppVer "25"
+
 [Setup]
 AppId={{6C6F5E6E-2D6A-4C8E-9C7A-DELCARGOTRK01}
 AppName=DelCargo Tracker
@@ -6,7 +11,7 @@ AppName=DelCargo Tracker
 ; (that only ever reads APP_VERSION from the Python source), but a stale
 ; number here used to confuse anyone checking there against what's
 ; actually running.
-AppVersion=24
+AppVersion={#AppVer}
 AppPublisher=DelCargo
 AppPublisherURL=https://delcargo.example
 DefaultDirName={localappdata}\DelCargo Tracker
@@ -66,17 +71,83 @@ Filename: "{app}\DelCargo Tracker.exe"; Description: "Launch DelCargo Tracker"; 
 ; unless a full wipe is wanted; documented for whoever revisits this.
 
 [Code]
-// CloseApplications=force above (Restart Manager) usually handles a
-// normally-running instance, but a copy left with a background thread
-// stuck mid-network-call (see the os._exit(0) fix in quit_app(),
-// agent_gui.py) can outlive that and keep "DelCargo Tracker.exe" locked,
-// making reinstall/update fail with "file in use". A hard taskkill before
-// any files are touched guarantees a clean install every time regardless
-// of what state the previous instance was left in.
+const
+  // Inno writes its uninstall entry under AppId + "_is1" (AppId above, with the
+  // "{{" escape resolved to a single "{"). per-user installs land in HKCU.
+  UninstallRegKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6C6F5E6E-2D6A-4C8E-9C7A-DELCARGOTRK01}_is1';
+
+// Version of an existing install ('' if none). DisplayVersion is the AppVersion
+// of whichever installer last ran.
+function GetInstalledVersion(): String;
+var
+  V: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKCU, UninstallRegKey, 'DisplayVersion', V) then
+    Result := V
+  else if RegQueryStringValue(HKLM, UninstallRegKey, 'DisplayVersion', V) then
+    Result := V;
+end;
+
+// Dotted numeric versions ("25", "1.10"): -1 if A < B, 0 if equal, 1 if A > B.
+function CompareVersions(A, B: String): Integer;
+var
+  P, NA, NB: Integer;
+  SA, SB: String;
+begin
+  Result := 0;
+  while (Result = 0) and ((A <> '') or (B <> '')) do
+  begin
+    P := Pos('.', A);
+    if P = 0 then begin SA := A; A := ''; end
+    else begin SA := Copy(A, 1, P - 1); A := Copy(A, P + 1, Length(A)); end;
+    P := Pos('.', B);
+    if P = 0 then begin SB := B; B := ''; end
+    else begin SB := Copy(B, 1, P - 1); B := Copy(B, P + 1, Length(B)); end;
+    NA := StrToIntDef(Trim(SA), 0);
+    NB := StrToIntDef(Trim(SB), 0);
+    if NA < NB then Result := -1
+    else if NA > NB then Result := 1;
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
+  Installed: String;
+  Cmp: Integer;
 begin
-  Exec('taskkill.exe', '/F /IM "DelCargo Tracker.exe" /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Result := True;
+
+  // Same AppId as the installed copy means Setup upgrades it in place. Only
+  // allow that when this installer is strictly NEWER; otherwise stop before
+  // touching anything (no taskkill, no file changes). With /SUPPRESSMSGBOXES
+  // (the in-app background updater) the message is suppressed and Setup just
+  // exits quietly.
+  Installed := GetInstalledVersion();
+  if Installed <> '' then
+  begin
+    Cmp := CompareVersions('{#AppVer}', Installed);
+    if Cmp = 0 then
+    begin
+      MsgBox('DelCargo Tracker v' + Installed + ' is already installed - you already have the most up-to-date version. Nothing to install.', mbInformation, MB_OK);
+      Result := False;
+      Exit;
+    end
+    else if Cmp < 0 then
+    begin
+      MsgBox('A newer DelCargo Tracker (v' + Installed + ') is already installed. This installer (v{#AppVer}) is older and will not replace it.', mbInformation, MB_OK);
+      Result := False;
+      Exit;
+    end;
+  end;
+
+  // CloseApplications=force above (Restart Manager) usually handles a
+  // normally-running instance, but a copy left with a background thread
+  // stuck mid-network-call (see the os._exit(0) fix in quit_app(),
+  // agent_gui.py) can outlive that and keep "DelCargo Tracker.exe" locked,
+  // making reinstall/update fail with "file in use". A hard taskkill before
+  // any files are touched guarantees a clean install every time regardless
+  // of what state the previous instance was left in.
+  Exec('taskkill.exe', '/F /IM "DelCargo Tracker.exe" /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

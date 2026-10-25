@@ -14,7 +14,7 @@
 
 set -e
 python3 -m pip install --upgrade pip
-pip3 install -r requirements.txt
+pip3 install -r requirements-build.txt
 
 # Sanity check: fail loudly here instead of PyInstaller silently packaging a
 # build that crashes on launch with a SyntaxError (this happened once — see

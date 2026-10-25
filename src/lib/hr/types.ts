@@ -201,6 +201,15 @@ export interface PayrollRecord {
   // instead, for HR to resolve by actually processing that old record (at
   // which point it stops counting toward this).
   pendingArrears: number;
+  // NOT persisted columns (same reasoning as reservedThisMonth) — new-joiner pay timing, see
+  // FIRST_MONTH_CUTOFF_DAY in core/payroll.ts. deferredThisMonth: part-month pay of a late joiner that is
+  // set aside this month (already withheld through `deductions`, so net pay is 0) and paid two months
+  // later. earlierPay/earlierPayLabel: that set-aside amount, added to THIS month's pay.
+  deferredThisMonth?: number;
+  earlierPay?: number;
+  earlierPayLabel?: string;
+  // True once this month's numbers are written down and no longer follow live changes (monthly freeze, or paid).
+  frozen?: boolean;
 }
 
 export interface AbsenceRecord {
