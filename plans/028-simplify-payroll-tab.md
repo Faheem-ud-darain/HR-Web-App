@@ -228,6 +228,12 @@ The live `hr_payroll` table has no room for these; they need either new columns 
 - A month freezes at midnight NY on the 1st of the next month and stays available for at least 10 days (and while anyone is unpaid).
 - USD geofence calculates time only; no USD attendance deductions for now.
 
+## Progress
+
+- **Phase 0 — done** (`payrollPins.test.ts`, 14 pins).
+- **First version of the new screen — done, not deployed.** HR and Admin now share `components/payroll/PayrollScreen.tsx` with three tabs: *Salaries* (Pakistan/USA switch, money-left-to-pay / paid-so-far / needs-a-look cards, everyone / not paid / paid / needs-a-look filter, one "amount to pay" figure that includes increments), *Held salary*, *Past months*. The pay slip (`PaySlipDialog.tsx`) shows the bank details with copy buttons, the deductions in plain groups, and a bonus box with an explicit Save. Only Admin can mark paid (one person, or "Mark all ready as paid" with a count and total). Exports: bank transfer sheet (Admin) and full report. The old `NetPayableModal` and the 10-column HR table are gone. Pure rules live in `core/payrollView.ts` (tested).
+- **Known gaps for the next steps:** manual deductions are not editable (the old boxes never persisted, because the deductions are recalculated each time); corrections after payment, the month freeze, automatic increments, outstanding settlements and salary-query flags are still to build. Mark-as-paid still adds the pending increment to base salary until the automatic job exists.
+
 ## Open questions
 
 None blocking Phase 0–3. Possible further topics: bonus approval, what Team Leads can see, the offboarding final settlement layout, history/audit view.

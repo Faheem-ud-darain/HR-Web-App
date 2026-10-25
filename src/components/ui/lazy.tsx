@@ -45,7 +45,6 @@ export const EmployeeActivityInsights = dynamic(() => import('./EmployeeActivity
 export const AvatarCropperModal = dynamic(() => import('./AvatarCropperModal').then(m => m.AvatarCropperModal), { ssr: false });
 export const TaskModal = dynamic(() => import('./TaskModal').then(m => m.TaskModal), { ssr: false });
 export const ScheduleMeetModal = dynamic(() => import('./ScheduleMeetModal').then(m => m.ScheduleMeetModal), { ssr: false });
-export const NetPayableModal = dynamic(() => import('./NetPayableModal').then(m => m.NetPayableModal), { ssr: false });
 export const UserProfileModal = dynamic(() => import('./UserProfileModal').then(m => m.UserProfileModal), { ssr: false });
 export const DocumentsModal = dynamic(() => import('./DocumentsModal').then(m => m.DocumentsModal), { ssr: false });
 export const DocumentPreviewModal = dynamic(() => import('./DocumentPreviewModal').then(m => m.DocumentPreviewModal), { ssr: false });
