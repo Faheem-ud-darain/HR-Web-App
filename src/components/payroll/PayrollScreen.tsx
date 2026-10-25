@@ -36,7 +36,7 @@ import { downloadCsv } from './csv';
 
 type TabKey = 'salaries' | 'held' | 'past';
 type Filter = 'all' | 'unpaid' | 'paid' | 'look';
-type Pending = { kind: 'one'; record: PayrollRecord } | { kind: 'all' } | null;
+type Pending = { kind: 'one'; record: PayrollRecord } | { kind: 'past'; record: PayrollRecord } | { kind: 'all' } | null;
 
 const GROUP_REGION: Record<PayrollGroup, 'Pakistan' | 'USA'> = { pakistan: 'Pakistan', usa: 'USA' };
 const GROUP_LABEL: Record<PayrollGroup, string> = { pakistan: 'Pakistan (PKR)', usa: 'USA (USD)' };
@@ -135,6 +135,12 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         setPayingId(action.record.employeeId);
         await payOne(action.record);
         setNotice(`${action.record.name} was marked as paid.`);
+      } else if (action.kind === 'past') {
+        // An earlier month that was paid but never ticked off here. This only records that it was
+        // paid — it deliberately does not touch anyone's salary, increment or held balance.
+        setPayingId(action.record.employeeId);
+        await upsertPayrollRecordAdmin({ ...action.record, processed: true });
+        setNotice(`${action.record.name} — ${monthLabel(action.record.month)} is now marked as paid.`);
       } else {
         setBulkBusy(true);
         let done = 0;
@@ -434,7 +440,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                 <TableScroll>
                   <Table>
                     <THead>
-                      <tr><Th>Employee</Th><Th align="right">Amount</Th><Th align="center">Status</Th></tr>
+                      <tr><Th>Employee</Th><Th align="right">Amount</Th><Th align="center">Status</Th>{isAdmin && <Th align="center">Action</Th>}</tr>
                     </THead>
                     <TBody>
                       {pastRows.length === 0 ? <EmptyState as="td" colSpan={3}>Nothing was saved for this month.</EmptyState> : pastRows.map(r => (
@@ -442,12 +448,22 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                           <Td><div className="font-semibold text-slate-900">{r.name}</div><div className="text-xs text-slate-500">{r.role}</div></Td>
                           <Td align="right"><span className="font-semibold text-slate-900">{formatMoney(netPay(r), r.region)}</span></Td>
                           <Td align="center">{statusBadge(r)}</Td>
+                          {isAdmin && (
+                            <Td align="center">
+                              {r.processed ? <span className="text-xs text-slate-400">—</span> : (
+                                <Button variant="outline" size="sm" disabled={payingId !== null} onClick={() => setPending({ kind: 'past', record: r })}>Mark as paid</Button>
+                              )}
+                            </Td>
+                          )}
                         </Tr>
                       ))}
                     </TBody>
                   </Table>
                 </TableScroll>
               </Card>
+              {isAdmin && pastRows.some(r => !r.processed) && (
+                <p className="text-xs text-slate-500">Paid this month already but still showing “Not paid yet”? Press Mark as paid. It only ticks the month off; it does not change anyone’s salary.</p>
+              )}
             </>
           )}
         </div>
@@ -469,9 +485,11 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         onClose={() => setPending(null)}
         onConfirm={confirmPay}
         variant="warning"
-        title={pending?.kind === 'all' ? 'Mark everyone ready as paid?' : 'Mark as paid?'}
+        title={pending?.kind === 'all' ? 'Mark everyone ready as paid?' : pending?.kind === 'past' ? `Mark ${monthLabel(pending.record.month)} as paid?` : 'Mark as paid?'}
         message={
-          pending?.kind === 'one'
+          pending?.kind === 'past'
+            ? `${pending.record.name} — ${monthLabel(pending.record.month)}, ${formatMoney(netPay(pending.record), pending.record.region)}. This only records that this month was paid. It does not change anyone’s salary or anything else.`
+            : pending?.kind === 'one'
             ? `${pending.record.name} — ${formatMoney(netPay(pending.record), pending.record.region)}. Only continue once the money has been sent.${pending.record.incrementAmount > 0 ? ` Their yearly increment of ${formatMoney(pending.record.incrementAmount, pending.record.region)} will also be added to their monthly salary.` : ''}${pending.record.reservedThisMonth > 0 ? ` ${formatMoney(pending.record.reservedThisMonth, pending.record.region)} will be held back as first-month salary.` : ''}`
             : pending?.kind === 'all'
               ? `${readyToPay.length} ${readyToPay.length === 1 ? 'person' : 'people'} (${GROUP_LABEL[group]}), ${money(readyToPay.reduce((s, r) => s + netPay(r), 0))} in total. People marked “Needs a look” are not included. Only continue once the money has been sent. Any yearly increments due will also be added to monthly salaries.`
