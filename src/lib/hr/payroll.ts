@@ -5,6 +5,7 @@ import { getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import type { PayrollRecord, PayrollSelf } from './types';
 import { computePayrollView } from '../core/payroll';
+import type { PayrollCorrection } from '../core/payrollCorrections';
 
 // Migrated off the public pb.collection('hr_payroll').getFullList() call —
 // hr_payroll's PocketBase rules are locked to admins-only (plan 012 Phase
@@ -102,6 +103,43 @@ export async function upsertPayrollRecordAdmin(record: PayrollRecord): Promise<v
     const data = await res.json().catch(() => ({}));
     throw new Error(data?.error || `Request failed: ${res.status}`);
   }
+}
+
+// ── Corrections after payment (lib/core/payrollCorrections.ts; route /api/admin/payroll/corrections) ──
+export function usePayrollCorrections(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    enabled: options.enabled ?? true,
+    queryKey: ['hr_payroll_corrections'],
+    staleTime: 30_000,
+    queryFn: async (): Promise<{ configured: boolean; corrections: PayrollCorrection[] }> => {
+      const token = getAuthToken();
+      if (!token) return { configured: true, corrections: [] };
+      const res = await fetch(`${API_BASE}/api/admin/payroll/corrections`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Could not load corrections.');
+      const data = await res.json();
+      return { configured: data.configured !== false, corrections: data.corrections || [] };
+    },
+  });
+}
+
+export async function createPayrollCorrection(args: { employeeId: string; month: string; correctedAmount: number; reason: string }): Promise<PayrollCorrection> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/admin/payroll/corrections`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(args),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
+  return data.correction;
+}
+
+export async function settlePayrollCorrection(id: string, note = ''): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(`${API_BASE}/api/admin/payroll/corrections`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ id, note }),
+  });
+  if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data?.error || `Request failed: ${res.status}`); }
 }
 
 // Counts how many anniversary "events" (same month/day as salaryStartDate,

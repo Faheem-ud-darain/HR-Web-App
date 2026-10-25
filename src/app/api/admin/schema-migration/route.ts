@@ -781,6 +781,35 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
     }
+    if (body.action === 'ensurePayrollCorrections') {
+      // Corrections after payment (see src/app/api/admin/payroll/corrections/route.ts and
+      // lib/core/payrollCorrections.ts): one row per correction, admin-only (rules null) because the
+      // browser never touches it — only that route does, with the admin token. Additive only.
+      // Defaults to a dry run — pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_payroll_corrections';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string, required = false) => ({ name: n, type: 'text', required, unique: false, options: { min: null, max: null, pattern: '' } });
+        const number = (n: string) => ({ name: n, type: 'number', required: false, unique: false, options: { min: null, max: null, noDecimal: false } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: [
+              text('employee_id', true), text('employee_name'), text('month', true), text('region'),
+              number('previous_amount'), number('corrected_amount'), number('difference'), text('reason'),
+              text('created_by'), text('created_by_role'),
+              { name: 'settled', type: 'bool', required: false, unique: false, options: {} },
+              text('settled_at'), text('settled_by'), text('settlement_note'),
+            ],
+            indexes: ['CREATE INDEX idx_hr_payroll_corrections_emp_month ON hr_payroll_corrections (employee_id, month)'],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
     if (body.action === 'deleteActivityRows') {
       // Maintenance helper for the two dot tables ONLY (their delete rule is admin-only on
       // purpose, so the browser can't wipe them): removes the rows matching `filter`.

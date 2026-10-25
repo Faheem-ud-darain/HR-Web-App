@@ -40,6 +40,7 @@ import {
 } from './hr/payroll';
 export {
   usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
+  usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection,
   upsertPayrollRecordAdmin, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
   getPendingIncrementForPayrollMonth, getFinalLeavePayout, getAbsenceDeductionForMonth,
   getShiftShortfallDeduction, canReviewPreviousMonthPayroll, previousPayrollMonthKey,
@@ -58,6 +59,7 @@ export {
   setTeamLeadAdmin,
 } from './hr/profiles';
 export type { ArchiveProgress } from './hr/profiles';
+export type { PayrollCorrection } from './core/payrollCorrections';
 export {
   useLeaves, parseLeaveDates, calculateTenure, calculatePTOAccrued, getAccruedPTOForDisplay,
   getApprovedLeaveDays, getRemainingPTO, isWeekday, getApprovedLeaveOnDate,

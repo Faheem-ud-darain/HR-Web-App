@@ -24,6 +24,7 @@ import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Ta
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import {
   hrActions, usePayroll, useProfiles, useLeaves, useTimesheets, formatMoney,
+  usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection, type PayrollCorrection,
   applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin,
   canReviewPreviousMonthPayroll, previousPayrollMonthKey, type PayrollRecord, type Profile,
 } from '@/lib/hrData';
@@ -31,10 +32,11 @@ import { daysAgoNYDateString } from '@/lib/timezone';
 import {
   netPay, payrollFlags, summarizePayroll, monthLabel, payPeriod, groupOfRegion, type PayrollGroup,
 } from '@/lib/core/payrollView';
+import { correctionsFor, outstandingTotals } from '@/lib/core/payrollCorrections';
 import { PaySlipDialog } from './PaySlipDialog';
 import { downloadCsv } from './csv';
 
-type TabKey = 'salaries' | 'held' | 'past';
+type TabKey = 'salaries' | 'settlements' | 'held' | 'past';
 type Filter = 'all' | 'unpaid' | 'paid' | 'look';
 type Pending = { kind: 'one'; record: PayrollRecord } | { kind: 'past'; record: PayrollRecord } | { kind: 'all' } | null;
 
@@ -58,6 +60,10 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     staleTime: 60_000,
   });
 
+  const { data: correctionData, refetch: refetchCorrections } = usePayrollCorrections();
+  const corrections: PayrollCorrection[] = correctionData?.corrections ?? [];
+  const correctionsConfigured = correctionData?.configured !== false;
+  const [settling, setSettling] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('salaries');
   const [group, setGroup] = useState<PayrollGroup>('pakistan');
   const [filter, setFilter] = useState<Filter>('all');
@@ -203,7 +209,10 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     { value: 'look', label: 'Needs a look', count: totals.needsLook },
   ];
 
-  const statusBadge = (r: PayrollRecord) => (r.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Not paid yet</Badge>);
+  const statusBadge = (r: PayrollRecord) => {
+    if (!r.processed) return <Badge variant="warning">Not paid yet</Badge>;
+    return correctionsFor(corrections, r.employeeId, r.month).length > 0 ? <Badge variant="warning">Paid — corrected</Badge> : <Badge variant="success">Paid</Badge>;
+  };
   const flagChips = (r: PayrollRecord) => {
     const chips: React.ReactNode[] = [];
     if (r.incrementAmount > 0) chips.push(<span key="inc" className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Increment</span>);
@@ -240,6 +249,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         onChange={setTab}
         items={[
           { value: 'salaries', label: 'Salaries' },
+          { value: 'settlements', label: 'Settlements', count: outstandingTotals(corrections).count || undefined },
           { value: 'held', label: 'Held salary', count: heldRows.length || undefined },
           { value: 'past', label: 'Past months' },
         ]}
@@ -403,6 +413,55 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         </div>
       )}
 
+      {tab === 'settlements' && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+            <p className="font-bold">What are settlements?</p>
+            <p className="mt-1">When a salary that was already paid turns out to be wrong, a correction is recorded and the difference waits here. Admin pays the extra, or recovers the overpayment, whenever it suits — it is never added to or taken from another month’s salary — and then marks it settled.</p>
+          </div>
+          {!correctionsConfigured ? (
+            <EmptyState>Corrections are not switched on yet. Ask your developer to run the setup step (ensurePayrollCorrections).</EmptyState>
+          ) : corrections.length === 0 ? (
+            <EmptyState>No corrections have been recorded.</EmptyState>
+          ) : (
+            <Card className="overflow-hidden border border-slate-200 p-0">
+              <TableScroll>
+                <Table>
+                  <THead>
+                    <tr><Th>Employee</Th><Th>Salary for</Th><Th align="right">Difference</Th><Th>Reason</Th><Th align="center">Status</Th>{isAdmin && <Th align="center">Action</Th>}</tr>
+                  </THead>
+                  <TBody>
+                    {[...corrections].sort((a, b) => Number(a.settled) - Number(b.settled) || b.createdAt.localeCompare(a.createdAt)).map(c => (
+                      <Tr key={c.id}>
+                        <Td><span className="font-semibold text-slate-900">{c.employeeName}</span></Td>
+                        <Td>{payPeriod(c.month).salaryMonth}</Td>
+                        <Td align="right">
+                          <span className={`font-bold ${c.difference > 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{c.difference > 0 ? 'Pay ' : 'Recover '}{formatMoney(Math.abs(c.difference), c.region === 'USA' ? 'USA' : 'Pakistan')}</span>
+                        </Td>
+                        <Td><span className="text-xs text-slate-600">{c.reason}</span></Td>
+                        <Td align="center">{c.settled ? <Badge variant="success">Settled</Badge> : <Badge variant="warning">Open</Badge>}</Td>
+                        {isAdmin && (
+                          <Td align="center">
+                            {c.settled ? <span className="text-xs text-slate-400">—</span> : (
+                              <Button variant="outline" size="sm" disabled={settling !== null} onClick={async () => {
+                                setSettling(c.id);
+                                try { await settlePayrollCorrection(c.id); await refetchCorrections(); setNotice(`Marked as settled: ${c.employeeName} — ${payPeriod(c.month).salaryMonth}.`); }
+                                catch (e) { setNotice(e instanceof Error ? e.message : 'Could not mark it as settled.'); }
+                                finally { setSettling(null); }
+                              }}>{settling === c.id ? 'Saving…' : 'Mark settled'}</Button>
+                            )}
+                          </Td>
+                        )}
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              </TableScroll>
+            </Card>
+          )}
+        </div>
+      )}
+
       {tab === 'held' && (
         <div className="space-y-4">
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-xs leading-relaxed text-indigo-900">
@@ -489,6 +548,13 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         onSaveBonus={saveBonus}
         onMarkPaid={(r) => setPending({ kind: 'one', record: r })}
         busy={payingId !== null}
+        corrections={slipRecord ? correctionsFor(corrections, slipRecord.employeeId, slipRecord.month) : []}
+        configured={correctionsConfigured}
+        onCorrect={async (record, correctedAmount, reason) => {
+          await createPayrollCorrection({ employeeId: record.employeeId, month: record.month, correctedAmount, reason });
+          await refetchCorrections();
+          setNotice(`Correction recorded for ${record.name} — ${payPeriod(record.month).salaryMonth}. They have been told.`);
+        }}
       />
 
       <ConfirmDialog
