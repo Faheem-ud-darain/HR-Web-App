@@ -1,0 +1,15 @@
+name = "delcargo-cron"
+main = "src/index.ts"
+compatibility_date = "2026-08-14"
+
+# Prefer the app's custom domain so the call goes to the production deployment.
+[vars]
+APP_URL = "https://hub.delcargo.us"
+
+[triggers]
+crons = [
+  "0 11 7 * *",        # 7th, 11:00 UTC (07:00 New York): warn
+  "*/5 * 10-20 * *",   # 10th–20th, every 5 minutes: delete one batch
+]
+
+# CRON_SECRET is a secret: `npx wrangler secret put CRON_SECRET` (never commit it).
