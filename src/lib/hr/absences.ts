@@ -1,11 +1,7 @@
 // src/lib/hr/absences.ts
 // Absence records (hr_absence_records), the no-call-no-show detection used
 // by runAbsenceCheck, and mouse inactivity logs (which feed absence
-// detection). checkScreenshotRetention also lives here — in the original
-// file it sits directly under the "Mouse inactivity logs" banner with no
-// separate section divider of its own, so it moved along with that section
-// rather than being split out into profiles.ts on a guess; see plan 014's
-// implementation notes for this judgment call. Extracted from the former
+// detection). Extracted from the former
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
@@ -53,8 +49,6 @@ export function useMyAbsenceRecords() {
 }
 
 
-let lastRetentionCheckAt = 0;
-const RETENTION_CHECK_MIN_GAP_MS = 60 * 60 * 1000;
 
 export const absenceActions = {
   // ── Absence records (hr_absence_records — one row per employee per day) ──
@@ -305,30 +299,5 @@ export const absenceActions = {
       logs = logs.filter(l => (l.employeeEmail || '').toLowerCase() === wanted);
     }
     return logs;
-  },
-  // 2026-09-07: delegated entirely to /api/tracking/screenshots-retention
-  // (admin/hr only) — this used to run the whole warn-then-delete sweep
-  // client-side against the public client, including the actual DELETE
-  // calls, which (unnoticed until this audit) were already silently
-  // failing in production: hr_screenshots' Update/Delete rules were
-  // already admin-only in PocketBase, so the client-side deletes here
-  // never had a real PocketBase admin token and just 403'd every month.
-  // The server route does the identical warn/delete state machine with a
-  // real admin connection, so the sweep actually deletes old screenshots
-  // now. Best-effort: any HR/Admin dashboard mount can trigger this, so a
-  // transient failure here is not worth surfacing to the user.
-  checkScreenshotRetention: async (): Promise<void> => {
-    const token = getAuthToken();
-    if (!token) return;
-    // The sweep is monthly, so once an hour per tab is plenty — every
-    // dashboard/Tracking mount (and React strict-mode remounts) used to POST.
-    if (Date.now() - lastRetentionCheckAt < RETENTION_CHECK_MIN_GAP_MS) return;
-    lastRetentionCheckAt = Date.now();
-    try {
-      await fetch(`${API_BASE}/api/tracking/screenshots-retention`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch { /* best-effort — next dashboard mount tries again */ }
   },
 };

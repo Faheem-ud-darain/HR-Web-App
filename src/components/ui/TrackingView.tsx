@@ -154,10 +154,6 @@ export function TrackingView({ role, viewerEmail }: TrackingViewProps) {
     return e.teams?.some(t => viewerProfile.leadTeams?.includes(t));
   });
   useEffect(() => {
-    // Monthly retention sweep — fire-and-forget, runs once per HR/Admin
-    // dashboard visit. Safe to call repeatedly; it no-ops once this month
-    // has already been checked (see checkScreenshotRetention in hrData.ts).
-    hrActions.checkScreenshotRetention();
   }, []);
 
   const heartbeatFor = (email: string): TrackerHeartbeat | null =>

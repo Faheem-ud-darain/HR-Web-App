@@ -109,6 +109,18 @@ export function monthLabel(key: string): string {
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 15, 12)).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
+/**
+ * Which month a payroll record is FOR, and when it is paid: salary for September is paid at the
+ * start of October. Shown on every payroll screen and pay slip so nobody has to work it out.
+ */
+export function payPeriod(monthKey: string): { salaryMonth: string; paidMonth: string } {
+  const m = /^(\d{4})-(\d{2})$/.exec(monthKey || '');
+  if (!m) return { salaryMonth: monthKey || '', paidMonth: '' };
+  const y = Number(m[1]); const mo = Number(m[2]);
+  const next = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
+  return { salaryMonth: monthLabel(monthKey), paidMonth: monthLabel(next) };
+}
+
 /** The employee's currency group: USA is paid in USD, everyone else in PKR. */
 export type PayrollGroup = 'pakistan' | 'usa';
 export function groupOfRegion(region: string | undefined): PayrollGroup {

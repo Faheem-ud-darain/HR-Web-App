@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatMoney, type PayrollRecord, type Profile } from '@/lib/hrData';
-import { netPay, groupDeductions, payrollFlags, monthLabel } from '@/lib/core/payrollView';
+import { netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
 
 interface PaySlipDialogProps {
   record: PayrollRecord | null;
@@ -59,12 +59,13 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
   const money = (n: number) => formatMoney(n, record.region);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`${record.name} — ${monthLabel(record.month)}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={`Salary for ${payPeriod(record.month).salaryMonth} — ${record.name}`}>
       <div className="space-y-4 font-sans text-xs">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
           <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Amount to pay</p>
           <p className="mt-1 text-2xl font-black text-emerald-900">{money(net)}</p>
           <div className="mt-2">{record.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Not paid yet</Badge>}</div>
+          <p className="mt-2 text-[11px] font-semibold text-emerald-800">Salary for {payPeriod(record.month).salaryMonth} · paid at the start of {payPeriod(record.month).paidMonth}</p>
         </div>
 
         {flags.length > 0 && (

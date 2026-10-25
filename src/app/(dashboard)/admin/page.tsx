@@ -34,9 +34,6 @@ export default function AdminDashboard() {
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Monthly screenshot retention sweep — no-ops if already checked this
-    // month or nothing is due; see checkScreenshotRetention in hrData.ts.
-    hrActions.checkScreenshotRetention();
   }, []);
 
   // Same no-call-no-show / inactivity auto-absence check as hr/page.tsx —

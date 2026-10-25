@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion } from './payrollView';
+import { netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod } from './payrollView';
 import type { PayrollRecord } from '../hr/types';
 
 function rec(over: Partial<PayrollRecord> = {}): PayrollRecord {
@@ -71,5 +71,13 @@ describe('labels', () => {
     expect(groupOfRegion('USA')).toBe('usa');
     expect(groupOfRegion('Pakistan')).toBe('pakistan');
     expect(groupOfRegion(undefined)).toBe('pakistan');
+  });
+});
+
+describe('payPeriod', () => {
+  it('says which month the salary is for and which month it is paid in', () => {
+    expect(payPeriod('2026-09')).toEqual({ salaryMonth: 'September 2026', paidMonth: 'October 2026' });
+    expect(payPeriod('2026-12')).toEqual({ salaryMonth: 'December 2026', paidMonth: 'January 2027' });
+    expect(payPeriod('bad')).toEqual({ salaryMonth: 'bad', paidMonth: '' });
   });
 });

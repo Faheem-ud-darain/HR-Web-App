@@ -29,7 +29,7 @@ import {
 } from '@/lib/hrData';
 import { daysAgoNYDateString } from '@/lib/timezone';
 import {
-  netPay, payrollFlags, summarizePayroll, monthLabel, groupOfRegion, type PayrollGroup,
+  netPay, payrollFlags, summarizePayroll, monthLabel, payPeriod, groupOfRegion, type PayrollGroup,
 } from '@/lib/core/payrollView';
 import { PaySlipDialog } from './PaySlipDialog';
 import { downloadCsv } from './csv';
@@ -42,6 +42,9 @@ const GROUP_REGION: Record<PayrollGroup, 'Pakistan' | 'USA'> = { pakistan: 'Paki
 const GROUP_LABEL: Record<PayrollGroup, string> = { pakistan: 'Pakistan (PKR)', usa: 'USA (USD)' };
 const NO_EMPLOYEES: Profile[] = [];
 const NO_RECORDS: PayrollRecord[] = [];
+
+/** "YYYY-MM" of the calendar month we are in right now (New York time), to tell "this month so far" from a finished month. */
+const monthKeyNow = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 7);
 
 export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   const isAdmin = role === 'admin';
@@ -174,8 +177,8 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   };
   const downloadFullReport = () => {
     downloadCsv(`DelCargo_Payroll_${GROUP_REGION[group]}_${currentMonth}.csv`, [
-      ['Employee', 'Role', 'Month', 'Monthly salary', 'Increment', 'Bonus', 'Deductions', 'Amount to pay', 'Status'],
-      ...inGroup.map(r => [r.name, r.role, r.month, r.baseSalary, r.incrementAmount, r.bonus, r.deductions, netPay(r), r.processed ? 'Paid' : 'Not paid yet']),
+      ['Employee', 'Role', 'Salary for', 'Monthly salary', 'Increment', 'Bonus', 'Deductions', 'Amount to pay', 'Status'],
+      ...inGroup.map(r => [r.name, r.role, monthLabel(r.month), r.baseSalary, r.incrementAmount, r.bonus, r.deductions, netPay(r), r.processed ? 'Paid' : 'Not paid yet']),
     ]);
   };
 
@@ -276,7 +279,12 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                 ]}
               />
             </div>
-            <p className="text-sm font-bold text-slate-700">{monthLabel(currentMonth)}</p>
+            {currentMonth && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm">
+                <p className="font-bold text-slate-900">Salary for {payPeriod(currentMonth).salaryMonth}{currentMonth === monthKeyNow() ? ' (this month so far)' : ''}</p>
+                <p className="text-xs text-slate-600">Paid at the start of {payPeriod(currentMonth).paidMonth}</p>
+              </div>
+            )}
           </div>
 
           {loading ? (
@@ -435,7 +443,10 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
           ) : (
             <>
               <Tabs variant="chips" aria-label="Choose a month" value={activePast} onChange={setPastMonth} items={pastMonths.map(m => ({ value: m, label: monthLabel(m) }))} />
-              <p className="text-xs text-slate-500">Figures below are exactly what was saved for {monthLabel(activePast)}.</p>
+              <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm">
+                <p className="font-bold text-slate-900">Salary for {payPeriod(activePast).salaryMonth}</p>
+                <p className="text-xs text-slate-600">Paid at the start of {payPeriod(activePast).paidMonth}. Figures below are exactly what was saved.</p>
+              </div>
               <Card className="overflow-hidden border border-slate-200 p-0">
                 <TableScroll>
                   <Table>
@@ -490,9 +501,9 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
           pending?.kind === 'past'
             ? `${pending.record.name} — ${monthLabel(pending.record.month)}, ${formatMoney(netPay(pending.record), pending.record.region)}. This only records that this month was paid. It does not change anyone’s salary or anything else.`
             : pending?.kind === 'one'
-            ? `${pending.record.name} — ${formatMoney(netPay(pending.record), pending.record.region)}. Only continue once the money has been sent.${pending.record.incrementAmount > 0 ? ` Their yearly increment of ${formatMoney(pending.record.incrementAmount, pending.record.region)} will also be added to their monthly salary.` : ''}${pending.record.reservedThisMonth > 0 ? ` ${formatMoney(pending.record.reservedThisMonth, pending.record.region)} will be held back as first-month salary.` : ''}`
+            ? `${pending.record.name} — salary for ${payPeriod(pending.record.month).salaryMonth}, ${formatMoney(netPay(pending.record), pending.record.region)}. Only continue once the money has been sent.${pending.record.incrementAmount > 0 ? ` Their yearly increment of ${formatMoney(pending.record.incrementAmount, pending.record.region)} will also be added to their monthly salary.` : ''}${pending.record.reservedThisMonth > 0 ? ` ${formatMoney(pending.record.reservedThisMonth, pending.record.region)} will be held back as first-month salary.` : ''}`
             : pending?.kind === 'all'
-              ? `${readyToPay.length} ${readyToPay.length === 1 ? 'person' : 'people'} (${GROUP_LABEL[group]}), ${money(readyToPay.reduce((s, r) => s + netPay(r), 0))} in total. People marked “Needs a look” are not included. Only continue once the money has been sent. Any yearly increments due will also be added to monthly salaries.`
+              ? `Salary for ${payPeriod(currentMonth).salaryMonth}: ${readyToPay.length} ${readyToPay.length === 1 ? 'person' : 'people'} (${GROUP_LABEL[group]}), ${money(readyToPay.reduce((s, r) => s + netPay(r), 0))} in total. People marked “Needs a look” are not included. Only continue once the money has been sent. Any yearly increments due will also be added to monthly salaries.`
               : ''
         }
         confirmLabel="Yes, mark as paid"
