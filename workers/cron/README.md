@@ -6,6 +6,12 @@ Runs the app's scheduled jobs by calling its authenticated `/api/cron/*` routes.
 |---|---|
 | `0 11 7 * *` | Warns HR/Admin (in-app notice) what screenshots will be deleted on the 10th |
 | `*/5 * 10-20 * *` | Deletes one small batch of screenshots captured before the start of the current month |
+| `*/10 5-23 1 * *`, `*/10 * 2-3 * *` | Freezes last month's payroll (a few salaries per call), then applies due anniversary raises |
+
+Payroll rule: from midnight New York on the 1st, last month's salaries are written down and stop
+following late leave/absence records. Raises start only after that, for anyone whose anniversary was in
+the month before (never back-filled). Paid salaries are never touched. Preview, changing nothing:
+`curl -X POST "https://hub.delcargo.us/api/cron/payroll-monthly?mode=preview" -H "Authorization: Bearer $CRON_SECRET"`.
 
 Rule: screenshots are kept for their own month plus until the 10th of the next month. Employees
 marked "exclude from auto-delete" are never touched. The route refuses to delete before the 10th

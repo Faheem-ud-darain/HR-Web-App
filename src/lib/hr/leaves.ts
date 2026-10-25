@@ -10,6 +10,7 @@ import type { LeaveApplication } from './types';
 import { pbList, pbCreate, pbUpdate, pbDelete } from './shared';
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
+import { toLeave } from '../core/payrollMappers';
 import { parseLeaveDateStrings } from '../core/leaves';
 import type { PbRow } from '@/lib/pbTypes';
 
@@ -18,14 +19,6 @@ import type { PbRow } from '@/lib/pbTypes';
 // are derived from the free-text `duration`).
 const LEAVE_FIELDS = 'id,employee_name,type,duration,reason,status,start_date,end_date';
 
-function toLeave(l: PbRow): LeaveApplication {
-  const stored = l.start_date && l.end_date ? { start: String(l.start_date).slice(0, 10), end: String(l.end_date).slice(0, 10) } : null;
-  const range = stored ?? parseLeaveDateStrings(l.duration);
-  return {
-    id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status,
-    startDate: range?.start, endDate: range?.end,
-  };
-}
 
 export interface LeaveQuery {
   /**

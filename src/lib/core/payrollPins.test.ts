@@ -226,3 +226,22 @@ describe('payroll pins — October 2026', () => {
     expect(after.deductions).toBe(4000); // changed AFTER payment
   });
 });
+
+describe('payroll pins — a frozen month (monthly freeze job)', () => {
+  const stored = record({
+    frozen: true, baseSalary: 44000, deductions: 2000, bonus: 500, incrementAmount: 0,
+    deductionBreakdown: [{ label: 'Absence (no-show / under 4h / inactivity)', amount: 2000 }],
+  });
+  it('keeps the written-down numbers when new absences, leave or a salary change arrive later', () => {
+    const lateAbsences = ['2026-10-05', '2026-10-06', '2026-10-07'].map(d => absence('alex@x.us', 'Alex Example', d));
+    const [r] = run([emp({ baseSalary: 60000 })], { existing: [stored], absences: lateAbsences });
+    expect(r).toMatchObject({ baseSalary: 44000, deductions: 2000, bonus: 500, frozen: true });
+    expect(r.deductionBreakdown).toEqual(stored.deductionBreakdown);
+    expect(net(r)).toBe(42500);
+  });
+  it('without the freeze the same late records DO change the month', () => {
+    const lateAbsences = ['2026-10-05', '2026-10-06'].map(d => absence('alex@x.us', 'Alex Example', d));
+    const [r] = run([emp()], { existing: [{ ...stored, frozen: false }], absences: lateAbsences });
+    expect(r.deductions).toBeGreaterThan(2000);
+  });
+});

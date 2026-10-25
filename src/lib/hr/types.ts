@@ -208,6 +208,8 @@ export interface PayrollRecord {
   deferredThisMonth?: number;
   earlierPay?: number;
   earlierPayLabel?: string;
+  // True once this month's numbers are written down and no longer follow live changes (monthly freeze, or paid).
+  frozen?: boolean;
 }
 
 export interface AbsenceRecord {

@@ -19,18 +19,11 @@ export { countAbsentWeekdays };
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
 import type { PbRow } from '@/lib/pbTypes';
+import { toAbsenceRecord } from '../core/payrollMappers';
 
 // Columns toAbsenceRecord reads — keeps each fetched row small.
 const ABSENCE_FIELDS = 'id,employeeEmail,employeeName,date,reason,inactivityMinutes,workedMinutes,deductionAmount,createdAt,created,acknowledged,deleted,deletedAt';
 
-function toAbsenceRecord(r: PbRow): AbsenceRecord {
-  return {
-    id: r.id, employeeEmail: r.employeeEmail, employeeName: r.employeeName, date: r.date,
-    reason: r.reason, inactivityMinutes: r.inactivityMinutes || undefined, workedMinutes: r.workedMinutes || undefined,
-    deductionAmount: r.deductionAmount, createdAt: r.createdAt || r.created, acknowledged: !!r.acknowledged,
-    deleted: !!r.deleted, deletedAt: r.deletedAt || undefined,
-  };
-}
 
 export function useMyAbsenceRecords() {
   return useQuery({

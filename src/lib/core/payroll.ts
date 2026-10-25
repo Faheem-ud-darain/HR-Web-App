@@ -392,6 +392,17 @@ function computePayrollForMonth(employees: Profile[], existingPayroll: PayrollRe
       if (deferredThisMonth > 0) deductionBreakdown.push({ label: `Part-month pay — paid with the ${monthLabel(addMonths(targetMonthKey, 2))} salary`, amount: deferredThisMonth });
       if (reservedThisMonth > 0) deductionBreakdown.push({ label: 'First-Month Reserve (not lost — paid at resignation/termination)', amount: reservedThisMonth });
 
+      // A frozen month keeps exactly what was written down at the freeze (or at payment): late leave or
+      // absence records, a changed salary or a new increment no longer move it.
+      if (existing?.frozen) {
+        return {
+          ...existing,
+          region: emp.region,
+          month: targetMonthKey,
+          pendingArrears,
+        };
+      }
+
       if (existing) {
         return {
           ...existing,
