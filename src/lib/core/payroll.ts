@@ -87,7 +87,10 @@ export function getAbsenceDeductionForMonth(
 // (a true no-show is runAbsenceCheck's job, not this function's — it only
 // prorates a shift that actually happened but ran short). Only counts
 // dates through yesterday (today's shift may still be in progress).
-export function getShiftShortfallDeduction(
+export interface ShortShiftDay { date: string; minutes: number; amount: number }
+
+/** The individual short-shift days behind getShiftShortfallDeduction (unrounded amounts), oldest first. */
+export function getShortShiftDays(
   timesheets: TimesheetEntry[],
   absenceRecords: AbsenceRecord[],
   leaves: LeaveApplication[],
@@ -95,9 +98,9 @@ export function getShiftShortfallDeduction(
   currentBaseSalary: number,
   monthKey: string,
   today: Date = new Date()
-): number {
-  if (profile.region !== 'Pakistan') return 0;
-  if (profile.exemptFromAbsenceCheck) return 0;
+): ShortShiftDay[] {
+  if (profile.region !== 'Pakistan') return [];
+  if (profile.exemptFromAbsenceCheck) return [];
 
   const todayStr = getNYDateString(today);
   const joinedStr = profile.joinedDate && /^\d{4}-\d{2}-\d{2}/.test(profile.joinedDate)
@@ -124,7 +127,7 @@ export function getShiftShortfallDeduction(
 
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
   const MIN_REQUIRED_WORK_MINUTES = 4 * 60;
-  let totalShortfall = 0;
+  const days: ShortShiftDay[] = [];
 
   for (const [dateStr, mins] of minutesByDate) {
     if (dateStr >= todayStr) continue; // today/future — shift may still be in progress
@@ -134,10 +137,22 @@ export function getShiftShortfallDeduction(
     if (mins < MIN_REQUIRED_WORK_MINUTES) continue; // that's runAbsenceCheck's job, not this function's
     if (mins >= STANDARD_SHIFT_MINUTES) continue; // full (or over) shift — no shortfall
     if (isApprovedLeaveOnDate(leaves, profile.fullName, dateStr)) continue;
-    totalShortfall += dailyRate * (1 - mins / STANDARD_SHIFT_MINUTES);
+    days.push({ date: dateStr, minutes: mins, amount: dailyRate * (1 - mins / STANDARD_SHIFT_MINUTES) });
   }
+  return days.sort((x, y) => x.date.localeCompare(y.date));
+}
 
-  const rounded = Math.round(totalShortfall);
+export function getShiftShortfallDeduction(
+  timesheets: TimesheetEntry[],
+  absenceRecords: AbsenceRecord[],
+  leaves: LeaveApplication[],
+  profile: Pick<Profile, 'fullName' | 'email' | 'region' | 'joinedDate' | 'exemptFromAbsenceCheck'>,
+  currentBaseSalary: number,
+  monthKey: string,
+  today: Date = new Date()
+): number {
+  const total = getShortShiftDays(timesheets, absenceRecords, leaves, profile, currentBaseSalary, monthKey, today).reduce((sum, d) => sum + d.amount, 0);
+  const rounded = Math.round(total);
   return Number.isFinite(rounded) ? Math.max(0, rounded) : 0;
 }
 
@@ -226,7 +241,7 @@ function hasPayrollForMonth(emp: Profile, monthKey: string, existingPayroll: Pay
 }
 
 /** The payroll records for ONE calendar month (see computePayrollView for how that month is chosen). */
-function computePayrollForMonth(employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[], absenceRecords: AbsenceRecord[], today: Date, targetMonthKey: string, resolveStub = true): PayrollRecord[] {
+export function computePayrollForMonth(employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[], absenceRecords: AbsenceRecord[], today: Date, targetMonthKey: string, resolveStub = true): PayrollRecord[] {
   return employees
     .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
     .filter(emp => hasPayrollForMonth(emp, targetMonthKey, existingPayroll))
