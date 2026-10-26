@@ -5,6 +5,7 @@ import { ThinkingOrb } from 'thinking-orbs';
 import { ArrowUp, Check, Copy, ExternalLink, Maximize2, Minimize2, MessageCircle, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Markdown } from './Markdown';
+import { personaFor } from '@/lib/assistant/persona';
 import { clearAssistantChat, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
 
 function useReducedMotion(): boolean {
@@ -56,6 +57,7 @@ function CopyButton({ text }: { text: string }) {
 export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Props) {
   const { messages, loading } = useAssistantChat();
   const router = useRouter();
+  const persona = personaFor(role);
   const reduced = useReducedMotion();
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
@@ -74,10 +76,6 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
     }
   };
 
-  // Which data the last answer came from: made-up demo data, or the live database.
-  const lastReply = [...messages].reverse().find(m => m.role === 'assistant' && !m.error && typeof m.demo === 'boolean');
-  const dataLabel = lastReply ? (lastReply.demo ? ' · demo data' : ' · live data') : '';
-
   const submit = (text: string) => {
     if (!text.trim() || loading) return;
     setDraft('');
@@ -92,7 +90,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold leading-tight text-slate-900">Del</h2>
-          <p className="truncate text-[11px] text-slate-500">AI assistant for HR and Admin{dataLabel}</p>
+          <p className="truncate text-[11px] text-slate-500">{persona.tagline}</p>
         </div>
         {messages.length > 0 && (
           <button type="button" onClick={clearAssistantChat} aria-label="Clear conversation" title="Clear conversation" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
@@ -119,7 +117,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4" aria-live="polite">
         {messages.length === 0 && (
           <div>
-            <p className="text-sm text-slate-700">Hi, I&apos;m Del. Ask me about pay, leave, tickets or trackers in plain English. I only read information; I can&apos;t change anything.</p>
+            <p className="text-sm text-slate-700">Good day, {persona.addressAs}. I am Del, your personal assistant. I can look into pay, leave, absences, tickets and trackers on your behalf. I only read information and cannot change anything.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {SUGGESTIONS.map(s => (
                 <button key={s} type="button" onClick={() => submit(s)} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50">
@@ -167,7 +165,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
             <span className="flex h-6 w-6 items-center justify-center" aria-hidden="true">
               <ThinkingOrb state="solving" speed={ORB_BUSY_SPEED} size={20} theme="light" color={ORB_COLOR} dotSize={ORB_BUSY_DOT_SIZE} paused={reduced} aria-hidden="true" />
             </span>
-            Thinking…
+            Looking into it…
           </div>
         )}
         <div ref={endRef} />
@@ -184,14 +182,14 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(draft); } }}
             rows={1}
             maxLength={2000}
-            placeholder="Ask a question…"
+            placeholder="How may I assist you?"
             className="max-h-28 min-h-[24px] flex-1 resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
           />
           <button type="submit" disabled={!draft.trim() || loading} aria-label="Send" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-300">
             <ArrowUp className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <p className="mt-1.5 text-center text-[10px] text-slate-400">Del is an AI and can make mistakes. Check the details before acting.</p>
+        <p className="mt-1.5 text-center text-[10px] text-slate-400">Del is an AI assistant and may make errors. Please verify the details before acting.</p>
       </form>
     </div>
   );

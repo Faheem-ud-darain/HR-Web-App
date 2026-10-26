@@ -2,7 +2,23 @@
 // request ("Employee 3"). Names in the user's messages and in tool results are turned into aliases before
 // anything is sent; the aliases in the model's answer are turned back into real names on the server, just
 // before the answer is shown to HR/Admin. The provider only ever sees "Employee 3".
-export interface AliasPerson { id: string; name: string }
+/** `alias` is the nickname the person goes by in the app (HR/Admin see it as "Full Name (alias)"). */
+export interface AliasPerson { id: string; name: string; alias?: string; email?: string }
+
+/** Edit distance between two short words. */
+export function editDistance(a: string, b: string): number {
+  const x = a.toLowerCase(); const y = b.toLowerCase();
+  const prev = Array.from({ length: y.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= x.length; i++) {
+    let diag = prev[0]; prev[0] = i;
+    for (let j = 1; j <= y.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (x[i - 1] === y[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return prev[y.length];
+}
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -22,7 +38,12 @@ export class AliasMap {
       this.byAlias.set(alias.toLowerCase(), p);
       const full = p.name.trim().replace(/\s+/g, ' ');
       this.fullNames.push({ re: new RegExp(`(?<![\\w])${escape(full).replace(/\\ /g, '\\s+')}(?![\\w])`, 'gi'), alias });
-      for (const t of full.split(' ')) {
+      // A typed e-mail address of this person becomes their alias too (longest patterns are applied first).
+      const mail = (p.email || '').trim();
+      if (mail.length >= 5) this.fullNames.push({ re: new RegExp(`(?<![\\w.+-])${escape(mail)}(?![\\w.-])`, 'gi'), alias });
+      const nick = (p.alias || '').trim().replace(/\s+/g, ' ');
+      if (nick.length >= 3) this.fullNames.push({ re: new RegExp(`(?<![\\w])${escape(nick).replace(/\\ /g, '\\s+')}(?![\\w])`, 'gi'), alias });
+      for (const t of [...full.split(' '), ...nick.split(' ')]) {
         if (t.length < 3) continue;
         const key = t.toLowerCase();
         (tokenOwners.get(key) ?? tokenOwners.set(key, new Set()).get(key)!).add(p.id);
@@ -50,7 +71,29 @@ export class AliasMap {
   search(query: string): AliasPerson[] {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     if (!words.length) return [];
-    return [...this.byAlias.values()].filter(p => words.every(w => p.name.toLowerCase().includes(w)));
+    return [...this.byAlias.values()].filter(p => { const hay = `${p.name} ${p.alias || ''}`.toLowerCase(); return words.every(w => hay.includes(w)); });
+  }
+
+  /**
+   * Closest people when nothing matches exactly: every word of the query is compared with every word of each
+   * name, allowing 1 slip in short words and 2 in longer ones ("Anien" finds "Anain"). Best matches first.
+   */
+  fuzzySearch(query: string): { person: AliasPerson; distance: number }[] {
+    const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+    if (!words.length) return [];
+    const out: { person: AliasPerson; distance: number }[] = [];
+    for (const p of this.byAlias.values()) {
+      const parts = `${p.name} ${p.alias || ''}`.toLowerCase().split(/\s+/).filter(Boolean);
+      let total = 0; let ok = true;
+      for (const w of words) {
+        const best = Math.min(...parts.map(t => editDistance(w, t)));
+        const allowed = w.length <= 4 ? 1 : 2;
+        if (best > allowed) { ok = false; break; }
+        total += best;
+      }
+      if (ok) out.push({ person: p, distance: total });
+    }
+    return out.sort((a, b) => a.distance - b.distance).slice(0, 4);
   }
 
   /** Real names -> aliases. */
@@ -63,7 +106,7 @@ export class AliasMap {
 
   /** Aliases -> real names (the person's full name). */
   restore(text: string): string {
-    const name = (n: string) => this.byAlias.get(`employee ${n}`)?.name;
+    const name = (n: string) => { const p = this.byAlias.get(`employee ${n}`); return p ? (p.alias ? `${p.name} (${p.alias})` : p.name) : undefined; };
     // "Employees 10 and 9" / "Employees 16, 4, 9" -> a list of real names.
     const plural = text.replace(/\bEmployees (\d{1,3}(?:(?:,\s*|\s+and\s+|\s*&\s*)\d{1,3})*)\b/g, (m, list: string) => {
       const names = list.split(/,\s*|\s+and\s+|\s*&\s*/).map(n => name(n));

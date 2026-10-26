@@ -9,6 +9,11 @@ describe('tools', () => {
     expect(findEmployees('Sara Khan').map(e => e.ref)).toEqual(['e_001']);
     expect(findEmployees('nobody')).toEqual([]);
   });
+  it('has company-wide leave and absence rankings, and checks the month', () => {
+    expect(runTool('leave_overview', { month: '2026-10' })).toHaveProperty('ranked');
+    expect(runTool('absence_overview', { month: '2026-10' })).toHaveProperty('ranked');
+    expect(runTool('leave_overview', { month: 'October' })).toHaveProperty('error');
+  });
   it('rejects badly shaped arguments instead of running them', () => {
     expect(runTool('explain_pay', { employee_ref: 'e_002', month: 'October' })).toHaveProperty('error');
     expect(runTool('explain_pay', { employee_ref: "e_002'; drop", month: '2026-10' })).toHaveProperty('error');
@@ -81,6 +86,12 @@ describe('runAssistant', () => {
     const fetchImpl = (async () => reply({ content: text })) as unknown as typeof fetch;
     const r = await runAssistant([{ role: 'user', content: 'x' }], 'k', { fetchImpl, models: ['m1'] });
     expect(r.answer).toBe('Try restarting it.\n\nLet me know.');
+  });
+  it('removes a written-out Next actions / Suggested actions block, including a JSON blob', async () => {
+    const text = 'Leave: none.\n\nAbsence: 2 days.\n\n---  \n**Next actions**  \n- Open page\n\n---  \n**Suggested actions**  \n{\n  "actions": [ {"label": "x", "page": "leaves"} ]\n}';
+    const fetchImpl = (async () => reply({ content: text })) as unknown as typeof fetch;
+    const r = await runAssistant([{ role: 'user', content: 'x' }], 'k', { fetchImpl, models: ['m1'] });
+    expect(r.answer).toBe('Leave: none.\n\nAbsence: 2 days.');
   });
   it('removes a stray written-out follow-up marker from the answer text', async () => {
     const fetchImpl = (async () => reply({ content: 'These are on an old version.\n\n[Ask follow-up: "Send an update reminder?"]' })) as unknown as typeof fetch;

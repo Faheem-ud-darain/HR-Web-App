@@ -15,7 +15,7 @@ import { isWeekday, getWeekdaysInMonth } from '../core/dates';
 import { explainPay, payrollOverviewFacts, reservedFacts, money, type PayInputs } from '../core/payrollExplain';
 import { buildIntegrityReport } from '../core/trackingSettings';
 import { groupErrors, newestVersion, isBehind, explainTrackerError } from '../core/trackerErrors';
-import { loadPayrollInputs, type PayrollInputs } from '../server/payrollInputs';
+import { loadPayrollInputs, loadPayrollInputsFor, type PayrollInputs } from '../server/payrollInputs';
 import { monthLabel } from '../core/payrollView';
 import type { PbRow } from '../pbTypes';
 import type { Profile, LeaveApplication } from '../hr/types';
@@ -47,7 +47,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
     const [rows, extras] = await Promise.all([adminListAll('hr_profiles', 'sort=full_name'), adminListAll('hr_profile_extras', 'fields=id,profile_id,data')]);
     const ex = new Map<string, PbRow>(extras.map(r => [String(r.profile_id), r]));
     const profiles = rows.map(p => mapProfileRecord(p, (ex.get(p.id)?.data || {}) as Partial<Profile>));
-    return { profiles, alias: new AliasMap(profiles.map(p => ({ id: p.id, name: p.fullName }))) };
+    return { profiles, alias: new AliasMap(profiles.map(p => ({ id: p.id, name: p.fullName, alias: p.alias, email: p.email }))) };
   })());
   const inputsCache = new Map<string, Promise<PayrollInputs>>();
   const inputs = (sinceMonth: string) => {
@@ -57,21 +57,29 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
   let leavesP: Promise<LeaveApplication[]> | null = null;
   const leaves = () => (leavesP ??= adminListAll('hr_leaves', 'fields=id,employee_name,type,duration,reason,status,start_date,end_date').then(rows => rows.map(toLeave)));
 
-  async function person(ref: unknown): Promise<{ p: Profile; aliasName: string } | { error: string }> {
+  async function person(ref: unknown, opts: { allowApprox?: boolean } = {}): Promise<{ p: Profile; aliasName: string; approximate?: boolean } | { error: string; did_you_mean?: { ref: string; team: string }[] }> {
     const { profiles, alias } = await roster();
     const text = typeof ref === 'string' ? ref.slice(0, 80) : '';
     let match = alias.fromAlias(text);
+    let approximate = false;
     if (!match) {
       const found = alias.search(alias.restore(text));
       if (found.length === 1) match = found[0];
-      else return { error: found.length === 0 ? 'No employee matches that.' : 'More than one employee matches; ask which one.' };
+      else if (found.length > 1) return { error: 'More than one employee matches; ask which one.', did_you_mean: found.slice(0, 4).map(f => ({ ref: alias.aliasOf(f.id), team: (profiles.find(p => p.id === f.id)?.teams || [])[0] || '' })) };
+      else {
+        const near = alias.fuzzySearch(alias.restore(text));
+        // A single clear near-match may be used for harmless look-ups; anything sensitive always asks first.
+        if (opts.allowApprox && near.length >= 1 && (near.length === 1 || near[1].distance > near[0].distance)) { match = near[0].person; approximate = true; }
+        else return { error: near.length ? 'No exact match; these names are close. Ask which one was meant.' : 'No employee matches that.', ...(near.length ? { did_you_mean: near.map(n => ({ ref: alias.aliasOf(n.person.id), team: (profiles.find(p => p.id === n.person.id)?.teams || [])[0] || '' })) } : {}) };
+      }
     }
     const p = profiles.find(x => x.id === match!.id);
-    return p ? { p, aliasName: alias.aliasOf(p.id) } : { error: 'No employee matches that.' };
+    return p ? { p, aliasName: alias.aliasOf(p.id), ...(approximate ? { approximate } : {}) } : { error: 'No employee matches that.' };
   }
 
-  const payInputs = async (month: string): Promise<PayInputs> => {
-    const i = await inputs(month);
+  const payInputs = async (month: string, only?: Profile): Promise<PayInputs> => {
+    // A question about one person reads only that person's rows; a company-wide question reads everyone's.
+    const i = only ? await loadPayrollInputsFor(only, now, month) : await inputs(month);
     return { profiles: i.profiles, payroll: i.payroll, leaves: i.leaves, timesheets: i.timesheets, absences: i.absences, now };
   };
 
@@ -79,20 +87,95 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
     async find_employee(a) {
       const { profiles, alias } = await roster();
       const q = alias.restore(clip(a.name, 60));
-      const found = alias.fromAlias(clip(a.name, 60)) ? [alias.fromAlias(clip(a.name, 60))!] : alias.search(q);
-      return { candidates: found.slice(0, 8).map(f => { const p = profiles.find(x => x.id === f.id)!; return { ref: alias.aliasOf(f.id), region: p.region || 'Pakistan', team: (p.teams || [])[0] || '', title: p.jobTitle || '', ...(p.offboarded ? { status: 'offboarded' } : {}) }; }) };
+      let found = alias.fromAlias(clip(a.name, 60)) ? [alias.fromAlias(clip(a.name, 60))!] : alias.search(q);
+      let approximate = false;
+      if (!found.length) { found = alias.fuzzySearch(q).map(n => n.person); approximate = found.length > 0; }
+      return { ...(approximate ? { note: 'No exact match. These names are close; ask which one was meant.' } : {}), candidates: found.slice(0, 8).map(f => { const p = profiles.find(x => x.id === f.id)!; return { ref: alias.aliasOf(f.id), region: p.region || 'Pakistan', team: (p.teams || [])[0] || '', title: p.jobTitle || '', ...(p.offboarded ? { status: 'offboarded' } : {}) }; }) };
     },
 
     async explain_pay(a) {
       const month = clip(a.month, 7); if (!MONTH.test(month)) return { error: 'Need month as YYYY-MM.' };
       const who = await person(a.employee_ref); if ('error' in who) return who;
-      return { employee: who.aliasName, ...explainPay(who.p, month, await payInputs(month)) };
+      return { employee: who.aliasName, ...explainPay(who.p, month, await payInputs(month, who.p)) };
     },
 
     async payroll_overview(a) {
       const month = clip(a.month, 7); if (!MONTH.test(month)) return { error: 'Need month as YYYY-MM.' };
       const { alias } = await roster();
       return payrollOverviewFacts(month, await payInputs(month), p => alias.aliasOf(p.id));
+    },
+
+    async activity_now(a) {
+      const who = await person(a.employee_ref, { allowApprox: true }); if ('error' in who) return who;
+      const email = (who.p.email || '').toLowerCase();
+      const since = new Date(now.getTime() - 3 * 86400000).toISOString().replace('T', ' ').replace('Z', '');
+      const rows = await adminListAll('hr_timesheets', `fields=id,employee_id,date,clock_in,clock_out&sort=-clock_in&filter=${encodeURIComponent(pbFilter('employee_id ~ {:e} && (clock_out = "" || date >= {:s})', { e: email, s: since }))}`);
+      const mine = rows.filter(r => String(r.employee_id || '').toLowerCase() === email);
+      const open = mine.find(r => !r.clock_out);
+      const last = mine.filter(r => r.clock_out).sort((x, y) => String(y.clock_out).localeCompare(String(x.clock_out)))[0];
+      const signals = await adminListAll('hr_tracker_signals', `fields=email,heartbeat&filter=${encodeURIComponent(pbFilter('email ~ {:e}', { e: email }))}`);
+      const h = (signals.find(r => String(r.email || '').toLowerCase() === email)?.heartbeat || {}) as { lastSeenAt?: string; lastCaptureAt?: string | null };
+      const agoMin = (iso?: string | null) => { const t = iso ? new Date(String(iso).replace(' ', 'T')).getTime() : NaN; return isNaN(t) ? null : Math.max(0, Math.round((now.getTime() - t) / 60000)); };
+      const fmt = (m: number | null) => (m === null ? 'never' : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`);
+      const nyTime = (iso: string) => new Date(String(iso).replace(' ', 'T')).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' New York time';
+      const seen = agoMin(h.lastSeenAt);
+      return {
+        employee: who.aliasName, ...(who.approximate ? { assumed_match: 'The name was typed approximately; state which person you took it to be.' } : {}),
+        on_shift_now: !!open,
+        ...(open ? { shift_started: nyTime(String(open.clock_in)), shift_length_so_far: hm(agoMin(String(open.clock_in)) ?? 0) } : last ? { last_shift_ended: fmt(agoMin(String(last.clock_out))) } : { last_shift: 'none in the last 3 days' }),
+        tracker_last_seen: fmt(seen), tracker_last_capture: fmt(agoMin(h.lastCaptureAt)),
+        tracker_connected_now: seen !== null && seen <= 13,
+        note: 'Active means clocked in on an open shift. USA staff use a geofence and have no tracker, so no tracker signal is expected for them.',
+      };
+    },
+
+    async active_now() {
+      const { profiles, alias } = await roster();
+      const byEmail = new Map(profiles.map(p => [(p.email || '').toLowerCase(), p]));
+      const [open, signals] = await Promise.all([
+        adminListAll('hr_timesheets', `fields=id,employee_id,clock_in&filter=${encodeURIComponent('clock_out = ""')}`),
+        adminListAll('hr_tracker_signals', 'fields=email,heartbeat'),
+      ]);
+      const hb = new Map(signals.map(r => [String(r.email || '').toLowerCase(), (r.heartbeat || {}) as { lastSeenAt?: string; lastCaptureAt?: string | null }]));
+      const list = open.map(r => {
+        const email = String(r.employee_id || '').toLowerCase(); const p = byEmail.get(email);
+        const mins = Math.max(0, Math.round((now.getTime() - new Date(String(r.clock_in).replace(' ', 'T')).getTime()) / 60000));
+        const seen = hb.get(email)?.lastSeenAt ? Math.round((now.getTime() - new Date(hb.get(email)!.lastSeenAt!).getTime()) / 60000) : null;
+        return { who: p ? alias.aliasOf(p.id) : 'Unknown employee', on_shift_for: hm(mins), tracker: p?.region === 'USA' ? 'geofence (no tracker)' : seen !== null && seen <= 13 ? 'connected' : 'not connected', mins };
+      }).sort((x, y) => y.mins - x.mins);
+      return { on_shift_now: list.length, tracker_not_connected_while_on_shift: list.filter(x => x.tracker === 'not connected').length, people: list.slice(0, 30).map(({ mins, ...rest }) => rest), note: 'Active means clocked in on an open shift right now.' };
+    },
+
+    async leave_overview(a) {
+      const month = clip(a.month, 7); if (!MONTH.test(month)) return { error: 'Need month as YYYY-MM.' };
+      const { profiles, alias } = await roster();
+      const byName = new Map(profiles.map(p => [p.fullName.trim().toLowerCase(), p]));
+      const per = new Map<string, { who: string; approved_days: number; pending_days: number; requests: number }>();
+      for (const l of await leaves()) {
+        if (l.status === 'rejected') continue;
+        const r = getLeaveRange(l); if (!r) continue;
+        const days = eachLeaveDay(r).filter(d => d.slice(0, 7) === month && isWeekday(d));
+        if (!days.length) continue;
+        const p = byName.get(l.employeeName.trim().toLowerCase());
+        const key = p ? p.id : `name:${l.employeeName}`;
+        const row = per.get(key) ?? { who: p ? alias.aliasOf(p.id) : 'Unknown employee', approved_days: 0, pending_days: 0, requests: 0 };
+        row.requests++;
+        if (l.status === 'approved') row.approved_days += days.length; else row.pending_days += days.length;
+        per.set(key, row);
+      }
+      const ranked = [...per.values()].sort((x, y) => (y.approved_days - x.approved_days) || (y.pending_days - x.pending_days)).slice(0, 10);
+      return { month: monthLabel(month), ranked, total_people_with_leave: per.size, note: 'Working days (Mon-Fri). Approved = taken or booked; pending = awaiting HR or CEO sign-off. Rejected requests are excluded.' };
+    },
+
+    async absence_overview(a) {
+      const month = clip(a.month, 7); if (!MONTH.test(month)) return { error: 'Need month as YYYY-MM.' };
+      const { profiles, alias } = await roster();
+      const byEmail = new Map(profiles.map(p => [(p.email || '').toLowerCase(), p]));
+      const rows = await adminListAll('hr_absence_records', `filter=${encodeURIComponent(pbFilter('deleted = false && date >= {:s} && date < {:t}', { s: `${month}-01`, t: `${nextMonth(month)}-01` }))}`);
+      const days = new Map<string, Set<string>>();
+      for (const r of rows.map(toAbsenceRecord)) { const k = r.employeeEmail.toLowerCase(); (days.get(k) ?? days.set(k, new Set()).get(k)!).add(r.date); }
+      const ranked = [...days.entries()].map(([email, set]) => ({ who: byEmail.get(email) ? alias.aliasOf(byEmail.get(email)!.id) : 'Unknown employee', absent_days: set.size })).sort((x, y) => y.absent_days - x.absent_days).slice(0, 10);
+      return { month: monthLabel(month), ranked, total_people_with_absences: days.size, note: 'Distinct absent days recorded (no clock-in, under 4 hours, or long inactivity).' };
     },
 
     async reserved_overview() {
@@ -103,7 +186,8 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
     async leave_summary(a) {
       const month = clip(a.month, 7); if (!MONTH.test(month)) return { error: 'Need month as YYYY-MM.' };
       const who = await person(a.employee_ref); if ('error' in who) return who;
-      const mine = (await leaves()).filter(l => l.employeeName.trim().toLowerCase() === who.p.fullName.trim().toLowerCase());
+      // Only this person's leave requests are read (not the whole company's).
+      const mine = (await adminListAll('hr_leaves', `fields=id,employee_name,type,duration,reason,status,start_date,end_date&filter=${encodeURIComponent(pbFilter('employee_name ~ {:n}', { n: who.p.fullName }))}`)).map(toLeave).filter(l => l.employeeName.trim().toLowerCase() === who.p.fullName.trim().toLowerCase());
       const bucket = () => ({ count: 0, days: 0, dates: [] as string[] });
       const out: Record<string, ReturnType<typeof bucket>> = { approved: bucket(), pending: bucket(), rejected: bucket() };
       let requests = 0;
@@ -130,7 +214,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
         adminListAll('hr_timesheets', `fields=id,employee_id,date,clock_in,clock_out,duration,status&filter=${encodeURIComponent(pbFilter('employee_id ~ {:e} && date >= {:s} && date < {:t}', { e: email, s: start, t: end }))}`),
         adminListAll('hr_absence_records', `filter=${encodeURIComponent(pbFilter('employeeEmail ~ {:e} && deleted = false && date >= {:s} && date < {:t}', { e: email, s: `${month}-01`, t: `${nextMonth(month)}-01` }))}`),
         adminListAll('hr_inactivity_logs', `fields=employee_email,start_at,duration_seconds&filter=${encodeURIComponent(pbFilter('employee_email ~ {:e} && start_at >= {:s} && start_at < {:t}', { e: email, s: start, t: end }))}`),
-        leaves(),
+        adminListAll('hr_leaves', `fields=id,employee_name,type,duration,reason,status,start_date,end_date&filter=${encodeURIComponent(pbFilter('employee_name ~ {:n}', { n: who.p.fullName }))}`).then(rows => rows.map(toLeave)),
       ]);
       const ts = tsRows.map(toTimesheet).filter(t => (t.employeeEmail || '').toLowerCase() === email);
       const abs = absRows.map(toAbsenceRecord).filter(r => r.employeeEmail.toLowerCase() === email);
@@ -258,7 +342,8 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
     defs: LIVE_DEFS,
     async prepare(history: ChatMessage[]) {
       const { alias } = await roster();
-      return history.map(m => ({ ...m, content: alias.redact(m.content) }));
+      // People (names, nicknames, their e-mail addresses) become aliases; any other e-mail address or phone number is removed.
+      return history.map(m => ({ ...m, content: redactText(alias.redact(m.content), []) }));
     },
     async run(name, args) {
       const fn = tools[name];

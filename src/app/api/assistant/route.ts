@@ -33,8 +33,11 @@ export async function POST(request: Request) {
   // Admin and HR only. Employees (and team leads) never get the assistant, whatever the screen shows.
   if (session.role !== 'hr' && session.role !== 'admin') return NextResponse.json({ error: 'Not authorized.' }, { status: 403 });
 
+  // The data mode must be chosen explicitly: 'live' (the real database) or 'demo' (made-up people, for local
+  // testing only). With nothing set, the assistant is switched off, so made-up data can never be mistaken for real.
+  const dataMode = process.env.ASSISTANT_DATA;
   const apiKey = process.env.GROQ_API_KEY || '';
-  if (!apiKey) return NextResponse.json({ error: 'The assistant is not set up yet (missing key).' }, { status: 503 });
+  if ((dataMode !== 'live' && dataMode !== 'demo') || !apiKey) return NextResponse.json({ error: 'The assistant has not been switched on yet.' }, { status: 503 });
 
   let body: { messages?: ChatMessage[]; ticketDraft?: TicketDraftInput };
   try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }); }
@@ -51,8 +54,7 @@ export async function POST(request: Request) {
       if (typeof t.title !== 'string' || typeof t.description !== 'string' || typeof t.employeeName !== 'string') return NextResponse.json({ error: 'Invalid ticket.' }, { status: 400 });
       return NextResponse.json({ ...(await runTicketDraft({ title: t.title, description: t.description, employeeName: t.employeeName, replies: Array.isArray(t.replies) ? t.replies : [] }, apiKey)), demo: false });
     }
-    // Real data only when switched on (ASSISTANT_DATA=live); otherwise the made-up demo data.
-    const live = process.env.ASSISTANT_DATA === 'live';
+    const live = dataMode === 'live';
     const result = await runAssistant(body.messages as ChatMessage[], apiKey, { role: session.role, ...(live ? { runner: createLiveRunner() } : {}) });
     return NextResponse.json({ ...result, demo: !live });
   } catch (err) {

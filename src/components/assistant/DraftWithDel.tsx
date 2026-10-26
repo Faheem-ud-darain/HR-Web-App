@@ -55,7 +55,7 @@ export function DraftWithDel({ ticket, onDraft }: { ticket: Ticket; onDraft: (te
         <span className="flex h-5 w-5 items-center justify-center" aria-hidden="true">
           <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={20} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} aria-hidden="true" />
         </span>
-        {loading ? 'Del is writing…' : 'Draft a reply with Del'}
+        {loading ? 'Del is drafting…' : 'Draft a reply with Del'}
       </button>
       {note && <p className="mt-1 text-[11px] text-amber-700">Check before sending: {note}</p>}
       {error && <p className="mt-1 text-[11px] text-rose-600" role="alert">{error}</p>}

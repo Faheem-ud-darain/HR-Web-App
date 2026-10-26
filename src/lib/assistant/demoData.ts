@@ -110,3 +110,16 @@ export function trackerHealth(ref: string): Record<string, unknown> {
 export function payrollOverview(month: string): Record<string, unknown> {
   return { month: monthName(month), employees: 7, paid: 4, unpaid: 3, flagged: 2, total_held: 'PKR 55,000', notes: ['Bilal Sadiq: no bank details', 'Hamza Tariq: tracker problem'] };
 }
+
+export function leaveOverview(month: string): Record<string, unknown> {
+  return { month: monthName(month), ranked: [
+    { who: 'Hamza Tariq', approved_days: 8, pending_days: 3, requests: 7 },
+    { who: 'Sara Khan', approved_days: 4, pending_days: 1, requests: 3 },
+  ], total_people_with_leave: 2, note: 'Days are working days (Mon-Fri).' };
+}
+
+export function absenceOverview(month: string): Record<string, unknown> {
+  return { month: monthName(month), ranked: [
+    { who: 'Ali Raza', absent_days: 2 },
+  ], total_people_with_absences: 1 };
+}

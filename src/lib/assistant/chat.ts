@@ -33,7 +33,8 @@ function cleanAnswer(text: string): string {
     .replace(/[\u2010\u2011\u2012\u2013]/g, '-')
     // Next steps belong in the buttons. If the model also wrote them out as text (a "Next steps" block, or
     // pseudo-code like "(open_page, page: ...)"), remove that so no code-looking text reaches the person.
-    .replace(/\n?[ \t]*(?:-{3,}[ \t]*\n)?[ \t]*\**Next steps:?\**:?[ \t]*\n[\s\S]*$/i, '')
+    .replace(/\n?[ \t]*(?:-{3,}[ \t]*\n)?[ \t]*\**(?:Next steps?|Next actions?|Suggested actions?):?\**:?[ \t]*\n[\s\S]*$/i, '')
+    .replace(/\n?\s*\{\s*"actions"\s*:[\s\S]*$/i, '')
     .replace(/^[ \t]*\[[^\]\n]*\][ \t]*\((?:open_page|ask_followup)[^)\n]*\)[ \t]*$/gim, '')
     .replace(/^[ \t]*\[(?:Ask follow-?up|Follow-?up|Button|Action)s?:[^\]\n]*\][ \t]*$/gim, '')
     .replace(/(?:\n[ \t]*-{3,}[ \t]*)+$/g, '')
@@ -41,7 +42,7 @@ function cleanAnswer(text: string): string {
 }
 
 async function runWithModel(model: string, history: ChatMessage[], apiKey: string, fetchImpl: typeof fetch, now: Date, role: AssistantRole, runner: ToolRunner): Promise<AssistantResult> {
-  const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt(now, runner.mode === 'live') }, ...history];
+  const messages: ApiMessage[] = [{ role: 'system', content: systemPrompt(now, runner.mode === 'live', role) }, ...history];
   const toolsUsed: string[] = [];
   let actions: AssistantAction[] = [];
   const calls: { name: string; result: Record<string, unknown> }[] = [];

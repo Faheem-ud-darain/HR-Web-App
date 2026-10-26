@@ -49,3 +49,29 @@ export async function loadPayrollInputs(now: Date, sinceMonth: string, absenceDa
     absences: absenceRows.map(toAbsenceRecord),
   };
 }
+
+/**
+ * Only ONE person's rows, for a question about that person (the assistant's "why does X have deductions").
+ * Five small, filtered reads instead of loading the whole company; the pay engine gives the same answer for
+ * this person because it works one employee at a time.
+ */
+export async function loadPayrollInputsFor(profile: Profile, now: Date, sinceMonth: string, absenceDays = 120): Promise<PayrollInputs> {
+  const email = (profile.email || '').toLowerCase();
+  const since = `${sinceMonth}-01 00:00:00.000`;
+  const absenceSince = getNYDateString(new Date(now.getTime() - absenceDays * 24 * 3600 * 1000));
+  const [payrollRows, breakdownRows, leaveRows, timesheetRows, absenceRows] = await Promise.all([
+    adminListAll('hr_payroll', `sort=-created&filter=${encodeURIComponent(pbFilter('employee_id = {:id}', { id: profile.id }))}`),
+    adminListAll('hr_payroll_breakdowns', `fields=id,breakdown_key,data&filter=${encodeURIComponent(pbFilter('breakdown_key ~ {:id}', { id: profile.id }))}`),
+    adminListAll('hr_leaves', `fields=id,employee_name,type,duration,reason,status,start_date,end_date&filter=${encodeURIComponent(pbFilter('employee_name ~ {:n}', { n: profile.fullName }))}`),
+    adminListAll('hr_timesheets', `fields=id,employee_id,date,clock_in,clock_out,duration,status&filter=${encodeURIComponent(pbFilter('employee_id ~ {:e} && (clock_out = "" || date >= {:s})', { e: email, s: since }))}`),
+    adminListAll('hr_absence_records', `filter=${encodeURIComponent(pbFilter('employeeEmail ~ {:e} && deleted = false && date >= {:s}', { e: email, s: absenceSince }))}`),
+  ]);
+  const breakdownByKey = new Map<string, PbRow>(breakdownRows.map(b => [String(b.breakdown_key), b]));
+  return {
+    profiles: [profile], extrasById: new Map(), payrollRows, breakdownRows,
+    payroll: payrollRows.map(r => toPayrollRecordFromRow(r, breakdownByKey.get(breakdownKey(r.employee_id, r.month || ''))?.data)),
+    leaves: leaveRows.map(toLeave).filter(l => l.employeeName.trim().toLowerCase() === profile.fullName.trim().toLowerCase()),
+    timesheets: timesheetRows.map(toTimesheet).filter(t => (t.employeeEmail || '').toLowerCase() === email),
+    absences: absenceRows.map(toAbsenceRecord).filter(a => a.employeeEmail.toLowerCase() === email),
+  };
+}

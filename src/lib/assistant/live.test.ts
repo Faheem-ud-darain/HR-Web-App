@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AliasMap } from './aliases';
+import { AliasMap, editDistance } from './aliases';
 import { explainPay, reservedFacts, money } from '../core/payrollExplain';
 import type { Profile, AbsenceRecord } from '../hr/types';
 
@@ -68,5 +68,47 @@ describe('pay facts', () => {
   it('formats money by region', () => {
     expect(money(2100, 'USA')).toBe('USD 2,100');
     expect(money(52000)).toBe('PKR 52,000');
+  });
+});
+
+describe('spelling-tolerant name search', () => {
+  const m = new AliasMap([{ id: 'p1', name: 'Anain Malik' }, { id: 'p2', name: 'Sara Khan' }, { id: 'p3', name: 'Arneeb Komal' }]);
+  it('measures edit distance', () => {
+    expect(editDistance('anien', 'anain')).toBe(2);
+    expect(editDistance('sara', 'sara')).toBe(0);
+  });
+  it('finds a close spelling and ranks the best first', () => {
+    const near = m.fuzzySearch('Anien');
+    expect(near[0].person.id).toBe('p1');
+  });
+  it('does not match unrelated names, and exact search still wins', () => {
+    expect(m.fuzzySearch('Zebediah')).toEqual([]);
+    expect(m.search('anain').map(p => p.id)).toEqual(['p1']);
+  });
+});
+
+describe('nicknames (the alias field)', () => {
+  const m = new AliasMap([{ id: 'p1', name: 'Anain Malik', alias: 'Anien' }, { id: 'p2', name: 'Sara Khan' }]);
+  it('recognises a nickname when typed, and hides it from the provider like a real name', () => {
+    expect(m.search('anien').map(p => p.id)).toEqual(['p1']);
+    const out = m.redact('is Anien active right now?');
+    expect(out).not.toMatch(/Anien/i);
+    expect(out).toContain(m.aliasOf('p1'));
+  });
+  it('shows the person the way the app does for HR and Admin: full name with the nickname', () => {
+    expect(m.restore(`${m.aliasOf('p1')} is on shift.`)).toBe('Anain Malik (Anien) is on shift.');
+    expect(m.restore(`${m.aliasOf('p2')} is on shift.`)).toBe('Sara Khan is on shift.');
+  });
+  it('finds a near spelling of a nickname too', () => {
+    expect(m.fuzzySearch('Anein')[0]?.person.id).toBe('p1');
+  });
+});
+
+describe('e-mail addresses typed into a question', () => {
+  const m = new AliasMap([{ id: 'p1', name: 'Anain Malik', alias: 'Anien', email: 'anain@delcargo.us' }, { id: 'p2', name: 'Sara Khan', email: 'sara@delcargo.us' }]);
+  it('a known person\'s address becomes their alias, as a whole', () => {
+    const out = m.redact('check anain@delcargo.us and Sara@Delcargo.us please');
+    expect(out).not.toMatch(/@|delcargo|anain|sara/i);
+    expect(out).toContain(m.aliasOf('p1')); expect(out).toContain(m.aliasOf('p2'));
   });
 });

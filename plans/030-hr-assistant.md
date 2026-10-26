@@ -386,8 +386,10 @@ exists; try a longer 5-turn conversation; re-test with the real knowledge pack a
 
 ## 8a. Live data is connected (2026-10-26, locally)
 
-The assistant now reads the real database when `ASSISTANT_DATA=live` is set (it is set in `.env.local` only;
-without it the route answers from made-up demo data, so deploying the code does not by itself expose anything).
+The assistant now reads the real database when `ASSISTANT_DATA=live` is set (it is set in `.env.local` only). The
+setting must be chosen explicitly: `live` (real data) or `demo` (made-up people, local testing only). With nothing
+set, or without `GROQ_API_KEY`, the route answers "not switched on yet", so deploying the code does not by itself
+expose anything and made-up data can never appear on the live site.
 
 - **Read-only tools on real data** (`src/lib/assistant/live.ts`): find an employee; explain a person's pay for a
   month (same payroll engine as the Payroll screen, with the dates behind each deduction); company payroll
@@ -412,6 +414,17 @@ without it the route answers from made-up demo data, so deploying the code does 
   change any tracker code. Chrome extension and desktop agent report through the same fields.
   *Limit:* only what the trackers already write is visible; a tracker that is closed or off reports nothing, which
   shows up as "no signal". Richer error reporting would need a tracker change (held on the local tracker branch).
+- **Scope follows the question (owner request).** A specific question (one person, one topic: "how many leaves
+  did Anien take") reads only that person's records on that topic and answers only what was asked. A general
+  question ("who took the most leave", "who is active now") uses the company-wide overview tools. Single-person
+  pay questions use a narrow loader (five filtered reads) that was checked against the broad loader for every
+  employee in two months: identical answers.
+- **Nicknames.** People are also found by the alias nickname in their profile, near spellings are tolerated, and
+  answers show "Full Name (alias)" like the app does for HR and Admin. Nicknames, e-mail addresses typed into a
+  question and phone numbers are hidden from the model provider like real names.
+- **Personas.** Name "Del" for everyone; Admin: "Here to Help", addressed as
+  "Administrator", executive-briefing style; HR: "Always at Hand", addressed as "HR
+  Manager", operational detail. Defined in `src/lib/assistant/persona.ts`.
 - **Not done yet:** the audit log (needs a new collection, so it waits for approval), a per-day usage counter, and
   using these facts inside the ticket-draft button (it still drafts from the ticket text alone).
 - **Edge limits:** a question that needs pay data makes about a dozen database reads plus the model calls; this
