@@ -4,6 +4,8 @@ import React from 'react';
 import { Lock, AlertCircle, FileText, X, Paperclip, Send } from 'lucide-react';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { Ticket } from '@/lib/hrData';
+import { getSessionRole } from '@/lib/session';
+import { DraftWithDel } from '@/components/assistant/DraftWithDel';
 
 interface TicketComposerProps {
   isClosed: boolean;
@@ -51,6 +53,21 @@ export function TicketComposer({ isClosed, selectedTicket, isAdmin, handleSendRe
               </button>
             </div>
           )}
+          {getSessionRole() === 'hr' && <DraftWithDel
+            ticket={selectedTicket}
+            onDraft={text => {
+              handleReplyMsgChange(text);
+              // A draft is several lines: grow the box so it can be read, and put the cursor in it.
+              requestAnimationFrame(() => {
+                const el = replyTextareaRef.current;
+                if (!el) return;
+                el.style.maxHeight = '260px';
+                el.style.height = 'auto';
+                el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
+                el.focus();
+              });
+            }}
+          />}
           <div className="flex items-center gap-1.5 md:gap-2">
             <label
               title="Attach a file"
