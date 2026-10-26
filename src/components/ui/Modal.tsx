@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { pushModal, popModal } from '@/lib/modalStack';
@@ -31,16 +31,24 @@ function usePrefersReducedMotion() {
   );
 }
 
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
 export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
   // Mount/exit state machine (plan 002) — Modal used to unmount instantly on
   // close with no exit transition; this keeps it mounted for the exit
   // animation's duration before actually unmounting. `exiting` is set the
   // moment `isOpen` flips (adjusting state while rendering), cleared by a timer.
   const [exiting, setExiting] = useState(false);
   const [wasOpen, setWasOpen] = useState(isOpen);
+  // What had focus the moment the dialog opened (read before the dialog's own content, e.g. an autoFocus
+  // field, takes focus), so focus can be handed back when it closes.
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
     setExiting(!isOpen);
+    if (isOpen && typeof document !== 'undefined') setOpener(document.activeElement as HTMLElement | null);
   }
   const shouldRender = isOpen || exiting;
   const closing = exiting && !isOpen;
@@ -67,6 +75,38 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
       window.removeEventListener('keydown', handleEscape);
     };
   }, [isOpen, onClose]);
+
+  // Keyboard users: move focus into the dialog when it opens, keep Tab inside it while it is open, and
+  // give focus back to whatever opened it when it closes.
+  useEffect(() => {
+    if (!isOpen || !mounted) return;
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.contains(document.activeElement)) {
+      const first = dialog.querySelector<HTMLElement>(FOCUSABLE);
+      (first || dialog).focus();
+    }
+    const trap = (e: KeyboardEvent) => {
+      const dlg = dialogRef.current;
+      if (e.key !== 'Tab' || !dlg) return;
+      // Only the topmost dialog traps (dialogs are appended to <body> in the order they open).
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dlg) return;
+      const active = document.activeElement;
+      // Focus is inside some other overlay (a lightbox, a popup): leave it alone.
+      if (active && active !== document.body && !dlg.contains(active)) return;
+      const items = Array.from(dlg.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => el.offsetParent !== null);
+      if (items.length === 0) { e.preventDefault(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && (active === first || !dlg.contains(active))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !dlg.contains(active))) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', trap);
+    return () => {
+      document.removeEventListener('keydown', trap);
+      if (opener && document.contains(opener)) opener.focus();
+    };
+  }, [isOpen, mounted, opener]);
 
   // Registers with the shared modal-stack tracker so the mobile floating
   // bottom nav (Sidebar.tsx) knows to hide itself — see lib/modalStack.ts
@@ -104,8 +144,11 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
           ${className || ''}
         `}
         style={reducedMotion ? { animation: 'none' } : undefined}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
       >
         {/* Drag handle (mobile only) */}
         <div className="md:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
@@ -114,12 +157,14 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 flex-shrink-0">
-          <h2 className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title}</h2>
+          <h2 id={titleId} className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title}</h2>
           <button
+            type="button"
+            aria-label="Close"
             onClick={onClose}
             className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 

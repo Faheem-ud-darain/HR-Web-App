@@ -146,8 +146,14 @@ export async function GET(request: Request) {
     const stored = new Map<string, PbRow>();
     if (rows.some((r: PbRow) => r.month)) {
       try {
-        const list = await pbAdminFetch('/api/collections/hr_payroll_breakdowns/records?perPage=500&fields=breakdown_key,data');
-        for (const b of list?.items || []) stored.set(String(b.breakdown_key), b.data || {});
+        // Paged: paid months depend on their stored breakdown, so a cut-off at 500 rows would make
+        // the oldest ones fall back to a generic breakdown as the company grows.
+        for (let page = 1; page <= 20; page++) {
+          const list = await pbAdminFetch(`/api/collections/hr_payroll_breakdowns/records?perPage=500&page=${page}&sort=created&fields=breakdown_key,data`);
+          const items: PbRow[] = list?.items || [];
+          for (const b of items) stored.set(String(b.breakdown_key), b.data || {});
+          if (items.length < 500) break;
+        }
       } catch (err) {
         console.error('[admin/payroll GET] breakdowns unavailable:', err);
       }

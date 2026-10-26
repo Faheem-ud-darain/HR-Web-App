@@ -170,10 +170,8 @@ export function CareersView({ role }: CareersViewProps) {
         setApplyError(errMsg(err, 'Could not submit your application. Please try again.'));
         return;
       }
-      // The Applications review panel is available to HR and Admin alike
-      // (see canEdit above) — notify both, not just HR.
-      await hrActions.addNotification('all', 'hr', `New application for "${selectedJob?.title}" submitted by ${applicantName} (${applicantEmail})`);
-      await hrActions.addNotification('all', 'admin', `New application for "${selectedJob?.title}" submitted by ${applicantName} (${applicantEmail})`);
+      // HR/Admin are notified by the apply route itself (server-side, best effort), so a failure there
+      // can't hide a saved application from the applicant or make a retry hit the duplicate guard.
       refetchApplications();
       setApplySuccess('Application submitted successfully! Our HR team will get back to you.');
       setTimeout(() => {

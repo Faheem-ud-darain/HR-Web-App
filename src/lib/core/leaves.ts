@@ -172,13 +172,10 @@ export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: stri
   return getApprovedLeaveOnDate(leaves, fullName, dateStr) !== null;
 }
 
-export function getApprovedLeaveDaysInMonth(
-  leaves: LeaveApplication[],
-  fullName: string,
-  type: LeaveApplication['type'],
-  monthKey: string
-): number {
-  let total = 0;
+// Working days (Mon–Fri) in `monthKey` covered by this employee's approved leave of ONE type.
+// Weekends are never charged, and a day covered by two overlapping requests counts once.
+function approvedLeaveWorkdays(leaves: LeaveApplication[], fullName: string, type: LeaveApplication['type'], monthKey: string): Set<string> {
+  const days = new Set<string>();
   for (const l of leaves) {
     if (l.employeeName !== fullName || l.type !== type || l.status !== 'approved') continue;
     // Malformed/unparseable duration — there's no date range to walk, so
@@ -188,9 +185,21 @@ export function getApprovedLeaveDaysInMonth(
     // sum did.
     const range = getLeaveRange(l);
     if (!range) continue;
-    total += eachLeaveDay(range).filter(d => d.slice(0, 7) === monthKey).length;
+    for (const d of eachLeaveDay(range)) if (d.slice(0, 7) === monthKey && isWeekday(d)) days.add(d);
   }
-  return total;
+  return days;
+}
+
+export function getApprovedLeaveDaysInMonth(
+  leaves: LeaveApplication[],
+  fullName: string,
+  type: LeaveApplication['type'],
+  monthKey: string
+): number {
+  const days = approvedLeaveWorkdays(leaves, fullName, type, monthKey);
+  // A day already charged as Urgent leave is not charged again as Normal leave.
+  if (type === 'Normal') for (const d of approvedLeaveWorkdays(leaves, fullName, 'Urgent', monthKey)) days.delete(d);
+  return days.size;
 }
 
 export function countApprovedLeaveRequestsInMonth(

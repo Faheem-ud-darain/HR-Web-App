@@ -106,6 +106,10 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   const handleAnnouncementSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!annTitle.trim() || !annContent.trim() || isPostingAnnouncement) return;
+    if (annTargetType === 'warehouses' && annSelectedWarehouses.length === 0) {
+      setAnnPostError('Select at least one warehouse for this announcement.');
+      return;
+    }
 
     setIsPostingAnnouncement(true);
     setAnnPostError('');

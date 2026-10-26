@@ -145,9 +145,9 @@ body {
    size class they had. Same story for the `font-size: 16px !important` on
    textareas — it stomped the deliberately smaller chat/reply placeholder
    text sizing.
-   The zoom-prevention this was originally for is already handled by the
-   viewport config in layout.tsx (userScalable: false, maximumScale: 1), so
-   removing this doesn't reintroduce iOS zoom-on-focus. Components that
+   Pinch zoom is now allowed (accessibility: it was disabled in layout.tsx, which
+   fails WCAG 1.4.4). iOS zooms into a focused field whose text is under 16px, so the
+   iOS-only rule near the end of this file sets 16px on form fields there. Components that
    genuinely want a generous 44px tap target already opt into it explicitly
    per-button (e.g. `min-h-[44px] md:min-h-0` on several form CTAs) — that's
    the correct, non-global way to do it. */
@@ -594,4 +594,27 @@ button:active {
 .scrollbar-hide {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+}
+
+
+/* Keyboard focus: a clear ring on everything that is not a text field (text fields already show their
+   own focus border/ring). Only appears for keyboard use (:focus-visible), never on mouse or touch taps.
+   Unlayered on purpose, so it wins over the many `outline-none` utility classes on buttons. */
+:is(button, a[href], summary, select, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], [role='checkbox'], [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+input[type='checkbox']:focus-visible,
+input[type='radio']:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+/* iOS zooms into a focused field whose font is under 16px. With pinch zoom now allowed, stop that jump. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit']):not([type='button']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

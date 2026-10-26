@@ -3,8 +3,9 @@ import { requireSession } from '@/lib/serverAuth';
 import { adminFindProfileByEmail, adminListPayrollForEmployee, adminFindByField } from '@/lib/pbAdmin';
 import { getPendingIncrement } from '@/lib/incrementMath';
 import { getNYDateString } from '@/lib/timezone';
+import { getAbsenceDeductionForMonth } from '@/lib/core/payroll';
+import { toAbsenceRecord } from '@/lib/core/payrollMappers';
 import { adminListAbsenceRecordsForEmail } from '@/lib/pbAdmin';
-import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
 
@@ -61,9 +62,11 @@ export async function GET(request: Request) {
     if (!recordIsCurrentMonth) {
       try {
         const absenceRows = await adminListAbsenceRecordsForEmail(session.email);
-        liveDeductionsThisMonth = absenceRows
-          .filter((r: PbRow) => typeof r.date === 'string' && r.date.slice(0, 7) === currentMonthKey)
-          .reduce((sum: number, r: PbRow) => sum + (Number(r.deductionAmount) || 0), 0);
+        // Same rule the HR/Admin Payroll screen uses (core/payroll.ts): count the distinct absent days
+        // this month at the CURRENT daily rate, never more than one month's base salary. The old sum
+        // of each row's stored amount ignored the cap and could push the net pay below zero.
+        const monthly = getAbsenceDeductionForMonth(absenceRows.map(toAbsenceRecord), session.email, Number(profile.base_salary) || 0, currentMonthKey);
+        liveDeductionsThisMonth = Math.min(monthly, Number(profile.base_salary) || 0);
       } catch { /* best-effort — worst case the dashboard shows 0 until HR processes */ }
     }
 

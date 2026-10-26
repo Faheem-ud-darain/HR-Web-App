@@ -23,23 +23,34 @@ export function toAbsenceRecord(r: PbRow): AbsenceRecord {
 }
 
 /** hr_payroll row (+ the stored breakdown row, if any) -> PayrollRecord. Only a frozen month carries its stored breakdown. */
-export function toPayrollRecordFromRow(p: PbRow, extra?: PbRow) {
+export function toPayrollRecordFromRow(p: PbRow, extra?: PbRow): PayrollRecord {
+  const baseSalary = Number(p.base_salary) || 0;
+  const bonus = Number(p.bonus) || 0;
+  const deductions = Number(p.deductions) || 0;
+  const incrementAmount = Number(p.increment_amount) || 0;
+  const processed = !!p.processed;
+  // Paid or frozen: the numbers written then are the numbers, and the stored breakdown (if any) says why.
+  const useStored = !!extra && (!!extra.frozen || processed);
+  // A month paid before breakdowns were stored has no "why" row. The part-month pay added to it is
+  // still recoverable: net_pay was saved as base + bonus - deductions + increment + earlier pay.
+  const net = Number(p.net_pay);
+  const impliedEarlier = processed && !useStored && Number.isFinite(net) ? Math.round((net - (baseSalary + bonus - deductions + incrementAmount)) * 100) / 100 : 0;
+  const earlierPay = useStored ? Number(extra!.earlierPay) || 0 : impliedEarlier > 0 ? impliedEarlier : 0;
+  const stored = useStored && Array.isArray(extra!.deductionBreakdown) ? (extra!.deductionBreakdown as { label: string; amount: number }[]) : null;
   return {
     id: p.id, employeeId: p.employee_id, name: p.employee_name, role: p.role, region: p.region,
-    baseSalary: Number(p.base_salary) || 0, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus: Number(p.bonus) || 0,
-    deductions: Number(p.deductions) || 0, incrementAmount: Number(p.increment_amount) || 0, processed: !!p.processed,
+    baseSalary, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus,
+    deductions, incrementAmount, processed,
     month: typeof p.month === 'string' ? p.month : '',
-    // The stored "why" for a frozen month (hr_payroll_breakdowns); live months compute it again.
-    reservedThisMonth: extra?.frozen ? Number(extra.reservedThisMonth) || 0 : 0,
-    deferredThisMonth: extra?.frozen ? Number(extra.deferredThisMonth) || 0 : undefined,
-    earlierPay: extra?.frozen ? Number(extra.earlierPay) || 0 : undefined,
-    earlierPayLabel: extra?.frozen && typeof extra.earlierPayLabel === 'string' ? extra.earlierPayLabel : undefined,
-    deductionBreakdown: extra?.frozen && Array.isArray(extra.deductionBreakdown) ? extra.deductionBreakdown : [],
-    frozen: !!extra?.frozen,
+    reservedThisMonth: useStored ? Number(extra!.reservedThisMonth) || 0 : 0,
+    deferredThisMonth: useStored ? Number(extra!.deferredThisMonth) || 0 : undefined,
+    earlierPay: earlierPay || undefined,
+    earlierPayLabel: useStored && typeof extra!.earlierPayLabel === 'string' ? extra!.earlierPayLabel : undefined,
+    deductionBreakdown: stored ?? (processed && deductions > 0 ? [{ label: 'Deductions at the time of payment', amount: deductions }] : []),
+    frozen: useStored || processed,
     pendingArrears: 0,
-  } as PayrollRecord;
+  };
 }
-
 
 /** PayrollRecord -> the hr_payroll columns written for it (one place, so every writer maps it the same way). */
 export function toPayrollRowFields(record: PbRow, todayISO: string): PbRow {

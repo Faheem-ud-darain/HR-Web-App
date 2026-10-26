@@ -17,9 +17,9 @@ function makeLeave(overrides: Partial<LeaveApplication> = {}): LeaveApplication 
 // one day ahead of the range under test; that workaround is gone.
 describe('getApprovedLeaveDaysInMonth — month-boundary splitting', () => {
   it('splits a leave spanning two calendar months between them (not double-counted, not all in one)', () => {
-    // Aug 30 - Sep 2: 4 days total, 2 in August (30, 31) and 2 in September (1, 2).
+    // Sun Aug 30 - Wed Sep 2: weekends are not charged, so 1 working day in August (Mon 31) and 2 in September (1, 2).
     const leaves = [makeLeave({ duration: '2026-08-30 - 2026-09-02' })];
-    expect(getApprovedLeaveDaysInMonth(leaves, 'Test Employee', 'Urgent', '2026-08')).toBe(2);
+    expect(getApprovedLeaveDaysInMonth(leaves, 'Test Employee', 'Urgent', '2026-08')).toBe(1);
     expect(getApprovedLeaveDaysInMonth(leaves, 'Test Employee', 'Urgent', '2026-09')).toBe(2);
     // No days should leak into an adjacent, uninvolved month.
     expect(getApprovedLeaveDaysInMonth(leaves, 'Test Employee', 'Urgent', '2026-07')).toBe(0);

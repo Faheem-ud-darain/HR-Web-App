@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession, verifyPassword, hashPassword } from '@/lib/serverAuth';
 import type { PbRow } from '@/lib/pbTypes';
+import { classifySelfProfilePatch } from '@/lib/profileSelfFields';
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
@@ -27,7 +28,9 @@ export const runtime = 'edge';
 // onboardingCompleted below. HR/Admin's actual approve/reject decision
 // (setting it to 'approved'/'rejected' + reviewer fields) goes through the
 // separate hr/admin-gated /api/admin/profile route, never this one.
-const KV_EXTRA_KEYS = ['personalPhone', 'companyPhone', 'approvalStatus'] as const;
+// approvalStatus is NOT written from the body: classifySelfProfilePatch only reports that the
+// employee is submitting for review, and the route stores 'pending' itself.
+const KV_EXTRA_KEYS = ['personalPhone', 'companyPhone'] as const;
 const KV_DOC_KEYS = ['cvFileName', 'cvFileData', 'identityDocs', 'passportFileName', 'passportFileData'] as const;
 const REAL_FIELD_MAP: Record<string, string> = {
   bankName: 'bank_name',
@@ -106,6 +109,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
+  // Employees may only change an explicit allow-list of their own fields (see profileSelfFields.ts);
+  // anything HR-controlled (approvalStatus decision, role, salary, ...) is refused here.
+  const checked = classifySelfProfilePatch(body);
+  if (!checked.ok) return NextResponse.json({ error: checked.error, fields: checked.fields }, { status: checked.status });
+  body = checked.fields as PbRow;
+
   try {
     const profile = await adminFindProfileByEmail(session.email);
     if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
@@ -152,6 +161,12 @@ export async function PATCH(request: Request) {
     const extraUpdates: PbRow = {};
     for (const key of KV_EXTRA_KEYS) {
       if (body[key] !== undefined) extraUpdates[key] = body[key];
+    }
+    if (checked.submitsOnboarding) {
+      // Server decides the status: 'pending' (HR/Admin approve or reject elsewhere). An already
+      // approved profile is left approved.
+      const current = await getExtras(profile.id);
+      if (current.approvalStatus !== 'approved') extraUpdates.approvalStatus = 'pending';
     }
     if (Object.keys(extraUpdates).length > 0) {
       await mergeExtras(profile.id, extraUpdates);

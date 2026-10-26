@@ -13,13 +13,15 @@ import type {
   Announcement, Profile, MaintenanceNotice, NotificationCategory,
   NotificationPrefs, Notification, NotificationReadMap,
 } from './types';
-import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField, type ReadScope } from './shared';
+import { pbCreate, pbUpdate, pbDelete, pbList, pbFindByField, pbUpsertByField, pbGetKV, pbGetKVStrict, pbSetKV, pbGetReadMap, pbMarkRead, pbGetIdSetMap, pbMarkIdsInField, type ReadScope } from './shared';
 import { hrActions } from '../hrData';
 import { POLL_MS, POLL_OPTIONS } from './polling';
 import { getSessionEmail, getSessionRole } from '../session';
 import { pbFilter } from '../pbFilter';
 import { every } from '../idle';
 import type { PbRow } from '@/lib/pbTypes';
+import { encodeAnnouncementTarget, decodeAnnouncementTarget } from './announcementTarget';
+import { mergeLegacyPrefs, LEGACY_PREFS_KEY } from './notificationPrefs';
 
 // Shared "does this announcement apply to this person" check — the exact
 // targeting rule employee/page.tsx's dashboard feed widget already used
@@ -108,7 +110,7 @@ function toNotification(n: PbRow): Notification {
 }
 
 function toAnnouncement(a: PbRow): Announcement {
-  return { id: a.id, title: a.title, content: a.content, timestamp: a.timestamp, createdBy: a.created_by, target: a.target || a.target_role || 'all', important: !!a.pinned };
+  return { id: a.id, title: a.title, content: a.content, timestamp: a.timestamp, createdBy: a.created_by, target: decodeAnnouncementTarget(a.target || a.target_role), important: !!a.pinned };
 }
 
 // The signed-in user only ever sees notifications addressed to their email or
@@ -224,6 +226,8 @@ export const notificationActions = {
   // were added) and clicking just won't navigate anywhere — not a crash,
   // just a no-op until the field exists.
   addNotification: async (email: string, role: string, message: string, category?: NotificationCategory, pushTitle?: string, senderEmail?: string, link?: string): Promise<void> => {
+    // The in-app bell always gets every notification: the toggles in Settings only control push, which
+    // the PocketBase hooks suppress from the mirrored legacy prefs (see updateNotificationPrefs).
     await pbCreate('hr_notifications', {
       recipient_email: email, recipient_role: role, message, read: false,
       category: category || 'internal',
@@ -286,10 +290,27 @@ export const notificationActions = {
   // the hook, so someone who's never opened Settings still gets pushes.
   getNotificationPrefs: async (email: string): Promise<NotificationPrefs> => {
     const row = await pbFindByField('hr_notification_prefs', 'email', email.toLowerCase());
-    return { ...DEFAULT_NOTIFICATION_PREFS, ...((row?.prefs as Partial<NotificationPrefs>) || {}) };
+    let saved = row?.prefs as Partial<NotificationPrefs> | undefined;
+    if (!saved) {
+      // No row in the new collection yet: fall back to the legacy map so earlier choices still show.
+      const legacy = await pbGetKV(LEGACY_PREFS_KEY);
+      saved = (legacy as Record<string, Partial<NotificationPrefs>> | null)?.[email.toLowerCase()];
+    }
+    return { ...DEFAULT_NOTIFICATION_PREFS, ...(saved || {}) };
   },
   updateNotificationPrefs: async (email: string, prefs: NotificationPrefs): Promise<void> => {
     await pbUpsertByField('hr_notification_prefs', 'email', email.toLowerCase(), { prefs });
+    // Also mirror to the legacy KV map (hr_delcargo_store / hr_notification_prefs_v1) that the
+    // PocketBase hooks on the droplet still read, so opt-outs stop pushes too. Best effort;
+    // see notificationPrefs.ts for which hook files should eventually read the new collection.
+    try {
+      // A strict read: if the shared map cannot be read, skip the mirror rather than overwrite everyone's
+      // opt-outs with a map that holds only this person.
+      const legacy = await pbGetKVStrict(LEGACY_PREFS_KEY);
+      await pbSetKV(LEGACY_PREFS_KEY, mergeLegacyPrefs(legacy, email, prefs));
+    } catch (err) {
+      console.error('[notifications] could not mirror prefs to legacy key:', err);
+    }
   },
 
   // ── Announcements ─────────────────────────────────────────────────────
@@ -299,7 +320,9 @@ export const notificationActions = {
   // was always hardcoded to `false`.
   addAnnouncement: (title: string, content: string, target: Announcement['target'], createdBy: string, important: boolean = false) =>
     pbCreate('hr_announcements', {
-      title, content, created_by: createdBy, target: typeof target === 'string' ? target : 'all',
+      // A warehouse list is stored as "wh:<ids>" (see announcementTarget.ts); it used to be collapsed to 'all'.
+      // target_role keeps the broad value for anything still reading the old column.
+      title, content, created_by: createdBy, target: encodeAnnouncementTarget(target),
       target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
       timestamp: formatTimeNY(new Date()) + ' ' + formatDateNY(new Date()),
     }),

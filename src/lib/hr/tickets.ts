@@ -20,6 +20,7 @@ import { every } from '../idle';
 import { touchActivity } from './activity';
 import { ticketEventScopes } from '../core/activity';
 import type { PbRow } from '@/lib/pbTypes';
+import { TICKET_LIGHT_FIELDS, ticketsNeedingReplies, appendReplyWithRetry, type ReplyCacheEntry } from './ticketSync';
 
 // shows a "Live" badge for any ticket whose presence hasn't gone stale.
 // Backed by the dedicated hr_ticket_presence collection (one row per
@@ -101,6 +102,30 @@ async function deleteTypingRow(scope: 'chat' | 'ticket', scopeId: string, email:
   } catch { /* already gone — fine */ }
 }
 
+// Replies (which can hold base64 attachments) per ticket id, keyed by the `updated` stamp they were
+// fetched at, so the 30-second poll only re-downloads a ticket's replies when that ticket changed.
+const replyCache = new Map<string, ReplyCacheEntry>();
+
+// Same as toTicket for the list, but replies come from replyCache when the ticket is unchanged.
+async function loadTicketsLight(limit: number, filter: string | undefined): Promise<Ticket[]> {
+  const baseOpts = { sort: '-created', requestKey: null as null, ...(filter ? { filter } : {}) };
+  // Nothing cached yet (first load): one full request, exactly as before.
+  if (replyCache.size === 0) {
+    const res = await pb.collection('hr_tickets').getList(1, limit, baseOpts);
+    for (const t of res.items) replyCache.set(t.id, { updated: t.updated, replies: t.replies || [] });
+    return res.items.map(toTicket);
+  }
+  const res = await pb.collection('hr_tickets').getList(1, limit, { ...baseOpts, fields: TICKET_LIGHT_FIELDS });
+  const stale = ticketsNeedingReplies(res.items as { id: string; updated?: string }[], replyCache);
+  await Promise.all(stale.map(async id => {
+    try {
+      const full = await pb.collection('hr_tickets').getOne(id, { requestKey: null, fields: 'id,updated,replies' });
+      replyCache.set(id, { updated: full.updated, replies: full.replies || [] });
+    } catch { /* keep any older cached copy; the next poll retries */ }
+  }));
+  return res.items.map(t => toTicket({ ...t, replies: replyCache.get(t.id)?.replies || [] }));
+}
+
 function toTicket(t: PbRow): Ticket {
   return { id: t.id, employeeName: t.employee_name, employeeEmail: t.employee_email, title: t.subject, description: t.description, department: t.department || 'hr', status: t.status, createdAt: t.created, replies: t.replies || [] };
 }
@@ -126,12 +151,7 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed', optio
             ? `(${pbFilter('employee_email ~ {:email}', { email })} || department = "technical")`
             : pbFilter('employee_email ~ {:email}', { email }));
         }
-        const res = await pb.collection('hr_tickets').getList(1, limit, {
-          sort: '-created',
-          requestKey: null,
-          ...(parts.length ? { filter: parts.join(' && ') } : {}),
-        });
-        const tickets = res.items.map(toTicket);
+        const tickets = await loadTicketsLight(limit, parts.length ? parts.join(' && ') : undefined);
         // `~` is a "contains" match — drop another person's address that merely contains this one.
         return staff ? tickets : tickets.filter(t => t.employeeEmail.toLowerCase() === email || (technical && t.department === 'technical'));
       } catch (err) {
@@ -180,8 +200,17 @@ export const ticketActions = {
     return toTicket(created);
   },
   addTicketReply: async (ticket: Ticket, reply: Omit<TicketReply, 'id' | 'timestamp'>): Promise<void> => {
-    const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}`, timestamp: new Date().toISOString() };
-    await pbUpdate('hr_tickets', ticket.id, { replies: [...ticket.replies, newReply] });
+    const newReply: TicketReply = { ...reply, id: `rep_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, timestamp: new Date().toISOString() };
+    // Append to the replies as stored NOW (not the possibly stale copy this screen loaded), and start
+    // over from the newer version if the ticket changed in between, so concurrent replies are not lost.
+    await appendReplyWithRetry<TicketReply>({
+      read: async () => {
+        const fresh = await pb.collection('hr_tickets').getOne(ticket.id, { requestKey: null, fields: 'id,updated,replies' });
+        return { updated: fresh.updated, replies: Array.isArray(fresh.replies) ? fresh.replies : [] };
+      },
+      readUpdated: async () => (await pb.collection('hr_tickets').getOne(ticket.id, { requestKey: null, fields: 'id,updated' })).updated,
+      write: async replies => { await pbUpdate('hr_tickets', ticket.id, { replies }); },
+    }, newReply);
     // Newest event for this ticket's scopes: the owner's own dot, the staff dot, the tech queue.
     void touchActivity(ticketEventScopes(ticket), reply.senderEmail || '');
     if (reply.senderRole === 'hr' || reply.senderRole === 'admin' || (ticket.department === 'technical' && reply.senderRole !== 'employee')) {

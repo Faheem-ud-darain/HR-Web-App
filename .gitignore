@@ -105,3 +105,14 @@ __pycache__/
 tracker-agent/dist/
 tracker-agent/build/
 tracker-agent/*.spec
+
+# Local-only: browser-test captures and QA reports (may hold employee data and security findings)
+.playwright-mcp/
+reports/
+.ruff_cache/
+
+# Editor and scratch files that do not belong in the repo
+.obsidian/
+logcat*.txt
+*.diff
+scratch.mjs

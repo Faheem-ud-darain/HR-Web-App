@@ -45,3 +45,27 @@ describe('decideIncrement', () => {
     expect(decideIncrement(emp({ salaryStartDate: 'soon' }), '2026-08').status).toBe('none');
   });
 });
+
+import { toPayrollRecordFromRow } from './payrollMappers';
+
+describe('reading a paid row that has no stored breakdown', () => {
+  const row = { id: 'r', employee_id: 'e', employee_name: 'N', role: 'A', region: 'Pakistan', month: '2026-09', base_salary: 40000, bonus: 0, deductions: 1000, increment_amount: 0, net_pay: 54000, processed: true };
+  it('is final, and recovers the part-month pay that was added to it', () => {
+    const r = toPayrollRecordFromRow(row);
+    expect(r.frozen).toBe(true);
+    expect(r.earlierPay).toBe(15000);
+    expect(r.baseSalary + r.bonus - r.deductions + r.incrementAmount + (r.earlierPay || 0)).toBe(54000);
+    expect(r.deductionBreakdown).toEqual([{ label: 'Deductions at the time of payment', amount: 1000 }]);
+  });
+  it('an unpaid row stays live', () => {
+    expect(toPayrollRecordFromRow({ ...row, processed: false }).frozen).toBe(false);
+  });
+});
+
+describe('anniversary on the 1st reads as that calendar date in every time zone', () => {
+  const first = { salaryStartDate: '2025-03-01', region: 'Pakistan', baseSalary: 50000 };
+  it('nothing in March, raise from April', () => {
+    expect(decideIncrement(first, '2026-03').status).toBe('none');
+    expect(decideIncrement(first, '2026-04')).toMatchObject({ status: 'apply', anniversaryMonth: '2026-03' });
+  });
+});

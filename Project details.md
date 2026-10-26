@@ -1,143 +1,95 @@
-# HR Operations System: Architecture & Execution Plan
+# DelCargo HR Platform — architecture
 
-## 1. System Overview
-A comprehensive blueprint for building a modern HR Operations system tailored for 100+ employees. The system is architected to launch completely free on Vercel as a web application, with a frictionless transition path to native mobile applications (iOS/Android) using Ionic and Capacitor.
+This replaces the original blueprint, which planned Supabase (PostgreSQL) and Vercel. The product was
+built on PocketBase and Cloudflare instead; this page describes what is actually running. For setup,
+commands and environment variables see `README.md`.
 
-## 2. Technology Stack & Scalability
-To support both a free web deployment and a future mobile application, the architecture relies on decoupling the frontend from a backend-as-a-service.
+## 1. Overview
 
-* **Frontend:** React (Next.js). Configured for Static Site Generation (SSG) using `output: 'export'`. This is crucial because Capacitor wraps static HTML/JS/CSS, meaning Server-Side Rendering (SSR) cannot be used if you want a smooth mobile transition.
-* **Styling:** Tailwind CSS. Allows for rapid development of a minimal, clean interface (e.g., using glassmorphism and modern UI elements).
-* **Backend (BaaS):** Supabase (PostgreSQL). Provides authentication, a robust relational database, file storage, and Row Level Security (RLS) on a generous free tier. It connects directly via client-side API calls.
-* **Mobile Wrapper (Future):** Capacitor. When ready for mobile, the static Next.js build is dropped into Capacitor to bridge the web code to native iOS/Android device APIs.
+One app for three portals — **Employee**, **HR** and **Admin**. A team lead is an employee with the `team_lead` role or flag.
+It covers shifts and screen tracking, leave, absences, payroll, tickets, tasks, chat, announcements,
+onboarding and careers, on the web and as iOS/Android apps.
 
-## 3. Feasibility & Free Tier Strategy
-Running this system for 100+ employees for free is highly feasible:
-* **Vercel (Hosting):** Offers 100GB of bandwidth per month. 100 daily active internal users will consume minimal bandwidth, especially with a Single Page Application (SPA) architecture where only data (not UI) is fetched on navigation.
-* **Supabase (Database/Auth):** The free tier includes 500MB of database space and 50,000 Monthly Active Users (MAU). 500MB of text data (leaves, salaries, profiles) will easily last for years.
-* **Storage:** Supabase offers 1GB for file storage. To stay under this limit, ensure employee profile pictures and onboarding documents are compressed locally on the client before uploading.
+## 2. Stack and where it runs
 
-## 4. Core Features Implementation
+| Layer | Technology | Hosting |
+|---|---|---|
+| Web app | Next.js 16 (App Router), React 19, Tailwind 4, React Query | Cloudflare Pages, project `hr-web-app`, built from `main` |
+| API | Next.js route handlers, edge runtime (`src/app/api/**`) | Same Pages project |
+| Database + file storage | PocketBase 0.22 | DigitalOcean droplet in New York behind Caddy, `pb.delcargo.us` — live production data |
+| Server hooks | PocketBase JS hooks (`pb_hooks/`): push notifications, stale-shift closing, retention clean-up | Droplet, deployed by `.github/workflows/deploy-pb-hooks.yml` |
+| Scheduled jobs | Cloudflare Worker `delcargo-cron` calling `/api/cron/*` | Cloudflare Workers |
+| Mobile | Capacitor (static export of the web app) | App Store / Google Play builds from `ios/`, `android/` |
+| Desktop tracker | Python app (`tracker-agent/`) | Installed on employees' computers, built by GitHub Actions |
+| Chromebook tracker | Chrome extension, Manifest V3 (`chrome-extension/`) | Installed on Chromebooks |
+| Email | Resend (password-reset codes) | — |
 
-### 1. Role-Based Access Control (RBAC)
-Managed entirely via Supabase Row Level Security (RLS) in the PostgreSQL database.
-* **Admin/CEO/Owner:** Unrestricted access (`SELECT`, `UPDATE`, `INSERT`, `DELETE`) across all tables.
-* **HR:** Full access to onboarding, team assignments, and leave approvals. Can read all salary data and input payroll records.
-* **Employee:** Can only access their own profile, view their specific salary history, and submit leave requests mapped to their user ID.
+Decisions that are settled: the database stays on the New York droplet (it is not moved to, or proxied
+through, Cloudflare); Cloudflare is used for the Pages app and for cron Workers only.
 
-### 2. Employee Onboarding
-* HR inputs basic details to generate an invite link or initial credentials.
-* Employees log in, complete their profile, and upload necessary documents to Supabase Storage.
+## 3. How the code is organised
 
-### 3. Salary Management (Internal Ledger)
-* **Salaries Table:** Tracks base pay and yearly increment percentages.
-* **Payroll Records Table:** Generated monthly. HR logs deductions (e.g., unpaid leaves) and bonuses. The system calculates the net payable amount purely for HR viewing (no banking API integration required).
+- `src/lib/core/` — plain TypeScript business rules with unit tests: payroll (`payroll`,
+  `payrollView`, `payrollCorrections`, `payrollMonthly`), leave-day maths, absences, timesheets,
+  tracking settings, screenshot retention. The screens, the API routes and the cron jobs call the same
+  functions, so a number is calculated one way everywhere.
+- `src/lib/hr/` — data hooks and actions per area (profiles, leaves, payroll, tickets, tracking, …).
+- `src/lib/pbAdmin.ts` — server-side PocketBase access with an admin login; API routes use it so the
+  browser never needs more than its own session.
+- `src/app/(dashboard)/employee|hr|admin/` — the three role portals; `src/components/` — shared UI.
+- Sessions are signed tokens checked in `src/lib/serverAuth.ts`; each API route checks the caller's role.
 
-### 4. Leave Workflows (PTO & Urgent)
-* Implemented as a state machine: `Pending` -> `HR_Approved` -> `CEO_Approved` (or `Rejected`).
-* **UX Recommendation:** Use a Kanban-style drag-and-drop board on the HR/Admin dashboards to easily move leave requests between status columns.
+## 4. Roles
 
-### 5. Dashboards
-* **Employee Dashboard:** Analytics on personal leave balances, current salary/deductions, and a portal to apply for time off.
-* **HR Dashboard:** Overviews of pending leave requests, onboarding statuses, payroll processing checklists, and team management modules.
-* **Admin/CEO Dashboard:** High-level metrics on total payroll costs, company-wide leave trends, and final approval controls.
+| Role | Can |
+|---|---|
+| Employee | Their own profile, shifts, leave, tickets, tasks, chat, salary page |
+| HR | Everything an employee can, plus onboarding, leave review, absences, tracking, payroll review and corrections |
+| Admin | Everything HR can, plus paying salaries, settling corrections, and admin-only settings |
 
-### 6. Team Management
-* Uses a junction table (`team_members`) allowing for many-to-many relationships. HR can create a team (e.g., "Engineering") and assign multiple employees, or view an employee and assign them to multiple teams.
+Only Admin pays salaries; HR prepares and reviews them.
 
----
+## 5. Features in brief
 
-## 5. Complete Database Schema (PostgreSQL)
+- **Shifts and tracking** — employees clock in; Pakistan staff run the desktop agent or the Chrome
+  extension (screenshots and heartbeats at the interval HR sets); USA staff use a geofence that only
+  measures time. A shift with no heartbeat is closed automatically.
+- **Leave** — `pending → hr_approved → approved` (or `rejected`); types PTO, Sick Leave, Urgent, Normal,
+  Parental Leave. Only Urgent and Normal leave are deducted, on working days only.
+- **Absences** — detected from missing or short shifts (under 4 hours, no clock-in, long inactivity),
+  reviewed by HR.
+- **Payroll** — see section 6.
+- **Tickets, tasks, chat, announcements** — with push notifications; employees choose which categories
+  they receive.
+- **Careers** — public job list and application form; applications go to HR.
+- **Screenshot clean-up** — screenshots are kept for their own month plus until the 10th of the next
+  month; a warning goes out on the 7th.
 
-Execute this in your Supabase SQL Editor to establish the foundation:
+## 6. Payroll rules
 
-```sql
--- 1. Custom Enum Types
-CREATE TYPE user_role AS ENUM ('employee', 'hr', 'admin');
-CREATE TYPE leave_status AS ENUM ('pending', 'hr_approved', 'approved', 'rejected');
-CREATE TYPE leave_type AS ENUM ('pto', 'urgent', 'sick');
+- Salary for month M is paid at the start of M+1, by Admin. Pakistan (PKR) and USA (USD) staff are never
+  mixed. Bank details come from the employee's profile.
+- Deductions: urgent leave (2 days' pay per day), normal leave (1 day), absences (2 days' pay per day),
+  partial shifts (proportional shortfall), unfinished onboarding. A month's deductions never exceed its
+  base salary.
+- New joiners: joined on the 1st–5th → the joining month is held back in full and the next month is
+  normal; joined later → the part-month pay is set aside and paid with the salary two months later, and
+  the first full month is held back. Held amounts are paid at resignation or termination.
+- A month is written down ("frozen") at midnight New York time on the 1st and stays viewable for 10 days.
+  A paid month is final: anything found afterwards is recorded as a visible correction that keeps the
+  original paid amount; Admin settles the difference separately, and the employee is notified.
+- Anniversary raises are automatic (10,000 PKR / 100 USD per year), start the month after the
+  anniversary month, and are never back-filled.
+- Plan and reasoning: `plans/028-simplify-payroll-tab.md`.
 
--- 2. Profiles Table (Extends Supabase Auth)
-CREATE TABLE profiles (
-    id UUID REFERENCES auth.users(id) PRIMARY KEY,
-    full_name TEXT NOT NULL,
-    role user_role DEFAULT 'employee',
-    joined_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    onboarding_completed BOOLEAN DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+## 7. Data
 
--- 3. Teams Table
-CREATE TABLE teams (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name TEXT NOT NULL UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+The collections are defined in the live PocketBase admin; `pb_schema.json` and `pb_schema_recent.json` are partial exports only (collections such as `hr_profiles`, `hr_payroll`, `hr_leaves`,
+`hr_timesheets`, `hr_absence_records`, `hr_screenshots`, `hr_notifications`, `hr_tickets`,
+`hr_payroll_breakdowns`, `hr_system_state`). Several collections hold a small `data` JSON column keyed
+by a unique field. Changes to the live schema are made deliberately through
+`/api/admin/schema-migration` actions (dry run first) — never by editing production by hand.
 
--- 4. Team Assignments (Many-to-Many)
-CREATE TABLE team_members (
-    team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-    PRIMARY KEY (team_id, user_id)
-);
+## 8. Known gaps
 
--- 5. Salary Management (Base tracking)
-CREATE TABLE salaries (
-    user_id UUID REFERENCES profiles(id) PRIMARY KEY,
-    base_salary DECIMAL(10, 2) NOT NULL,
-    yearly_increment_percentage DECIMAL(5, 2) DEFAULT 0.00,
-    last_increment_date DATE,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 6. Monthly Payroll Records (For HR deductions/additions)
-CREATE TABLE payroll_records (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES profiles(id),
-    month_year DATE NOT NULL, -- e.g., 2026-07-01
-    base_amount DECIMAL(10, 2) NOT NULL,
-    deductions DECIMAL(10, 2) DEFAULT 0.00,
-    bonuses DECIMAL(10, 2) DEFAULT 0.00,
-    net_payable DECIMAL(10, 2) GENERATED ALWAYS AS (base_amount + bonuses - deductions) STORED,
-    processed BOOLEAN DEFAULT false
-);
-
--- 7. Leave Applications
-CREATE TABLE leaves (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES profiles(id),
-    type leave_type NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    reason TEXT,
-    status leave_status DEFAULT 'pending',
-    hr_reviewer_id UUID REFERENCES profiles(id),
-    admin_reviewer_id UUID REFERENCES profiles(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 8. Enable Row Level Security (Examples)
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE leaves ENABLE ROW LEVEL SECURITY;
-
--- Employees can read their own profile
-CREATE POLICY "Users can view own profile" 
-ON profiles FOR SELECT 
-USING (auth.uid() = id);
-
--- HR and Admins can view all profiles
-CREATE POLICY "HR and Admin can view all profiles" 
-ON profiles FOR SELECT 
-USING (
-    EXISTS (
-        SELECT 1 FROM profiles 
-        WHERE id = auth.uid() AND role IN ('hr', 'admin')
-    )
-);
-
--- Employees can insert their own leave requests
-CREATE POLICY "Employees can request leaves" 
-ON leaves FOR INSERT 
-WITH CHECK (auth.uid() = user_id);
-```
+Open security and quality items from the latest review are kept in the owner's local QA reports (not in git, because they contain security findings and personal data).
