@@ -198,6 +198,18 @@ export async function adminUploadProfilePicture(profileId: string, dataUrl: stri
   }
 }
 
+/** Every row of a collection matching `query` (extra URL parameters such as `sort=` or `fields=`), paged, read-only. */
+export async function adminListAll(collection: string, query = '', maxPages = 10): Promise<PbRow[]> {
+  const out: PbRow[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const list = await pbAdminFetch(`/api/collections/${collection}/records?perPage=500&page=${page}${query ? `&${query}` : ''}`);
+    const items: PbRow[] = list?.items || [];
+    out.push(...items);
+    if (items.length < 500) break;
+  }
+  return out;
+}
+
 export async function adminListAllProfiles(): Promise<PbRow[]> {
   // hr_profiles is small enough (employee headcount, not a big-data table)
   // that a single bounded page comfortably covers the whole company — same

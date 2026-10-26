@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { PbRow } from '@/lib/pbTypes';
-import { pbFilter } from '@/lib/pbFilter';
 import { getNYDateString } from '@/lib/timezone';
 import { pbAdminFetch, adminFindByField, adminUpsertByField, adminAddNotification, rememberAdminUpsertId } from '@/lib/pbAdmin';
-import { mapProfileRecord } from '@/lib/core/profiles';
-import { toLeave, toAbsenceRecord, toPayrollRecordFromRow, toPayrollRowFields } from '@/lib/core/payrollMappers';
-import { toTimesheet } from '@/lib/core/timesheets';
+import { toPayrollRowFields } from '@/lib/core/payrollMappers';
+import { loadPayrollInputs, breakdownKey } from '@/lib/server/payrollInputs';
 import { computePayrollView } from '@/lib/core/payroll';
 import { monthLabel } from '@/lib/core/payrollView';
 import { decideIncrement, monthToFreeze } from '@/lib/core/payrollMonthly';
-import type { Profile, PayrollRecord } from '@/lib/hr/types';
 
 export const runtime = 'edge';
 
@@ -40,19 +37,6 @@ function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function listAll(collection: string, query: string): Promise<PbRow[]> {
-  const out: PbRow[] = [];
-  for (let page = 1; page <= 10; page++) {
-    const list = await pbAdminFetch(`/api/collections/${collection}/records?perPage=500&page=${page}&${query}`);
-    const items: PbRow[] = list?.items || [];
-    out.push(...items);
-    if (items.length < 500) break;
-  }
-  return out;
-}
-
-const breakdownKey = (employeeId: string, month: string) => `${employeeId}_${month}`;
-
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET || '';
   if (secret.length < 24) return NextResponse.json({ error: 'The cron secret is not configured.' }, { status: 503 });
@@ -75,25 +59,11 @@ export async function POST(request: Request) {
     if (mode === 'increments' && incrementsDone) return NextResponse.json({ status: 'already_done', month: payMonth });
 
     // ── read everything the pay maths needs (read-only) ──
-    const since = `${freezeMonth}-01 00:00:00.000`;
-    const absenceSince = getNYDateString(new Date(now.getTime() - 120 * 24 * 3600 * 1000));
-    const [profileRows, extraRows, payrollRows, breakdownRows, leaveRows, timesheetRows, absenceRows] = await Promise.all([
-      listAll('hr_profiles', 'sort=full_name'),
-      listAll('hr_profile_extras', 'fields=id,profile_id,data'),
-      listAll('hr_payroll', 'sort=-created'),
-      listAll('hr_payroll_breakdowns', 'fields=id,breakdown_key,data'),
-      listAll('hr_leaves', 'fields=id,employee_name,type,duration,reason,status,start_date,end_date'),
-      listAll('hr_timesheets', `fields=id,employee_id,date,clock_in,clock_out,duration,status&filter=${encodeURIComponent(pbFilter('clock_out = "" || date >= {:since}', { since }))}`),
-      listAll('hr_absence_records', `filter=${encodeURIComponent(pbFilter('deleted = false && date >= {:since}', { since: absenceSince }))}`),
-    ]);
-
-    const extrasById = new Map<string, PbRow>(extraRows.map(r => [String(r.profile_id), r]));
-    const profiles: Profile[] = profileRows.map(p => mapProfileRecord(p, (extrasById.get(p.id)?.data || {}) as Partial<Profile>));
+    const { profiles, payrollRows, breakdownRows, payroll, leaves, timesheets, absences } = await loadPayrollInputs(now, freezeMonth);
     const breakdownByKey = new Map<string, PbRow>(breakdownRows.map(b => [String(b.breakdown_key), b]));
-    const payroll: PayrollRecord[] = payrollRows.map(r => toPayrollRecordFromRow(r, breakdownByKey.get(breakdownKey(r.employee_id, r.month || ''))?.data));
 
     // ── what the freeze would write ──
-    const view = computePayrollView(profiles, payroll, leaveRows.map(toLeave), timesheetRows.map(toTimesheet), absenceRows.map(toAbsenceRecord), now, true);
+    const view = computePayrollView(profiles, payroll, leaves, timesheets, absences, now, true);
     const toFreeze = view.filter(r => r.month === freezeMonth && !r.processed && !r.frozen);
 
     // ── which raises are due ──

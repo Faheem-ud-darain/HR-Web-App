@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { OnboardingFlow } from '@/components/layout/OnboardingFlow';
 import { ConsentOverlay } from '@/components/layout/ConsentOverlay';
+import { FloatingAssistant } from '@/components/assistant/FloatingAssistant';
 
 // Wraps each page's content for the tab-switch fade+rise animation. Split
 // out into its own component (rather than inlining a `page-enter` class
@@ -419,6 +420,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           employee/team_lead, since HR/Admin also rely on push for tickets
           and leave requests. */}
       <PushPermissionPrompt />
+
+      {/* The AI assistant (plan 030): HR and Admin only. */}
+      {(role === 'hr' || role === 'admin') && <FloatingAssistant role={role} />}
 
       {/* Consent Popup Overlay Gate */}
       {showConsent && <ConsentOverlay profile={profile} onAccept={handleConsentAccept} />}
