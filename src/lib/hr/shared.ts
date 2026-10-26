@@ -189,6 +189,19 @@ export async function pbGetKV(key: string): Promise<PbJson | null> {
   }
 }
 
+// Like pbGetKV, but only a genuinely missing row gives null: any other failure throws, so a caller that
+// is about to write the whole value back never builds it from a failed read.
+export async function pbGetKVStrict(key: string): Promise<PbJson | null> {
+  try {
+    const rec = await pb.collection('hr_delcargo_store').getFirstListItem(pbFilter('key = {:key}', { key }), { requestKey: null });
+    kvIdCache.set(key, rec.id);
+    return rec.value;
+  } catch (err) {
+    if ((err as { status?: number })?.status === 404) return null;
+    throw err;
+  }
+}
+
 export async function pbSetKV(key: string, value: PbJson): Promise<void> {
   const cachedId = kvIdCache.get(key);
   if (cachedId) {

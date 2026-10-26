@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminHasAppliedForPosition, adminCreateCareerApplication } from '@/lib/pbAdmin';
+import { adminHasAppliedForPosition, adminCreateCareerApplication, adminAddNotification } from '@/lib/pbAdmin';
 import { rateLimitByIp } from '@/lib/rateLimit';
 import { cleanText, cleanEmail } from '@/lib/sanitize';
 import type { PbRow } from '@/lib/pbTypes';
@@ -50,6 +50,17 @@ export async function POST(request: Request) {
     }
 
     await adminCreateCareerApplication({ positionId, positionTitle, applicantName, applicantEmail, coverLetter });
+
+    // The Applications review panel is available to HR and Admin alike, so tell both. Best effort:
+    // the application is already saved, so a failed notification must never fail the response (the
+    // applicant would otherwise see an error and a retry would hit the 409 duplicate guard).
+    const note = `New application for "${positionTitle}" submitted by ${applicantName} (${applicantEmail})`;
+    await Promise.allSettled([
+      adminAddNotification('all', 'hr', note),
+      adminAddNotification('all', 'admin', note),
+    ]).then(results => results.forEach(r => {
+      if (r.status === 'rejected') console.error('[careers/apply] notification failed:', r.reason);
+    }));
 
     return NextResponse.json({ ok: true });
   } catch (err) {

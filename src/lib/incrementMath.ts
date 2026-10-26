@@ -11,6 +11,26 @@
 // interface, so callers server-side (which only fetch the handful of
 // fields actually needed, not a whole Profile) don't need to fake up
 // dozens of unrelated fields just to satisfy the type checker.
+import { getNYDateString } from './timezone';
+
+// A start date is a calendar date ("2025-07-13"). Reading it with `new Date(...)` makes it midnight UTC,
+// which is the evening before in New York and shifts the anniversary a day (or a month, on the 1st) for
+// anyone using the app in the US. So read its year/month/day exactly as written.
+interface Ymd { y: number; m: number; d: number }
+function parseYmd(source: string | undefined): Ymd | null {
+  if (!source) return null;
+  const p = /^(\d{4})-(\d{2})-(\d{2})/.exec(source);
+  if (p) return { y: Number(p[1]), m: Number(p[2]), d: Number(p[3]) };
+  const dt = new Date(source);
+  if (isNaN(dt.getTime())) return null;
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+function todayYmd(): Ymd {
+  const [y, m, d] = getNYDateString(new Date()).split('-').map(Number);
+  return { y, m, d };
+}
+const ymdNum = (v: Ymd) => v.y * 10000 + v.m * 100 + v.d;
+
 export interface IncrementInput {
   salaryStartDate?: string;
   joinedDate?: string;
@@ -31,20 +51,16 @@ export interface IncrementEvent {
 // calendar year of the last event actually applied, so "events processed" =
 // lastIncrementProcessedYear - startYear (0 if never processed).
 export function getMissedIncrementEvents(profile: IncrementInput): number {
-  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
-  if (!anniversarySource) return 0;
-  const anniversaryDate = new Date(anniversarySource);
-  if (isNaN(anniversaryDate.getTime())) return 0;
-  const now = new Date();
-  if (anniversaryDate > now) return 0;
+  const start = parseYmd(profile.salaryStartDate || profile.joinedDate);
+  if (!start) return 0;
+  const now = todayYmd();
+  if (ymdNum(start) > ymdNum(now)) return 0;
 
-  const startYear = anniversaryDate.getFullYear();
-  let eventsElapsed = now.getFullYear() - startYear;
-  const thisYearAnniversary = new Date(now.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-  if (thisYearAnniversary > now) eventsElapsed -= 1; // this year's anniversary hasn't happened yet
+  let eventsElapsed = now.y - start.y;
+  if (now.m * 100 + now.d < start.m * 100 + start.d) eventsElapsed -= 1; // this year's anniversary hasn't happened yet
   if (eventsElapsed < 1) return 0;
 
-  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - startYear) : 0;
+  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - start.y) : 0;
   return Math.max(0, eventsElapsed - eventsProcessed);
 }
 
@@ -77,29 +93,24 @@ export function getPendingIncrement(profile: IncrementInput): number {
 // BEFORE targetMonthKey's month — comparing months, not exact dates, since
 // the deferral is granular to a full calendar month either way.
 export function getMissedIncrementEventsForPayrollMonth(profile: IncrementInput, targetMonthKey: string): number {
-  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
-  if (!anniversarySource) return 0;
-  const anniversaryDate = new Date(anniversarySource);
-  if (isNaN(anniversaryDate.getTime())) return 0;
+  const start = parseYmd(profile.salaryStartDate || profile.joinedDate);
+  if (!start) return 0;
 
   const [targetYear, targetMonthNum] = (targetMonthKey || '').split('-').map(Number);
   if (!targetYear || !targetMonthNum) return 0;
 
-  const startYear = anniversaryDate.getFullYear();
-  const annivMonthIndex = anniversaryDate.getMonth(); // 0-indexed
-
-  let eventsElapsed = targetYear - startYear;
+  let eventsElapsed = targetYear - start.y;
   if (eventsElapsed >= 1) {
     // This year's (i.e. the most recent candidate) anniversary event's own
     // calendar month, as a "YYYY-MM" key — if it isn't strictly before
     // targetMonthKey yet, that event doesn't count for this payroll month.
-    const candidateEventYear = startYear + eventsElapsed;
-    const candidateEventMonthKey = `${candidateEventYear}-${String(annivMonthIndex + 1).padStart(2, '0')}`;
+    const candidateEventYear = start.y + eventsElapsed;
+    const candidateEventMonthKey = `${candidateEventYear}-${String(start.m).padStart(2, '0')}`;
     if (candidateEventMonthKey >= targetMonthKey) eventsElapsed -= 1;
   }
   if (eventsElapsed < 1) return 0;
 
-  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - startYear) : 0;
+  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - start.y) : 0;
   return Math.max(0, eventsElapsed - eventsProcessed);
 }
 
@@ -121,26 +132,22 @@ export function getPendingIncrementForPayrollMonth(profile: IncrementInput, targ
 // never manually edited outside the increment system in between. Treat
 // this as a best-effort breakdown, not an audited ledger.
 export function getIncrementHistory(profile: IncrementInput): { originalBaseSalary: number; events: IncrementEvent[] } {
-  const anniversarySource = profile.salaryStartDate || profile.joinedDate;
   const perEvent = profile.region === 'USA' ? 100 : 10000;
-  if (!anniversarySource) return { originalBaseSalary: profile.baseSalary, events: [] };
-  const anniversaryDate = new Date(anniversarySource);
-  if (isNaN(anniversaryDate.getTime())) return { originalBaseSalary: profile.baseSalary, events: [] };
+  const start = parseYmd(profile.salaryStartDate || profile.joinedDate);
+  if (!start) return { originalBaseSalary: profile.baseSalary, events: [] };
 
-  const now = new Date();
-  const startYear = anniversaryDate.getFullYear();
-  let eventsElapsedToToday = now.getFullYear() - startYear;
-  const thisYearAnniversary = new Date(now.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-  if (thisYearAnniversary > now) eventsElapsedToToday -= 1;
-  if (anniversaryDate > now) eventsElapsedToToday = 0;
+  const now = todayYmd();
+  let eventsElapsedToToday = now.y - start.y;
+  if (now.m * 100 + now.d < start.m * 100 + start.d) eventsElapsedToToday -= 1;
+  if (ymdNum(start) > ymdNum(now)) eventsElapsedToToday = 0;
 
-  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - startYear) : 0;
+  const eventsProcessed = profile.lastIncrementProcessedYear ? Math.max(0, profile.lastIncrementProcessedYear - start.y) : 0;
   const totalEvents = Math.max(eventsElapsedToToday, eventsProcessed);
   const originalBaseSalary = profile.baseSalary - eventsProcessed * perEvent;
 
   const events: IncrementEvent[] = [];
   for (let n = 1; n <= totalEvents; n++) {
-    events.push({ year: startYear + n, amount: perEvent, applied: n <= eventsProcessed });
+    events.push({ year: start.y + n, amount: perEvent, applied: n <= eventsProcessed });
   }
   return { originalBaseSalary, events };
 }

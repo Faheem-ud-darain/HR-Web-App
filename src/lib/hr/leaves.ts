@@ -13,6 +13,9 @@ import { daysAgoNYDateString } from '../timezone';
 import { toLeave } from '../core/payrollMappers';
 import { parseLeaveDateStrings } from '../core/leaves';
 import type { PbRow } from '@/lib/pbTypes';
+import { sameEmployeeName } from './employeeName';
+
+export { sameEmployeeName, normalizeEmployeeName } from './employeeName';
 
 // Columns the app reads. start_date / end_date are "YYYY-MM-DD" calendar days
 // (older rows get them via the backfillLeaveDates migration; until then they
@@ -40,7 +43,11 @@ export const DEFAULT_LEAVE_WINDOW_DAYS = 365;
 export async function fetchLeaves(q: LeaveQuery = {}): Promise<LeaveApplication[]> {
   const base = { requestKey: null, batch: 200, fields: LEAVE_FIELDS, sort: '-created' } as const;
   if (q.employeeName) {
-    return (await pbList('hr_leaves', { filter: pbFilter('employee_name = {:name}', { name: q.employeeName }), fields: LEAVE_FIELDS })).map(toLeave);
+    // `~` is a case-insensitive "contains" match, so differently-cased or space-padded names still come
+    // back; the exact comparison below drops longer names that merely contain this one.
+    const wanted = q.employeeName.trim();
+    const rows = await pbList('hr_leaves', { filter: pbFilter('employee_name ~ {:name}', { name: wanted }), fields: LEAVE_FIELDS });
+    return rows.filter(r => sameEmployeeName(r.employee_name, wanted)).map(toLeave);
   }
   const days = q.windowDays ?? DEFAULT_LEAVE_WINDOW_DAYS;
   if (days <= 0) return (await pbList('hr_leaves', { fields: LEAVE_FIELDS })).map(toLeave);
@@ -95,7 +102,7 @@ export const leaveActions = {
   // ── Leaves ────────────────────────────────────────────────────────────
   addLeave: (leave: Omit<LeaveApplication, 'id'>) =>
     pbCreate('hr_leaves', {
-      employee_name: leave.employeeName, type: leave.type, duration: leave.duration, reason: leave.reason, status: leave.status || 'pending',
+      employee_name: leave.employeeName.trim(), type: leave.type, duration: leave.duration, reason: leave.reason, status: leave.status || 'pending',
       // Unknown columns are ignored by PocketBase, so this is safe before the migration adds them.
       start_date: leave.startDate || parseLeaveDateStrings(leave.duration)?.start || '',
       end_date: leave.endDate || parseLeaveDateStrings(leave.duration)?.end || '',

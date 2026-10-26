@@ -47,7 +47,9 @@ export function getAbsenceDeductionForMonth(
   leaves: LeaveApplication[] = []
 ): number {
   const wanted = (employeeEmail || '').toLowerCase();
+  const seenDates = new Set<string>();
   const count = absenceRecords.filter(a => {
+    if (a.deleted) return false;
     if (a.employeeEmail.toLowerCase() !== wanted) return false;
     if (a.date.slice(0, 7) !== monthKey) return false;
     // Skip any absence record whose date turned out to be covered by an
@@ -59,6 +61,9 @@ export function getAbsenceDeductionForMonth(
     // PTO/Sick/Parental) via the Urgent/Normal Leave deduction above —
     // counting it here too would double-charge the same day.
     if (getApprovedLeaveOnDate(leaves, a.employeeName, a.date)) return false;
+    // One charge per day, even if two records exist for the same date.
+    if (seenDates.has(a.date)) return false;
+    seenDates.add(a.date);
     return true;
   }).length;
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
@@ -204,10 +209,27 @@ function addMonths(key: string, n: number): string {
   return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Whether an employee has a payroll row for `monthKey` at all. Not before their joining month, and not
+ * after the month they left. A row that already exists is always kept (it may be paid or frozen).
+ */
+function hasPayrollForMonth(emp: Profile, monthKey: string, existingPayroll: PayrollRecord[]): boolean {
+  if (existingPayroll.some(p => p.employeeId === emp.id && p.month === monthKey)) return true;
+  const joined = /^(\d{4})-(\d{2})/.exec(emp.joinedDate || '');
+  if (joined && `${joined[1]}-${joined[2]}` > monthKey) return false;
+  if (emp.offboarded) {
+    const left = /^(\d{4})-(\d{2})/.exec(emp.offboardDate || '');
+    // Left before this month (or no leaving date recorded and no row ever made): nothing is owed here.
+    if (!left || `${left[1]}-${left[2]}` < monthKey) return false;
+  }
+  return true;
+}
+
 /** The payroll records for ONE calendar month (see computePayrollView for how that month is chosen). */
 function computePayrollForMonth(employees: Profile[], existingPayroll: PayrollRecord[], leaves: LeaveApplication[], timesheets: TimesheetEntry[], absenceRecords: AbsenceRecord[], today: Date, targetMonthKey: string, resolveStub = true): PayrollRecord[] {
   return employees
     .filter(emp => emp.role === 'employee' || emp.role === 'team_lead')
+    .filter(emp => hasPayrollForMonth(emp, targetMonthKey, existingPayroll))
     .map(emp => {
       // Scoped to THIS calendar month — see PayrollRecord.month's comment.
       // Without the month check this would match any row ever created
@@ -393,8 +415,9 @@ function computePayrollForMonth(employees: Profile[], existingPayroll: PayrollRe
       if (reservedThisMonth > 0) deductionBreakdown.push({ label: 'First-Month Reserve (not lost — paid at resignation/termination)', amount: reservedThisMonth });
 
       // A frozen month keeps exactly what was written down at the freeze (or at payment): late leave or
-      // absence records, a changed salary or a new increment no longer move it.
-      if (existing?.frozen) {
+      // absence records, a changed salary or a new increment no longer move it. A PAID month is final
+      // too, even if it was paid before freezing existed — a later change goes through a correction.
+      if (existing?.frozen || existing?.processed) {
         return {
           ...existing,
           region: emp.region,

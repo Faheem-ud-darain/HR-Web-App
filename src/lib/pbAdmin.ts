@@ -298,6 +298,7 @@ export async function adminListTrackingSettings(): Promise<PbRow[]> {
 export async function adminAddNotification(
   email: string, role: string, message: string, category?: string, pushTitle?: string, senderEmail?: string, link?: string,
 ): Promise<void> {
+  // The in-app bell always gets every notification; opt-outs only stop push (see hr/notificationPrefs.ts).
   await pbAdminFetch(`/api/collections/hr_notifications/records`, {
     method: 'POST',
     body: JSON.stringify({

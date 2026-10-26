@@ -45,7 +45,11 @@ async function callPayroll(env: Env, mode: 'freeze' | 'increments'): Promise<str
   const text = await res.text();
   console.log(`[cron] payroll-monthly ${mode} -> ${res.status} ${text.slice(0, 400)}`);
   if (!res.ok) throw new Error(`payroll-monthly ${mode} failed: ${res.status}`);
-  try { return String(JSON.parse(text).status || ''); } catch { return ''; }
+  let body: { status?: string; failed?: number } = {};
+  try { body = JSON.parse(text); } catch { /* not JSON */ }
+  // A partly failed run is a failed run: it shows up in the Worker's logs and dashboard.
+  if (Number(body.failed) > 0) throw new Error(`payroll-monthly ${mode}: ${body.failed} item(s) failed`);
+  return String(body.status || '');
 }
 
 // Freeze first; raises only once the month is frozen (the route also refuses otherwise).

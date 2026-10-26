@@ -214,16 +214,13 @@ describe('payroll pins — October 2026', () => {
     expect(r.incrementAmount).toBe(10000);
   });
 
-  it('PINNED QUIRK — an already-paid record keeps its stored base salary and increment, but its deductions are still recalculated live', () => {
-    // This is how the code behaves today and it matters for the month-freeze work in plan 028: if an
-    // absence record is added (or removed) after a month was marked paid, the "paid" row's deductions
-    // — and therefore its net pay — change after the fact. Plan 028 fixes this by freezing a month.
+  it('a paid month is final: records added after payment no longer change it (they need a correction)', () => {
     const paid = record({ processed: true, baseSalary: 40000, incrementAmount: 0, bonus: 500, deductions: 0 });
     const [before] = run([emp()], { existing: [paid] });
     expect(before).toMatchObject({ processed: true, baseSalary: 40000, bonus: 500, deductions: 0 });
-    const [after] = run([emp()], { existing: [paid], absences: [absence('alex@x.us', 'Alex Example', '2026-10-06')] });
-    expect(after).toMatchObject({ processed: true, baseSalary: 40000, bonus: 500 });
-    expect(after.deductions).toBe(4000); // changed AFTER payment
+    const [after] = run([emp({ baseSalary: 90000 })], { existing: [paid], absences: [absence('alex@x.us', 'Alex Example', '2026-10-06')] });
+    expect(after).toMatchObject({ processed: true, baseSalary: 40000, bonus: 500, deductions: 0 });
+    expect(net(after)).toBe(40500);
   });
 });
 
@@ -243,5 +240,24 @@ describe('payroll pins — a frozen month (monthly freeze job)', () => {
     const lateAbsences = ['2026-10-05', '2026-10-06'].map(d => absence('alex@x.us', 'Alex Example', d));
     const [r] = run([emp()], { existing: [{ ...stored, frozen: false }], absences: lateAbsences });
     expect(r.deductions).toBeGreaterThan(2000);
+  });
+});
+
+describe('payroll pins — who gets a row for a month', () => {
+  it('no row before the joining month', () => {
+    expect(run([emp({ joinedDate: '2026-11-02' })])).toHaveLength(0);
+  });
+  it('no row after the month an employee left, but the leaving month is kept', () => {
+    expect(run([emp({ offboarded: true, offboardDate: '2026-08-20' })])).toHaveLength(0);
+    expect(run([emp({ offboarded: true, offboardDate: '2026-10-20' })])).toHaveLength(1);
+  });
+  it('a row that already exists is always kept', () => {
+    expect(run([emp({ joinedDate: '2026-11-02' })], { existing: [record({ processed: true })] })).toHaveLength(1);
+  });
+  it('absences on the same day are charged once and deleted records not at all', () => {
+    const dup = [absence('alex@x.us', 'Alex Example', '2026-10-06'), absence('alex@x.us', 'Alex Example', '2026-10-06')];
+    const gone = { ...absence('alex@x.us', 'Alex Example', '2026-10-07'), deleted: true } as AbsenceRecord;
+    const [r] = run([emp()], { absences: [...dup, gone] });
+    expect(r.deductions).toBe(4000);
   });
 });

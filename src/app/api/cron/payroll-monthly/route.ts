@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { PbRow } from '@/lib/pbTypes';
 import { pbFilter } from '@/lib/pbFilter';
 import { getNYDateString } from '@/lib/timezone';
-import { pbAdminFetch, adminFindByField, adminUpsertByField, adminAddNotification } from '@/lib/pbAdmin';
+import { pbAdminFetch, adminFindByField, adminUpsertByField, adminAddNotification, rememberAdminUpsertId } from '@/lib/pbAdmin';
 import { mapProfileRecord } from '@/lib/core/profiles';
 import { toLeave, toAbsenceRecord, toPayrollRecordFromRow, toPayrollRowFields } from '@/lib/core/payrollMappers';
 import { toTimesheet } from '@/lib/core/timesheets';
@@ -27,7 +27,7 @@ export const runtime = 'edge';
 // few minutes until the job reports it is finished. Calling an already-finished job costs a few reads.
 // Frozen salaries are never touched again; paid salaries are never touched at all.
 const BATCH_FREEZE = 10;
-const BATCH_INCREMENTS = 8;
+const BATCH_INCREMENTS = 3; // ~5 outgoing requests per raise on top of ~20 reads: keeps well under the ~50 limit
 const STATE_KEY = 'payroll_monthly_cron';
 const LOG_KEY = 'increment_log';
 
@@ -116,12 +116,20 @@ export async function POST(request: Request) {
       const batch = toFreeze.slice(0, BATCH_FREEZE);
       let written = 0;
       let failed = 0;
+      let skippedPaid = 0;
       for (const rec of batch) {
         try {
           const fields = toPayrollRowFields({ ...rec, processed: false }, '');
           const existingRow = payrollRows.find(r => r.employee_id === rec.employeeId && r.month === freezeMonth);
-          if (existingRow) await pbAdminFetch(`/api/collections/hr_payroll/records/${existingRow.id}`, { method: 'PATCH', body: JSON.stringify(fields) });
-          else await pbAdminFetch('/api/collections/hr_payroll/records', { method: 'POST', body: JSON.stringify(fields) });
+          if (existingRow) {
+            // The list above was read a few seconds ago. If Admin has marked this salary paid since, leave it
+            // entirely alone — freezing must never turn a paid salary back into an unpaid one.
+            const latest = await pbAdminFetch(`/api/collections/hr_payroll/records/${existingRow.id}?fields=id,processed`);
+            if (latest?.processed) { skippedPaid++; continue; }
+            await pbAdminFetch(`/api/collections/hr_payroll/records/${existingRow.id}`, { method: 'PATCH', body: JSON.stringify(fields) });
+          } else {
+            await pbAdminFetch('/api/collections/hr_payroll/records', { method: 'POST', body: JSON.stringify(fields) });
+          }
           const key = breakdownKey(rec.employeeId, freezeMonth);
           const data = {
             deductionBreakdown: rec.deductionBreakdown || [],
@@ -141,7 +149,7 @@ export async function POST(request: Request) {
           console.error('[cron/payroll-monthly] freeze failed for', rec.employeeId, err);
         }
       }
-      const remaining = toFreeze.length - written;
+      const remaining = toFreeze.length - written - skippedPaid;
       if (remaining === 0 && failed === 0) {
         const total = view.filter(r => r.month === freezeMonth).length;
         await adminUpsertByField('hr_system_state', 'key', STATE_KEY, { ...state, frozen: { ...(state.frozen || {}), [freezeMonth]: { at: now.toISOString(), count: total } } });
@@ -166,18 +174,30 @@ export async function POST(request: Request) {
         // Re-read this one row right before writing: only raise it if it is still exactly what we planned from.
         const fresh = await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`);
         if (Number(fresh?.base_salary) !== profile.baseSalary) throw new Error('salary changed while the job ran');
-        await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`, { method: 'PATCH', body: JSON.stringify({ base_salary: decision.newBaseSalary }) });
-        const extras = (extrasById.get(profile.id)?.data || {}) as PbRow;
-        await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, { ...extras, lastIncrementProcessedYear: decision.processedThroughYear });
+        // Write "this anniversary is done" FIRST, then the raise. If the raise then fails we put the marker back,
+        // and if even that fails the person is left un-raised (visible in the response and fixable by hand)
+        // rather than raised again on the next 10-minute run — a missed raise is safer than a double one.
+        const extrasRowNow = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
+        const extrasNow = (extrasRowNow?.data || {}) as PbRow;
+        if (extrasRowNow) rememberAdminUpsertId('hr_profile_extras', 'profile_id', profile.id, extrasRowNow.id);
+        if (extrasNow.lastIncrementProcessedYear === decision.processedThroughYear) continue; // a previous run already did this one
+        await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, { ...extrasNow, lastIncrementProcessedYear: decision.processedThroughYear });
+        try {
+          await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`, { method: 'PATCH', body: JSON.stringify({ base_salary: decision.newBaseSalary }) });
+        } catch (err) {
+          await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, extrasNow).catch(() => { /* left marked: see above */ });
+          throw err;
+        }
         log.push({ at: now.toISOString(), email: profile.email, payMonth, anniversaryMonth: decision.anniversaryMonth, from: profile.baseSalary, to: decision.newBaseSalary });
         await adminAddNotification(profile.email, 'employee', `Your annual salary increment has been added to your base salary. It applies to the ${monthLabel(payMonth)} salary.`, 'internal');
         applied++;
       } catch (err) {
         failed++;
+        log.push({ at: now.toISOString(), email: profile.email, payMonth, failed: true, reason: err instanceof Error ? err.message.slice(0, 120) : 'error' });
         console.error('[cron/payroll-monthly] raise failed for', profile.id, err);
       }
     }
-    if (applied > 0) await adminUpsertByField('hr_system_state', 'key', LOG_KEY, { entries: log.slice(-500) });
+    if (applied > 0 || failed > 0) await adminUpsertByField('hr_system_state', 'key', LOG_KEY, { entries: log.slice(-500) });
     const remaining = dueRaises.length - applied;
     if (remaining === 0 && failed === 0) {
       await adminUpsertByField('hr_system_state', 'key', STATE_KEY, { ...state, incrementsDone: { ...(state.incrementsDone || {}), [payMonth]: now.toISOString() } });
