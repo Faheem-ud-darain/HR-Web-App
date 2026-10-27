@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -49,7 +50,7 @@ export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTic
                 {t.title}
                 {isEmp && isTicketLiveWithHR(t.id) && (
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> LIVE
+                    <StatusDot tone="emerald" pulse /> LIVE
                   </span>
                 )}
               </span>

@@ -215,13 +215,13 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   };
   const flagChips = (r: PayrollRecord) => {
     const chips: React.ReactNode[] = [];
-    if (r.incrementAmount > 0) chips.push(<span key="inc" className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Increment</span>);
-    if (r.deductions > 0 && r.reservedThisMonth <= 0) chips.push(<span key="ded" className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">Deductions</span>);
-    if (r.reservedThisMonth > 0) chips.push(<span key="held" className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">First month held</span>);
+    if (r.incrementAmount > 0) chips.push(<Badge key="inc" variant="success" size="sm">Increment</Badge>);
+    if (r.deductions > 0 && r.reservedThisMonth <= 0) chips.push(<Badge key="ded" variant="danger" size="sm">Deductions</Badge>);
+    if (r.reservedThisMonth > 0) chips.push(<Badge key="held" variant="indigo" size="sm">First month held</Badge>);
     if (!r.processed) payrollFlags(r, profileById.get(r.employeeId)).forEach(f => chips.push(
-      <span key={f.kind} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800" title={f.detail}>
+      <Badge key={f.kind} variant="warning" size="sm" className="gap-1" title={f.detail}>
         <AlertTriangle className="h-3 w-3" />{f.label}
-      </span>,
+      </Badge>,
     ));
     return chips.length ? <div className="mt-1 flex flex-wrap gap-1">{chips}</div> : null;
   };

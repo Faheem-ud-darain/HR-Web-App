@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, InactivityLog } from '@/lib/hrData';
@@ -121,8 +122,8 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                     />
                   </div>
                   <div className="flex items-center gap-4 text-[9px] font-semibold text-slate-500">
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Active</span>
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Inactive</span>
+                    <span className="flex items-center gap-1"><StatusDot tone="emerald" size="sm" /> Active</span>
+                    <span className="flex items-center gap-1"><StatusDot tone="amber" size="sm" /> Inactive</span>
                   </div>
                 </div>
               )}

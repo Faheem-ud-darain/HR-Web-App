@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -307,7 +308,7 @@ export function CareersView({ role }: CareersViewProps) {
                     <ul className="space-y-1.5">
                       {job.requirements.map((req, idx: number) => (
                         <li key={idx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
-                          <span className="h-1.5 w-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />
+                          <StatusDot tone="orange" className="mt-1.5" />
                           <span>{req}</span>
                         </li>
                       ))}

@@ -1,25 +1,24 @@
 'use client';
 
+import { WarehouseManager } from '@/components/ui/WarehouseManager';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { hrActions, Profile, Team, useProfiles, useTeams, useWarehouses, displayName, updateEmployeeTeamsAdmin, setTeamLeadAdmin, updateProfileAdmin } from '@/lib/hrData';
-import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Edit, Trash, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
+import { Users, Trash2, Plus, AlertTriangle, CheckCircle2, UserCog, Star, Sparkles, Building2, Loader2, CheckSquare, Square } from 'lucide-react';
 import { UserProfileModal } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { ListSkeleton } from '@/components/ui/Skeleton';
-import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useSessionEmail } from '@/lib/useSession';
-import type { Warehouse } from '@/lib/hrData';
 
 export default function HRTeamsPage() {
   const { data: allProfiles = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const { data: allTeams = [], isLoading: teamsLoading, refetch: refetchTeams } = useTeams();
-  const { data: allWarehouses = [], refetch: refetchWarehouses } = useWarehouses();
+  const { data: allWarehouses = [] } = useWarehouses();
   
   const employees = allProfiles;
   // hr_teams.members (array of employee emails) is the authoritative
@@ -41,18 +40,8 @@ export default function HRTeamsPage() {
   const currentUserEmail = useSessionEmail() || '';
 
   // Warehouse states
-  const [whName, setWhName] = useState('');
-  const [whLat, setWhLat] = useState('');
-  const [whLon, setWhLon] = useState('');
-  const [whRadius, setWhRadius] = useState('500');
   const [whSuccess, setWhSuccess] = useState('');
 
-  // Warehouse editing states
-  const [editingWhId, setEditingWhId] = useState<string | null>(null);
-  const [editingWhName, setEditingWhName] = useState('');
-  const [editingWhLat, setEditingWhLat] = useState('');
-  const [editingWhLon, setEditingWhLon] = useState('');
-  const [editingWhRadius, setEditingWhRadius] = useState('');
   
   // Drag and Drop & Prompt Modal State
   const [draggedEmployee, setDraggedEmployee] = useState<Profile | null>(null);
@@ -76,10 +65,6 @@ export default function HRTeamsPage() {
   const [pendingDeleteTeamName, setPendingDeleteTeamName] = useState<string | null>(null);
   const [isSavingTeamLead, setIsSavingTeamLead] = useState(false);
   const [isSavingWhLead, setIsSavingWhLead] = useState(false);
-  const [isCreatingWh, setIsCreatingWh] = useState(false);
-  const [deletingWhId, setDeletingWhId] = useState<string | null>(null);
-  const [pendingDeleteWhId, setPendingDeleteWhId] = useState<string | null>(null);
-  const [isSavingWhEdit, setIsSavingWhEdit] = useState(false);
 
   useEffect(() => {
     const handleSearch = (e: Event) => {
@@ -304,80 +289,6 @@ export default function HRTeamsPage() {
       }, 1500);
     } finally {
       setIsSavingWhLead(false);
-    }
-  };
-
-  const handleCreateWarehouse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isCreatingWh || !whName.trim() || !whLat || !whLon) return;
-
-    setIsCreatingWh(true);
-    try {
-      await hrActions.addWarehouse({
-        name: whName.trim(),
-        latitude: Number(whLat),
-        longitude: Number(whLon),
-        radius: Number(whRadius)
-      });
-      refetchWarehouses();
-      setWhName('');
-      setWhLat('');
-      setWhLon('');
-      setWhRadius('500');
-      setWhSuccess('Warehouse created successfully!');
-      setTimeout(() => setWhSuccess(''), 1500);
-    } finally {
-      setIsCreatingWh(false);
-    }
-  };
-
-  const handleDeleteWarehouse = (id: string) => {
-    if (deletingWhId) return;
-    setPendingDeleteWhId(id);
-  };
-
-  const confirmDeleteWarehouse = async () => {
-    if (!pendingDeleteWhId) return;
-    const id = pendingDeleteWhId;
-    setPendingDeleteWhId(null);
-    setDeletingWhId(id);
-    try {
-      await hrActions.deleteWarehouse(id, allProfiles);
-      refetchWarehouses();
-      refetchProfiles();
-      setWhSuccess('Warehouse deleted successfully.');
-      setTimeout(() => setWhSuccess(''), 1500);
-    } finally {
-      setDeletingWhId(null);
-    }
-  };
-
-  const handleStartEditWarehouse = (wh: Warehouse) => {
-    setEditingWhId(wh.id);
-    setEditingWhName(wh.name);
-    setEditingWhLat(wh.latitude.toString());
-    setEditingWhLon(wh.longitude.toString());
-    setEditingWhRadius(wh.radius.toString());
-  };
-
-  const handleUpdateWarehouseSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSavingWhEdit || !editingWhId) return;
-
-    setIsSavingWhEdit(true);
-    try {
-      await hrActions.updateWarehouse(editingWhId, {
-        name: editingWhName.trim(),
-        latitude: Number(editingWhLat),
-        longitude: Number(editingWhLon),
-        radius: Number(editingWhRadius)
-      });
-      refetchWarehouses();
-      setEditingWhId(null);
-      setWhSuccess('Warehouse updated successfully.');
-      setTimeout(() => setWhSuccess(''), 1500);
-    } finally {
-      setIsSavingWhEdit(false);
     }
   };
 
@@ -945,107 +856,7 @@ export default function HRTeamsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Configure warehouses list and add form */}
-          <div className="lg:col-span-6 space-y-4">
-            <Card className="border border-slate-200">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h3 className="font-bold text-slate-900 text-sm">Add Warehouse Location</h3>
-              </div>
-              <CardContent className="p-6">
-                <form onSubmit={handleCreateWarehouse} className="space-y-3">
-                  <div className="space-y-1">
-                    <FieldLabel size="muted">Warehouse Name *</FieldLabel>
-                    <Input 
-                      type="text" 
-                      required
-                      value={whName}
-                      onChange={e => setWhName(e.target.value)}
-                      placeholder="e.g. Seattle Logistics Yard"
-                      fieldSize="md"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <FieldLabel size="muted">Latitude *</FieldLabel>
-                      <Input 
-                        type="number" 
-                        step="0.000001"
-                        required
-                        value={whLat}
-                        onChange={e => setWhLat(e.target.value)}
-                        placeholder="e.g. 47.6062"
-                        fieldSize="md"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <FieldLabel size="muted">Longitude *</FieldLabel>
-                      <Input 
-                        type="number" 
-                        step="0.000001"
-                        required
-                        value={whLon}
-                        onChange={e => setWhLon(e.target.value)}
-                        placeholder="e.g. -122.3321"
-                        fieldSize="md"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <FieldLabel size="muted">Radius (meters) *</FieldLabel>
-                      <Input 
-                        type="number" 
-                        required
-                        value={whRadius}
-                        onChange={e => setWhRadius(e.target.value)}
-                        placeholder="e.g. 500"
-                        fieldSize="md"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    type="submit"
-                    disabled={isCreatingWh}
-                    
-                  >
-                    {isCreatingWh && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {isCreatingWh ? 'Adding…' : 'Add Warehouse'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-slate-200">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h3 className="font-bold text-slate-900 text-sm">Active Warehouses ({warehouses.length})</h3>
-              </div>
-              <CardContent className="p-4 space-y-2 max-h-60 overflow-y-auto">
-                {warehouses.map(wh => (
-                  <div key={wh.id} className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex justify-between items-center text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800">{wh.name}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">Coords: {wh.latitude}, {wh.longitude} · Radius: {wh.radius}m</div>
-                    </div>
-                    <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleStartEditWarehouse(wh)}
-                        disabled={deletingWhId === wh.id}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white border border-transparent hover:border-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Edit Warehouse"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteWarehouse(wh.id)}
-                        disabled={deletingWhId === wh.id}
-                        className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Delete Warehouse"
-                      >
-                        {deletingWhId === wh.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+          <WarehouseManager layout="stacked" className="lg:col-span-6" />
 
           {/* Assign Warehouses to USA Employees */}
           <div className="lg:col-span-6 space-y-4">
@@ -1119,60 +930,6 @@ export default function HRTeamsPage() {
         />
       )}
 
-      {editingWhId && (
-        <Modal isOpen onClose={() => setEditingWhId(null)} title="Edit Warehouse Details">
-          <form onSubmit={handleUpdateWarehouseSubmit} className="space-y-4 pt-1">
-            <FormField label="Warehouse Name *">
-              <Input 
-                type="text" 
-                required
-                value={editingWhName}
-                onChange={e => setEditingWhName(e.target.value)}
-                fieldSize="lg"
-              />
-            </FormField>
-            <div className="grid grid-cols-3 gap-3">
-              <FormField label="Latitude *">
-                <Input 
-                  type="number" 
-                  step="0.000001"
-                  required
-                  value={editingWhLat}
-                  onChange={e => setEditingWhLat(e.target.value)}
-                  fieldSize="lg"
-                />
-              </FormField>
-              <FormField label="Longitude *">
-                <Input 
-                  type="number" 
-                  step="0.000001"
-                  required
-                  value={editingWhLon}
-                  onChange={e => setEditingWhLon(e.target.value)}
-                  fieldSize="lg"
-                />
-              </FormField>
-              <FormField label="Radius (m) *">
-                <Input 
-                  type="number" 
-                  required
-                  value={editingWhRadius}
-                  onChange={e => setEditingWhRadius(e.target.value)}
-                  fieldSize="lg"
-                />
-              </FormField>
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-              <Button type="button" variant="outline" size="md" disabled={isSavingWhEdit} onClick={() => setEditingWhId(null)}>Cancel</Button>
-              <Button type="submit" disabled={isSavingWhEdit} >
-                {isSavingWhEdit && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {isSavingWhEdit ? 'Saving…' : 'Save Changes'}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
       <ConfirmDialog
         isOpen={pendingDeleteTeamName !== null}
         onClose={() => setPendingDeleteTeamName(null)}
@@ -1182,17 +939,6 @@ export default function HRTeamsPage() {
         confirmLabel={deletingTeamName ? 'Deleting…' : 'Delete'}
         variant="danger"
         loading={!!deletingTeamName}
-      />
-
-      <ConfirmDialog
-        isOpen={pendingDeleteWhId !== null}
-        onClose={() => setPendingDeleteWhId(null)}
-        onConfirm={confirmDeleteWarehouse}
-        title="Delete warehouse?"
-        message="Are you sure you want to delete this warehouse? Assignments will be updated."
-        confirmLabel={deletingWhId ? 'Deleting…' : 'Delete'}
-        variant="danger"
-        loading={!!deletingWhId}
       />
 
       <ConfirmDialog

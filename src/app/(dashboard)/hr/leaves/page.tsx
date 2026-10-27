@@ -6,7 +6,7 @@ import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayNa
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
 import { GripVertical, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
-import { LEAVE_TYPE_COLORS, LeaveStatusBadge } from '@/components/ui/StatusBadges';
+import { LeaveStatusBadge, LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
@@ -323,7 +323,7 @@ export default function HRLeavesPage() {
                     <div key={leave.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 text-sm font-bold leading-tight text-slate-900 break-words">{nameFor(leave.employeeName)}</div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${LEAVE_TYPE_COLORS[leave.type] || 'bg-slate-100 text-slate-700'}`}>{leave.type}</span>
+                        <LeaveTypeBadge type={leave.type} className="shrink-0" />
                       </div>
                       <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Calendar className="h-3.5 w-3.5 shrink-0" /> {leave.duration}</div>
                       {leave.reason && <p className="mt-2 text-xs leading-relaxed text-slate-500 break-words">{leave.reason}</p>}
@@ -391,9 +391,7 @@ export default function HRLeavesPage() {
                         <div className="font-bold text-slate-900 text-sm leading-tight">{nameFor(leave.employeeName)}</div>
                         <GripVertical className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5 hidden md:block" />
                       </div>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 ${LEAVE_TYPE_COLORS[leave.type] || 'bg-slate-100 text-slate-700'}`}>
-                        {leave.type}
-                      </span>
+                      <LeaveTypeBadge type={leave.type} className="inline-block mb-2" />
                       <div className="text-[10px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3 w-3" /> {leave.duration}</div>
                       <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">{leave.reason}</p>
 
@@ -468,7 +466,7 @@ export default function HRLeavesPage() {
                     <Tr key={l.id}>
                       <Td density="cozy" className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
                       <Td density="cozy">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
+                        <LeaveTypeBadge type={l.type} />
                       </Td>
                       <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
                       <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
@@ -527,7 +525,7 @@ export default function HRLeavesPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <p className="text-[10px] text-slate-400 font-semibold uppercase">Type</p>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
+                      <LeaveTypeBadge type={l.type} className="inline-block" />
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>

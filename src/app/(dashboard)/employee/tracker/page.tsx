@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, TrackingSettings, TrackerHeartbeat, localShiftDate, hasStaleTrackerToken } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -201,7 +202,7 @@ export default function TrackerPage() {
               {openShift ? (
                 <div className="text-center space-y-2">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit mx-auto flex items-center gap-1.5 animate-pulse">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> On Shift
+                    <StatusDot tone="emerald" /> On Shift
                   </span>
                   <div className="text-3xl md:text-4xl font-bold text-slate-900 font-mono pt-2 flex items-center justify-center gap-2">
                     <Timer className="h-8 w-8 text-emerald-500" />

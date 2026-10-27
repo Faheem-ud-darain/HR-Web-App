@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { ShieldCheck, List, Loader2 } from 'lucide-react';
 import { useLeaves, useProfiles, hrActions, LeaveApplication, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { LEAVE_TYPE_COLORS, LeaveStatusBadge } from '@/components/ui/StatusBadges';
+import { LeaveStatusBadge, LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { Tabs } from '@/components/ui/Tabs';
@@ -160,7 +160,7 @@ export default function AdminLeavesPage() {
                   <Tr key={leave.id}>
                     <Td className="font-semibold text-slate-900">{nameFor(leave.employeeName)}</Td>
                     <Td>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[leave.type] || ''}`}>{leave.type}</span>
+                      <LeaveTypeBadge type={leave.type} />
                     </Td>
                     <Td className="text-slate-600 font-medium text-xs">{leave.duration}</Td>
                     <Td className="text-slate-500 max-w-xs truncate text-xs">{leave.reason}</Td>
@@ -194,7 +194,7 @@ export default function AdminLeavesPage() {
               <div key={leave.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-bold text-slate-900">{nameFor(leave.employeeName)}</p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[leave.type] || ''}`}>{leave.type}</span>
+                  <LeaveTypeBadge type={leave.type} />
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>
@@ -275,7 +275,7 @@ export default function AdminLeavesPage() {
                     <Tr key={l.id}>
                       <Td density="cozy" className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
                       <Td density="cozy">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-600'}`}>{l.type}</span>
+                        <LeaveTypeBadge type={l.type} />
                       </Td>
                       <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
                       <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
@@ -302,7 +302,7 @@ export default function AdminLeavesPage() {
                 <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-bold text-slate-900">{nameFor(l.employeeName)}</p>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-600'}`}>{l.type}</span>
+                    <LeaveTypeBadge type={l.type} />
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>

@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -388,13 +389,13 @@ export default function HROnboardingPage() {
         <form onSubmit={handleOnboardSubmit} className="space-y-4 pt-1">
           {onboardError && (
             <div className="p-3.5 text-xs bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-semibold flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-600 shrink-0" />
+              <StatusDot tone="rose" />
               {onboardError}
             </div>
           )}
           {onboardSuccess && (
             <div className="p-3.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-semibold flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 shrink-0" />
+              <StatusDot tone="emerald" />
               {onboardSuccess}
             </div>
           )}
