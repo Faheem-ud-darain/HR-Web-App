@@ -23,10 +23,20 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// In a normal browser the plugin falls back to navigator.vibrate(), which Chrome refuses (and logs an error
+// for) until the person has tapped the page, and which makes no sense on a desktop at all. Inside the native
+// apps it always works.
+function allowed(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (cap?.isNativePlatform?.()) return true;
+  return navigator.userActivation?.hasBeenActive === true && window.matchMedia('(pointer: coarse)').matches;
+}
+
 export const triggerHaptic = {
   // Light tap for button clicks, tab switches, toggles
   light: async () => {
-    if (!HapticsPlugin) return;
+    if (!HapticsPlugin || !allowed()) return;
     try {
       await HapticsPlugin.impact({ style: ImpactStyleEnum?.Light || 'LIGHT' });
     } catch { /* ignore */ }
@@ -34,7 +44,7 @@ export const triggerHaptic = {
 
   // Medium tap for modal opens, dropdown selections, main actions
   medium: async () => {
-    if (!HapticsPlugin) return;
+    if (!HapticsPlugin || !allowed()) return;
     try {
       await HapticsPlugin.impact({ style: ImpactStyleEnum?.Medium || 'MEDIUM' });
     } catch { /* ignore */ }
@@ -42,7 +52,7 @@ export const triggerHaptic = {
 
   // Heavy tap for important actions like clock-in / clock-out
   heavy: async () => {
-    if (!HapticsPlugin) return;
+    if (!HapticsPlugin || !allowed()) return;
     try {
       await HapticsPlugin.impact({ style: ImpactStyleEnum?.Heavy || 'HEAVY' });
     } catch { /* ignore */ }
@@ -50,7 +60,7 @@ export const triggerHaptic = {
 
   // Success vibration pattern for form submissions, ticket resolution
   success: async () => {
-    if (!HapticsPlugin) return;
+    if (!HapticsPlugin || !allowed()) return;
     try {
       await HapticsPlugin.notification({ type: NotificationTypeEnum?.Success || 'SUCCESS' });
     } catch { /* ignore */ }
@@ -58,7 +68,7 @@ export const triggerHaptic = {
 
   // Warning vibration pattern for warnings or deletions
   warning: async () => {
-    if (!HapticsPlugin) return;
+    if (!HapticsPlugin || !allowed()) return;
     try {
       await HapticsPlugin.notification({ type: NotificationTypeEnum?.Warning || 'WARNING' });
     } catch { /* ignore */ }
@@ -66,7 +76,7 @@ export const triggerHaptic = {
 
   // Selection change feedback for tab switches
   selection: async () => {
-    if (!HapticsPlugin) return;
+    if (!HapticsPlugin || !allowed()) return;
     try {
       await HapticsPlugin.selectionStart();
       await HapticsPlugin.selectionChanged();
