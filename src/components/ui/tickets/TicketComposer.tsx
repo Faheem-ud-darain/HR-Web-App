@@ -5,6 +5,7 @@ import { Lock, AlertCircle, FileText, X, Paperclip, Send } from 'lucide-react';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 import { Ticket } from '@/lib/hrData';
 import { getSessionRole } from '@/lib/session';
+import { useAutoGrow } from '@/lib/useAutoGrow';
 import { DraftWithDel } from '@/components/assistant/DraftWithDel';
 
 interface TicketComposerProps {
@@ -25,6 +26,7 @@ interface TicketComposerProps {
 }
 
 export function TicketComposer({ isClosed, selectedTicket, isAdmin, handleSendReply, replyFileError, replyFile, setReplyFile, replyFileInputRef, handleReplyFileChange, replyTextareaRef, replyMsg, handleReplyMsgChange, sendReply, sendingReply }: TicketComposerProps) {
+  useAutoGrow(replyTextareaRef, replyMsg, 260); // grows and shrinks with what is typed
   return (
     <div className="px-3 md:px-4 pt-3 md:pt-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-slate-200 bg-white">
       {isClosed ? (
@@ -57,15 +59,8 @@ export function TicketComposer({ isClosed, selectedTicket, isAdmin, handleSendRe
             ticket={selectedTicket}
             onDraft={text => {
               handleReplyMsgChange(text);
-              // A draft is several lines: grow the box so it can be read, and put the cursor in it.
-              requestAnimationFrame(() => {
-                const el = replyTextareaRef.current;
-                if (!el) return;
-                el.style.maxHeight = '260px';
-                el.style.height = 'auto';
-                el.style.height = `${Math.min(el.scrollHeight, 260)}px`;
-                el.focus();
-              });
+              // The box grows to fit the draft by itself; just put the cursor in it.
+              requestAnimationFrame(() => replyTextareaRef.current?.focus());
             }}
           />}
           <div className="flex items-center gap-1.5 md:gap-2">
@@ -97,7 +92,7 @@ export function TicketComposer({ isClosed, selectedTicket, isAdmin, handleSendRe
                 }}
                 placeholder="Type your reply..."
                 rows={1}
-                className="flex-1 bg-transparent py-3 px-3 md:px-4 text-xs md:text-sm outline-none text-slate-900 resize-none max-h-28 min-h-[40px] w-full"
+                className="flex-1 bg-transparent py-3 px-3 md:px-4 text-xs md:text-sm outline-none text-slate-900 resize-none max-h-64 min-h-[40px] w-full"
               />
             </div>
     

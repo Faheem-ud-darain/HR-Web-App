@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ThinkingOrb } from 'thinking-orbs';
 import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, SquarePen, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Markdown } from './Markdown';
 import { personaFor } from '@/lib/assistant/persona';
 import { clearAssistantChat, deleteSavedChat, listSavedChats, openSavedChat, type SavedChatRow, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
@@ -105,6 +106,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
   const [showHistory, setShowHistory] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(inputRef, draft, 160);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [messages.length, loading]);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -230,7 +232,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
             rows={1}
             maxLength={2000}
             placeholder="How may I assist you?"
-            className="max-h-28 min-h-[24px] flex-1 resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+            className="max-h-40 min-h-[24px] flex-1 resize-none bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
           />
           <button type="submit" disabled={!draft.trim() || loading} aria-label="Send" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-300">
             <ArrowUp className="h-4 w-4" aria-hidden="true" />
