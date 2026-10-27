@@ -55,14 +55,14 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** The signed-in user's own saved chats: reopen one to carry on, or delete it. */
-function HistoryList({ onPicked }: { onPicked: () => void }) {
+function HistoryList({ onPicked, activeId, refreshKey }: { onPicked?: () => void; activeId?: string; refreshKey?: string }) {
   const [rows, setRows] = useState<SavedChatRow[] | null>(null);
   const [available, setAvailable] = useState(true);
   useEffect(() => {
     let alive = true;
     void listSavedChats().then(r => { if (alive) { setRows(r.chats); setAvailable(r.available); } });
     return () => { alive = false; };
-  }, []);
+  }, [refreshKey]);
   const when = (u: string) => {
     const d = new Date(u.replace(' ', 'T'));
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -75,8 +75,8 @@ function HistoryList({ onPicked }: { onPicked: () => void }) {
       {rows !== null && available && rows.length === 0 && <p className="px-1 text-sm text-slate-600">No saved chats yet. Your next conversation will appear here.</p>}
       <ul className="space-y-1">
         {(rows ?? []).map(r => (
-          <li key={r.id} className="group flex items-center gap-1 rounded-lg hover:bg-slate-50">
-            <button type="button" onClick={async () => { if (await openSavedChat(r.id)) onPicked(); }} className="min-w-0 flex-1 rounded-lg px-2 py-2 text-left">
+          <li key={r.id} className={`group flex items-center gap-1 rounded-lg hover:bg-slate-100 ${r.id === activeId ? 'bg-slate-100' : ''}`}>
+            <button type="button" onClick={async () => { if (await openSavedChat(r.id)) onPicked?.(); }} className="min-w-0 flex-1 rounded-lg px-2 py-2 text-left">
               <span className="block truncate text-sm font-medium text-slate-800">{r.title}</span>
               <span className="block text-[11px] text-slate-400">{when(r.updated)}</span>
             </button>
@@ -97,7 +97,7 @@ function HistoryList({ onPicked }: { onPicked: () => void }) {
 }
 
 export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Props) {
-  const { messages, loading } = useAssistantChat();
+  const { messages, loading, chatId } = useAssistantChat();
   const router = useRouter();
   const persona = personaFor(role);
   const reduced = useReducedMotion();
@@ -125,8 +125,8 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
     void sendAssistantMessage(text);
   };
 
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+  const main = (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white">
       <div className="flex items-center gap-2.5 border-b border-slate-200 px-4 py-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden="true">
           <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={20} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
@@ -140,7 +140,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
             <SquarePen className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
-        <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${showHistory ? 'bg-slate-100 text-slate-800' : 'text-slate-500'}`}>
+        <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${variant === 'page' ? 'md:hidden' : ''} ${showHistory ? 'bg-slate-100 text-slate-800' : 'text-slate-500'}`}>
           <History className="h-4 w-4" aria-hidden="true" />
         </button>
         {variant === 'window' && onExpand && (
@@ -238,6 +238,24 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
         </div>
         <p className="mt-1.5 text-center text-[10px] text-slate-400">Del is an AI assistant and may make errors. Please verify the details before acting.</p>
       </form>
+    </div>
+  );
+
+  // The full page keeps your past chats in a column on the left (like most chat apps); on a phone, and in
+  // the small window, they open from the clock button instead.
+  if (variant !== 'page') return main;
+  return (
+    <div className="flex h-full min-h-0 bg-white">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50 md:flex" aria-label="Past chats">
+        <div className="p-3">
+          <button type="button" onClick={() => { clearAssistantChat(); setShowHistory(false); inputRef.current?.focus(); }} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100">
+            <SquarePen className="h-4 w-4" aria-hidden="true" />
+            New chat
+          </button>
+        </div>
+        <HistoryList activeId={chatId} refreshKey={`${chatId ?? ''}-${loading}`} />
+      </aside>
+      {main}
     </div>
   );
 }

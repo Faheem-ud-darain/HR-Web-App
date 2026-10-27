@@ -33,9 +33,9 @@ export function Markdown({ text }: { text: string }) {
       while (i < lines.length && isTableRow(lines[i])) { rows.push(cells(lines[i])); i++; }
       blocks.push(
         <div key={`t${k++}`} className="my-2 overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-max min-w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600"><tr>{head.map((h, c) => <th key={c} className="whitespace-nowrap px-2 py-1.5 font-semibold">{inline(h, `h${c}`)}</th>)}</tr></thead>
-            <tbody>{rows.map((r, ri) => <tr key={ri} className="border-t border-slate-100">{r.map((c, ci) => <td key={ci} className="px-2 py-1.5 align-top [&:not(:first-child)]:whitespace-nowrap first:min-w-[6.5rem]">{inline(c, `c${ri}-${ci}`)}</td>)}</tr>)}</tbody>
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-600"><tr>{head.map((h, c) => <th key={c} className="px-1.5 py-1.5 align-bottom font-semibold">{inline(h, `h${c}`)}</th>)}</tr></thead>
+            <tbody>{rows.map((r, ri) => <tr key={ri} className="border-t border-slate-100">{r.map((c, ci) => <td key={ci} className="px-1.5 py-1.5 align-top [&:not(:first-child)]:whitespace-nowrap first:min-w-[6.5rem]">{inline(c, `c${ri}-${ci}`)}</td>)}</tr>)}</tbody>
           </table>
         </div>
       );
