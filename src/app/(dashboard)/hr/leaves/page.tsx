@@ -33,6 +33,8 @@ export default function HRLeavesPage() {
   const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
   const { data: employees = [] } = useProfiles();
   const [dragId, setDragId] = useState<string | null>(null);
+  // Phone/tablet board: one status at a time. Until you pick one it shows the first status that has cards.
+  const [mobileColChoice, setMobileColChoice] = useState<LeaveApplication['status'] | null>(null);
   const [overCol, setOverCol] = useState<LeaveApplication['status'] | null>(null);
   const { showToast } = useActionToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -125,6 +127,11 @@ export default function HRLeavesPage() {
   // browser limitation — so phones need a completely different interaction
   // to reach this same code path.
   const moveLeaveTo = async (leaf: LeaveApplication, targetStatus: LeaveApplication['status']) => {
+    if (processingLeaveId) return; // one change at a time: no double taps
+    setProcessingLeaveId(leaf.id);
+    try { await moveLeaveToNow(leaf, targetStatus); } finally { setProcessingLeaveId(null); }
+  };
+  const moveLeaveToNow = async (leaf: LeaveApplication, targetStatus: LeaveApplication['status']) => {
     if (leaf.status === targetStatus) return;
 
     // Final approval is a CEO/Admin-only decision (see admin/leaves page's
@@ -187,6 +194,8 @@ export default function HRLeavesPage() {
        l.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
        l.reason.toLowerCase().includes(searchQuery.toLowerCase()))
     );
+
+  const mobileCol = mobileColChoice ?? (COLUMNS.find(c => leaves.some(l => l.status === c.key))?.key ?? 'pending');
 
   const historyLeaves = leaves.filter(l =>
     (histFilter === 'all' || l.status === histFilter) &&
@@ -281,7 +290,64 @@ export default function HRLeavesPage() {
       {/* ── KANBAN VIEW ── */}
       {activeTab === 'kanban' && leavesLoading && <ListSkeleton rows={4} />}
       {activeTab === 'kanban' && !leavesLoading && (
-        <div className="flex xl:grid xl:grid-cols-4 gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 xl:mx-0 xl:px-0 scrollbar-hide">
+        <div className="xl:hidden space-y-3">
+          {/* Phones and tablets: touch screens cannot drag cards, so the board is one status at a time with
+              clear buttons on each card. The buttons run the same moveLeaveTo() rules as the desktop drag. */}
+          <div role="tablist" aria-label="Leave status" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide">
+            {COLUMNS.map(col => {
+              const count = filteredInCol(col.key).length;
+              const active = mobileCol === col.key;
+              return (
+                <button
+                  key={col.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setMobileColChoice(col.key)}
+                  className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-bold transition-colors ${active ? `${col.headerBg} text-slate-900` : 'border-slate-200 bg-white text-slate-500'}`}
+                >
+                  {col.label}
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-slate-200 bg-white px-1 text-[11px] text-slate-600">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {(() => {
+            const cards = filteredInCol(mobileCol);
+            if (cards.length === 0) return <div className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">Nothing here</div>;
+            return (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {cards.map(leave => {
+                  const busy = processingLeaveId === leave.id;
+                  return (
+                    <div key={leave.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 text-sm font-bold leading-tight text-slate-900 break-words">{nameFor(leave.employeeName)}</div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${LEAVE_TYPE_COLORS[leave.type] || 'bg-slate-100 text-slate-700'}`}>{leave.type}</span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Calendar className="h-3.5 w-3.5 shrink-0" /> {leave.duration}</div>
+                      {leave.reason && <p className="mt-2 text-xs leading-relaxed text-slate-500 break-words">{leave.reason}</p>}
+                      {leave.status === 'pending' && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'hr_approved')} className="min-h-11 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Send to CEO</button>
+                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'rejected')} className="min-h-11 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60">Reject</button>
+                        </div>
+                      )}
+                      {leave.status === 'hr_approved' && <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">With the CEO for the final decision.</p>}
+                      {leave.status === 'approved' && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved by the CEO.</p>}
+                      {leave.status === 'rejected' && (
+                        <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-3 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Re-open for review</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+      {activeTab === 'kanban' && !leavesLoading && (
+        <div className="hidden xl:grid xl:grid-cols-4 gap-4">
           {COLUMNS.map(col => {
             const cards = filteredInCol(col.key);
             const isOver = overCol === col.key;
@@ -292,7 +358,7 @@ export default function HRLeavesPage() {
                 onDragOver={e => handleDragOver(e, col.key)}
                 onDragLeave={handleDragLeave}
                 onDrop={e => handleDrop(e, col.key)}
-                className={`snap-center shrink-0 w-[85vw] sm:w-[45vw] xl:w-auto rounded-xl border-2 flex flex-col transition-colors transition-transform transition-shadow duration-200 ${
+                className={`rounded-xl border-2 flex flex-col transition-colors transition-transform transition-shadow duration-200 ${
                   isOver ? `${col.headerBg} border-dashed scale-[1.01] shadow-md` : 'border-slate-200 bg-slate-50/50'
                 }`}
               >
@@ -331,24 +397,6 @@ export default function HRLeavesPage() {
                       <div className="text-[10px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3 w-3" /> {leave.duration}</div>
                       <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">{leave.reason}</p>
 
-                      {/* Mobile-only status mover — native HTML5 drag-and-drop
-                          never fires on touch devices at all (a hard browser
-                          limitation, not a sizing bug), so dragging cards
-                          between columns silently does nothing on phones.
-                          This calls the exact same moveLeaveTo() path the
-                          desktop drag-and-drop uses, giving touch users a
-                          working equivalent action instead of a dead gesture. */}
-                      <Select
-                        value={leave.status}
-                        onChange={e => moveLeaveTo(leave, e.target.value as LeaveApplication['status'])}
-                        onClick={e => e.stopPropagation()}
-                        disabled={COLUMNS.find(c => c.key === leave.status)?.locked}
-                        fieldSize="md" className="md:hidden mt-2.5 disabled:opacity-60"
-                      >
-                        {COLUMNS.filter(c => !c.locked || c.key === leave.status).map(c => (
-                          <option key={c.key} value={c.key}>{c.label}</option>
-                        ))}
-                      </Select>
                     </div>
                   ))}
                   {cards.length === 0 && (
