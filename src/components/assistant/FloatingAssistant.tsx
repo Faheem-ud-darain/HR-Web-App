@@ -82,7 +82,7 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
         <div
           role="dialog"
           aria-label="Assistant"
-          className="fixed bottom-[11rem] right-4 z-[45] h-[560px] max-h-[calc(100vh-13rem)] w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 shadow-2xl md:bottom-24 md:right-6 md:max-h-[70vh]"
+          className="fixed bottom-[11rem] right-4 z-[45] h-[560px] max-h-[calc(100vh-13rem)] w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 shadow-2xl md:bottom-24 md:right-6 md:max-h-[70vh]"
         >
           <ChatPanel
             variant="window"
