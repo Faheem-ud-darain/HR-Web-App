@@ -18,13 +18,12 @@ interface TicketReplyLogProps {
   role: "admin" | "hr" | "employee" | "team_lead";
   isPrivileged: boolean;
   ticketSeenState: TicketSeenState | null | undefined;
-  setLightboxSrc: React.Dispatch<React.SetStateAction<string | null>>;
-  setLightboxName: React.Dispatch<React.SetStateAction<string | undefined>>;
+  onOpenImage: (src: string, name?: string) => void;
   typingNames: string[];
   chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, profileFor, nameFor, role, ticketSeenState, setLightboxSrc, setLightboxName, typingNames, chatEndRef }: TicketReplyLogProps) {
+export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, profileFor, nameFor, role, ticketSeenState, onOpenImage, typingNames, chatEndRef }: TicketReplyLogProps) {
   const viewerIsOwner = !!currentEmail && currentEmail.toLowerCase() === selectedTicket.employeeEmail.toLowerCase();
   // The one message that carries the "Seen / Not seen yet" receipt (-1 = none) — see core/ticketReceipts.
   const lastCounterpartIdx = receiptReplyIndex(selectedTicket);
@@ -156,7 +155,7 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                     // there's no real document to navigate to.
                     <button
                       type="button"
-                      onClick={() => { setLightboxSrc(rep.attachmentUrl!); setLightboxName(rep.attachmentName); }}
+                      onClick={() => onOpenImage(rep.attachmentUrl!, rep.attachmentName)}
                       className={rep.message ? 'block mt-2' : 'block'}
                     >
                       <img src={rep.attachmentUrl} alt={rep.attachmentName || 'attachment'} className="rounded-lg max-h-56 object-cover" />
