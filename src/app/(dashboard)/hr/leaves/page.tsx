@@ -1,5 +1,6 @@
 'use client';
 
+import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
@@ -223,14 +224,7 @@ export default function HRLeavesPage() {
   const exportLeavesCSV = () => {
     const headers = ['Employee', 'Type', 'Duration', 'Reason', 'Status'];
     const rows = historyLeaves.map(l => [l.employeeName, l.type, l.duration, l.reason, l.status]);
-    const csvContent = 'data:text/csv;charset=utf-8,'
-      + [headers.join(','), ...rows.map(r => r.map(val => `"${val}"`).join(','))].join('\n');
-    const link = document.createElement('a');
-    link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `DelCargo_Leaves_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCsv(csvFilename('DelCargo_Leaves'), [headers, ...rows]);
   };
 
   return (

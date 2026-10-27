@@ -18,3 +18,6 @@ export function downloadCsv(filename: string, rows: unknown[][]): void {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// "Name_2026-10-27.csv": the file name every report download uses.
+export const csvFilename = (name: string): string => `${name}_${new Date().toISOString().slice(0, 10)}.csv`;

@@ -34,7 +34,7 @@ import {
 } from '@/lib/core/payrollView';
 import { correctionsFor, outstandingTotals } from '@/lib/core/payrollCorrections';
 import { PaySlipDialog } from './PaySlipDialog';
-import { downloadCsv } from './csv';
+import { downloadCsv } from '@/lib/csv';
 
 type TabKey = 'salaries' | 'settlements' | 'held' | 'past';
 type Filter = 'all' | 'unpaid' | 'paid' | 'look';
