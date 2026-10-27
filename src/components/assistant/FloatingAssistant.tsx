@@ -93,7 +93,7 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
           aria-label="Assistant"
           onAnimationEnd={e => { if (e.target === e.currentTarget && !open) setClosing(false); }}
           inert={!open}
-          className={`${open ? 'del-window-in' : 'del-window-out'} fixed bottom-[6.5rem] right-4 z-[45] h-[560px] max-h-[calc(100vh-8.5rem)] w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 shadow-2xl md:bottom-6 md:right-6 md:max-h-[80vh]`}
+          className={`${open ? 'del-window-in' : 'del-window-out'} fixed bottom-[6.5rem] right-4 z-[45] h-[560px] max-h-[calc(100vh-8.5rem)] w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 shadow-2xl md:bottom-6 md:right-6 md:max-h-[80vh]`}
         >
           <ChatPanel
             variant="window"

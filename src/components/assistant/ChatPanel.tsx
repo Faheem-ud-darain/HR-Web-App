@@ -2,13 +2,12 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ThinkingOrb } from 'thinking-orbs';
-import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, Plus, SquarePen, X } from 'lucide-react';
+import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, Plus, SquarePen, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Markdown } from './Markdown';
 import { personaFor } from '@/lib/assistant/persona';
-import { ChatHistoryList } from './ChatHistoryList';
-import { clearAssistantChat, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
+import { clearAssistantChat, deleteSavedChat, listSavedChats, openSavedChat, type SavedChatRow, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
 
 function useReducedMotion(): boolean {
   return useSyncExternalStore(
@@ -36,9 +35,7 @@ const TOOL_LABEL: Record<string, string> = {
   activity_facts: 'work activity', bank_details: 'bank details', get_ticket: 'ticket', tracker_health: 'trackers', payroll_overview: 'payroll',
 };
 
-// `historyDocked`: the page shows the saved-chat list beside the chat (tablet and up), so the History button and
-// its list are only needed on phones.
-interface Props { variant: 'window' | 'page'; role: 'hr' | 'admin'; historyDocked?: boolean; onExpand?: () => void; onMinimise?: () => void; onClose?: () => void }
+interface Props { variant: 'window' | 'page'; role: 'hr' | 'admin'; onExpand?: () => void; onMinimise?: () => void; onClose?: () => void }
 
 /** Copies an answer to the clipboard (for pasting a drafted reply into a ticket). */
 function CopyButton({ text }: { text: string }) {
@@ -58,7 +55,49 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function ChatPanel({ variant, role, historyDocked, onExpand, onMinimise, onClose }: Props) {
+/** The signed-in user's own saved chats: reopen one to carry on, or delete it. */
+function HistoryList({ onPicked, activeId, refreshKey }: { onPicked?: () => void; activeId?: string; refreshKey?: string }) {
+  const [rows, setRows] = useState<SavedChatRow[] | null>(null);
+  const [available, setAvailable] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    void listSavedChats().then(r => { if (alive) { setRows(r.chats); setAvailable(r.available); } });
+    return () => { alive = false; };
+  }, [refreshKey]);
+  const when = (u: string) => {
+    const d = new Date(u.replace(' ', 'T'));
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <p className="px-1 pb-2 text-[11px] text-slate-500">Your past chats. Only you can see these, and they are removed after 30 days. Bank numbers are saved masked.</p>
+      {rows === null && <p className="px-1 text-sm text-slate-500" role="status">Loading…</p>}
+      {rows !== null && !available && <p className="px-1 text-sm text-slate-600">Saved chats are not switched on yet.</p>}
+      {rows !== null && available && rows.length === 0 && <p className="px-1 text-sm text-slate-600">No saved chats yet. Your next conversation will appear here.</p>}
+      <ul className="space-y-1">
+        {(rows ?? []).map(r => (
+          <li key={r.id} className={`group flex items-center gap-1 rounded-lg hover:bg-slate-100 ${r.id === activeId ? 'bg-slate-100' : ''}`}>
+            <button type="button" onClick={async () => { if (await openSavedChat(r.id)) onPicked?.(); }} className="min-w-0 flex-1 rounded-lg px-2 py-2 text-left">
+              <span className="block truncate text-sm font-medium text-slate-800">{r.title}</span>
+              <span className="block text-[11px] text-slate-400">{when(r.updated)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => { if (await deleteSavedChat(r.id)) setRows(cur => (cur ?? []).filter(x => x.id !== r.id)); }}
+              aria-label={`Delete chat: ${r.title}`}
+              title="Delete this chat"
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-200/60 hover:text-rose-600"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Props) {
   const { messages, loading, chatId } = useAssistantChat();
   const router = useRouter();
   const persona = personaFor(role);
@@ -88,8 +127,8 @@ export function ChatPanel({ variant, role, historyDocked, onExpand, onMinimise, 
     void sendAssistantMessage(text);
   };
 
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+  const main = (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white">
       <div className="flex items-center gap-2.5 border-b border-slate-200 px-4 py-3">
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${variant === 'window' ? 'del-header-orb' : ''}`} aria-hidden="true">
           <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={32} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
@@ -98,13 +137,13 @@ export function ChatPanel({ variant, role, historyDocked, onExpand, onMinimise, 
           <h2 className="text-sm font-bold leading-tight text-slate-900">Del</h2>
           <p className="truncate text-[11px] text-slate-500">{persona.tagline}</p>
         </div>
-        {(historyDocked || messages.length > 0) && (
-          // Docked (full page): a plus on phones only; from tablet up the left column has its own "New chat".
-          <button type="button" onClick={() => { clearAssistantChat(); setShowHistory(false); }} aria-label="New chat" title="New chat" className={`${historyDocked ? 'md:hidden ' : ''}rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800`}>
-            {historyDocked ? <Plus className="h-4 w-4" aria-hidden="true" /> : <SquarePen className="h-4 w-4" aria-hidden="true" />}
+        {(variant === 'page' || messages.length > 0) && (
+          // Full page: a plus on phones only (from tablet up the left column has its own "New chat").
+          <button type="button" onClick={() => { clearAssistantChat(); setShowHistory(false); }} aria-label="New chat" title="New chat" className={`${variant === 'page' ? 'md:hidden ' : ''}rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800`}>
+            {variant === 'page' ? <Plus className="h-4 w-4" aria-hidden="true" /> : <SquarePen className="h-4 w-4" aria-hidden="true" />}
           </button>
         )}
-        <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`${historyDocked ? 'md:hidden ' : ''}rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${showHistory ? 'bg-slate-100 text-slate-800' : 'text-slate-500'}`}>
+        <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${variant === 'page' ? 'md:hidden' : ''} ${showHistory ? 'bg-slate-100 text-slate-800' : 'text-slate-500'}`}>
           <History className="h-4 w-4" aria-hidden="true" />
         </button>
         {variant === 'window' && onExpand && (
@@ -124,12 +163,8 @@ export function ChatPanel({ variant, role, historyDocked, onExpand, onMinimise, 
         )}
       </div>
 
-      {showHistory && (
-        <div className={`flex min-h-0 flex-1 flex-col ${historyDocked ? 'md:hidden' : ''}`}>
-          <ChatHistoryList onPicked={() => setShowHistory(false)} activeId={chatId} />
-        </div>
-      )}
-      <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ${showHistory ? (historyDocked ? 'hidden md:block' : 'hidden') : ''}`} aria-live="polite">
+      {showHistory && <HistoryList onPicked={() => setShowHistory(false)} />}
+      <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ${showHistory ? 'hidden' : ''}`} aria-live="polite">
         {messages.length === 0 && (
           <div>
             <p className="text-sm text-slate-700">Good day, {persona.addressAs}. I am Del, your personal assistant. I can look into pay, leave, absences, tickets and trackers on your behalf. I only read information and cannot change anything.</p>
@@ -206,6 +241,24 @@ export function ChatPanel({ variant, role, historyDocked, onExpand, onMinimise, 
         </div>
         <p className="mt-1.5 text-center text-[10px] text-slate-400">Del is an AI assistant and may make errors. Please verify the details before acting.</p>
       </form>
+    </div>
+  );
+
+  // The full page keeps your past chats in a column on the left (like most chat apps); on a phone, and in
+  // the small window, they open from the clock button instead.
+  if (variant !== 'page') return main;
+  return (
+    <div className="flex h-full min-h-0 bg-white">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50 md:flex" aria-label="Past chats">
+        <div className="p-3">
+          <button type="button" onClick={() => { clearAssistantChat(); setShowHistory(false); inputRef.current?.focus(); }} className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100">
+            <SquarePen className="h-4 w-4" aria-hidden="true" />
+            New chat
+          </button>
+        </div>
+        <HistoryList activeId={chatId} refreshKey={`${chatId ?? ''}-${loading}`} />
+      </aside>
+      {main}
     </div>
   );
 }
