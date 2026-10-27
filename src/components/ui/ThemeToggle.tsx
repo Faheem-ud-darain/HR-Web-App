@@ -1,7 +1,7 @@
 'use client';
 
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { setThemePreference, useResolvedTheme, useThemePreference, type ThemePreference } from '@/lib/theme';
+import { originOf, setThemePreference, useResolvedTheme, useThemePreference, type ThemePreference } from '@/lib/theme';
 import { triggerHaptic } from '@/lib/haptics';
 import { Card } from './Card';
 
@@ -24,7 +24,7 @@ export function ThemeSegmentedControl() {
             type="button"
             role="radio"
             aria-checked={active}
-            onClick={() => { triggerHaptic.selection(); setThemePreference(value); }}
+            onClick={e => { triggerHaptic.selection(); setThemePreference(value, originOf(e.currentTarget)); }}
             className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors ${
               active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
@@ -61,12 +61,15 @@ export function ThemeIconButton({ className = '' }: { className?: string }) {
   return (
     <button
       type="button"
-      onClick={() => { triggerHaptic.light(); setThemePreference(dark ? 'light' : 'dark'); }}
+      onClick={e => { triggerHaptic.light(); setThemePreference(dark ? 'light' : 'dark', originOf(e.currentTarget)); }}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={dark ? 'Light mode' : 'Dark mode'}
       className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center ${className}`}
     >
-      {dark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
+      {/* Keyed so the icon re-mounts and plays its pop-in each time the theme flips. */}
+      <span key={dark ? 'sun' : 'moon'} className="theme-icon-pop flex" style={{ '--spin': dark ? '25deg' : '-25deg' } as React.CSSProperties}>
+        {dark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
+      </span>
     </button>
   );
 }

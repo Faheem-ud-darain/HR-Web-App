@@ -33,13 +33,70 @@ function applyTheme(pref: ThemePreference) {
     .catch(() => { /* web, or plugin not in this build */ });
 }
 
-export function setThemePreference(pref: ThemePreference) {
+// Where the circle starts/ends: the centre of the control that was tapped.
+export type WipeOrigin = { x: number; y: number };
+export const originOf = (el: Element): WipeOrigin => {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+};
+
+function commit(pref: ThemePreference) {
+  applyTheme(pref);
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+let activeWipe: ViewTransition | null = null;
+
+function clearWipe() {
+  const root = document.documentElement;
+  root.removeAttribute('data-theme-wipe');
+  root.style.removeProperty('--wipe-x');
+  root.style.removeProperty('--wipe-y');
+}
+
+// Switching to dark paints a circle out of the toggle over the screen; switching back to light pulls the
+// dark screen into the toggle. Uses the View Transitions API, so browsers without it (or people who ask for
+// reduced motion) just get the instant switch. A click while a wipe is still running ends it and switches
+// at once, so tapping quickly can never stack transitions.
+export function setThemePreference(pref: ThemePreference, origin?: WipeOrigin) {
   try {
     if (pref === 'system') localStorage.removeItem(THEME_KEY);
     else localStorage.setItem(THEME_KEY, pref);
   } catch { /* private mode: the choice lasts until the page is closed */ }
-  applyTheme(pref);
-  window.dispatchEvent(new Event(CHANGE_EVENT));
+
+  const root = document.documentElement;
+  const toDark = resolveTheme(pref) === 'dark';
+  const changes = toDark !== (root.getAttribute('data-theme') === 'dark');
+  if (activeWipe) {
+    activeWipe.skipTransition();
+    activeWipe = null;
+    clearWipe();
+    commit(pref);
+    return;
+  }
+  if (!origin || !changes || !document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    commit(pref);
+    return;
+  }
+
+  // The start circle is also set in CSS (globals.css) so the new screen is never visible full-size before the
+  // animation below is attached.
+  root.style.setProperty('--wipe-x', `${origin.x}px`);
+  root.style.setProperty('--wipe-y', `${origin.y}px`);
+  root.setAttribute('data-theme-wipe', toDark ? 'grow' : 'shrink');
+  const transition = document.startViewTransition(() => commit(pref));
+  activeWipe = transition;
+  const radius = Math.hypot(Math.max(origin.x, innerWidth - origin.x), Math.max(origin.y, innerHeight - origin.y));
+  const circle = (r: number) => `circle(${r}px at ${origin.x}px ${origin.y}px)`;
+  transition.ready
+    .then(() => root.animate(
+      { clipPath: toDark ? [circle(0), circle(radius)] : [circle(radius), circle(0)] },
+      { duration: 550, easing: 'ease-in-out', fill: 'forwards', pseudoElement: toDark ? '::view-transition-new(root)' : '::view-transition-old(root)' },
+    ))
+    .catch(() => { /* transition skipped */ });
+  transition.finished.catch(() => { /* skipped or interrupted */ }).finally(() => {
+    if (activeWipe === transition) { activeWipe = null; clearWipe(); }
+  });
 }
 
 function subscribe(onChange: () => void) {

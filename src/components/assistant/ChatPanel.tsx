@@ -130,8 +130,8 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="flex items-center gap-2.5 border-b border-slate-200 px-4 py-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden="true">
-          <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={20} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${variant === 'window' ? 'del-header-orb' : ''}`} aria-hidden="true">
+          <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={32} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold leading-tight text-slate-900">Del</h2>

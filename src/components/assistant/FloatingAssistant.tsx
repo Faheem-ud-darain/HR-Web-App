@@ -31,6 +31,13 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
   const onAssistantPage = pathname.endsWith('/assistant');
   const [nudge, setNudge] = useState<Nudge | null>(null);
   const [nudgesOff, setNudgesOff] = useState(false);
+  // Closing keeps the window mounted until its shrink-into-the-orb animation has played (see globals.css).
+  const [wasOpen, setWasOpen] = useState(open);
+  const [closing, setClosing] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    setClosing(!open && !reduced);
+  }
 
   // While the window is closed, float a small suggestion beside the orb every so often so people
   // notice Del is there. It hides itself after a few seconds and stops for the tab once dismissed twice.
@@ -78,11 +85,13 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
 
   return (
     <>
-      {open && (
+      {(open || closing) && (
         <div
           role="dialog"
           aria-label="Assistant"
-          className="fixed bottom-[11rem] right-4 z-[45] h-[560px] max-h-[calc(100vh-13rem)] w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 shadow-2xl md:bottom-24 md:right-6 md:max-h-[70vh]"
+          onAnimationEnd={e => { if (e.target === e.currentTarget && !open) setClosing(false); }}
+          inert={!open}
+          className={`${open ? 'del-window-in' : 'del-window-out'} fixed bottom-[6.5rem] right-4 z-[45] h-[560px] max-h-[calc(100vh-8.5rem)] w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-200 shadow-2xl md:bottom-6 md:right-6 md:max-h-[80vh]`}
         >
           <ChatPanel
             variant="window"
@@ -110,7 +119,11 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
         onClick={() => setAssistantOpen(!open)}
         aria-label={open ? 'Close assistant' : 'Open assistant'}
         aria-expanded={open}
-        className="fixed bottom-[6.5rem] right-4 z-[45] flex h-16 w-16 items-center justify-center rounded-full transition-transform hover:scale-110 md:bottom-6 md:right-6"
+        tabIndex={open ? -1 : 0}
+        className={`fixed bottom-[6.5rem] right-4 z-[45] flex h-16 w-16 items-center justify-center rounded-full transition-[transform,opacity] md:bottom-6 md:right-6 ${
+          // The orb flies into the window while it's open, and comes back as the window shrinks into it.
+          open ? 'pointer-events-none scale-0 opacity-0 duration-200' : 'opacity-100 delay-150 duration-300 hover:scale-110'
+        }`}
       >
         <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={64} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
       </button>
