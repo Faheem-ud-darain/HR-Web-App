@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Crown, Megaphone, Paperclip, X, FileText, Video, Smile, Loader2, Send } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { displayName, Team, Profile } from '@/lib/hrData';
@@ -41,6 +42,7 @@ interface ChatComposerProps {
 }
 
 export function ChatComposer({ oversight, activeTeam, draftIsAnnouncement, sendError, pendingFile, setPendingFile, fileInputRef, mention, mentionSuggestions, pickMention, currentUserRole, docTag, docTagSuggestions, pickDocTag, teamDocuments, handleFilePick, setDraft, setDraftIsAnnouncement, emojiWrapperRef, setShowEmojiPicker, showEmojiPicker, insertEmoji, textareaRef, draft, handleDraftChange, setMention, setDocTag, handleSend, sending }: ChatComposerProps) {
+  useAutoGrow(textareaRef, draft, 192); // grows and shrinks with what is typed
   return (
     <div className="border-t border-slate-200 px-2 md:px-3 pt-2 md:pt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:pb-[calc(0.75rem+env(safe-area-inset-bottom))] shrink-0 relative bg-white">
       {oversight && (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { fitTextarea, useAutoGrow } from '@/lib/useAutoGrow';
 
 // Shared text-field styling. Forms used to hand-type ~70 slightly different
 // Tailwind strings; these presets are the ones that were already in use most
@@ -39,7 +40,22 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function 
   return <select ref={ref} className={join(fieldSize, className)} {...props} />;
 });
 
-type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & { fieldSize?: FieldSize };
-export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ fieldSize = 'md', className, maxLength, ...props }, ref) {
-  return <textarea ref={ref} className={join(fieldSize, className)} maxLength={maxLength ?? DEFAULT_TEXTAREA_MAX_LENGTH} {...props} />;
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & { fieldSize?: FieldSize; /** Tallest it grows before scrolling (px). Default 320. */ maxAutoHeight?: number; /** Set false for a fixed-height box. */ autoGrow?: boolean };
+// Grows and shrinks with what is typed (up to maxAutoHeight), starting from its `rows`.
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ fieldSize = 'md', className, maxLength, maxAutoHeight = 320, autoGrow = true, onInput, ...props }, ref) {
+  const inner = React.useRef<HTMLTextAreaElement | null>(null);
+  const setRefs = React.useCallback((el: HTMLTextAreaElement | null) => {
+    inner.current = el;
+    if (typeof ref === 'function') ref(el); else if (ref) (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+  }, [ref]);
+  useAutoGrow(inner, autoGrow ? props.value ?? props.defaultValue : null, maxAutoHeight);
+  return (
+    <textarea
+      ref={setRefs}
+      className={join(fieldSize, className)}
+      maxLength={maxLength ?? DEFAULT_TEXTAREA_MAX_LENGTH}
+      onInput={e => { if (autoGrow) fitTextarea(e.currentTarget, maxAutoHeight); onInput?.(e); }}
+      {...props}
+    />
+  );
 });
