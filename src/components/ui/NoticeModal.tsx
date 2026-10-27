@@ -23,7 +23,8 @@ interface NoticeModalProps {
   extra?: { tone: Tone; icon: LucideIcon; text: React.ReactNode }[];
   // The main action. Left out for a plain "got it" notice.
   action?: { label: string; onClick: () => void; variant?: ButtonVariant; disabled?: boolean };
-  closeLabel?: string;
+  // The Close button's text; null hides it (the action is then the only way on).
+  closeLabel?: string | null;
   // Disables Close while the action is running.
   busy?: boolean;
   onClose: () => void;
@@ -48,7 +49,7 @@ export function NoticeModal({ title, tone, icon: Icon, children, extra = [], act
         ))}
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
           {action && <Button variant={action.variant ?? 'primary'} size="md" onClick={action.onClick} disabled={action.disabled}>{action.label}</Button>}
-          <Button variant="secondary" size="md" onClick={onClose} disabled={busy}>{closeLabel}</Button>
+          {closeLabel !== null && <Button variant="secondary" size="md" onClick={onClose} disabled={busy}>{closeLabel}</Button>}
         </div>
       </div>
     </Modal>
