@@ -1,18 +1,18 @@
 'use client';
 
+import { NoticeModal } from '@/components/ui/NoticeModal';
+import { TaskDetailModal } from './_components/TaskDetailModal';
+import { UnderEightHoursModal } from './_components/UnderEightHoursModal';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { AlertTriangle, WifiOff, Smartphone, Landmark, Loader2 } from 'lucide-react';
+import { AlertTriangle, WifiOff, Smartphone, Landmark } from 'lucide-react';
 import { isMobileDevice, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
-import { formatDateNY } from '@/lib/timezone';
-import { Button } from '@/components/ui/Button';
-import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 import { TimesheetReviewModal } from "@/app/(dashboard)/employee/_components/TimesheetReviewModal";
 import { EmployeeSidePanel } from "@/app/(dashboard)/employee/_components/EmployeeSidePanel";
 import { EmployeeMainColumn } from "@/app/(dashboard)/employee/_components/EmployeeMainColumn";
@@ -666,238 +666,53 @@ export default function EmployeeDashboard() {
 
       </div>
 
-      {/* Mobile-blocked prompt — shown whenever Start Shift is attempted
-          from a mobile device (phone/tablet browser or the native app),
-          regardless of whether screen tracking is enabled for this
-          employee. See isMobileDevice's comment in trackerSetup.ts for
-          why this isn't scoped to tracked accounts only. */}
+      {/* Start Shift prompts. Each blocks the shift for a different reason; see isMobileDevice and TRACKER_MIN_VERSION in
+          trackerSetup.ts. */}
       {showMobileBlockedModal && (
-        <Modal isOpen onClose={() => setShowMobileBlockedModal(false)} title="Desktop Required for This Shift">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 p-4 rounded-xl">
-              <Smartphone className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Manual Start Shift isn&apos;t available on a phone or tablet. Please start your shift from a desktop or laptop browser instead.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setShowMobileBlockedModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <NoticeModal title="Desktop Required for This Shift" tone="rose" icon={Smartphone} onClose={() => setShowMobileBlockedModal(false)}>
+          Manual Start Shift isn&apos;t available on a phone or tablet. Please start your shift from a desktop or laptop browser instead.
+        </NoticeModal>
       )}
 
-      {/* Tracker-required prompt — shown when Start Shift is blocked because
-          screen tracking is enabled for this employee but the desktop agent
-          isn't currently connected. */}
+      {/* Screen tracking is on for this employee but the desktop agent is not connected. */}
       {showTrackerRequiredModal && (
-        <Modal isOpen onClose={() => setShowTrackerRequiredModal(false)} title="Tracker App Required">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
-              <WifiOff className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Your account has screen tracking enabled by HR/Admin, so your shift can only be started once the DelCargo Tracker desktop app is installed and running. Open the app (check your system tray / menu bar if it&apos;s already installed) and try starting your shift again.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => router.push('/employee/tracker')}
-              >
-                Go to Tracker Setup
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setShowTrackerRequiredModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <NoticeModal title="Tracker App Required" tone="amber" icon={WifiOff} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setShowTrackerRequiredModal(false)}>
+          Your account has screen tracking enabled by HR/Admin, so your shift can only be started once the DelCargo Tracker desktop app is installed and running. Open the app (check your system tray / menu bar if it&apos;s already installed) and try starting your shift again.
+        </NoticeModal>
       )}
 
-      {/* Tracker-update-required prompt — shown when Start Shift is blocked
-          because the connected desktop agent is live but running a build
-          older than TRACKER_MIN_VERSION (see trackerSetup.ts). Distinct from
-          showTrackerRequiredModal above, which is for "not connected at
-          all" — this one is for "connected, but too old to trust." */}
+      {/* Connected, but running a build older than TRACKER_MIN_VERSION ("connected but too old to trust"). */}
       {showTrackerUpdateRequiredModal && (
-        <Modal isOpen onClose={() => setShowTrackerUpdateRequiredModal(false)} title="Tracker Update Required">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-xl">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Your DelCargo Tracker app{trackerHeartbeat?.agentVersion ? ` (v${trackerHeartbeat.agentVersion})` : ''} is running but out of date — v{TRACKER_MIN_VERSION} or newer is required before you can start a tracked shift. Please update the app (it should prompt you automatically), then try starting your shift again.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => router.push('/employee/tracker')}
-              >
-                Go to Tracker Setup
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setShowTrackerUpdateRequiredModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <NoticeModal title="Tracker Update Required" tone="amber" icon={AlertTriangle} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setShowTrackerUpdateRequiredModal(false)}>
+          Your DelCargo Tracker app{trackerHeartbeat?.agentVersion ? ` (v${trackerHeartbeat.agentVersion})` : ''} is running but out of date — v{TRACKER_MIN_VERSION} or newer is required before you can start a tracked shift. Please update the app (it should prompt you automatically), then try starting your shift again.
+        </NoticeModal>
       )}
 
-      {/* Stale-setup-code prompt — shown when Start Shift is blocked because
-          the connected desktop agent is presenting an old agentToken that no
-          longer matches hr_tracking_settings (the setup code was regenerated
-          since this device was last configured). Distinct from both modals
-          above: the agent IS running and IS current, it just can't
-          authenticate — screen tracking silently cannot function until the
-          employee re-pastes their new setup code. */}
+      {/* The agent is running and current but presents an old agentToken that no longer matches hr_tracking_settings
+          (the setup code was regenerated since this device was configured), so tracking cannot work until the new code is pasted in. */}
       {showTrackerReconnectRequiredModal && (
-        <Modal isOpen onClose={() => setShowTrackerReconnectRequiredModal(false)} title="Reconnect Tracker Required">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 p-4 rounded-xl">
-              <AlertTriangle className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                Your setup code was regenerated by HR/Admin, so your desktop tracker app is still using the old code and can no longer connect. Your shift can&apos;t start until you open your Tracker Setup page, copy the new setup code, and paste it into the DelCargo Tracker app on your computer.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => router.push('/employee/tracker')}
-              >
-                Go to Tracker Setup
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setShowTrackerReconnectRequiredModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <NoticeModal title="Reconnect Tracker Required" tone="orange" icon={AlertTriangle} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setShowTrackerReconnectRequiredModal(false)}>
+          Your setup code was regenerated by HR/Admin, so your desktop tracker app is still using the old code and can no longer connect. Your shift can&apos;t start until you open your Tracker Setup page, copy the new setup code, and paste it into the DelCargo Tracker app on your computer.
+        </NoticeModal>
       )}
 
-      {/* Tracker-closed-mid-shift OR inactivity-auto-absence notice — see the
-          shift-stop-signal polling effect above. Blocking (no backdrop-click
-          dismiss expected) since this is important enough that it shouldn't
-          be missed by accident. */}
+      {/* The tracker was closed mid-shift, or inactivity ended the shift and marked the employee absent (see the
+          shift-stop-signal polling effect above). */}
       {shiftStopModal && (
-        <Modal
-          isOpen
-          onClose={() => setShiftStopModal(false)}
+        <NoticeModal
           title={shiftStopReason === 'inactivity_absence' ? 'Marked Absent — Shift Ended' : 'Tracker Closed — Shift Ended'}
+          tone={shiftStopReason === 'inactivity_absence' ? 'rose' : 'amber'}
+          icon={AlertTriangle}
+          action={{ label: shiftStopReason === 'inactivity_absence' ? 'View Absent Details' : 'Go to Tracker Setup', onClick: () => router.push(shiftStopReason === 'inactivity_absence' ? '/employee/absences' : '/employee/tracker') }}
+          onClose={() => setShiftStopModal(false)}
         >
-          <div className="space-y-4">
-            <div className={`flex items-start gap-3 p-4 rounded-xl border ${shiftStopReason === 'inactivity_absence' ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
-              <AlertTriangle className={`h-5 w-5 shrink-0 mt-0.5 ${shiftStopReason === 'inactivity_absence' ? 'text-rose-600' : 'text-amber-600'}`} />
-              <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                {shiftStopReason === 'inactivity_absence'
-                  ? 'Your shift has been ended automatically because you were inactive for more than 35 continuous minutes. You have been marked absent for today and a deduction has been applied to your pay — see Absent Details for the exact amount. If you believe this is a mistake, contact HR.'
-                  : "The DelCargo Tracker app on your computer was closed while your shift was active, so your shift has been automatically ended. If this wasn't intentional, reopen the tracker app and start a new shift to resume being tracked."}
-              </p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => router.push(shiftStopReason === 'inactivity_absence' ? '/employee/absences' : '/employee/tracker')}
-              >
-                {shiftStopReason === 'inactivity_absence' ? 'View Absent Details' : 'Go to Tracker Setup'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setShiftStopModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
+          {shiftStopReason === 'inactivity_absence'
+            ? 'Your shift has been ended automatically because you were inactive for more than 35 continuous minutes. You have been marked absent for today and a deduction has been applied to your pay — see Absent Details for the exact amount. If you believe this is a mistake, contact HR.'
+            : "The DelCargo Tracker app on your computer was closed while your shift was active, so your shift has been automatically ended. If this wasn't intentional, reopen the tracker app and start a new shift to resume being tracked."}
+        </NoticeModal>
       )}
 
-      {/* Task Detail Modal */}
-      {selectedTask && (
-        <Modal isOpen onClose={() => setSelectedTask(null)} title="Task Details">
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${TASK_PRIORITY_STYLES[selectedTask.priority]}`}>
-                {selectedTask.priority} priority
-              </span>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[selectedTask.status]}`}>
-                {TASK_STATUS_LABELS[selectedTask.status]}
-              </span>
-            </div>
-            
-            <div>
-              <h3 className="font-bold text-lg text-slate-900">{selectedTask.title}</h3>
-              {selectedTask.description && (
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed whitespace-pre-wrap break-words">{selectedTask.description}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs">
-              <div>
-                <p className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Due Date</p>
-                <p className="font-semibold text-slate-800 mt-0.5">{formatDateNY(selectedTask.dueDate)}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Department</p>
-                <p className="font-semibold text-slate-800 mt-0.5">{selectedTask.team}</p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
-              {selectedTask.status === 'todo' && (
-                <button
-                  onClick={() => handleUpdateTaskStatus(selectedTask.id, 'in_progress')}
-                  disabled={isUpdatingTaskStatus}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-xs disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                >
-                  {isUpdatingTaskStatus && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Start Task
-                </button>
-              )}
-              {selectedTask.status === 'in_progress' && (
-                <button
-                  onClick={() => handleUpdateTaskStatus(selectedTask.id, 'done')}
-                  disabled={isUpdatingTaskStatus}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-xs disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                >
-                  {isUpdatingTaskStatus && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Mark Completed
-                </button>
-              )}
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => setSelectedTask(null)}
-                disabled={isUpdatingTaskStatus}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {selectedTask && <TaskDetailModal task={selectedTask} busy={isUpdatingTaskStatus} onStatus={next => handleUpdateTaskStatus(selectedTask.id, next)} onClose={() => setSelectedTask(null)} />}
 
       {/* Employee Activity & Timesheet Review Modal */}
       {selectedReviewEmp && (
@@ -905,55 +720,8 @@ export default function EmployeeDashboard() {
           <TimesheetReviewModal selectedReviewEmp={selectedReviewEmp} userProfile={userProfile} reviewEntries={reviewEntries} setSelectedReviewEmp={setSelectedReviewEmp} />
         </Modal>
       )}
-      {/* Under 8 Hours heads-up — purely informational now (2026-09-01).
-          By the time this can show, doClockOut() has already run and the
-          shift is already ended; this used to be a confirmation GATE that
-          blocked the actual clock-out until a second click, which is what
-          let shifts silently stay open for up to 16 hours when an employee
-          didn't notice/click through it. Never re-add a button here that
-          the shift-ending action depends on. */}
       {showUnder8HourModal && under8HourDetails && (
-        <Modal isOpen={showUnder8HourModal} onClose={() => setShowUnder8HourModal(false)} title="Shift Ended Under 8 Hours">
-          <div className="space-y-4 font-sans text-xs">
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-bold text-sm">Your shift has been ended.</p>
-                <p className="text-amber-800 leading-relaxed font-medium">
-                  It was under the required <strong>8 hours</strong> of total shift time for today — this may affect your pay for today. HR/Admin has also been notified.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="flex justify-between items-center text-slate-700">
-                <span className="font-semibold text-slate-500">Today&apos;s Total Shift Time:</span>
-                <span className="font-bold font-mono text-sm text-slate-900">
-                  {Math.floor(under8HourDetails.workedMinutes / 60)}h {under8HourDetails.workedMinutes % 60}m
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-slate-700 pt-2 border-t border-slate-200">
-                <span className="font-semibold text-amber-700">Short By:</span>
-                <span className="font-bold font-mono text-sm text-amber-700">
-                  {Math.floor(under8HourDetails.remainingMinutes / 60)}h {under8HourDetails.remainingMinutes % 60}m
-                </span>
-              </div>
-            </div>
-
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              If your shift was split into multiple parts due to internet/app disconnections, your total worked time today is combined. If this looks wrong, contact HR.
-            </p>
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">
-              <button
-                onClick={() => setShowUnder8HourModal(false)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </Modal>
+        <UnderEightHoursModal workedMinutes={under8HourDetails.workedMinutes} remainingMinutes={under8HourDetails.remainingMinutes} onClose={() => setShowUnder8HourModal(false)} />
       )}
     </div>
   );
