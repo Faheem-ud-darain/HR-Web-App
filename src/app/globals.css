@@ -628,3 +628,60 @@ input[type='radio']:focus-visible {
     min-height: 22px;
   }
 }
+
+/* ── Apple Human Interface Guidelines, for phones and tablets ──────────────────────────────────────────
+   These apply on touch screens and on any window narrower than a laptop, so a tablet is treated like a
+   phone. Desktop keeps its compact look.
+   1. Text: Apple's smallest recommended size is 11pt, and grey text must reach 4.5:1 contrast. The app uses
+      8–10px labels and light grey (slate-400) in hundreds of places, so they are raised here once instead
+      of editing every screen. */
+@media (pointer: coarse), (max-width: 1023px) {
+  .text-\[8px\],
+  .text-\[9px\],
+  .text-\[10px\] {
+    font-size: 11px;
+  }
+  .text-slate-400:not(:hover),
+  .placeholder\:text-slate-400::placeholder {
+    color: #64748b; /* slate-500, 4.8:1 on white */
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+}
+
+/* 2. Touch: every control gets a hit area of at least 44×44pt (Apple's minimum), drawn as an invisible
+      layer around the control so nothing moves on screen. `:where()` and the base layer keep this weaker
+      than any utility class, so buttons that are positioned absolutely or fixed stay that way. */
+@layer base {
+  @media (pointer: coarse) {
+    :where(button, [role='button'], [role='tab'], [role='switch'], summary) {
+      position: relative;
+    }
+    :where(button, [role='button'], [role='tab'], [role='switch'], summary)::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+  /* No grey flash on tap and no double-tap-to-zoom delay: controls respond immediately, like native ones. */
+  :where(button, a, summary, select, label, [role='button'], [role='tab'], [role='switch']) {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* 3. Notch and rounded corners: when a phone is turned sideways the camera cut-out sits at the left or
+      right edge, so the page keeps clear of it. (Zero on every screen without a cut-out.) */
+@media (orientation: landscape) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
