@@ -14,7 +14,6 @@ interface ChannelSelectorProps {
   mobileStyle: 'horizontal' | 'dropdown';
 }
 
-const CHEVRON = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")';
 
 // Which channel is open. Rendered only when there is more than one to pick from.
 export function ChannelSelector({ teams, activeTeamId, onSelect, oversight, mobileStyle }: ChannelSelectorProps) {
@@ -37,13 +36,7 @@ export function ChannelSelector({ teams, activeTeamId, onSelect, oversight, mobi
 
       {mobileStyle === 'dropdown' && (
         <div className="md:hidden shrink-0 px-1">
-          <Select
-            value={activeTeamId || ''}
-            onChange={e => onSelect(e.target.value)}
-            fieldSize="md"
-            className="appearance-none"
-            style={{ backgroundImage: CHEVRON, backgroundPosition: 'right 1rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1rem' }}
-          >
+          <Select value={activeTeamId || ''} onChange={e => onSelect(e.target.value)} fieldSize="md" chevron>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </Select>
         </div>
