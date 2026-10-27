@@ -122,7 +122,7 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
         aria-label={open ? 'Close assistant' : 'Open assistant'}
         aria-expanded={open}
         tabIndex={open ? -1 : 0}
-        className={`fixed bottom-[6.5rem] right-4 z-[45] flex h-16 w-16 items-center justify-center rounded-full transition-[transform,opacity] md:bottom-6 md:right-6 ${
+        className={`fixed bottom-[6.5rem] right-4 z-[45] flex h-16 w-16 items-center justify-center rounded-full transition-[transform,opacity] motion-reduce:transition-none md:bottom-6 md:right-6 ${
           // The orb flies into the window while it's open, and comes back as the window shrinks into it.
           open ? 'pointer-events-none scale-0 opacity-0 duration-200' : 'opacity-100 delay-150 duration-300 hover:scale-110'
         }`}

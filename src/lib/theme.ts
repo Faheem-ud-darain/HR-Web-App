@@ -46,6 +46,9 @@ function commit(pref: ThemePreference) {
 }
 
 let activeWipe: ViewTransition | null = null;
+// Numbers each wipe. A skipped transition still runs its update callback later, so the callback only applies
+// its theme while it is the latest wipe: otherwise it could undo a newer choice.
+let wipeId = 0;
 
 function clearWipe() {
   const root = document.documentElement;
@@ -68,6 +71,7 @@ export function setThemePreference(pref: ThemePreference, origin?: WipeOrigin) {
   const toDark = resolveTheme(pref) === 'dark';
   const changes = toDark !== (root.getAttribute('data-theme') === 'dark');
   if (activeWipe) {
+    wipeId++;
     activeWipe.skipTransition();
     activeWipe = null;
     clearWipe();
@@ -84,7 +88,8 @@ export function setThemePreference(pref: ThemePreference, origin?: WipeOrigin) {
   root.style.setProperty('--wipe-x', `${origin.x}px`);
   root.style.setProperty('--wipe-y', `${origin.y}px`);
   root.setAttribute('data-theme-wipe', toDark ? 'grow' : 'shrink');
-  const transition = document.startViewTransition(() => commit(pref));
+  const id = ++wipeId;
+  const transition = document.startViewTransition(() => { if (id === wipeId) commit(pref); });
   activeWipe = transition;
   const radius = Math.hypot(Math.max(origin.x, innerWidth - origin.x), Math.max(origin.y, innerHeight - origin.y));
   const circle = (r: number) => `circle(${r}px at ${origin.x}px ${origin.y}px)`;
