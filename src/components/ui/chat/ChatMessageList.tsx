@@ -77,7 +77,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                 <span className="text-slate-400 font-semibold normal-case ml-auto flex items-center gap-1.5">
                   {formatTimestamp(m.timestamp)}
                   {canForward && (
-                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors">
+                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors p-2 -m-2">
                       <Forward className="h-3 w-3" />
                     </button>
                   )}
@@ -228,7 +228,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                 )}
                 <span className="text-[9px] text-slate-400 font-semibold">{formatTimestamp(m.timestamp)}</span>
                 {canForward && (
-                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors">
+                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors p-2 -m-2">
                     <Forward className="h-3 w-3" />
                   </button>
                 )}

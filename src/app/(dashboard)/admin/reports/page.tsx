@@ -329,13 +329,13 @@ export default function ReportsPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-                <button onClick={() => handleOpenAssignModal(emp)} className="flex-1 min-h-11 md:min-h-0 text-xs md:text-[10px] font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
+                <button onClick={() => handleOpenAssignModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-[10px] font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
                   <MapPin className="h-3.5 w-3.5" /> Assign
                 </button>
-                <button onClick={() => handleOpenReviewModal(emp)} className="flex-1 min-h-11 md:min-h-0 text-xs md:text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
+                <button onClick={() => handleOpenReviewModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
                   <FileText className="h-3.5 w-3.5" /> Tracker
                 </button>
-                <button onClick={() => setSelectedDocsEmp(emp)} className="flex-1 min-h-11 md:min-h-0 text-xs md:text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
+                <button onClick={() => setSelectedDocsEmp(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
                   <Download className="h-3.5 w-3.5" /> Docs
                 </button>
               </div>

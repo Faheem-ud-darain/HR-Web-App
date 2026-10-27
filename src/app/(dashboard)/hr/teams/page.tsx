@@ -595,7 +595,7 @@ export default function HRTeamsPage() {
                       onMouseDown={e => e.stopPropagation()}
                       onClick={e => { e.stopPropagation(); handleToggleTeamLead(emp); }}
                       title={emp.isTeamLead && (emp.leadTeams?.length ?? 0) > 0 ? 'Remove team lead' : 'Make team lead'}
-                      className={`flex-shrink-0 flex min-h-9 items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors transition-transform active:scale-95 md:min-h-0 ${
+                      className={`flex-shrink-0 flex min-h-9 items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors transition-transform active:scale-95 lg:min-h-0 ${
                         emp.isTeamLead && (emp.leadTeams?.length ?? 0) > 0
                           ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700'
                           : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700'
@@ -678,7 +678,7 @@ export default function HRTeamsPage() {
                       <button
                         onClick={() => handleDeleteTeam(teamName)}
                         disabled={deletingTeamName === teamName}
-                        className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-2 lg:p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Delete Team"
                       >
                         {deletingTeamName === teamName ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -705,7 +705,7 @@ export default function HRTeamsPage() {
                               const remain = teamNamesForEmployee(member.email).filter(t => t !== teamName);
                               performAllocation(member, remain);
                             }}
-                            className="min-h-9 px-2 text-slate-400 hover:text-rose-600 text-[10px] font-bold md:min-h-0 md:px-0"
+                            className="min-h-9 px-2 text-slate-400 hover:text-rose-600 text-[10px] font-bold lg:min-h-0 lg:px-0"
                           >
                             Remove
                           </button>

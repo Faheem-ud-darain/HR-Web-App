@@ -68,7 +68,7 @@ export function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; o
   return (
     <button
       onClick={onOpen}
-      className="flex items-center gap-1 mt-1 group"
+      className="flex items-center gap-1 mt-1 group py-2 -my-2"
       title="See who has viewed this message"
     >
       <div className="flex -space-x-1.5">
