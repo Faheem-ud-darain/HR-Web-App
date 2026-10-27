@@ -1,18 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
 import { GripVertical, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
-import { LeaveStatusBadge, LeaveTypeBadge } from '@/components/ui/StatusBadges';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
+import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
 import { Tabs } from '@/components/ui/Tabs';
-import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
-import { Select } from '@/components/ui/Input';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
   { key: 'pending',     label: 'Pending Review',       headerBg: 'bg-amber-50 border-amber-200'   },
@@ -49,9 +46,6 @@ export default function HRLeavesPage() {
     return emp ? displayName(emp, 'hr') : employeeName;
   };
 
-  // History filters
-  const [histFilter, setHistFilter] = useState<LeaveApplication['status'] | 'all'>('all');
-  const [histType, setHistType] = useState<'all' | 'PTO' | 'Sick Leave' | 'Urgent' | 'Normal' | 'Parental Leave'>('all');
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   const handleSendToCEO = async (l: LeaveApplication) => {
@@ -187,24 +181,36 @@ export default function HRLeavesPage() {
     await moveLeaveTo(leaf, targetStatus);
   };
 
-  const filteredInCol = (status: LeaveApplication['status']) =>
-    leaves.filter(l =>
-      l.status === status &&
-      (l.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       l.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       l.reason.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+  const filteredInCol = (status: LeaveApplication['status']) => leaves.filter(l => l.status === status && matchesLeaveSearch(l, searchQuery));
 
   const mobileCol = mobileColChoice ?? (COLUMNS.find(c => leaves.some(l => l.status === c.key))?.key ?? 'pending');
 
-  const historyLeaves = leaves.filter(l =>
-    (histFilter === 'all' || l.status === histFilter) &&
-    (histType === 'all' || l.type === histType) &&
-    (searchQuery === '' ||
-      l.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.reason.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filters = useLeaveFilters(leaves, searchQuery);
+  const historyLeaves = filters.rows;
+
+  // Row buttons for the History tab. A table row gets compact buttons; a phone card gets wide, tall ones.
+  const historyActions = (l: LeaveApplication, variant: 'row' | 'card') => {
+    const wide = variant === 'card';
+    const button = (tone: string, onClick: () => void, label: string, full = false) => (
+      <button
+        onClick={onClick}
+        disabled={processingLeaveId !== null}
+        className={`font-semibold transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 ${tone} ${
+          wide ? `text-[10px] font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded'
+        }`}
+      >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}{label}</button>
+    );
+    if (l.status === 'pending') {
+      return (
+        <div className={`flex gap-2 ${wide ? 'w-full' : 'justify-center'}`}>
+          {button('text-emerald-600 bg-emerald-50 hover:bg-emerald-100', () => handleSendToCEO(l), 'Send to CEO')}
+          {button('text-rose-600 bg-rose-50 hover:bg-rose-100', () => handleHistoryReject(l), 'Reject')}
+        </div>
+      );
+    }
+    if (l.status === 'rejected') return button('text-slate-600 bg-slate-100 hover:bg-slate-200', () => handleReopenLeave(l), 'Re-open', true);
+    return <span className="text-xs text-slate-400 font-medium">—</span>;
+  };
 
   // Overview stats
   const stats = {
@@ -251,21 +257,14 @@ export default function HRLeavesPage() {
           also tacked on a PTO/Sick/Urgent type breakdown at the same visual
           weight, which duplicated the Type column already visible on every
           kanban card and history row without adding new information. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total',    value: stats.total,    bg: 'bg-slate-50 border-slate-200',          text: 'text-slate-700' },
-          { label: 'Pending',  value: stats.pending,  bg: 'bg-amber-50 border-amber-200',           text: 'text-amber-700' },
-          { label: 'Approved', value: stats.approved, bg: 'bg-emerald-50 border-emerald-200',       text: 'text-emerald-700' },
-          { label: 'Rejected', value: stats.rejected, bg: 'bg-rose-50 border-rose-200',             text: 'text-rose-700' },
-        ].map(s => (
-          <Card key={s.label} className={`border ${s.bg}`}>
-            <CardContent className="p-3 text-center">
-              <p className={`text-2xl font-bold ${s.text}`}>{s.value}</p>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <LeaveStatTiles
+        tiles={[
+          { label: 'Total', value: stats.total, tone: 'slate' },
+          { label: 'Pending', value: stats.pending, tone: 'amber' },
+          { label: 'Approved', value: stats.approved, tone: 'emerald' },
+          { label: 'Rejected', value: stats.rejected, tone: 'rose' },
+        ]}
+      />
 
       {/* Tab toggle */}
       <Tabs
@@ -414,166 +413,7 @@ export default function HRLeavesPage() {
       )}
 
       {/* ── HISTORY VIEW ── */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap gap-3">
-            <Select
-              value={histFilter}
-              onChange={e => setHistFilter(e.target.value as LeaveApplication['status'] | 'all')}
-              fieldSize="md"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="hr_approved">HR Approved</option>
-              <option value="approved">CEO Approved</option>
-              <option value="rejected">Rejected</option>
-            </Select>
-            <Select
-              value={histType}
-              onChange={e => setHistType(e.target.value as typeof histType)}
-              fieldSize="md"
-            >
-              <option value="all">All Types</option>
-              <option value="PTO">PTO</option>
-              <option value="Sick Leave">Sick Leave</option>
-              <option value="Urgent">Urgent</option>
-              <option value="Normal">Normal</option>
-              <option value="Parental Leave">Parental Leave</option>
-            </Select>
-            <span className="text-xs text-slate-400 font-semibold self-center">{historyLeaves.length} records</span>
-          </div>
-
-          <Card className="overflow-hidden p-0 border border-slate-200">
-            <TableScroll hideOnMobile>
-              <Table minWidth={750}>
-                <THead>
-                  <tr>
-                    <Th>Employee</Th>
-                    <Th>Type</Th>
-                    <Th>Duration</Th>
-                    <Th>Reason</Th>
-                    <Th align="center">Status</Th>
-                    <Th align="center">Action</Th>
-                  </tr>
-                </THead>
-                <TBody>
-{leavesLoading ? (
-  <TableSkeletonRows rows={6} cols={6} />
-) : (
-<>
-                  {historyLeaves.map(l => (
-                    <Tr key={l.id}>
-                      <Td density="cozy" className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
-                      <Td density="cozy">
-                        <LeaveTypeBadge type={l.type} />
-                      </Td>
-                      <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
-                      <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
-                      <Td align="center" density="cozy">
-                        <LeaveStatusBadge status={l.status} />
-                      </Td>
-                      <Td align="center" density="cozy">
-                        {l.status === 'pending' && (
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => handleSendToCEO(l)}
-                              disabled={processingLeaveId !== null}
-                              className="text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                            >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Send to CEO</button>
-                            <button
-                              onClick={() => handleHistoryReject(l)}
-                              disabled={processingLeaveId !== null}
-                              className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                            >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Reject</button>
-                          </div>
-                        )}
-                        {l.status === 'rejected' && (
-                          <button
-                            onClick={() => handleReopenLeave(l)}
-                            disabled={processingLeaveId !== null}
-                            className="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                          >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Re-open</button>
-                        )}
-                        {(l.status === 'approved' || l.status === 'hr_approved') && (
-                          <span className="text-xs text-slate-400 font-medium">—</span>
-                        )}
-                      </Td>
-                    </Tr>
-                  ))}
-                  {historyLeaves.length === 0 && (
-                    <Tr>
-                      <EmptyState as="td" colSpan={6} py={12} size="sm">
-                        No records match your filters.
-                      </EmptyState>
-                    </Tr>
-                  )}
-                </>
-)}
-</TBody>
-              </Table>
-            </TableScroll>
-
-            {/* Mobile card stack */}
-            <div className="md:hidden space-y-3 p-4">
-              {historyLeaves.map(l => (
-                <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-slate-900 truncate pr-2">{nameFor(l.employeeName)}</p>
-                    <LeaveStatusBadge status={l.status} className="shrink-0" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Type</p>
-                      <LeaveTypeBadge type={l.type} className="inline-block" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
-                      <p className="text-xs font-semibold text-slate-700">{l.duration}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
-                      <p className="text-xs font-medium text-slate-600 line-clamp-2">{l.reason}</p>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
-                    {l.status === 'pending' && (
-                      <>
-                        <button
-                          onClick={() => handleSendToCEO(l)}
-                          disabled={processingLeaveId !== null}
-                          className="flex-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 py-2 rounded-lg transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                        >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Send to CEO</button>
-                        <button
-                          onClick={() => handleHistoryReject(l)}
-                          disabled={processingLeaveId !== null}
-                          className="flex-1 text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 py-2 rounded-lg transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                        >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Reject</button>
-                      </>
-                    )}
-                    {l.status === 'rejected' && (
-                      <button
-                        onClick={() => handleReopenLeave(l)}
-                        disabled={processingLeaveId !== null}
-                        className="w-full text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Re-open</button>
-                    )}
-                    {(l.status === 'approved' || l.status === 'hr_approved') && (
-                      <span className="text-[10px] text-slate-400 font-medium w-full text-center py-1">—</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {leavesLoading && <ListSkeleton rows={3} />}
-              {!leavesLoading && historyLeaves.length === 0 && (
-                <EmptyState py={8} size="sm">
-                  No records match your filters.
-                </EmptyState>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
+      {activeTab === 'history' && <LeaveHistory filters={filters} loading={leavesLoading} nameFor={nameFor} actions={historyActions} />}
     </div>
   );
 }
