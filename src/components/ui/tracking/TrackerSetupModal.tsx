@@ -20,7 +20,7 @@ interface TrackerSetupModalProps {
   handleForceDisconnect: (email: string) => void;
   copyConfig: (settings: TrackingSettings) => void;
   handleRunDiagnostics: (email: string) => Promise<void>;
-  diagnosticsStatus: "idle" | "waiting" | "ok" | "timeout";
+  diagnosticsStatus: "idle" | "waiting" | "ok" | "timeout" | "error";
   handleReloadSettingsNow: (email: string) => Promise<void>;
   handleTrackerAction: (email: string, type: 'reconnect' | 'restart') => Promise<void>;
   diagnosticsResult: TrackerDiagnostics | null;
@@ -176,6 +176,13 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                       </div>
                     )}
     
+                    {diagnosticsStatus === 'error' && (
+                      <div role="alert" className="flex items-start gap-2 bg-rose-50 border border-rose-200 p-3 rounded-lg">
+                        <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-slate-700 leading-relaxed">Could not send the diagnostics request. Check the connection and try again.</p>
+                      </div>
+                    )}
+
                     {diagnosticsStatus === 'ok' && diagnosticsResult && (
                       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">

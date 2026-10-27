@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { hrActions, type Profile, type TrackerDiagnostics, type TrackingSettings } from '@/lib/hrData';
 import { encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL } from '@/lib/trackerSetup';
 import { formatDiagnosticsReport } from './diagnosticsReport';
@@ -50,11 +50,14 @@ export function useTrackerAdmin({ role, settingsList, refetchSettings, refetchHe
   // 'idle' before the first request, 'waiting' while polling, 'timeout' when an older (pre-v19) or offline agent
   // never answers. The UI words that as "couldn't reach it", not "broken": a plain timeout is also the expected
   // result from any agent older than v19.
-  const [diagnosticsStatus, setDiagnosticsStatus] = useState<'idle' | 'waiting' | 'ok' | 'timeout'>('idle');
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState<'idle' | 'waiting' | 'ok' | 'timeout' | 'error'>('idle');
   const [diagnosticsResult, setDiagnosticsResult] = useState<TrackerDiagnostics | null>(null);
   // Each request claims a fresh id; a poll from an earlier request (another employee, or a second click) only
   // applies its result while its own id is still current.
   const diagnosticsRequestIdRef = useRef(0);
+  const diagnosticsTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Leaving the page stops a diagnostics poll that is still waiting for the tracker.
+  useEffect(() => () => { diagnosticsRequestIdRef.current++; clearTimeout(diagnosticsTimerRef.current); }, []);
 
   const handleOpenSetup = async (emp: Profile) => {
     setCopied(false);
@@ -73,7 +76,12 @@ export function useTrackerAdmin({ role, settingsList, refetchSettings, refetchHe
     setDiagnosticsStatus('waiting');
     setDiagnosticsResult(null);
     await hrActions.clearTrackerDiagnostics(email).catch(() => {});
-    await hrActions.writeTrackerCommand(email, 'diagnostics');
+    try {
+      await hrActions.writeTrackerCommand(email, 'diagnostics');
+    } catch {
+      if (diagnosticsRequestIdRef.current === requestId) setDiagnosticsStatus('error'); // lets the button be used again
+      return;
+    }
     const startedAt = Date.now();
     const poll = async () => {
       if (diagnosticsRequestIdRef.current !== requestId) return; // superseded
@@ -88,9 +96,9 @@ export function useTrackerAdmin({ role, settingsList, refetchSettings, refetchHe
         setDiagnosticsStatus('timeout');
         return;
       }
-      setTimeout(poll, DIAGNOSTICS_POLL_MS);
+      diagnosticsTimerRef.current = setTimeout(poll, DIAGNOSTICS_POLL_MS);
     };
-    setTimeout(poll, DIAGNOSTICS_POLL_MS);
+    diagnosticsTimerRef.current = setTimeout(poll, DIAGNOSTICS_POLL_MS);
   };
 
   const handleReloadSettingsNow = async (email: string) => {

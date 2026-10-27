@@ -34,6 +34,8 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
   // Closing keeps the window mounted until its shrink-into-the-orb animation has played (see globals.css).
   const [wasOpen, setWasOpen] = useState(open);
   const [closing, setClosing] = useState(false);
+  // Expanding to the full page unmounts the window mid-animation, so its "closing" flag would never clear.
+  if (onAssistantPage && closing) setClosing(false);
   if (open !== wasOpen) {
     setWasOpen(open);
     setClosing(!open && !reduced);

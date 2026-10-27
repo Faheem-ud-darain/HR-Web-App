@@ -5,7 +5,7 @@ import { AlertCircle } from 'lucide-react';
 export function FormError({ children }: { children?: React.ReactNode }) {
   if (!children) return null;
   return (
-    <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
+    <div role="alert" className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
       <AlertCircle className="h-4 w-4 shrink-0" />{children}
     </div>
   );

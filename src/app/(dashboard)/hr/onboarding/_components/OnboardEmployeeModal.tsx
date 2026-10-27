@@ -11,7 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { StatusDot } from '@/components/ui/StatusDot';
 
 const today = () => new Date().toISOString().split('T')[0];
-const emptyForm = () => ({ fullName: '', email: '', jobTitle: '', gender: 'male', role: 'employee', region: 'Pakistan', salary: '', team: 'Engineering', tempPassword: '' });
+const emptyForm = () => ({ fullName: '', email: '', jobTitle: '', gender: 'male', role: 'employee', region: 'Pakistan', salary: '', team: '', tempPassword: '' });
 type Form = ReturnType<typeof emptyForm>;
 
 // "Onboard Employee": creates the account (the server returns a random temporary password when none is typed),
@@ -27,20 +27,29 @@ export function OnboardEmployeeModal({ teams, onRegistered, onClose }: { teams: 
 
   const field = (key: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm(f => ({ ...f, [key]: e.target.value }));
   const usa = form.region === 'USA';
+  // The team shown in the dropdown: the one picked, else the first real team (never a name that may not exist).
+  const teamName = form.team || teams[0]?.name || '';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     if (busy) return;
-    const { fullName, email, salary, jobTitle, team } = form;
+    const { fullName, email, salary, jobTitle } = form;
+    const team = teamName;
     if (!fullName || !email || !salary || !jobTitle) return setError('Please fill in all required fields.');
     if (isNaN(Number(salary)) || Number(salary) <= 0) return setError('Please enter a valid base salary.');
 
     setBusy(true);
+    // Set once the account exists, so a failure in a later step cannot hide its temporary password.
+    let created: { tempPassword?: string } | null = null;
+    const typedPassword = form.tempPassword.trim();
+    // With no password typed, the server generated a random one: the only time it is ever visible in plaintext.
+    const registeredNote = () => (!typedPassword && created?.tempPassword
+      ? `Employee successfully registered! Temporary password: ${created.tempPassword} — share this with them; it won't be shown again.`
+      : 'Employee successfully registered!');
     try {
-      const typedPassword = form.tempPassword.trim();
-      const result = await addEmployeeServer({
+      created = await addEmployeeServer({
         fullName,
         email,
         role: form.role as 'employee' | 'hr' | 'admin' | 'team_lead',
@@ -52,7 +61,7 @@ export function OnboardEmployeeModal({ teams, onRegistered, onClose }: { teams: 
         jobTitle,
         gender: form.gender as 'male' | 'female',
         region: form.region as 'USA' | 'Pakistan',
-      });
+      }) ?? {};
 
       // Mirror membership onto the authoritative hr_teams.members list.
       const targetTeam = teams.find(t => t.name === team);
@@ -63,18 +72,25 @@ export function OnboardEmployeeModal({ teams, onRegistered, onClose }: { teams: 
       await hrActions.addNotification('all', 'admin', `New employee ${fullName} onboarded onto team ${team}.`);
       onRegistered();
 
-      // With no password typed, the server generated a random one and returned it here: the only time it is ever
-      // visible in plaintext. Keep the dialog open so it can be copied down, and clear the form for the next person.
-      if (!typedPassword && result?.tempPassword) {
-        setSuccess(`Employee successfully registered! Temporary password: ${result.tempPassword} — share this with them; it won't be shown again.`);
+      // Keep the dialog open when a password was generated, so it can be copied down, and clear the form for the next person.
+      if (!typedPassword && created.tempPassword) {
+        setSuccess(registeredNote());
         setForm(emptyForm());
         return;
       }
-      setSuccess('Employee successfully registered!');
+      setSuccess(registeredNote());
       setTimeout(onClose, 1500);
     } catch (err) {
       console.error('Onboard employee failed:', err);
-      setError('Could not register that employee. Please try again.');
+      if (created) {
+        // The account exists: show its password and say which part failed instead of "could not register".
+        setSuccess(registeredNote());
+        setError('The account was created, but adding them to their team or notifying HR/Admin failed. Please add them to the team manually.');
+        setForm(emptyForm());
+        onRegistered();
+      } else {
+        setError('Could not register that employee. Please try again.');
+      }
     } finally {
       setBusy(false);
     }
@@ -126,7 +142,7 @@ export function OnboardEmployeeModal({ teams, onRegistered, onClose }: { teams: 
             <Input type="text" required value={form.salary} onChange={field('salary')} fieldSize="soft" placeholder={usa ? 'e.g. 5000' : 'e.g. 50000'} />
           </FormField>
           <FormField label="Assign Team">
-            <Select value={form.team} onChange={field('team')} fieldSize="soft" chevron>
+            <Select value={teamName} onChange={field('team')} fieldSize="soft" chevron>
               {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
             </Select>
           </FormField>

@@ -39,6 +39,7 @@ export function useMouseActivity({ timesheets }: { timesheets: TimesheetEntry[] 
   };
 
   const handleMouseDayChange = (day: string) => {
+    if (!day) return; // a cleared date field: keep the day that is showing
     setMouseDay(day);
     if (mouseEmp) loadMouseData(mouseEmp.email, 'day', day);
   };

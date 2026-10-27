@@ -20,24 +20,28 @@ export function useScreenshotViewer({ canManage }: { canManage: boolean }) {
   // The exact [since, until] the first page was loaded with: later pages and the ZIP export reuse it, so a rolling
   // 'week' / 'month' window cannot drift between requests.
   const viewerWindowRef = useRef<{ since: string; until: string } | null>(null);
+  // The latest load request: a slower, older response is dropped instead of overwriting the newer one.
+  const viewerRequestRef = useRef(0);
   const [exporting, setExporting] = useState(false);
   const [viewerInactivity, setViewerInactivity] = useState<InactivityLog[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const loadViewerData = async (email: string, range: ViewerRange, day: string) => {
+    const request = ++viewerRequestRef.current;
     setViewerLoading(true);
     try {
       const { since, until } = computeWindow(range, day);
       viewerWindowRef.current = { since: since.toISOString(), until: until.toISOString() };
       const query = { employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() };
       const [first, inactivity] = await Promise.all([hrActions.getScreenshotsPage(query, 1), hrActions.getInactivityLogs(query)]);
+      if (request !== viewerRequestRef.current) return;
       setViewerShots(first.items);
       setViewerPage(1);
       setViewerTotal(first.totalItems);
       setViewerTotalPages(first.totalPages);
       setViewerInactivity(inactivity);
     } finally {
-      setViewerLoading(false);
+      if (request === viewerRequestRef.current) setViewerLoading(false);
     }
   };
 
@@ -78,6 +82,7 @@ export function useScreenshotViewer({ canManage }: { canManage: boolean }) {
   };
 
   const handleDayChange = (day: string) => {
+    if (!day) return; // a cleared date field: keep the day that is showing
     setViewerDay(day);
     if (viewerEmp) loadViewerData(viewerEmp.email, 'day', day);
   };

@@ -66,7 +66,8 @@ export default function EmployeeProfilePage() {
   const { data: myDocs, refetch: refetchDocs } = useProfileSelf();
 
   const photo = useProfilePhoto({ profileId: profile?.id, logTag: 'Profile', onSaved: refetchProfiles }); // the profile is derived from the roster, so it updates itself
-  const docs = useDocumentUploads({ enabled: !!profile?.id, identityDocs: myDocs?.identityDocs || [], onSaved: refetchDocs });
+  const docs = useDocumentUploads({ enabled: !!profile?.id && !!myDocs, // until the person's own documents have loaded, a new identity upload would replace the list with just itself
+    identityDocs: myDocs?.identityDocs || [], onSaved: refetchDocs });
   const deletion = useAccountDeletionRequest(profile?.email);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const idInputRef = useRef<HTMLInputElement>(null);

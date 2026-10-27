@@ -38,12 +38,12 @@ export function ScreenshotLightbox({ shots, index, total, onClose, onNav }: Scre
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); } // captured first, so the dialog behind does not also close
       else if (e.key === 'ArrowLeft') go(-1);
       else if (e.key === 'ArrowRight') go(1);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-bound when the shot or the loaded count changes so navigation sees current values
   }, [index, shots.length]);
 
