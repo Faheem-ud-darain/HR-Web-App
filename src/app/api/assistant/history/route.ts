@@ -33,15 +33,15 @@ export async function GET(request: Request) {
   try {
     if (id) {
       if (!validId(id)) return NextResponse.json({ error: 'Chat not found.' }, { status: 404 });
-      const row = await db.prepare('SELECT id, title, messages FROM assistant_chats WHERE id = ? AND owner = ?').bind(id, owner).first<{ id: string; title: string; messages: string }>();
+      const row = await db.prepare('SELECT id, title, messages FROM assistant_chats WHERE id = ? AND owner = ? AND updated >= ?').bind(id, owner, retentionCutoff()).first<{ id: string; title: string; messages: string }>();
       if (!row) return NextResponse.json({ error: 'Chat not found.' }, { status: 404 });
       let messages: unknown = [];
       try { messages = JSON.parse(row.messages); } catch { /* unreadable: show it empty */ }
       return NextResponse.json({ chat: { id: row.id, title: row.title, messages: Array.isArray(messages) ? messages : [] } });
     }
-    // Tidy up this user's expired chats whenever they open the list.
+    // Tidy up this user's expired chats whenever they open the list (the nightly cron route sweeps everyone's).
     await db.prepare('DELETE FROM assistant_chats WHERE owner = ? AND updated < ?').bind(owner, retentionCutoff()).run();
-    const list = await db.prepare('SELECT id, title, updated FROM assistant_chats WHERE owner = ? ORDER BY updated DESC LIMIT ?').bind(owner, MAX_SAVED_CHATS).all<{ id: string; title: string; updated: string }>();
+    const list = await db.prepare('SELECT id, title, updated FROM assistant_chats WHERE owner = ? AND updated >= ? ORDER BY updated DESC LIMIT ?').bind(owner, retentionCutoff(), MAX_SAVED_CHATS).all<{ id: string; title: string; updated: string }>();
     return NextResponse.json({ available: true, chats: list.results ?? [] });
   } catch (err) {
     console.error('[assistant/history GET] failed:', err instanceof Error ? err.message : 'error');

@@ -45,9 +45,9 @@ export function cleanChatForSave(input: unknown): SavedMessage[] | null {
       msg.actions = m.actions.slice(0, MAX_ACTIONS).flatMap((a): SavedAction[] => {
         const x = a as Record<string, unknown>;
         if (!x || typeof x.label !== 'string' || (x.type !== 'open_page' && x.type !== 'ask_followup')) return [];
-        const act: SavedAction = { type: x.type, label: x.label.slice(0, 80) };
+        const act: SavedAction = { type: x.type, label: maskBankNumbers(x.label.slice(0, 80)) };
         if (typeof x.page === 'string') act.page = x.page.slice(0, 40);
-        if (typeof x.search === 'string') act.search = x.search.slice(0, 80);
+        if (typeof x.search === 'string') act.search = maskBankNumbers(x.search.slice(0, 80));
         if (typeof x.text === 'string') act.text = maskBankNumbers(x.text.slice(0, 300));
         return [act];
       });

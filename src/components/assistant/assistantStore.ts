@@ -39,6 +39,10 @@ function subscribe(l: () => void): () => void { listeners.add(l); return () => l
 const snapshot = (): State => { load(); return state; };
 const serverSnapshot = (): State => EMPTY;
 
+// `epoch` changes whenever the active chat is replaced (new chat, opened chat, deleted chat). A reply or a
+// save that started under an older epoch is dropped, so it can never land in (or re-tag) a different chat.
+let epoch = 0;
+let openGen = 0; // the latest "open a saved chat" request; older ones are ignored when they come back
 const newId = () => Math.random().toString(36).slice(2, 10);
 
 export function useAssistantChat() {
@@ -47,6 +51,8 @@ export function useAssistantChat() {
 
 /** Starts a fresh chat. The one being left stays in the saved history. */
 export function clearAssistantChat(): void {
+  openGen++;
+  epoch++;
   set({ messages: [], loading: false });
 }
 
@@ -54,15 +60,23 @@ export function clearAssistantChat(): void {
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` });
 let historyOff = false; // the server said saving is not set up: stop trying for this tab
 
-async function saveCurrentChat(): Promise<void> {
-  if (historyOff) return;
+// Saves run one at a time, so two quick replies cannot both create the same chat twice: each save reads the
+// chat's id only when it starts, after the one before it has finished.
+let saveQueue: Promise<void> = Promise.resolve();
+function queueSave(): void {
+  const at = epoch;
+  saveQueue = saveQueue.then(() => saveCurrentChat(at)).catch(() => { /* best effort */ });
+}
+
+async function saveCurrentChat(at: number): Promise<void> {
+  if (historyOff || at !== epoch) return;
   const sent = state.messages.filter(m => !m.error);
   if (!sent.some(m => m.role === 'user')) return;
   try {
     const res = await fetch(`${API_BASE}/api/assistant/history`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id: state.chatId, messages: sent }), signal: AbortSignal.timeout(15_000) });
     if (res.status === 503) { historyOff = true; return; }
     const data = await res.json().catch(() => ({})) as { id?: string };
-    if (res.ok && data.id && data.id !== state.chatId) set({ ...state, chatId: data.id });
+    if (at === epoch && res.ok && data.id && data.id !== state.chatId) set({ ...state, chatId: data.id });
   } catch { /* saving is best effort: the chat itself is unaffected */ }
 }
 
@@ -76,19 +90,26 @@ export async function listSavedChats(): Promise<{ available: boolean; chats: Sav
 }
 
 export async function openSavedChat(id: string): Promise<boolean> {
+  const mine = ++openGen;
   try {
     const res = await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { headers: authHeaders(), signal: AbortSignal.timeout(15_000) });
     const data = await res.json().catch(() => ({})) as { chat?: { id: string; messages: AssistantMessage[] } };
-    if (!res.ok || !data.chat) return false;
+    if (!res.ok || !data.chat || mine !== openGen) return false;
+    epoch++;
     set({ messages: data.chat.messages.slice(-40), loading: false, chatId: data.chat.id });
     return true;
   } catch { return false; }
 }
 
-export async function deleteSavedChat(id: string): Promise<void> {
-  try { await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(), signal: AbortSignal.timeout(15_000) }); } catch { /* ignore */ }
+/** True only when the server confirmed the chat is gone. */
+export async function deleteSavedChat(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(), signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return false;
+  } catch { return false; }
   load();
-  if (state.chatId === id) set({ messages: [], loading: false });
+  if (state.chatId === id) { openGen++; epoch++; set({ messages: [], loading: false }); }
+  return true;
 }
 
 export async function sendAssistantMessage(text: string): Promise<void> {
@@ -97,6 +118,7 @@ export async function sendAssistantMessage(text: string): Promise<void> {
   if (!content || state.loading) return;
   const withUser: AssistantMessage[] = [...state.messages, { id: newId(), role: 'user', content: content.slice(0, 2000) }];
   set({ ...state, messages: withUser, loading: true });
+  const at = epoch;
   try {
     const token = getAuthToken();
     const history = withUser.filter(m => !m.error).map(m => ({ role: m.role, content: m.content }));
@@ -109,9 +131,11 @@ export async function sendAssistantMessage(text: string): Promise<void> {
     });
     const data = await res.json().catch(() => ({})) as { answer?: string; toolsUsed?: string[]; actions?: AssistantAction[]; demo?: boolean; error?: string };
     if (!res.ok || !data.answer) throw new Error(data.error || 'The assistant could not answer.');
+    if (at !== epoch) return; // the chat was replaced while this was being answered
     set({ ...state, messages: [...state.messages, { id: newId(), role: 'assistant', content: data.answer, toolsUsed: data.toolsUsed, actions: data.actions, demo: data.demo }], loading: false });
-    void saveCurrentChat();
+    queueSave();
   } catch (err) {
+    if (at !== epoch) return;
     set({ ...state, messages: [...state.messages, { id: newId(), role: 'assistant', content: err instanceof Error && err.name !== 'TimeoutError' && err.name !== 'AbortError' ? err.message : 'That took too long, so I stopped. Please try again.', error: true }], loading: false });
   }
 }

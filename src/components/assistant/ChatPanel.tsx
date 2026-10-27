@@ -82,7 +82,7 @@ function HistoryList({ onPicked }: { onPicked: () => void }) {
             </button>
             <button
               type="button"
-              onClick={async () => { await deleteSavedChat(r.id); setRows(cur => (cur ?? []).filter(x => x.id !== r.id)); }}
+              onClick={async () => { if (await deleteSavedChat(r.id)) setRows(cur => (cur ?? []).filter(x => x.id !== r.id)); }}
               aria-label={`Delete chat: ${r.title}`}
               title="Delete this chat"
               className="rounded-lg p-2 text-slate-400 hover:bg-slate-200/60 hover:text-rose-600"

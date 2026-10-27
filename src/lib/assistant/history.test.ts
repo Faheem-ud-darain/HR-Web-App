@@ -40,6 +40,13 @@ describe('cleanChatForSave', () => {
     expect(out![1].actions).toHaveLength(1);
     expect(out![1].toolsUsed).toEqual(['bank_details']);
   });
+  it('masks bank numbers inside button labels and searches too', () => {
+    const out = cleanChatForSave([
+      { role: 'user', content: 'x' },
+      { role: 'assistant', content: 'y', actions: [{ type: 'open_page', label: 'Open 0123456789012345', page: 'payroll', search: '0123456789012345' }] },
+    ]);
+    expect(out![1].actions![0]).toMatchObject({ label: 'Open ••••2345', search: '••••2345', page: 'payroll' });
+  });
   it('keeps only the last 40 messages', () => {
     const many = Array.from({ length: 60 }, (_, i) => ({ id: String(i), role: i % 2 ? 'assistant' : 'user', content: `m${i}` }));
     expect(cleanChatForSave(many)).toHaveLength(40);

@@ -8,3 +8,4 @@ CREATE TABLE IF NOT EXISTS assistant_chats (
   updated TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_assistant_chats_owner_updated ON assistant_chats (owner, updated);
+CREATE INDEX IF NOT EXISTS idx_assistant_chats_updated ON assistant_chats (updated);

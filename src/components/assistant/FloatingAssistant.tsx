@@ -30,11 +30,12 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const onAssistantPage = pathname.endsWith('/assistant');
   const [nudge, setNudge] = useState<Nudge | null>(null);
+  const [nudgesOff, setNudgesOff] = useState(false);
 
   // While the window is closed, float a small suggestion beside the orb every so often so people
   // notice Del is there. It hides itself after a few seconds and stops for the tab once dismissed twice.
   useEffect(() => {
-    if (open || loading || onAssistantPage) return;
+    if (open || loading || onAssistantPage || nudgesOff) return;
     let dismissed = 0;
     try { dismissed = Number(window.sessionStorage.getItem('assistant_nudge_dismissed') || 0); } catch { /* ignore */ }
     if (dismissed >= 2) return;
@@ -48,11 +49,15 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
     };
     next = setTimeout(show, 6000 + Math.random() * 6000);
     return () => { clearTimeout(hide); clearTimeout(next); setNudge(null); };
-  }, [open, loading, onAssistantPage]);
+  }, [open, loading, onAssistantPage, nudgesOff]);
 
   const dismissNudge = () => {
     setNudge(null);
-    try { window.sessionStorage.setItem('assistant_nudge_dismissed', String(Number(window.sessionStorage.getItem('assistant_nudge_dismissed') || 0) + 1)); } catch { /* ignore */ }
+    try {
+      const count = Number(window.sessionStorage.getItem('assistant_nudge_dismissed') || 0) + 1;
+      window.sessionStorage.setItem('assistant_nudge_dismissed', String(count));
+      if (count >= 2) setNudgesOff(true); // stops the schedule straight away, not only after a reload
+    } catch { /* ignore */ }
   };
 
   // Escape closes the small window and hands focus back to the button.

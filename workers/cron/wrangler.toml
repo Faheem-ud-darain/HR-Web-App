@@ -12,6 +12,7 @@ crons = [
   "*/5 * 10-20 * *",   # 10th–20th, every 5 minutes: delete one batch
   "*/10 5-23 1 * *",   # 1st from 05:00 UTC (never before midnight New York): freeze last month, then raises
   "*/10 * 2-3 * *",    # 2nd–3rd: carries on until the job reports it is finished
+  "30 4 * * *",        # every day 04:30 UTC: delete saved assistant chats older than 30 days
 ]
 
 # CRON_SECRET is a secret: `npx wrangler secret put CRON_SECRET` (never commit it).
