@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { hrActions, type InactivityLog, type Profile, type TimesheetEntry } from '@/lib/hrData';
 import { computeWindow, getShiftSecondsInRange, groupLogsByDay, localDateString } from '@/lib/core/trackingWindow';
 
@@ -15,13 +15,17 @@ export function useMouseActivity({ timesheets }: { timesheets: TimesheetEntry[] 
   const [mouseLogs, setMouseLogs] = useState<InactivityLog[]>([]);
   const [mouseLoading, setMouseLoading] = useState(false);
 
+  // The latest load request: a slower, older response is dropped instead of overwriting the newer one.
+  const loadIdRef = useRef(0);
   const loadMouseData = async (email: string, range: MouseRange, day: string) => {
+    const loadId = ++loadIdRef.current;
     setMouseLoading(true);
     try {
       const { since, until } = computeWindow(range, day);
-      setMouseLogs(await hrActions.getInactivityLogs({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() }));
+      const logs = await hrActions.getInactivityLogs({ employeeEmail: email, sinceISO: since.toISOString(), untilISO: until.toISOString() });
+      if (loadId === loadIdRef.current) setMouseLogs(logs);
     } finally {
-      setMouseLoading(false);
+      if (loadId === loadIdRef.current) setMouseLoading(false);
     }
   };
 

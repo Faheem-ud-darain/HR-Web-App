@@ -30,7 +30,8 @@ export function useTicketLiveState({ role, currentEmail, selectedTicket, tickets
   // presence row is cleared on cleanup (switching tickets, closing, leaving the page) so the badge disappears
   // promptly instead of waiting out the staleness window.
   useEffect(() => {
-    if (!isPrivileged || !selectedTicket || selectedTicket.status === 'closed') return;
+    // Admin is read-only on tickets: it must not write (or, on cleanup, delete) the shared presence row.
+    if (!isPrivileged || role === 'admin' || !selectedTicket || selectedTicket.status === 'closed') return;
     const ticketId = selectedTicket.id;
     const email = currentEmail;
     const beat = () => hrActions.touchTicketPresence(ticketId, email, role);

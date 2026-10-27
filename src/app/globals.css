@@ -620,8 +620,9 @@ input[type='radio']:focus-visible {
 }
 
 /* Touch screens: tick boxes and radio buttons are drawn 16px in many forms, which is hard to hit with a
-   finger. Make them at least 22px on devices whose main pointer is coarse (phones, tablets). */
-@media (pointer: coarse) {
+   finger. Make them at least 22px on any device that has a touch screen, including laptops with one (their
+   main pointer is the mouse, so `pointer: coarse` alone would skip them). */
+@media (pointer: coarse), (any-pointer: coarse) {
   input[type="checkbox"],
   input[type="radio"] {
     min-width: 22px;
@@ -922,6 +923,24 @@ input[type='radio']:focus-visible {
 :root[data-theme='dark'] [role='dialog'][aria-modal='true'] select {
   background-color: #000000;
 }
+
+/* Filled buttons (bg-X-600 hover:bg-X-700 with white text): the dark palette lightens every -700 token for
+   coloured TEXT, which would turn the hover fill pale with white text on it (about 2.3:1). On hover the fill
+   goes one step deeper instead. Touch screens keep :hover after a tap, so this matters there too. */
+:root[data-theme='dark'] .hover\:bg-orange-700:hover { background-color: #9a3412; }
+:root[data-theme='dark'] .hover\:bg-emerald-700:hover { background-color: #065f46; }
+:root[data-theme='dark'] .hover\:bg-sky-700:hover { background-color: #075985; }
+:root[data-theme='dark'] .hover\:bg-rose-700:hover { background-color: #be123c; }
+:root[data-theme='dark'] .hover\:bg-indigo-700:hover { background-color: #4338ca; }
+:root[data-theme='dark'] .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
+:root[data-theme='dark'] .hover\:bg-red-700:hover { background-color: #b91c1c; }
+:root[data-theme='dark'] .hover\:bg-green-700:hover { background-color: #15803d; }
+:root[data-theme='dark'] .hover\:bg-amber-700:hover { background-color: #b45309; }
+:root[data-theme='dark'] .hover\:bg-violet-700:hover { background-color: #6d28d9; }
+:root[data-theme='dark'] .hover\:bg-purple-700:hover { background-color: #7e22ce; }
+:root[data-theme='dark'] .hover\:bg-teal-700:hover { background-color: #0f766e; }
+:root[data-theme='dark'] .hover\:bg-cyan-700:hover { background-color: #0e7490; }
+:root[data-theme='dark'] .hover\:bg-pink-700:hover { background-color: #be185d; }
 
 /* Coloured text on dark: the saturated 500/600 shades are too dim on black, so they use the light 400 shade
    (the same hue, brighter), as iOS does. Filled backgrounds keep their colour. */

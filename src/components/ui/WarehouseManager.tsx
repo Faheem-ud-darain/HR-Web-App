@@ -18,7 +18,8 @@ const EMPTY_FORM: WhForm = { name: '', lat: '', lon: '', radius: '500' };
 
 // Without these range checks a mistyped latitude (e.g. 999) silently breaks geofencing for every employee
 // assigned to that warehouse, with no error shown anywhere.
-function validate({ lat, lon, radius }: WhForm): string | null {
+function validate({ name, lat, lon, radius }: WhForm): string | null {
+  if (!name.trim()) return 'Enter a warehouse name.'; // `required` lets a name of only spaces through
   const [la, lo, r] = [Number(lat), Number(lon), Number(radius)];
   if (Number.isNaN(la) || la < -90 || la > 90) return 'Latitude must be a number between -90 and 90.';
   if (Number.isNaN(lo) || lo < -180 || lo > 180) return 'Longitude must be a number between -180 and 180.';
@@ -75,6 +76,9 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
       refetchWarehouses();
       setForm(EMPTY_FORM);
       done('Warehouse created successfully!');
+    } catch (err) {
+      console.error('Create warehouse failed:', err);
+      setError('Could not create that warehouse. Please try again.');
     } finally { setBusy(null); }
   };
 
@@ -90,6 +94,9 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
       refetchWarehouses();
       setEditing(null);
       done('Warehouse updated successfully.');
+    } catch (err) {
+      console.error('Update warehouse failed:', err);
+      setError('Could not save those changes. Please try again.');
     } finally { setBusy(null); }
   };
 
@@ -97,16 +104,21 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
     if (!pendingDeleteId) return;
     const id = pendingDeleteId;
     setPendingDeleteId(null);
+    setError('');
     setDeletingId(id);
     try {
       await hrActions.deleteWarehouse(id, employees);
       refetchWarehouses();
       refetchProfiles();
       done('Warehouse deleted successfully.');
+    } catch (err) {
+      console.error('Delete warehouse failed:', err);
+      setError('Could not delete that warehouse. Please try again.');
     } finally { setDeletingId(null); }
   };
 
   const split = layout === 'split';
+  const closeEdit = () => { setEditing(null); setError(''); }; // an edit error must not linger on the create form
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -117,12 +129,13 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
         </div>
       )}
 
+      {error && !editing && <ErrorNote>{error}</ErrorNote>}
+
       <div className={split ? 'grid grid-cols-1 lg:grid-cols-12 gap-6' : 'space-y-4'}>
         <Card className={`border border-slate-200 ${split ? 'lg:col-span-4 self-start' : ''}`}>
           <div className="px-6 py-4 border-b border-slate-100"><h3 className="font-bold text-slate-900 text-sm">Add Warehouse Location</h3></div>
           <CardContent className="p-6">
             <form onSubmit={create} className="space-y-4">
-              {error && !editing && <ErrorNote>{error}</ErrorNote>}
               <WarehouseFields value={form} onChange={setForm} />
               <Button type="submit" disabled={busy !== null} loading={busy === 'create'}>{busy === 'create' ? 'Creating…' : 'Create Warehouse'}</Button>
             </form>
@@ -175,12 +188,12 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
       </div>
 
       {editing && (
-        <Modal isOpen onClose={() => setEditing(null)} title="Edit Warehouse Details">
+        <Modal isOpen onClose={closeEdit} title="Edit Warehouse Details">
           <form onSubmit={save} className="space-y-4 pt-1">
             {error && <ErrorNote>{error}</ErrorNote>}
             <WarehouseFields value={editing.form} onChange={next => setEditing({ id: editing.id, form: next })} />
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-              <Button type="button" variant="outline" disabled={busy === 'save'} onClick={() => setEditing(null)}>Cancel</Button>
+              <Button type="button" variant="outline" disabled={busy === 'save'} onClick={closeEdit}>Cancel</Button>
               <Button type="submit" disabled={busy === 'save'} loading={busy === 'save'}>{busy === 'save' ? 'Saving…' : 'Save Changes'}</Button>
             </div>
           </form>

@@ -63,7 +63,9 @@ export function useScreenshotViewer({ canManage }: { canManage: boolean }) {
     try {
       const win = viewerWindowRef.current;
       if (!win) return;
+      const request = viewerRequestRef.current;
       const next = await hrActions.getScreenshotsPage({ employeeEmail: viewerEmp.email, sinceISO: win.since, untilISO: win.until }, viewerPage + 1);
+      if (request !== viewerRequestRef.current) return; // a newer window replaced the grid meanwhile
       setViewerShots(prev => {
         const seen = new Set(prev.map(x => x.id));
         return [...prev, ...next.items.filter(x => !seen.has(x.id))];

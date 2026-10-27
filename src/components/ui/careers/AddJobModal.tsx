@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { hrActions } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
+import { FormError } from '@/components/ui/FormError';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -19,9 +20,11 @@ export function AddJobModal({ isOpen, onClose, onPosted }: { isOpen: boolean; on
   const [desc, setDesc] = useState('');
   const [reqsText, setReqsText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (!title || !loc || !desc || busy) return;
     setBusy(true);
     try {
@@ -39,6 +42,9 @@ export function AddJobModal({ isOpen, onClose, onPosted }: { isOpen: boolean; on
       setDesc('');
       setReqsText('');
       showToast({ type: 'success', message: 'Position listed successfully!' });
+    } catch (err) {
+      console.error('Post job failed:', err);
+      setError('Could not post that job. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -47,6 +53,7 @@ export function AddJobModal({ isOpen, onClose, onPosted }: { isOpen: boolean; on
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create New Job Listing">
       <form onSubmit={submit} className="space-y-4 pt-1">
+        <FormError>{error}</FormError>
         <FormField label="Job Title *">
           <Input type="text" required value={title} onChange={e => setTitle(e.target.value)} fieldSize="soft" placeholder="e.g. Lead QA Engineer" />
         </FormField>

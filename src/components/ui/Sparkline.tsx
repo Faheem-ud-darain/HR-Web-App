@@ -19,7 +19,9 @@ const TOP_PAD = 6;
 
 // The small trend line on the dashboard stat cards: a smooth curve with a soft fill, a dot on the latest
 // value, and a tooltip on hover or tap. Hand-built SVG, so there is no chart library to ship.
-export function Sparkline({ values, label, detail, colorClass }: SparklineProps) {
+export function Sparkline({ values: rawValues, label, detail, colorClass }: SparklineProps) {
+  // One value is drawn as a flat line (two equal points) so the x spacing stays finite; no values draw nothing.
+  const values = rawValues.length === 1 ? [rawValues[0], rawValues[0]] : rawValues;
   const gradientId = `spark-${useId().replace(/:/g, '')}`;
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -27,6 +29,7 @@ export function Sparkline({ values, label, detail, colorClass }: SparklineProps)
   const gap = W / (values.length - 1);
   const points = values.map((v, i) => ({ x: i * gap, y: TOP_PAD + (1 - v / max) * (H - TOP_PAD) }));
   const today = points[points.length - 1];
+  if (!today) return null;
 
   return (
     <div className={`relative mt-2 ${colorClass}`}>

@@ -78,7 +78,7 @@ export function ScreenshotLightbox({ shots, index, total, onClose, onNav }: Scre
           className="max-h-[80vh] max-w-[90vw] object-contain select-none"
           onWheel={e => { e.preventDefault(); if (e.deltaY < 0) zoomIn(); else zoomOut(); }}
         />
-        {index < shots.length - 1 && (
+        {(index < shots.length - 1 || total > shots.length) && ( // more pages remain: Next loads them
           <button onClick={() => go(1)} aria-label="Next screenshot" className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-black/40 backdrop-blur-md hover:bg-black/55 text-white transition-colors">
             <ChevronRight className="h-5 w-5" />
           </button>

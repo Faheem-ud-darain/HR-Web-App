@@ -54,7 +54,7 @@ export default function HRLeavesPage() {
     setProcessingLeaveId(l.id);
     try {
       await hrActions.updateLeaveStatus(l.id, 'hr_approved');
-      refetchLeaves();
+      await refetchLeaves(); // the guard stays on until the card shows its new status
       await hrActions.addNotification('all', 'admin', `CEO approval required for ${l.employeeName}'s leave.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('admin', 'leave', l.id));
       // Same gap as the Kanban path — only 'admin' was notified, so HR
       // itself never saw confirmation of its own action in the bell.
@@ -78,7 +78,7 @@ export default function HRLeavesPage() {
       const emp = employees.find((e: Profile) => e.fullName === l.employeeName);
       if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was rejected.`, 'leave_task', 'Leave Rejected', undefined, buildNotificationLink('employee', 'leave', l.id));
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} rejected by HR.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
-      refetchLeaves();
+      await refetchLeaves();
       showToast({ type: 'success', message: 'Rejected!' });
     } finally {
       setProcessingLeaveId(null);
@@ -91,7 +91,7 @@ export default function HRLeavesPage() {
     try {
       await hrActions.updateLeaveStatus(l.id, 'pending');
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} re-opened for reconsideration.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
-      refetchLeaves();
+      await refetchLeaves();
       showToast({ type: 'success', message: 'Re-opened for review!' });
     } finally {
       setProcessingLeaveId(null);
@@ -165,7 +165,7 @@ export default function HRLeavesPage() {
     }
 
     await hrActions.updateLeaveStatus(leaf.id, targetStatus);
-    refetchLeaves();
+    await refetchLeaves();
 
     showToast({ type: 'success', message: 'Leave status updated!' });
   };
@@ -197,7 +197,7 @@ export default function HRLeavesPage() {
         onClick={onClick}
         disabled={processingLeaveId !== null}
         className={`font-semibold transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 ${tone} ${
-          wide ? `text-[10px] font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded'
+          wide ? `min-h-11 text-[11px] font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded pointer-coarse:min-h-11'
         }`}
       >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}{label}</button>
     );
@@ -209,7 +209,8 @@ export default function HRLeavesPage() {
         </div>
       );
     }
-    if (l.status === 'rejected') return button('text-slate-600 bg-slate-100 hover:bg-slate-200', () => handleReopenLeave(l), 'Re-open', true);
+    // A request sent to the CEO by mistake can be recalled; the CEO's own decision (approved) cannot.
+    if (l.status === 'rejected' || l.status === 'hr_approved') return button('text-slate-600 bg-slate-100 hover:bg-slate-200', () => handleReopenLeave(l), 'Re-open', true);
     return <span className="text-xs text-slate-400 font-medium">—</span>;
   };
 
@@ -286,7 +287,20 @@ export default function HRLeavesPage() {
         <div className="xl:hidden space-y-3">
           {/* Phones and tablets: touch screens cannot drag cards, so the board is one status at a time with
               clear buttons on each card. The buttons run the same moveLeaveTo() rules as the desktop drag. */}
-          <div role="tablist" aria-label="Leave status" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide">
+          <div
+            role="tablist"
+            aria-label="Leave status"
+            className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide"
+            onKeyDown={e => {
+              // Arrow keys / Home / End move between the status tabs (roving focus), as in the ARIA tabs pattern.
+              const i = COLUMNS.findIndex(c => c.key === mobileCol);
+              const to = e.key === 'ArrowRight' ? (i + 1) % COLUMNS.length : e.key === 'ArrowLeft' ? (i - 1 + COLUMNS.length) % COLUMNS.length : e.key === 'Home' ? 0 : e.key === 'End' ? COLUMNS.length - 1 : -1;
+              if (to < 0) return;
+              e.preventDefault();
+              setMobileColChoice(COLUMNS[to].key);
+              document.getElementById(`leave-tab-${COLUMNS[to].key}`)?.focus();
+            }}
+          >
             {COLUMNS.map(col => {
               const count = filteredInCol(col.key).length;
               const active = mobileCol === col.key;
@@ -295,6 +309,9 @@ export default function HRLeavesPage() {
                   key={col.key}
                   type="button"
                   role="tab"
+                  id={`leave-tab-${col.key}`}
+                  aria-controls="leave-status-panel"
+                  tabIndex={active ? 0 : -1}
                   aria-selected={active}
                   onClick={() => setMobileColChoice(col.key)}
                   className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-bold transition-colors ${active ? `${col.headerBg} text-slate-900` : 'border-slate-200 bg-white text-slate-500'}`}
@@ -307,11 +324,11 @@ export default function HRLeavesPage() {
           </div>
           {(() => {
             const cards = filteredInCol(mobileCol);
-            if (cards.length === 0) return <div className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">Nothing here</div>;
+            if (cards.length === 0) return <div id="leave-status-panel" role="tabpanel" aria-labelledby={`leave-tab-${mobileCol}`} className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">Nothing here</div>;
             return (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div id="leave-status-panel" role="tabpanel" aria-labelledby={`leave-tab-${mobileCol}`} className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 {cards.map(leave => {
-                  const busy = processingLeaveId === leave.id;
+                  const busy = processingLeaveId !== null; // one change at a time, so every card waits
                   return (
                     <div key={leave.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
@@ -326,7 +343,12 @@ export default function HRLeavesPage() {
                           <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'rejected')} className="min-h-11 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60">Reject</button>
                         </div>
                       )}
-                      {leave.status === 'hr_approved' && <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">With the CEO for the final decision.</p>}
+                      {leave.status === 'hr_approved' && (
+                        <>
+                          <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">With the CEO for the final decision.</p>
+                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Recall to pending</button>
+                        </>
+                      )}
                       {leave.status === 'approved' && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved by the CEO.</p>}
                       {leave.status === 'rejected' && (
                         <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-3 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Re-open for review</button>

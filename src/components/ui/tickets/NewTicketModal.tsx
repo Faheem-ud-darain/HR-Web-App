@@ -31,8 +31,11 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
   const [fileError, setFileError] = useState('');
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The ticket once it exists: if attaching the file then fails, pressing File Ticket again only retries the
+  // attachment instead of creating a second ticket.
+  const createdRef = useRef<Awaited<ReturnType<typeof hrActions.createTicket>> | null>(null);
 
-  const close = () => { onClose(); setFile(null); setFileError(''); };
+  const close = () => { onClose(); setFile(null); setFileError(''); createdRef.current = null; };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0];
@@ -47,6 +50,7 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
     if (busy || !title || !desc || !userProfile) return;
     setFileError('');
     setBusy(true);
+    let attaching = false;
     try {
       let attachment: { data: string; error: string | null } | null = null;
       if (file) {
@@ -54,13 +58,15 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
         if (attachment.error) { setFileError(attachment.error); return; }
       }
 
-      const created = await hrActions.createTicket({
+      const created = createdRef.current ?? await hrActions.createTicket({
         employeeName: userProfile.fullName,
         employeeEmail: userProfile.email,
         title,
         description: desc,
         department,
       });
+      createdRef.current = created;
+      attaching = true;
 
       // hr_tickets has no attachment column, so a file picked at filing time is attached as an immediate
       // follow-up reply on the new ticket (see createTicket's comment in hrData.ts).
@@ -76,6 +82,7 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
         });
       }
 
+      createdRef.current = null;
       onCreated();
       onClose();
       setTitle('');
@@ -85,7 +92,9 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
       showToast({ type: 'success', message: 'Support ticket opened successfully!' });
     } catch (err) {
       console.error('[Tickets] Failed to open ticket:', err);
-      setFileError(err instanceof Error ? err.message : 'Failed to attach this file. Please try again.');
+      setFileError(attaching
+        ? 'The ticket was filed, but the attachment could not be sent. Press File Ticket again to retry the attachment.'
+        : err instanceof Error ? err.message : 'Could not file the ticket. Please try again.');
     } finally {
       setBusy(false);
     }

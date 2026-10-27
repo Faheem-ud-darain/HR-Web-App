@@ -2,7 +2,7 @@
 
 import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
 import { exportEmployeesCsv, exportTimesheetCsv } from '@/lib/reportExports';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -45,7 +45,9 @@ export default function ReportsPage() {
     setReviewEntries(entries);
   };
 
-  const filters = useEmployeeFilters(employees);
+  // The HR report covers staff below HR/Admin only (the Admin report keeps the full roster).
+  const reportable = useMemo(() => employees.filter(e => e.role !== 'admin' && e.role !== 'hr'), [employees]);
+  const filters = useEmployeeFilters(reportable);
   const filteredEmployees = filters.rows;
 
   const filteredReviewEntries = reviewEntries.filter(entry => {

@@ -45,6 +45,7 @@ export function CareersView({ role }: CareersViewProps) {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isApplyOpen, setIsApplyOpen] = useState(false);
+  const [applySession, setApplySession] = useState(0); // a new number per opening, so the form starts empty each time
   const [selectedJob, setSelectedJob] = useState<CareerPosition | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -197,7 +198,7 @@ export function CareersView({ role }: CareersViewProps) {
               <div className="pt-4 border-t border-slate-100 mt-5 flex items-center justify-between">
                 {canApply ? (
                   <button
-                    onClick={() => { setSelectedJob(job); setIsApplyOpen(true); }}
+                    onClick={() => { setSelectedJob(job); setApplySession(n => n + 1); setIsApplyOpen(true); }}
                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-bold bg-orange-50 sm:bg-transparent text-orange-600 hover:text-orange-700 py-2.5 sm:py-0 px-4 sm:px-0 rounded-lg sm:rounded-none tracking-wider uppercase transition-colors"
                   >
                     Apply now <ArrowRight className="h-3.5 w-3.5" />
@@ -230,8 +231,8 @@ export function CareersView({ role }: CareersViewProps) {
 
       <ApplicationsModal isOpen={isApplicationsOpen} onClose={() => setIsApplicationsOpen(false)} applications={applications} onChanged={refetchApplications} />
       <AddJobModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onPosted={refetchCareers} />
-      {/* Mounted only while open, so the form starts empty every time. */}
-      {isApplyOpen && <ApplyModal isOpen onClose={() => setIsApplyOpen(false)} job={selectedJob} canApply={canApply} onSubmitted={refetchApplications} />}
+      {/* Stays mounted so the dialog can return focus and play its exit animation; `key` gives it a fresh form per opening. */}
+      <ApplyModal key={applySession} isOpen={isApplyOpen} onClose={() => setIsApplyOpen(false)} job={selectedJob} canApply={canApply} onSubmitted={refetchApplications} />
 
       <ConfirmDialog
         isOpen={pendingDeleteJobId !== null}

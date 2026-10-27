@@ -56,7 +56,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
     inner.current = el;
     if (typeof ref === 'function') ref(el); else if (ref) (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
   }, [ref]);
-  useAutoGrow(inner, autoGrow ? props.value ?? props.defaultValue : null, maxAutoHeight);
+  useAutoGrow(inner, props.value ?? props.defaultValue, maxAutoHeight, autoGrow);
   return (
     <textarea
       ref={setRefs}

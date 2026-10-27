@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { updateApplicationStatusAdmin, type CareerApplication, type CareerApplicationStatus } from '@/lib/hrData';
 import { Badge } from '@/components/ui/Badge';
+import { FormError } from '@/components/ui/FormError';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -12,8 +13,8 @@ interface ApplicationsModalProps {
   isOpen: boolean;
   onClose: () => void;
   applications: CareerApplication[];
-  // Reload the list after a status change.
-  onChanged: () => void;
+  // Reload the list after a status change (awaited, so the control waits for the fresh data).
+  onChanged: () => void | Promise<void>;
 }
 
 // HR/Admin review of submitted applications: filter by position and status, expand one to read it and set its
@@ -23,6 +24,7 @@ export function ApplicationsModal({ isOpen, onClose, applications, onChanged }: 
   const [statusFilter, setStatusFilter] = useState<CareerApplicationStatus | 'All'>('All');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   const positionTitles = Array.from(new Set(applications.map(a => a.positionTitle))).sort();
   const shown = applications.filter(app =>
@@ -32,9 +34,13 @@ export function ApplicationsModal({ isOpen, onClose, applications, onChanged }: 
 
   const changeStatus = async (id: string, status: CareerApplicationStatus) => {
     setUpdatingId(id);
+    setError('');
     try {
       await updateApplicationStatusAdmin(id, status);
-      onChanged();
+      await onChanged();
+    } catch (err) {
+      console.error('Application status update failed:', err);
+      setError('Could not change that status. Please try again.');
     } finally {
       setUpdatingId(null);
     }
@@ -43,6 +49,7 @@ export function ApplicationsModal({ isOpen, onClose, applications, onChanged }: 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Job Applications (${applications.length})`}>
       <div className="space-y-3">
+        <FormError>{error}</FormError>
         <div className="flex flex-wrap gap-2 pb-3 border-b border-slate-200">
           <Select value={positionFilter} onChange={e => setPositionFilter(e.target.value)} fieldSize="md">
             <option value="All">All Positions</option>

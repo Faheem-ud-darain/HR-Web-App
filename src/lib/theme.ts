@@ -27,9 +27,10 @@ function applyTheme(pref: ThemePreference) {
   document.documentElement.setAttribute('data-theme', theme);
   // Browser chrome / installed-app title bar follows the page.
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#000000' : '#0B0F1A');
-  // Native app: light icons on a dark screen and the other way round (no-op on the web).
+  // Native app: light icons on a dark screen and dark icons on a light one (no-op on the web). In Capacitor's
+  // naming, Style.Dark is the style FOR a dark background (light icons) and Style.Light is for a light one.
   import('@capacitor/status-bar')
-    .then(({ StatusBar, Style }) => StatusBar.setStyle({ style: theme === 'dark' ? Style.Light : Style.Dark }))
+    .then(({ StatusBar, Style }) => StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light }))
     .catch(() => { /* web, or plugin not in this build */ });
 }
 
@@ -61,6 +62,10 @@ function clearWipe() {
 // dark screen into the toggle. Uses the View Transitions API, so browsers without it (or people who ask for
 // reduced motion) just get the instant switch. A click while a wipe is still running ends it and switches
 // at once, so tapping quickly can never stack transitions.
+// Re-applies the saved choice to the native status bar and the browser chrome: called once when the app starts, because
+// the status bar otherwise keeps its default style until the theme is next changed.
+export const syncThemeChrome = () => applyTheme(readPreference());
+
 export function setThemePreference(pref: ThemePreference, origin?: WipeOrigin) {
   try {
     if (pref === 'system') localStorage.removeItem(THEME_KEY);
@@ -110,11 +115,13 @@ function subscribe(onChange: () => void) {
   const onSystem = () => { if (readPreference() === 'system') applyTheme('system'); onChange(); };
   mq.addEventListener('change', onSystem);
   window.addEventListener(CHANGE_EVENT, onChange);
-  window.addEventListener('storage', onChange);
+  // Another tab changed the saved choice: apply it here too, not only re-read it.
+  const onStorage = (e: StorageEvent) => { if (e.key === null || e.key === THEME_KEY) applyTheme(readPreference()); onChange(); };
+  window.addEventListener('storage', onStorage);
   return () => {
     mq.removeEventListener('change', onSystem);
     window.removeEventListener(CHANGE_EVENT, onChange);
-    window.removeEventListener('storage', onChange);
+    window.removeEventListener('storage', onStorage);
   };
 }
 
