@@ -949,9 +949,9 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
                 <Button type="button" variant="secondary" size="md" className="flex-1" disabled={isSavingProfile} onClick={() => setIsEditing(false)}>
                   Cancel
                 </Button>
-                <button type="submit" disabled={isSavingProfile} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs disabled:opacity-60 disabled:cursor-not-allowed">
+                <Button type="submit" disabled={isSavingProfile}  className="flex-1">
                   {isSavingProfile ? 'Saving…' : 'Save Changes'}
-                </button>
+                </Button>
               </div>
             </form>
           )}

@@ -781,7 +781,7 @@ export default function EmployeeProfilePage() {
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isResetting} onClick={() => setIsResetOpen(false)}>Cancel</Button>
-            <button type="submit" disabled={isResetting} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isResetting ? 'Updating…' : 'Update Password'}</button>
+            <Button type="submit" disabled={isResetting}  size="lg">{isResetting ? 'Updating…' : 'Update Password'}</Button>
           </div>
         </form>
       </Modal>
@@ -828,7 +828,7 @@ export default function EmployeeProfilePage() {
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isSavingBank} onClick={() => setIsBankEditOpen(false)}>Cancel</Button>
-            <button type="submit" disabled={isSavingBank} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingBank ? 'Saving…' : 'Save Bank Details'}</button>
+            <Button type="submit" disabled={isSavingBank}  size="lg">{isSavingBank ? 'Saving…' : 'Save Bank Details'}</Button>
           </div>
         </form>
       </Modal>
@@ -866,7 +866,7 @@ export default function EmployeeProfilePage() {
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isSavingPhone} onClick={() => setIsPhoneEditOpen(false)}>Cancel</Button>
-            <button type="submit" disabled={isSavingPhone} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingPhone ? 'Saving…' : 'Save Contact Numbers'}</button>
+            <Button type="submit" disabled={isSavingPhone}  size="lg">{isSavingPhone ? 'Saving…' : 'Save Contact Numbers'}</Button>
           </div>
         </form>
       </Modal>

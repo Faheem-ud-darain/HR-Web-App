@@ -833,10 +833,10 @@ export function TicketsView({ role }: TicketsViewProps) {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isOpeningTicket} onClick={() => { setIsNewOpen(false); setNewTicketFile(null); setNewTicketFileError(''); }}>Cancel</Button>
-            <button type="submit" disabled={isOpeningTicket} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+            <Button type="submit" disabled={isOpeningTicket}  size="lg">
               {isOpeningTicket && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {isOpeningTicket ? 'Filing…' : 'File Ticket'}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>

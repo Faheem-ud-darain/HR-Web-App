@@ -1000,14 +1000,14 @@ export default function HRTeamsPage() {
                       />
                     </div>
                   </div>
-                  <button
+                  <Button
                     type="submit"
                     disabled={isCreatingWh}
-                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg text-xs transition-colors transition-transform shadow-sm active:scale-97 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                    
                   >
                     {isCreatingWh && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     {isCreatingWh ? 'Adding…' : 'Add Warehouse'}
-                  </button>
+                  </Button>
                 </form>
               </CardContent>
             </Card>
@@ -1164,10 +1164,10 @@ export default function HRTeamsPage() {
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
               <Button type="button" variant="outline" size="md" disabled={isSavingWhEdit} onClick={() => setEditingWhId(null)}>Cancel</Button>
-              <button type="submit" disabled={isSavingWhEdit} className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+              <Button type="submit" disabled={isSavingWhEdit} >
                 {isSavingWhEdit && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {isSavingWhEdit ? 'Saving…' : 'Save Changes'}
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>
