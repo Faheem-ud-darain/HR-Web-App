@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { fileToStoredAttachment, type TicketRole } from './ticketHelpers';
+import { fileToStoredData } from '@/lib/imageCompressor';
+import type { TicketRole } from './ticketHelpers';
 
 interface NewTicketModalProps {
   isOpen: boolean;
@@ -49,7 +50,7 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
     try {
       let attachment: { data: string; error: string | null } | null = null;
       if (file) {
-        attachment = await fileToStoredAttachment(file);
+        attachment = await fileToStoredData(file);
         if (attachment.error) { setFileError(attachment.error); return; }
       }
 

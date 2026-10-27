@@ -2,7 +2,6 @@
 
 import { Ticket } from '@/lib/hrData';
 import { formatDateTimeNY } from '@/lib/timezone';
-import { compressImageToWebP, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES, validatePdfSize } from '@/lib/imageCompressor';
 
 export function isImageAttachment(name?: string): boolean {
   return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name || '');
@@ -69,19 +68,3 @@ export function ticketActivityMs(ticket: Ticket): number {
 }
 
 export type TicketRole = 'admin' | 'hr' | 'employee' | 'team_lead';
-
-// Converts an uploaded attachment File to a storable data URL: images are compressed to WebP (max 3 MB), PDFs
-// are stored as-is after a size check (max 5 MB). hr_tickets has no file field to upload to (see the
-// TicketReply comment in hrData.ts), so the file travels inside the reply record.
-export async function fileToStoredAttachment(file: File): Promise<{ data: string; error: string | null }> {
-  if (file.type === 'application/pdf') {
-    const err = validatePdfSize(file);
-    if (err) return { data: '', error: err };
-    return { data: await fileToDataUrl(file), error: null };
-  }
-  if (file.type.startsWith('image/')) {
-    const data = await compressImageToWebP(file, 0.8, MAX_DOCUMENT_IMAGE_BYTES);
-    return { data, error: null };
-  }
-  return { data: '', error: 'Only image files or PDFs are supported.' };
-}

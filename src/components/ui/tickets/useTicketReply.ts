@@ -2,7 +2,8 @@
 
 import React, { useRef, useState } from 'react';
 import { hrActions, isTechnicalSupportMember, type Profile, type Ticket } from '@/lib/hrData';
-import { fileToStoredAttachment, type TicketRole } from './ticketHelpers';
+import { fileToStoredData } from '@/lib/imageCompressor';
+import type { TicketRole } from './ticketHelpers';
 
 interface ReplyArgs {
   selectedTicket: Ticket | null;
@@ -48,7 +49,7 @@ export function useTicketReply({ selectedTicket, role, currentEmail, userProfile
     try {
       let attachmentFields: { attachmentName?: string; attachmentUrl?: string; attachmentSize?: number } = {};
       if (replyFile) {
-        const { data, error } = await fileToStoredAttachment(replyFile);
+        const { data, error } = await fileToStoredData(replyFile);
         if (error) { setReplyFileError(error); return; }
         attachmentFields = { attachmentName: replyFile.name, attachmentUrl: data, attachmentSize: replyFile.size };
       }
@@ -67,7 +68,7 @@ export function useTicketReply({ selectedTicket, role, currentEmail, userProfile
       lastTypingTouchRef.current = 0;
       hrActions.clearTypingState('ticket', selectedTicket.id, currentEmail).catch(() => {});
     } catch (err) {
-      // fileToStoredAttachment can throw (compressImageToWebP rejects rather than storing an unusable file).
+      // fileToStoredData can throw (compressImageToWebP rejects rather than storing an unusable file).
       console.error('[Tickets] Failed to send reply:', err);
       setReplyFileError(err instanceof Error ? err.message : 'Failed to attach this file. Please try again.');
     } finally {
