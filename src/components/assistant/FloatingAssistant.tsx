@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ThinkingOrb } from 'thinking-orbs';
 import { ChatPanel } from './ChatPanel';
-import { ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, setAssistantOpen, useAssistantChat, useAssistantOpen } from './assistantStore';
+import { nudgePool, type Nudge } from './nudges';
+import { ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, setAssistantOpen, useAssistantChat, useAssistantOpen } from './assistantStore';
 
 function useReducedMotion(): boolean {
   return useSyncExternalStore(
@@ -28,6 +29,36 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
   const reduced = useReducedMotion();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const onAssistantPage = pathname.endsWith('/assistant');
+  const [nudge, setNudge] = useState<Nudge | null>(null);
+  const [nudgesOff, setNudgesOff] = useState(false);
+
+  // While the window is closed, float a small suggestion beside the orb every so often so people
+  // notice Del is there. It hides itself after a few seconds and stops for the tab once dismissed twice.
+  useEffect(() => {
+    if (open || loading || onAssistantPage || nudgesOff) return;
+    let dismissed = 0;
+    try { dismissed = Number(window.sessionStorage.getItem('assistant_nudge_dismissed') || 0); } catch { /* ignore */ }
+    if (dismissed >= 2) return;
+    let hide: ReturnType<typeof setTimeout>;
+    let next: ReturnType<typeof setTimeout>;
+    const show = () => {
+      const pool = nudgePool();
+      setNudge(pool[Math.floor(Math.random() * pool.length)]);
+      hide = setTimeout(() => setNudge(null), 9000);
+      next = setTimeout(show, 50_000 + Math.random() * 40_000);
+    };
+    next = setTimeout(show, 6000 + Math.random() * 6000);
+    return () => { clearTimeout(hide); clearTimeout(next); setNudge(null); };
+  }, [open, loading, onAssistantPage, nudgesOff]);
+
+  const dismissNudge = () => {
+    setNudge(null);
+    try {
+      const count = Number(window.sessionStorage.getItem('assistant_nudge_dismissed') || 0) + 1;
+      window.sessionStorage.setItem('assistant_nudge_dismissed', String(count));
+      if (count >= 2) setNudgesOff(true); // stops the schedule straight away, not only after a reload
+    } catch { /* ignore */ }
+  };
 
   // Escape closes the small window and hands focus back to the button.
   useEffect(() => {
@@ -59,6 +90,18 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
             onClose={() => { setAssistantOpen(false); buttonRef.current?.focus(); }}
             onExpand={() => { setAssistantOpen(false); router.push(`/${role}/assistant`); }}
           />
+        </div>
+      )}
+      {nudge && !open && !loading && !onAssistantPage && (
+        <div className="fixed bottom-[7.5rem] right-24 z-[45] flex max-w-[15rem] items-center gap-1 rounded-2xl rounded-br-sm border border-orange-200 bg-white py-1 pl-3 pr-1 text-sm text-slate-800 shadow-lg md:bottom-9 md:right-28">
+          <button
+            type="button"
+            onClick={() => { const q = nudge.question; setNudge(null); setAssistantOpen(true); void sendAssistantMessage(q); }}
+            className="py-1 text-left font-medium hover:text-orange-700"
+          >
+            {nudge.bubble}
+          </button>
+          <button type="button" onClick={dismissNudge} aria-label="Dismiss suggestion" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">×</button>
         </div>
       )}
       <button

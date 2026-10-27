@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserCheck, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, UserPlus, Clock, LogOut, Wallet, ClipboardList, Star, BookOpen, Briefcase, HelpCircle, Menu, X, FileText, MapPin, Monitor, MessageSquare, MessageCircle, Radio, ChevronLeft, ChevronRight, UserCheck, BarChart3, Sparkles } from 'lucide-react';
 import { hrActions, useProfiles, useTeams, useTrackingSettings, isTechnicalSupportMember, TrackingSettings } from '@/lib/hrData';
 import { HR_ADMIN_LINE_TEAM_ID } from '@/lib/hr/shared';
 import { clearSession } from '@/lib/session';
@@ -192,6 +192,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Support Tickets', href: '/admin/tickets', icon: HelpCircle },
     { name: 'Team Chats', href: '/admin/team-chats', icon: MessageSquare },
     { name: 'Direct Messages', href: '/admin/direct-messages', icon: MessageCircle },
+    { name: 'Del Assistant', href: '/admin/assistant', icon: Sparkles },
 
   ];
 
@@ -211,6 +212,7 @@ export function Sidebar({ role }: SidebarProps) {
     { name: 'Support Tickets', href: '/hr/tickets', icon: HelpCircle },
     { name: 'Team Chats', href: '/hr/team-chats', icon: MessageSquare },
     { name: 'Direct Messages', href: '/hr/direct-messages', icon: MessageCircle },
+    { name: 'Del Assistant', href: '/hr/assistant', icon: Sparkles },
 
   ];
 

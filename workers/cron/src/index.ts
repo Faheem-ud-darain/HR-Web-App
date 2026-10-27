@@ -11,6 +11,7 @@
 //   */10 5-23 1 * *   the 1st (from 05:00 UTC, i.e. after midnight New York) and
 //   */10 * 2-3 * *    the 2nd–3rd: freeze last month's payroll, then apply anniversary raises. Each call
 //                     does one small batch; both steps report "already done" once finished.
+//   30 4 * * *       every day: delete saved assistant chats older than the 30-day retention period
 //
 // Secrets (never in the repo): CRON_SECRET — the same value must be set on the Pages project.
 // Minimal shapes of the Workers runtime types, so this file needs no extra type packages.
@@ -33,6 +34,14 @@ async function call(env: Env, mode: 'warn' | 'delete'): Promise<void> {
   console.log(`[cron] screenshot-retention ${mode} -> ${res.status} ${text.slice(0, 300)}`);
   // A non-2xx marks the run as failed in the Worker's logs/dashboard so it is noticed.
   if (!res.ok) throw new Error(`screenshot-retention ${mode} failed: ${res.status}`);
+}
+
+const ASSISTANT_CRON = '30 4 * * *';
+
+async function callAssistantRetention(env: Env): Promise<void> {
+  const res = await fetch(`${env.APP_URL}/api/cron/assistant-retention`, { method: 'POST', headers: { Authorization: `Bearer ${env.CRON_SECRET}` } });
+  console.log(`[cron] assistant-retention -> ${res.status} ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(`assistant-retention failed: ${res.status}`);
 }
 
 const PAYROLL_CRONS = ['*/10 5-23 1 * *', '*/10 * 2-3 * *'];
@@ -61,6 +70,7 @@ async function payrollMonthly(env: Env): Promise<void> {
 const worker = {
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (PAYROLL_CRONS.includes(event.cron)) { ctx.waitUntil(payrollMonthly(env)); return; }
+    if (event.cron === ASSISTANT_CRON) { ctx.waitUntil(callAssistantRetention(env)); return; }
     ctx.waitUntil(call(env, event.cron === WARN_CRON ? 'warn' : 'delete'));
   },
   // Visiting the Worker's address does nothing but say it exists — no job can be started from here.
