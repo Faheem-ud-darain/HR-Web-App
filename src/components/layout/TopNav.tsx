@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ThemeIconButton } from '@/components/ui/ThemeToggle';
 import { Bell, Search, User, LogOut, UserCircle, ClipboardList, HelpCircle, Users, Trash2, MapPin, Wallet, Clock, Briefcase, Megaphone } from 'lucide-react';
 import {
   Notification, Profile, Task, Ticket, Team, Warehouse, PayrollRecord, LeaveApplication, CareerPosition, Announcement,
@@ -568,6 +569,8 @@ export function TopNav() {
               <Search className="h-5 w-5" />
             </button>
           )}
+
+          <ThemeIconButton />
 
           {/* Bell */}
           <div ref={bellRef} className="relative">

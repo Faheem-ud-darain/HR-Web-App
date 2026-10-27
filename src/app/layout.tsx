@@ -1,3 +1,4 @@
+import { THEME_BOOT_SCRIPT } from "@/lib/themeBoot";
 import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
@@ -80,6 +81,10 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${plusJakarta.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Sets light/dark before the first paint so there is no flash of the wrong theme. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col overflow-x-hidden">
         <SplashScreenOverlay />
         <PushWebScript />

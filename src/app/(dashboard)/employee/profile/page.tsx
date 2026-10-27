@@ -11,6 +11,7 @@ import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/lazy';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
+import { AppearanceCard } from '@/components/ui/ThemeToggle';
 import { LoggedInDevicesCard } from '@/components/ui/LoggedInDevicesCard';
 import { GoogleIntegrationCard } from '@/components/ui/GoogleIntegrationCard';
 import {
@@ -684,6 +685,7 @@ export default function EmployeeProfilePage() {
           {profile?.email && <NotificationPreferencesCard email={profile.email} />}
           {/* Logged-in Devices */}
           {profile?.email && <LoggedInDevicesCard email={profile.email} />}
+          <AppearanceCard />
           <AppVersionCard />
 
           {/* Danger Zone — self-service account deletion request. */}
