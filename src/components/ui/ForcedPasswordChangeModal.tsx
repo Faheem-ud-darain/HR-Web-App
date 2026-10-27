@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState } from 'react';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -130,7 +131,7 @@ export function ForcedPasswordChangeModal({ profile, onChanged }: ForcedPassword
 
           {error && (
             <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-semibold flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-600 shrink-0" />
+              <StatusDot tone="rose" />
               {error}
             </div>
           )}

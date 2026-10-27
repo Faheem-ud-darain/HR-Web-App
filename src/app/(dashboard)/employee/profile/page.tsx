@@ -1,880 +1,250 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useProfiles, useProfileSelf, updateProfileSelf, changeOwnPassword, hrActions, Profile, formatMoney } from '@/lib/hrData';
-import { useActionToast } from '@/components/ui/ActionToastHost';
-import { getSessionEmail } from '@/lib/session';
-import { compressImageToWebP, validatePdfSize, fileToDataUrl, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
+import React, { useState, useMemo, useRef } from 'react';
+import { useProfiles, useProfileSelf, Profile, formatMoney } from '@/lib/hrData';
 import { Card } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
-import { PasswordInput } from '@/components/ui/PasswordInput';
 import { AvatarCropperModal } from '@/components/ui/lazy';
 import { NotificationPreferencesCard } from '@/components/ui/NotificationPreferencesCard';
 import { AppVersionCard } from '@/components/ui/AppVersionCard';
+import { AppearanceCard } from '@/components/ui/ThemeToggle';
 import { LoggedInDevicesCard } from '@/components/ui/LoggedInDevicesCard';
 import { GoogleIntegrationCard } from '@/components/ui/GoogleIntegrationCard';
-import {
-  User, Mail, Briefcase, Calendar, Users, ShieldCheck,
-  KeyRound, AlertCircle, Star, Landmark, Pencil, Camera, FileText, Upload, Phone
-} from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { InfoRow, ProfileCard } from '@/components/ui/profile/ProfileCard';
+import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal';
+import { BankDetailsModal, ContactNumbersModal, DeleteAccountRequestModal, useAccountDeletionRequest } from '@/components/ui/profile/SelfServiceModals';
+import { useProfilePhoto } from '@/components/ui/profile/useProfilePhoto';
+import { useDocumentUploads } from '@/components/ui/profile/useDocumentUploads';
+import { Mail, Briefcase, User, Calendar, Users, ShieldCheck, KeyRound, Star, Landmark, Pencil, Camera, FileText, Upload, Phone } from 'lucide-react';
 import { formatDateNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { FormField } from '@/components/ui/FormField';
 import { useSessionEmail } from '@/lib/useSession';
+
+// Currency symbols drawn like an icon, for the salary row.
+const DollarSign = ({ className }: { className?: string }) => <span className={`font-bold text-sm leading-none ${className}`}>$</span>;
+const RupeeSign = ({ className }: { className?: string }) => <span className={`font-bold text-sm leading-none ${className}`}>₨</span>;
+
+type Dialog = 'password' | 'bank' | 'phone' | 'delete' | null;
+
+// One document slot (CV, passport): what is on file and an Upload / Replace button.
+function DocumentRow({ label, fileName, busy, onPick }: { label: string; fileName?: string; busy: boolean; onPick: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex items-center justify-between gap-3 px-6 py-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0"><FileText className="h-4 w-4 text-slate-500" /></div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+          <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{fileName || 'Not uploaded yet'}</p>
+        </div>
+      </div>
+      <Button variant="secondary" size="md" onClick={() => inputRef.current?.click()} disabled={busy} className="flex-shrink-0 border border-slate-200">
+        <Upload className="h-3.5 w-3.5" /> {busy ? 'Uploading…' : fileName ? 'Replace' : 'Upload'}
+      </Button>
+      <input ref={inputRef} type="file" accept="image/*,application/pdf" onChange={onPick} className="hidden" />
+    </div>
+  );
+}
+
+const EditButton = ({ onClick }: { onClick: () => void }) => (
+  <Button variant="secondary" size="md" onClick={onClick} className="border border-slate-200"><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+);
+
+const EmptyNote = ({ children }: { children: React.ReactNode }) => (
+  <div className="px-6 py-6 text-center"><p className="text-xs text-slate-400 italic font-semibold">{children}</p></div>
+);
 
 export default function EmployeeProfilePage() {
   const { data: allProfiles, refetch: refetchProfiles } = useProfiles();
-
   const sessionEmail = useSessionEmail();
   const profile: Profile | null = useMemo(
     () => allProfiles?.find(e => e.email && sessionEmail && e.email.toLowerCase() === sessionEmail.toLowerCase()) || null,
     [allProfiles, sessionEmail],
   );
-  // Bank details / phone / documents / password all come from the
-  // server-side self-service route now (see useProfileSelf in hrData.ts),
-  // not the fully-public useProfiles() list `profile` above still supplies
-  // display-only fields from (name, role, joined date, etc. — not sensitive
-  // on their own, left as-is for this pass).
+  // Bank details, phones, documents and the password all come from the server-side self-service route (see
+  // useProfileSelf); the public roster above only supplies display fields (name, role, joined date...).
   const { data: myDocs, refetch: refetchDocs } = useProfileSelf();
 
-  // Profile picture upload
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
-  const { showToast } = useActionToast();
-
-  // Documents (CV, identity docs, passport)
-  const cvInputRef = useRef<HTMLInputElement>(null);
+  const photo = useProfilePhoto({ profileId: profile?.id, logTag: 'Profile', onSaved: refetchProfiles }); // the profile is derived from the roster, so it updates itself
+  const docs = useDocumentUploads({ enabled: !!profile?.id && !!myDocs, // until the person's own documents have loaded, a new identity upload would replace the list with just itself
+    identityDocs: myDocs?.identityDocs || [], onSaved: refetchDocs });
+  const deletion = useAccountDeletionRequest(profile?.email);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const idInputRef = useRef<HTMLInputElement>(null);
-  const passportInputRef = useRef<HTMLInputElement>(null);
-  const [docBusy, setDocBusy] = useState<string | null>(null);
-
-  // Password reset
-  const [isResetOpen, setIsResetOpen] = useState(false);
-  const [currentPass, setCurrentPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [confirmPass, setConfirmPass] = useState('');
-  const [resetError, setResetError] = useState('');
-  const [isResetting, setIsResetting] = useState(false);
-
-  // Bank details self-service edit
-  const [isBankEditOpen, setIsBankEditOpen] = useState(false);
-  const [bankNameInput, setBankNameInput] = useState('');
-  const [accountNumberInput, setAccountNumberInput] = useState('');
-  const [ibanInput, setIbanInput] = useState('');
-  const [bankError, setBankError] = useState('');
-  const [isSavingBank, setIsSavingBank] = useState(false);
-
-  // Contact numbers self-service edit
-  const [isPhoneEditOpen, setIsPhoneEditOpen] = useState(false);
-  const [personalPhoneInput, setPersonalPhoneInput] = useState('');
-  const [companyPhoneInput, setCompanyPhoneInput] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [isSavingPhone, setIsSavingPhone] = useState(false);
-
-  // Self-service account deletion request — added 2026-08-18 for App Store
-  // review (Guideline 5.1.1(v)): there was no way for an employee to
-  // initiate deleting their own account from inside the app at all, only
-  // an HR/Admin-side "Delete Account Permanently" action in
-  // UserProfileModal.tsx for managing *other* people's accounts. Actual
-  // deletion still has to go through HR (payroll/legal records, offboarding
-  // checklist, etc. — see hrActions.deleteEmployee's purge list), so this
-  // records the request + notifies HR/Admin immediately rather than
-  // performing an instant self-serve delete, which matches Apple's
-  // guidance that a clear in-app way to *initiate* deletion is acceptable
-  // when immediate automatic deletion isn't practical for the business.
-  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
-  const [deletionRequest, setDeletionRequest] = useState<{ requestedAt: string } | null>(null);
-  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
-  const [deletionRequestError, setDeletionRequestError] = useState('');
-
-  useEffect(() => {
-    if (!profile?.email) return;
-    let active = true;
-    hrActions.getKV(`account_deletion_request_${profile.email.toLowerCase()}`)
-      .then(data => { if (active) setDeletionRequest(data || null); })
-      .catch(() => { /* null if never requested */ });
-    return () => { active = false; };
-  }, [profile?.email]);
-
-  const handleRequestAccountDeletion = async () => {
-    if (!profile?.email || isRequestingDeletion) return;
-    setIsRequestingDeletion(true);
-    setDeletionRequestError('');
-    try {
-      const requestedAt = new Date().toISOString();
-      await hrActions.setKV(`account_deletion_request_${profile.email.toLowerCase()}`, { email: profile.email, requestedAt });
-      const actorName = profile.fullName || profile.email;
-      await hrActions.addNotification('all', 'hr', `${actorName} (${profile.email}) has requested their account be deleted.`, 'internal', actorName, profile.email);
-      await hrActions.addNotification('all', 'admin', `${actorName} (${profile.email}) has requested their account be deleted.`, 'internal', actorName, profile.email);
-      setDeletionRequest({ requestedAt });
-      setShowDeleteAccountModal(false);
-    } catch {
-      setDeletionRequestError("Couldn't send your request — please try again, or contact HR directly.");
-    } finally {
-      setIsRequestingDeletion(false);
-    }
-  };
-
-  const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast({ type: 'error', message: 'Please choose an image file.' });
-      return;
-    }
-    setPendingPhotoFile(file);
-  };
-
-  const handlePhotoSave = async (webpDataUrl: string) => {
-    if (!profile?.id) return;
-    try {
-      await updateProfileSelf({ profilePicture: webpDataUrl });
-      await refetchProfiles(); // the profile below is derived from the roster, so it updates by itself
-      setPendingPhotoFile(null);
-      showToast({ type: 'success', message: 'Profile picture updated!' });
-    } catch (err) {
-      console.error('[Profile] Photo update error:', err);
-      showToast({ type: 'error', message: 'Failed to save profile picture.' });
-    }
-  };
-
-  // Converts an uploaded document File to a storable data URL: images are
-  // compressed to WebP (max 3 MB), PDFs are stored as-is after a size check
-  // (max 5 MB) — no lossy conversion for PDFs.
-  const fileToStoredData = async (file: File): Promise<{ data: string; error: string | null }> => {
-    if (file.type === 'application/pdf') {
-      const err = validatePdfSize(file);
-      if (err) return { data: '', error: err };
-      return { data: await fileToDataUrl(file), error: null };
-    }
-    if (file.type.startsWith('image/')) {
-      const data = await compressImageToWebP(file, 0.8, MAX_DOCUMENT_IMAGE_BYTES);
-      return { data, error: null };
-    }
-    return { data: '', error: 'Only image files or PDFs are supported.' };
-  };
-
-  const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !profile?.id) return;
-    setDocBusy('cv');
-    try {
-      const { data, error } = await fileToStoredData(file);
-      if (error) { showToast({ type: 'error', message: error }); return; }
-      await updateProfileSelf({ cvFileName: file.name, cvFileData: data });
-      await refetchDocs();
-      showToast({ type: 'success', message: 'CV / Resume uploaded successfully!' });
-    } catch (err) {
-      console.error('[Profile] CV upload error:', err);
-      // compressImageToWebP now rejects with a specific, actionable message
-      // (e.g. HEIC not supported) instead of silently storing an unusable
-      // raw file — surface that instead of a generic message when present.
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload CV. Please try again.' });
-    } finally {
-      setDocBusy(null);
-    }
-  };
-
-  const handleIdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !profile?.id) return;
-    setDocBusy('id');
-    try {
-      const { data, error } = await fileToStoredData(file);
-      if (error) { showToast({ type: 'error', message: error }); return; }
-      const existing = myDocs?.identityDocs || [];
-      await updateProfileSelf({ identityDocs: [...existing, { name: file.name, data }] });
-      await refetchDocs();
-      showToast({ type: 'success', message: 'Identity document uploaded successfully!' });
-    } catch (err) {
-      console.error('[Profile] ID doc upload error:', err);
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload document. Please try again.' });
-    } finally {
-      setDocBusy(null);
-    }
-  };
-
-  const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !profile?.id) return;
-    setDocBusy('passport');
-    try {
-      const { data, error } = await fileToStoredData(file);
-      if (error) { showToast({ type: 'error', message: error }); return; }
-      await updateProfileSelf({ passportFileName: file.name, passportFileData: data });
-      await refetchDocs();
-      showToast({ type: 'success', message: 'Passport uploaded successfully!' });
-    } catch (err) {
-      console.error('[Profile] Passport upload error:', err);
-      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload passport. Please try again.' });
-    } finally {
-      setDocBusy(null);
-    }
-  };
-
-  const openBankEdit = () => {
-    if (!profile) return;
-    // Bank details now come from myDocs (useProfileSelf), not the public
-    // `profile` object — see the comment on useProfileSelf above.
-    setBankNameInput(myDocs?.bankName || '');
-    setAccountNumberInput(myDocs?.accountNumber || '');
-    setIbanInput(myDocs?.iban || '');
-    setBankError('');
-    setIsBankEditOpen(true);
-  };
-
-  const handleBankSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBankError('');
-
-    if (isSavingBank) return;
-    if (!bankNameInput.trim() || !accountNumberInput.trim() || !ibanInput.trim()) {
-      setBankError('Please fill in all bank detail fields.');
-      return;
-    }
-
-    const email = getSessionEmail();
-    if (!email || !profile?.id) return;
-
-    setIsSavingBank(true);
-    try {
-      await updateProfileSelf({
-        bankName: bankNameInput.trim(),
-        accountNumber: accountNumberInput.trim(),
-        iban: ibanInput.trim(),
-      });
-      await refetchDocs();
-      setIsBankEditOpen(false);
-      showToast({ type: 'success', message: 'Bank details updated successfully!' });
-    } catch (err) {
-      console.error(err);
-      setBankError('Failed to save bank details.');
-    } finally {
-      setIsSavingBank(false);
-    }
-  };
-
-  const openPhoneEdit = () => {
-    if (!profile) return;
-    setPersonalPhoneInput(myDocs?.personalPhone || '');
-    setCompanyPhoneInput(myDocs?.companyPhone || '');
-    setPhoneError('');
-    setIsPhoneEditOpen(true);
-  };
-
-  const handlePhoneSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPhoneError('');
-
-    if (isSavingPhone) return;
-    if (!personalPhoneInput.trim()) {
-      setPhoneError('Please enter your own phone number.');
-      return;
-    }
-
-    if (!profile?.id) return;
-
-    setIsSavingPhone(true);
-    try {
-      await updateProfileSelf({
-        personalPhone: personalPhoneInput.trim(),
-        companyPhone: companyPhoneInput.trim(),
-      });
-      await refetchDocs();
-      setIsPhoneEditOpen(false);
-      showToast({ type: 'success', message: 'Contact numbers updated successfully!' });
-    } catch (err) {
-      console.error(err);
-      setPhoneError('Failed to save contact numbers.');
-    } finally {
-      setIsSavingPhone(false);
-    }
-  };
-
-  const handleResetSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError('');
-
-    if (isResetting) return;
-    if (!currentPass || !newPass || !confirmPass) {
-      setResetError('Please fill in all fields.');
-      return;
-    }
-    // Current-password check now happens server-side (see
-    // changeOwnPassword in hrData.ts / /api/profile/me's PATCH handler) —
-    // the real stored value is never sent to the browser anymore, so it
-    // can't be checked here client-side the way `profile.password !==
-    // currentPass` used to (which only "worked" because the fully-public
-    // useProfiles() list included everyone's plaintext password).
-    if (newPass.length < 6) {
-      setResetError('New password must be at least 6 characters.');
-      return;
-    }
-    if (newPass === currentPass) {
-      setResetError('New password must be different from current password.');
-      return;
-    }
-    if (newPass !== confirmPass) {
-      setResetError('New passwords do not match.');
-      return;
-    }
-
-    if (profile?.id) {
-      setIsResetting(true);
-      // Server-side now — verifies currentPass against the real stored
-      // value (bcrypt-hash-aware) and stores the new one hashed. See
-      // changeOwnPassword in hrData.ts.
-      changeOwnPassword(currentPass, newPass)
-        .then(() => {
-          setIsResetOpen(false);
-          setCurrentPass('');
-          setNewPass('');
-          setConfirmPass('');
-          showToast({ type: 'success', message: 'Password updated successfully!' });
-        })
-        .catch(err => {
-          console.error('[Profile] Password update error:', err);
-          setResetError(err?.message || 'Failed to change password. Please try again.');
-        })
-        .finally(() => setIsResetting(false));
-    }
-  };
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const closeDialog = () => setDialog(null);
 
   if (!profile) {
-    return (
-      <div className="flex items-center justify-center py-24 text-slate-400 text-sm font-semibold">
-        Loading profile…
-      </div>
-    );
+    return <div className="flex items-center justify-center py-24 text-slate-400 text-sm font-semibold">Loading profile…</div>;
   }
 
-  // Profile.baseSalary already reflects every processed anniversary
-  // increment, so it IS the current effective salary (mirrors old
-  // db.calculateCurrentSalary()).
-  const salary = profile.baseSalary;
-  const joined = formatDateNY(profile.joinedDate);
-
+  const usa = profile.region === 'USA';
+  const identityDocs = myDocs?.identityDocs || [];
+  // Profile.baseSalary already reflects every processed anniversary increment, so it IS the current effective salary.
   const infoRows = [
-    { icon: Mail,      label: 'Email Address',       value: profile.email },
+    { icon: Mail, label: 'Email Address', value: profile.email },
     { icon: Briefcase, label: 'Designation / Title', value: profile.jobTitle || 'Employee' },
-    { icon: User,      label: 'Gender / Pronouns',   value: profile.gender ? (profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)) : 'Male' },
-    { icon: Calendar,  label: 'Joined Date',         value: joined },
-    { icon: Users,     label: 'Department Teams',    value: profile.teams.join(', ') || '—' },
-    { icon: ShieldCheck, label: 'Onboarding Status',  value: profile.onboardingCompleted ? 'Completed ✓' : 'Incomplete' },
+    { icon: User, label: 'Gender / Pronouns', value: profile.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : 'Male' },
+    { icon: Calendar, label: 'Joined Date', value: formatDateNY(profile.joinedDate) },
+    { icon: Users, label: 'Department Teams', value: profile.teams.join(', ') || '—' },
+    { icon: ShieldCheck, label: 'Onboarding Status', value: profile.onboardingCompleted ? 'Completed ✓' : 'Incomplete' },
   ];
 
   return (
-    // Wider than the old single-column max-w-2xl — this now lays out as a
-    // 2-column grid at the lg breakpoint (see below), which needs the extra
-    // room or the two columns would be too cramped to read comfortably.
-    // Native mobile app builds run on phone-sized viewports, so they never
-    // hit the lg breakpoint and stay single-column exactly like before —
-    // no separate Capacitor check needed, same responsive-only approach
-    // used everywhere else in this app.
+    // Wide enough for the two-column layout at lg. Phones never reach lg, so the native apps stay single-column
+    // without a separate Capacitor check (responsive-only, like the rest of the app).
     <div className="space-y-6 md:space-y-8 max-w-6xl">
-      {/* Header */}
       <div>
         <h1 className="text-lg md:text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-xs md:text-sm text-slate-500 mt-0.5">Personal information and account settings.</p>
       </div>
 
-      {/* Avatar + Name card */}
       <Card className="p-0 overflow-hidden border border-slate-200">
-        {/* Top banner */}
         <div className="h-24 bg-orange-600" />
         <div className="px-6 pb-6">
           <div className="-mt-10 mb-4 flex items-end justify-between">
             <div className="relative group">
               {profile.profilePicture ? (
-                <img
-                  src={profile.profilePicture}
-                  alt="Profile"
-                  className="h-20 w-20 rounded-full bg-white border-4 border-white shadow-md object-cover"
-                />
+                <img src={profile.profilePicture} alt="Profile" className="h-20 w-20 rounded-full bg-white border-4 border-white shadow-md object-cover" />
               ) : (
-                <div className="h-20 w-20 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center text-2xl font-bold text-orange-600 bg-orange-50">
+                <div className="h-20 w-20 rounded-full border-4 border-white shadow-md flex items-center justify-center text-2xl font-bold text-orange-600 bg-orange-50">
                   {profile.fullName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
                 </div>
               )}
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => photoInputRef.current?.click()}
                 title="Change profile picture"
+                aria-label="Change profile picture"
                 className="absolute -bottom-0.5 -right-0.5 h-5 w-5 md:h-6 md:w-6 rounded-full bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center shadow-sm border-[1.5px] border-white transition-colors transition-transform active:scale-90"
               >
                 <Camera className="h-2.5 w-2.5 md:h-3 md:w-3" />
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoInputChange}
-                className="hidden"
-              />
+              <input ref={photoInputRef} type="file" accept="image/*" onChange={photo.handleInputChange} className="hidden" />
             </div>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setIsResetOpen(true)}
-              className="border border-slate-200"
-            >
+            <Button variant="secondary" size="md" onClick={() => setDialog('password')} className="border border-slate-200">
               <KeyRound className="h-3.5 w-3.5" /> Reset Password
             </Button>
           </div>
 
           <h2 className="text-xl font-bold text-slate-900">{profile.fullName}</h2>
           <div className="flex flex-wrap items-center gap-2 mt-1">
-            <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full capitalize">{profile.jobTitle || profile.role}</span>
+            <Badge variant="warning" className="capitalize">{profile.jobTitle || profile.role}</Badge>
             {profile.isTeamLead && (profile.leadTeams?.length ?? 0) > 0 && (
-              <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Star className="h-3 w-3" /> Team Lead · {profile.leadTeams?.join(', ')}
-              </span>
+              <Badge variant="warning" className="gap-1"><Star className="h-3 w-3" /> Team Lead · {profile.leadTeams?.join(', ')}</Badge>
             )}
           </div>
         </div>
       </Card>
 
-      {/* Everything below the identity card lays out as 2 columns on
-          desktop web (lg+) instead of stacking single-file down a narrow
-          center column — that's what was leaving so much empty space on
-          wide screens. items-start keeps each column's height independent
-          so a short column doesn't get stretched to match a tall one. */}
+      {/* Two columns on desktop instead of one narrow centre column; items-start keeps each column's height its own. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 items-start">
-        {/* Left Column */}
         <div className="space-y-6 md:space-y-8">
-          {/* Info grid */}
-          <Card className="border border-slate-200 p-0 overflow-hidden">
-            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">Account Details</h3>
-            </div>
+          <ProfileCard title="Account Details">
             <div className="divide-y divide-slate-100">
-              {infoRows.map(({ icon: Icon, label, value }) => (
-                <div key={label} className="flex items-center gap-4 px-6 py-4">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Icon className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{value}</p>
-                  </div>
-                </div>
-              ))}
-              {/* Salary row */}
-              <div className="flex items-center gap-4 px-6 py-4">
-                <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                  <span className="text-emerald-600 font-bold text-sm">{profile.region === 'USA' ? '$' : '₨'}</span>
-                </div>
-                <div className="flex-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Salary</p>
-                  <p className="text-sm font-semibold text-emerald-700 mt-0.5">{formatMoney(salary, profile.region)} / month</p>
-                </div>
-              </div>
+              {infoRows.map(row => <InfoRow key={row.label} {...row} />)}
+              <InfoRow
+                label="Current Salary"
+                value={`${formatMoney(profile.baseSalary, profile.region)} / month`}
+                valueClass="text-emerald-700"
+                iconClass="bg-emerald-50 text-emerald-600"
+                icon={usa ? DollarSign : RupeeSign}
+              />
             </div>
-          </Card>
+          </ProfileCard>
 
-          {/* Bank Details section */}
-          <Card className="border border-slate-200 p-0 overflow-hidden">
-            <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-sm">Bank Details</h3>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={openBankEdit}
-                className="border border-slate-200"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit
-              </Button>
-            </div>
+          <ProfileCard title="Bank Details" action={<EditButton onClick={() => setDialog('bank')} />}>
             {myDocs?.bankName ? (
               <div className="divide-y divide-slate-100">
-                <div className="flex items-center gap-4 px-6 py-4">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Landmark className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Name</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.bankName}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 px-6 py-4">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Landmark className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account Number</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{myDocs?.accountNumber || '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 px-6 py-4">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Landmark className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Routing Number' : 'IBAN'}</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono truncate">{myDocs?.iban || '—'}</p>
-                  </div>
-                </div>
+                <InfoRow icon={Landmark} label="Bank Name" value={myDocs.bankName} />
+                <InfoRow icon={Landmark} label="Account Number" value={myDocs.accountNumber || '—'} mono />
+                <InfoRow icon={Landmark} label={usa ? 'Routing Number' : 'IBAN'} value={myDocs.iban || '—'} mono />
               </div>
             ) : (
-              <div className="px-6 py-6 text-center">
-                <p className="text-xs text-slate-400 italic font-semibold">No bank details on file yet. Add them so payroll can process your salary correctly.</p>
-              </div>
+              <EmptyNote>No bank details on file yet. Add them so payroll can process your salary correctly.</EmptyNote>
             )}
-          </Card>
+          </ProfileCard>
 
-          {/* Contact Numbers section */}
-          <Card className="border border-slate-200 p-0 overflow-hidden">
-            <div className="px-6 pt-5 pb-2 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-sm">Contact Numbers</h3>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={openPhoneEdit}
-                className="border border-slate-200"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit
-              </Button>
-            </div>
+          <ProfileCard title="Contact Numbers" action={<EditButton onClick={() => setDialog('phone')} />}>
             {myDocs?.personalPhone || myDocs?.companyPhone ? (
               <div className="divide-y divide-slate-100">
-                <div className="flex items-center gap-4 px-6 py-4">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Phone className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Own Number</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.personalPhone || '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 px-6 py-4">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <Phone className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Company Allocated Number</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.companyPhone || 'Not applicable'}</p>
-                  </div>
-                </div>
+                <InfoRow icon={Phone} label="Own Number" value={myDocs?.personalPhone || '—'} />
+                <InfoRow icon={Phone} label="Company Allocated Number" value={myDocs?.companyPhone || 'Not applicable'} />
               </div>
             ) : (
-              <div className="px-6 py-6 text-center">
-                <p className="text-xs text-slate-400 italic font-semibold">No contact numbers on file yet. Add your own number (and a company-allocated one, if you have one).</p>
-              </div>
+              <EmptyNote>No contact numbers on file yet. Add your own number (and a company-allocated one, if you have one).</EmptyNote>
             )}
-          </Card>
+          </ProfileCard>
 
-          {/* Security section */}
-          <Card className="border border-slate-200 p-0 overflow-hidden">
-            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">Security</h3>
-            </div>
+          <ProfileCard title="Security">
             <div className="px-4 md:px-6 py-4 md:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <KeyRound className="h-4 w-4 text-slate-500" />
-                </div>
+                <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center"><KeyRound className="h-4 w-4 text-slate-500" /></div>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Password</p>
                   <p className="text-xs text-slate-500 mt-0.5">Change your account password at any time.</p>
                 </div>
               </div>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => setIsResetOpen(true)}
-                className="w-full sm:w-auto flex-shrink-0"
-              >
-                Change Password
-              </Button>
+              <Button variant="primary" size="md" onClick={() => setDialog('password')} className="w-full sm:w-auto flex-shrink-0">Change Password</Button>
             </div>
-          </Card>
+          </ProfileCard>
         </div>
 
-        {/* Right Column */}
         <div className="space-y-6 md:space-y-8">
-          {/* Google Integration & Calendar Sync */}
           <GoogleIntegrationCard profile={profile} />
 
-          {/* Documents section */}
-          <Card className="border border-slate-200 p-0 overflow-hidden">
-            <div className="px-6 pt-5 pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">My Documents</h3>
-              <p className="text-[10px] text-slate-400 mt-1">Images up to 3 MB (auto-converted to WebP), PDFs up to 5 MB. Visible to HR/Admin under Master Reports.</p>
-            </div>
-
+          <ProfileCard title="My Documents" subtitle="Images up to 3 MB (auto-converted to WebP), PDFs up to 5 MB. Visible to HR/Admin under Master Reports.">
             <div className="divide-y divide-slate-100">
-              {/* CV / Resume */}
-              <div className="flex items-center justify-between gap-3 px-6 py-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <FileText className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CV / Resume</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.cvFileName || 'Not uploaded yet'}</p>
-                  </div>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => cvInputRef.current?.click()}
-                  disabled={docBusy === 'cv'}
-                  className="flex-shrink-0 border border-slate-200"
-                >
-                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'cv' ? 'Uploading…' : myDocs?.cvFileName ? 'Replace' : 'Upload'}
-                </Button>
-                <input ref={cvInputRef} type="file" accept="image/*,application/pdf" onChange={handleCvUpload} className="hidden" />
-              </div>
+              <DocumentRow label="CV / Resume" fileName={myDocs?.cvFileName} busy={docs.busy === 'cv'} onPick={docs.onCv} />
 
-              {/* Identity documents */}
               <div className="px-6 py-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{profile.region === 'USA' ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{(myDocs?.identityDocs || []).length} document(s) on file</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{usa ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{identityDocs.length} document(s) on file</p>
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={() => idInputRef.current?.click()}
-                    disabled={docBusy === 'id'}
-                    className="flex-shrink-0 border border-slate-200"
-                  >
-                    <Upload className="h-3.5 w-3.5" /> {docBusy === 'id' ? 'Uploading…' : 'Add Document'}
+                  <Button variant="secondary" size="md" onClick={() => idInputRef.current?.click()} disabled={docs.busy === 'id'} className="flex-shrink-0 border border-slate-200">
+                    <Upload className="h-3.5 w-3.5" /> {docs.busy === 'id' ? 'Uploading…' : 'Add Document'}
                   </Button>
-                  <input ref={idInputRef} type="file" accept="image/*,application/pdf" onChange={handleIdUpload} className="hidden" />
+                  <input ref={idInputRef} type="file" accept="image/*,application/pdf" onChange={docs.onId} className="hidden" />
                 </div>
-                {(myDocs?.identityDocs || []).length > 0 && (
-                  <ul className="text-xs text-slate-600 space-y-1 pl-1">
-                    {(myDocs?.identityDocs || []).map((d, i) => <li key={i} className="truncate">• {d.name}</li>)}
-                  </ul>
+                {identityDocs.length > 0 && (
+                  <ul className="text-xs text-slate-600 space-y-1 pl-1">{identityDocs.map((d, i) => <li key={i} className="truncate">• {d.name}</li>)}</ul>
                 )}
               </div>
 
-              {/* Passport */}
-              <div className="flex items-center justify-between gap-3 px-6 py-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <FileText className="h-4 w-4 text-slate-500" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Passport (Optional)</p>
-                    <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{myDocs?.passportFileName || 'Not uploaded yet'}</p>
-                  </div>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => passportInputRef.current?.click()}
-                  disabled={docBusy === 'passport'}
-                  className="flex-shrink-0 border border-slate-200"
-                >
-                  <Upload className="h-3.5 w-3.5" /> {docBusy === 'passport' ? 'Uploading…' : myDocs?.passportFileName ? 'Replace' : 'Upload'}
-                </Button>
-                <input ref={passportInputRef} type="file" accept="image/*,application/pdf" onChange={handlePassportUpload} className="hidden" />
-              </div>
+              <DocumentRow label="Passport (Optional)" fileName={myDocs?.passportFileName} busy={docs.busy === 'passport'} onPick={docs.onPassport} />
             </div>
-          </Card>
+          </ProfileCard>
 
-          {/* Push Notification Preferences */}
-          {profile?.email && <NotificationPreferencesCard email={profile.email} />}
-          {/* Logged-in Devices */}
-          {profile?.email && <LoggedInDevicesCard email={profile.email} />}
+          <NotificationPreferencesCard email={profile.email} />
+          <LoggedInDevicesCard email={profile.email} />
+          <AppearanceCard />
           <AppVersionCard />
 
-          {/* Danger Zone — self-service account deletion request. */}
           <Card className="border border-rose-200 p-5 space-y-3">
             <h3 className="font-bold text-rose-700 text-sm">Danger Zone</h3>
-            {deletionRequest ? (
+            {deletion.request ? (
               <div className="text-xs text-slate-600 font-medium leading-relaxed bg-rose-50 border border-rose-100 rounded-lg p-3">
-                Account deletion requested on {formatDateNY(deletionRequest.requestedAt)}. HR will contact you to confirm and process this — it hasn&apos;t been deleted yet.
+                Account deletion requested on {formatDateNY(deletion.request.requestedAt)}. HR will contact you to confirm and process this — it hasn&apos;t been deleted yet.
               </div>
             ) : (
               <>
                 <p className="text-xs text-slate-500 leading-relaxed">
                   You can request that your account and personal data be deleted. HR will be notified immediately and will follow up to confirm before anything is removed.
                 </p>
-                {deletionRequestError && (
-                  <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
-                    <AlertCircle className="h-4 w-4" />{deletionRequestError}
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowDeleteAccountModal(true)}
-                  className="text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-4 py-2 rounded-lg transition-colors active:scale-97"
-                >
-                  Request Account Deletion
-                </button>
+                <Button variant="outline" size="md" onClick={() => setDialog('delete')} className="!text-rose-600 !bg-rose-50 hover:!bg-rose-100 !border-rose-200">Request Account Deletion</Button>
               </>
             )}
           </Card>
         </div>
       </div>
 
-      {/* Request Account Deletion confirmation */}
-      <Modal isOpen={showDeleteAccountModal} onClose={() => setShowDeleteAccountModal(false)} title="Request Account Deletion">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 p-4 rounded-xl">
-            <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-              This sends HR and Admin an immediate request to delete your account and personal data. It doesn&apos;t delete anything automatically — HR will follow up with you to confirm before it&apos;s processed (records like payroll history may need to be retained for a period as required by law).
-            </p>
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setShowDeleteAccountModal(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="md"
-              onClick={handleRequestAccountDeletion}
-              disabled={isRequestingDeletion}
-            >
-              {isRequestingDeletion ? 'Sending…' : 'Send Deletion Request'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {dialog === 'password' && <ChangePasswordModal logTag="Profile" onClose={closeDialog} />}
+      {dialog === 'bank' && <BankDetailsModal initial={myDocs ?? {}} region={profile.region} onSaved={refetchDocs} onClose={closeDialog} />}
+      {dialog === 'phone' && <ContactNumbersModal initial={myDocs ?? {}} onSaved={refetchDocs} onClose={closeDialog} />}
+      {dialog === 'delete' && <DeleteAccountRequestModal profile={profile} onRequested={requestedAt => deletion.setRequest({ requestedAt })} onClose={closeDialog} />}
 
-      {/* Password Reset Modal */}
-      <Modal isOpen={isResetOpen} onClose={() => { setIsResetOpen(false); setResetError(''); }} title="Change Password">
-        <form onSubmit={handleResetSubmit} className="space-y-4">
-          {resetError && (
-            <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />{resetError}
-            </div>
-          )}
-          <FormField label="Current Password" size="md">
-            <PasswordInput
-              value={currentPass}
-              onChange={setCurrentPass}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
-              placeholder="Enter current password"
-            />
-          </FormField>
-          <FormField label="New Password" size="md">
-            <PasswordInput
-              value={newPass}
-              onChange={setNewPass}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
-              placeholder="Min. 6 characters"
-            />
-          </FormField>
-          <FormField label="Confirm New Password" size="md">
-            <PasswordInput
-              value={confirmPass}
-              onChange={setConfirmPass}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900"
-              placeholder="Repeat new password"
-            />
-          </FormField>
-
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <Button type="button" variant="outline" size="md" disabled={isResetting} onClick={() => setIsResetOpen(false)}>Cancel</Button>
-            <button type="submit" disabled={isResetting} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isResetting ? 'Updating…' : 'Update Password'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Bank Details Edit Modal */}
-      <Modal isOpen={isBankEditOpen} onClose={() => { setIsBankEditOpen(false); setBankError(''); }} title="Edit Bank Details">
-        <form onSubmit={handleBankSubmit} className="space-y-4">
-          {bankError && (
-            <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />{bankError}
-            </div>
-          )}
-          <FormField label="Bank Name" size="md">
-            <Input
-              type="text"
-              value={bankNameInput}
-              onChange={e => setBankNameInput(e.target.value)}
-              fieldSize="md"
-              placeholder="e.g. Habib Bank Limited"
-            />
-          </FormField>
-          <FormField label="Account Number" size="md">
-            <Input
-              type="text"
-              value={accountNumberInput}
-              onChange={e => setAccountNumberInput(e.target.value)}
-              fieldSize="md" className="font-mono"
-              placeholder="Enter your account number"
-            />
-          </FormField>
-          <FormField label={<>{profile.region === 'USA' ? 'Routing Number' : 'IBAN'}</>} size="md">
-            <Input
-              type="text"
-              value={ibanInput}
-              onChange={e => setIbanInput(e.target.value)}
-              fieldSize="md" className="font-mono"
-              placeholder={profile.region === 'USA' ? 'e.g. 021000021' : 'e.g. PK12ABCD0000001234567890'}
-            />
-          </FormField>
-
-          <p className="text-[10px] text-slate-400 leading-relaxed">
-            Changes to your bank details are saved immediately and visible to HR/Payroll for your next salary cycle.
-          </p>
-
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <Button type="button" variant="outline" size="md" disabled={isSavingBank} onClick={() => setIsBankEditOpen(false)}>Cancel</Button>
-            <button type="submit" disabled={isSavingBank} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingBank ? 'Saving…' : 'Save Bank Details'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Contact Numbers Edit Modal */}
-      <Modal isOpen={isPhoneEditOpen} onClose={() => { setIsPhoneEditOpen(false); setPhoneError(''); }} title="Edit Contact Numbers">
-        <form onSubmit={handlePhoneSubmit} className="space-y-4">
-          {phoneError && (
-            <div className="p-3 text-xs bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
-              <AlertCircle className="h-4 w-4" />{phoneError}
-            </div>
-          )}
-          <FormField label="Own Number" size="md">
-            <Input
-              type="tel"
-              value={personalPhoneInput}
-              onChange={e => setPersonalPhoneInput(e.target.value)}
-              fieldSize="md"
-              placeholder="e.g. +92 300 1234567"
-            />
-          </FormField>
-          <FormField label="Company Allocated Number (if applicable)" size="md">
-            <Input
-              type="tel"
-              value={companyPhoneInput}
-              onChange={e => setCompanyPhoneInput(e.target.value)}
-              fieldSize="md"
-              placeholder="Leave blank if none issued"
-            />
-          </FormField>
-
-          <p className="text-[10px] text-slate-400 leading-relaxed">
-            Changes to your contact numbers are saved immediately and visible to HR/Admin.
-          </p>
-
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-            <Button type="button" variant="outline" size="md" disabled={isSavingPhone} onClick={() => setIsPhoneEditOpen(false)}>Cancel</Button>
-            <button type="submit" disabled={isSavingPhone} className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">{isSavingPhone ? 'Saving…' : 'Save Contact Numbers'}</button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Avatar Cropper Modal */}
-      <AvatarCropperModal
-        file={pendingPhotoFile}
-        onClose={() => setPendingPhotoFile(null)}
-        onSave={handlePhotoSave}
-      />
+      <AvatarCropperModal file={photo.pendingFile} onClose={photo.clearPending} onSave={photo.handleSave} />
     </div>
   );
 }

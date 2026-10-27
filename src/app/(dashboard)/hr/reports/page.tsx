@@ -1,21 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
+import { exportEmployeesCsv, exportTimesheetCsv } from '@/lib/reportExports';
+import React, { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useTimesheets, displayName } from '@/lib/hrData';
-import { FileText, Filter, Download, Clock, TrendingUp, Calendar, Landmark } from 'lucide-react';
+import { FileText, Download, Clock, TrendingUp, Calendar, Landmark } from 'lucide-react';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
-import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
-import { Select } from '@/components/ui/Input';
 import { useSessionEmail } from '@/lib/useSession';
 import { useNow } from '@/lib/useNow';
 
@@ -24,9 +24,6 @@ export default function ReportsPage() {
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
   const [historyDays, setHistoryDays] = useState(60);
   const { data: allTimesheets = [], isLoading: timesheetsLoading, isFetching: fetchingHistory } = useTimesheets({ days: historyDays });
-  const [regionFilter, setRegionFilter] = useState<'All' | 'USA' | 'Pakistan'>('All');
-  const [onboardingFilter, setOnboardingFilter] = useState<'All' | 'Completed' | 'Pending'>('All');
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedReviewEmp, setSelectedReviewEmp] = useState<Profile | null>(null);
   const [reviewEntries, setReviewEntries] = useState<TimesheetEntry[]>([]);
   const [dateFilter, setDateFilter] = useState('');
@@ -48,16 +45,10 @@ export default function ReportsPage() {
     setReviewEntries(entries);
   };
 
-  const filteredEmployees = employees.filter(emp => {
-    if (emp.role === 'admin' || emp.role === 'hr') return false;
-    const matchesSearch = emp.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (emp.jobTitle && emp.jobTitle.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesRegion = regionFilter === 'All' ? true : emp.region === regionFilter;
-    const matchesOnboarding = onboardingFilter === 'All' ? true : 
-                              onboardingFilter === 'Completed' ? emp.onboardingCompleted : !emp.onboardingCompleted;
-    return matchesSearch && matchesRegion && matchesOnboarding;
-  });
+  // The HR report covers staff below HR/Admin only (the Admin report keeps the full roster).
+  const reportable = useMemo(() => employees.filter(e => e.role !== 'admin' && e.role !== 'hr'), [employees]);
+  const filters = useEmployeeFilters(reportable);
+  const filteredEmployees = filters.rows;
 
   const filteredReviewEntries = reviewEntries.filter(entry => {
     if (!dateFilter) return true;
@@ -81,51 +72,6 @@ export default function ReportsPage() {
   const completedShifts = filteredReviewEntries.filter(e => e.status === 'completed').length;
   const openShifts = filteredReviewEntries.filter(e => e.status === 'in_progress').length;
 
-  const exportMainCSV = () => {
-    const headers = ['Full Name', 'Email', 'Role', 'Region', 'Bank Name', 'Account Number', 'IBAN', 'Onboarding Status', 'Base Salary'];
-    const rows = filteredEmployees.map(emp => [
-      emp.fullName,
-      emp.email,
-      emp.jobTitle || 'Employee',
-      emp.region || 'Pakistan',
-      emp.bankName || 'N/A',
-      emp.accountNumber || 'N/A',
-      emp.iban || 'N/A',
-      emp.onboardingCompleted ? 'Completed' : 'Pending',
-      formatMoney(emp.baseSalary, emp.region)
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.map(val => `"${val}"`).join(','))].join('\n');
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `DelCargo_Employee_Report_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportTrackingCSV = () => {
-    if (!selectedReviewEmp) return;
-    const headers = ['Date', 'Clock In', 'Clock Out', 'Duration', 'Status'];
-    const rows = filteredReviewEntries.map(e => [
-      e.date || '',
-      e.clockIn ? formatTimeNY(e.clockIn) : '—',
-      e.clockOut ? formatTimeNY(e.clockOut) : '—',
-      e.duration || '—',
-      e.status === 'in_progress' ? 'On Shift' : 'Completed'
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8,"
-      + [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `Tracking_${selectedReviewEmp.fullName.replace(' ', '_')}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -134,7 +80,7 @@ export default function ReportsPage() {
           <p className="text-slate-500">Comprehensive overview of profiles, localized salaries, and banking credentials.</p>
         </div>
         <button
-          onClick={exportMainCSV}
+          onClick={() => exportEmployeesCsv(filteredEmployees)}
           className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm self-start md:self-auto"
         >
           <Download className="h-4 w-4" /> Export Report (CSV)
@@ -144,35 +90,7 @@ export default function ReportsPage() {
       <LoadMoreHistory days={historyDays} maxDays={365} loading={fetchingHistory} noun="shifts" onLoadMore={() => setHistoryDays(d => d + 60)} />
 
       {/* Filters row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-        <SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employee or role..." />
-
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          <Select
-            value={regionFilter}
-            onChange={(e) => setRegionFilter(e.target.value as Parameters<typeof setRegionFilter>[0])}
-            fieldSize="md" className="cursor-pointer"
-          >
-            <option value="All">All Regions</option>
-            <option value="USA">USA Only</option>
-            <option value="Pakistan">Pakistan (Remote)</option>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          <Select
-            value={onboardingFilter}
-            onChange={(e) => setOnboardingFilter(e.target.value as Parameters<typeof setOnboardingFilter>[0])}
-            fieldSize="md" className="cursor-pointer"
-          >
-            <option value="All">All Onboarding Status</option>
-            <option value="Completed">Completed Onboarding</option>
-            <option value="Pending">Pending Onboarding</option>
-          </Select>
-        </div>
-      </div>
+      <EmployeeFilterBar filters={filters} />
 
       <Card className="overflow-hidden p-0 border border-slate-200">
         <TableScroll hideOnMobile>
@@ -366,7 +284,7 @@ export default function ReportsPage() {
                 />
               </div>
               <button
-                onClick={exportTrackingCSV}
+                onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, filteredReviewEntries)}
                 disabled={filteredReviewEntries.length === 0}
                 className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform shadow-sm whitespace-nowrap"
               >

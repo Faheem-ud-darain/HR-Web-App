@@ -28,6 +28,8 @@ export function Switch({ checked, onChange, label, size = 'md', disabled, classN
       onClick={() => onChange(!checked)}
       className={`relative shrink-0 inline-flex items-center rounded-full transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${TRACK[size]} ${checked ? 'bg-orange-600' : 'bg-slate-300'} ${className}`}
     >
+      {/* Invisible extra touch area: the visible track is small, but a thumb needs about 44px to hit reliably. */}
+      <span aria-hidden="true" className="absolute -inset-x-2 -inset-y-3" />
       <span className={`absolute top-0.5 left-0.5 ${THUMB[size]} rounded-full bg-white shadow transition-transform duration-150 ${checked ? SHIFT[size] : 'translate-x-0'}`} />
     </button>
   );

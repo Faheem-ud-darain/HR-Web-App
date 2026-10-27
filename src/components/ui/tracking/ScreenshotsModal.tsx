@@ -9,7 +9,7 @@ import { Download, MousePointerClick, ZoomIn } from 'lucide-react';
 import { formatShortDateNY, formatTimeNY, formatDateTimeNY } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
-import { localDateString } from '@/components/ui/TrackingView';
+import { formatDuration, localDateString } from '@/lib/core/trackingWindow';
 
 interface ScreenshotsModalProps {
   viewerEmp: Profile | null;
@@ -29,12 +29,11 @@ interface ScreenshotsModalProps {
   exporting: boolean;
   viewerLoading: boolean;
   viewerInactivity: InactivityLog[];
-  formatDuration: (seconds: number) => string;
   totalInactiveSeconds: number;
   openLightbox: (index: number) => void;
 }
 
-export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeChange, viewerRange, viewerDay, handleDayChange, handleExportZip, viewerShots, viewerTotal, hasMoreShots, loadMoreShots, loadingMoreShots, exporting, viewerLoading, viewerInactivity, formatDuration, totalInactiveSeconds, openLightbox }: ScreenshotsModalProps) {
+export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeChange, viewerRange, viewerDay, handleDayChange, handleExportZip, viewerShots, viewerTotal, hasMoreShots, loadMoreShots, loadingMoreShots, exporting, viewerLoading, viewerInactivity, totalInactiveSeconds, openLightbox }: ScreenshotsModalProps) {
   return (
     <Modal isOpen={!!viewerEmp} onClose={() => setViewerEmp(null)} title={viewerEmp ? `Screenshots — ${displayName(viewerEmp, role)}` : 'Screenshots'}>
       {viewerEmp && (

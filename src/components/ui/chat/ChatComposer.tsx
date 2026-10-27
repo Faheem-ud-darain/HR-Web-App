@@ -188,7 +188,7 @@ export function ChatComposer({ oversight, activeTeam, draftIsAnnouncement, sendE
             }}
             placeholder={draftIsAnnouncement ? 'Announcement…' : 'Message… (@ to mention)'}
             rows={1}
-            className="flex-1 bg-transparent py-2 md:py-2.5 px-1 text-[10px] md:text-[11px] outline-none font-medium resize-none max-h-24 min-h-8 md:min-h-9 w-full"
+            className="flex-1 bg-transparent py-2 md:py-2.5 px-1 text-[10px] md:text-[11px] outline-none font-medium resize-none max-h-48 min-h-8 md:min-h-9 w-full"
           />
         </div>
     

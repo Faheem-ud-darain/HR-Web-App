@@ -172,3 +172,19 @@ export async function compressImageToWebP(
     }
   });
 }
+
+// An uploaded document as something storable: images are compressed to WebP (max 3 MB), PDFs are kept as-is after a
+// size check (max 5 MB, no lossy conversion). Used wherever a person attaches a file that lives inside a record
+// (profile documents, ticket attachments). Resolves with `error` set for an unsupported or oversized file; rejects
+// with a specific message when an image cannot be read (e.g. HEIC).
+export async function fileToStoredData(file: File): Promise<{ data: string; error: string | null }> {
+  if (file.type === 'application/pdf') {
+    const err = validatePdfSize(file);
+    if (err) return { data: '', error: err };
+    return { data: await fileToDataUrl(file), error: null };
+  }
+  if (file.type.startsWith('image/')) {
+    return { data: await compressImageToWebP(file, 0.8, MAX_DOCUMENT_IMAGE_BYTES), error: null };
+  }
+  return { data: '', error: 'Only image files or PDFs are supported.' };
+}

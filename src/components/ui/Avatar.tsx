@@ -37,12 +37,11 @@ export function Avatar({ src, name, size = 40, className = '' }: AvatarProps) {
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    border: '1px solid var(--border, #e2e8f0)',
-    background: src && !imgError ? undefined : '#fff7ed',
+    border: '1px solid var(--border)',
   };
 
   return (
-    <div className={className} style={wrapperStyle}>
+    <div className={`${className} ${src && !imgError ? '' : 'bg-orange-50'}`} style={wrapperStyle}>
       {src && !imgError ? (
         <img
           src={src}
@@ -52,7 +51,7 @@ export function Avatar({ src, name, size = 40, className = '' }: AvatarProps) {
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
         />
       ) : (
-        <span style={{ fontSize: Math.max(10, size * 0.36), fontWeight: 700, color: '#ea580c' }}>{initials}</span>
+        <span className="font-bold text-orange-600" style={{ fontSize: Math.max(10, size * 0.36) }}>{initials}</span>
       )}
     </div>
   );

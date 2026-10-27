@@ -1,5 +1,6 @@
 'use client';
 
+import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
@@ -283,7 +284,7 @@ export default function AdminDashboard() {
                   <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-slate-900">{nameFor(l.employeeName)}</p>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">{l.type}</span>
+                      <LeaveTypeBadge type={l.type} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>

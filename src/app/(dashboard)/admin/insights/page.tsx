@@ -33,16 +33,14 @@ import { BarChart3, Users, Wallet, PiggyBank, Table2 } from 'lucide-react';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/StatCard';
 
-// Dataviz skill's validated default categorical palette (references/palette.md,
-// light-mode column) — slot 1 blue, slot 2 orange, slot 3 aqua. Assigned by
-// identity (region / leave-type), fixed order, never cycled or re-assigned
-// when a filter changes which series are present.
+// Categorical chart colours, taken from the theme (so light and dark both follow) and assigned by identity
+// (region / leave type) in a fixed order, never cycled or re-assigned when a filter changes which series show.
 const SERIES = {
-  usa: '#2a78d6',
-  pakistan: '#eb6834',
-  urgent: '#2a78d6',
-  normal: '#eb6834',
-  absence: '#1baf7a',
+  usa: 'var(--color-blue-600)',
+  pakistan: 'var(--color-orange-500)',
+  urgent: 'var(--color-blue-600)',
+  normal: 'var(--color-orange-500)',
+  absence: 'var(--color-emerald-500)',
 };
 
 function lastNMonthKeys(n: number): string[] {

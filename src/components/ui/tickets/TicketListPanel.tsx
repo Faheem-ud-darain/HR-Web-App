@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -16,9 +17,7 @@ interface TicketListPanelProps {
   isEmp: boolean;
   isTicketLiveWithHR: (ticketId: string) => boolean;
   canForwardToHrAdmin: boolean;
-  setForwardingTicket: React.Dispatch<React.SetStateAction<Ticket | null>>;
-  setForwardNote: React.Dispatch<React.SetStateAction<string>>;
-  setForwardError: React.Dispatch<React.SetStateAction<string>>;
+  openForward: (ticket: Ticket) => void;
   nameFor: (name: string) => string;
   currentEmail: string;
   ticketsLoading: boolean;
@@ -31,7 +30,7 @@ interface TicketListPanelProps {
   isFetchingTickets: boolean;
 }
 
-export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTicket, isEmp, isTicketLiveWithHR, canForwardToHrAdmin, setForwardingTicket, setForwardNote, setForwardError, nameFor, currentEmail, ticketsLoading, tickets, setStatusFilter, setSearchQuery, allTickets, ticketLimit, setTicketLimit, isFetchingTickets }: TicketListPanelProps) {
+export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTicket, isEmp, isTicketLiveWithHR, canForwardToHrAdmin, openForward, nameFor, currentEmail, ticketsLoading, tickets, setStatusFilter, setSearchQuery, allTickets, ticketLimit, setTicketLimit, isFetchingTickets }: TicketListPanelProps) {
   return (
     <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
       {visibleTickets.map(t => {
@@ -49,7 +48,7 @@ export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTic
                 {t.title}
                 {isEmp && isTicketLiveWithHR(t.id) && (
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> LIVE
+                    <StatusDot tone="emerald" pulse /> LIVE
                   </span>
                 )}
               </span>
@@ -67,7 +66,7 @@ export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTic
                 {canForwardToHrAdmin && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setForwardingTicket(t); setForwardNote(''); setForwardError(''); }}
+                    onClick={(e) => { e.stopPropagation(); openForward(t); }}
                     title="Forward to HR & Admin"
                     className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
                   >

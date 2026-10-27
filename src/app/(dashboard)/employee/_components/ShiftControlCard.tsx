@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import type { RefetchOptions, QueryObserverResult } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -46,7 +47,7 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full shrink-0 ${shiftActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                <StatusDot tone={shiftActive ? 'emerald' : 'slate'} size="sm" pulse={shiftActive} />
                 <p className={`font-display font-bold text-lg tracking-tight ${shiftActive ? 'text-emerald-700' : 'text-slate-700'}`}>
                   {shiftActive ? 'On Shift' : 'Off Shift'}
                 </p>

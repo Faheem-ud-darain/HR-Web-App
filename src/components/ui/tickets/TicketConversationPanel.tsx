@@ -19,9 +19,7 @@ interface TicketConversationPanelProps {
   updatingTicketStatusId: string | null;
   handleReopenTicket: (id: string) => void;
   canForwardToHrAdmin: boolean;
-  setForwardingTicket: React.Dispatch<React.SetStateAction<Ticket | null>>;
-  setForwardNote: React.Dispatch<React.SetStateAction<string>>;
-  setForwardError: React.Dispatch<React.SetStateAction<string>>;
+  openForward: (ticket: Ticket) => void;
   handleInspectApplicant: (email: string) => void;
   nameFor: (name: string) => string;
   currentEmail: string;
@@ -29,8 +27,7 @@ interface TicketConversationPanelProps {
   profileFor: (name: string) => Profile | undefined;
   role: "admin" | "hr" | "employee" | "team_lead";
   ticketSeenState: TicketSeenState | null | undefined;
-  setLightboxSrc: React.Dispatch<React.SetStateAction<string | null>>;
-  setLightboxName: React.Dispatch<React.SetStateAction<string | undefined>>;
+  onOpenImage: (src: string, name?: string) => void;
   typingNames: string[];
   chatEndRef: React.RefObject<HTMLDivElement | null>;
   isAdmin: boolean;
@@ -47,7 +44,7 @@ interface TicketConversationPanelProps {
   sendingReply: boolean;
 }
 
-export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSelectedTicket, isEmp, isTicketLiveWithHR, isPrivileged, canCloseOwnTicket, isClosed, handleCloseTicket, updatingTicketStatusId, handleReopenTicket, canForwardToHrAdmin, setForwardingTicket, setForwardNote, setForwardError, handleInspectApplicant, nameFor, currentEmail, userProfile, profileFor, role, ticketSeenState, setLightboxSrc, setLightboxName, typingNames, chatEndRef, isAdmin, handleSendReply, replyFileError, replyFile, setReplyFile, replyFileInputRef, handleReplyFileChange, replyTextareaRef, replyMsg, handleReplyMsgChange, sendReply, sendingReply }: TicketConversationPanelProps) {
+export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSelectedTicket, isEmp, isTicketLiveWithHR, isPrivileged, canCloseOwnTicket, isClosed, handleCloseTicket, updatingTicketStatusId, handleReopenTicket, canForwardToHrAdmin, openForward, handleInspectApplicant, nameFor, currentEmail, userProfile, profileFor, role, ticketSeenState, onOpenImage, typingNames, chatEndRef, isAdmin, handleSendReply, replyFileError, replyFile, setReplyFile, replyFileInputRef, handleReplyFileChange, replyTextareaRef, replyMsg, handleReplyMsgChange, sendReply, sendingReply }: TicketConversationPanelProps) {
   return (
     <div
       className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-0 z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}
@@ -137,7 +134,7 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                         action above. */}
                     {canForwardToHrAdmin && (
                       <button
-                        onClick={() => { setForwardingTicket(selectedTicket); setForwardNote(''); setForwardError(''); }}
+                        onClick={() => { openForward(selectedTicket); }}
                         title="Forward to HR & Admin"
                         className="h-8 w-8 lg:w-auto lg:px-3 lg:py-1.5 text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1 shrink-0"
                       >
@@ -162,7 +159,7 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
           </div>
     
           {/* Chat replies log */}
-          <TicketReplyLog currentEmail={currentEmail} selectedTicket={selectedTicket} userProfile={userProfile} profileFor={profileFor} nameFor={nameFor} role={role} isPrivileged={isPrivileged} ticketSeenState={ticketSeenState} setLightboxSrc={setLightboxSrc} setLightboxName={setLightboxName} typingNames={typingNames} chatEndRef={chatEndRef} />
+          <TicketReplyLog currentEmail={currentEmail} selectedTicket={selectedTicket} userProfile={userProfile} profileFor={profileFor} nameFor={nameFor} role={role} isPrivileged={isPrivileged} ticketSeenState={ticketSeenState} onOpenImage={onOpenImage} typingNames={typingNames} chatEndRef={chatEndRef} />
     
           {/* Chat input bar. Uses arbitrary-value padding-bottom
               (below) instead of `p-3 md:p-4 pb-safe` — both would set

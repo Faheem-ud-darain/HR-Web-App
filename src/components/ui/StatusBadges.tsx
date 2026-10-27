@@ -1,18 +1,23 @@
 import React from 'react';
-import { Badge } from './Badge';
+import { Badge, type BadgeVariant } from './Badge';
 import type { LeaveApplication, Task } from '@/lib/hrData';
 
 // Leave + task status/priority/type styling used by the HR, Admin and
 // Employee pages. These maps were copy-pasted per page and had started to
 // drift; define them once here.
 
-export const LEAVE_TYPE_COLORS: Record<string, string> = {
-  'PTO': 'bg-indigo-100 text-indigo-800',
-  'Sick Leave': 'bg-amber-100 text-amber-800',
-  'Urgent': 'bg-rose-100 text-rose-800',
-  'Normal': 'bg-sky-100 text-sky-800',
-  'Parental Leave': 'bg-emerald-100 text-emerald-800',
+const LEAVE_TYPE_VARIANT: Record<string, BadgeVariant> = {
+  'PTO': 'indigo',
+  'Sick Leave': 'warning',
+  'Urgent': 'danger',
+  'Normal': 'info',
+  'Parental Leave': 'success',
 };
+
+// The leave-type chip (PTO, Sick Leave, Urgent...) shown on every leave list, card and table.
+export function LeaveTypeBadge({ type, className }: { type: string; className?: string }) {
+  return <Badge variant={LEAVE_TYPE_VARIANT[type] ?? 'default'} size="sm" className={className}>{type}</Badge>;
+}
 
 const LEAVE_STATUS: Record<LeaveApplication['status'], { variant: 'success' | 'warning' | 'danger' | 'default'; label: string }> = {
   pending:     { variant: 'warning', label: 'Pending'      },

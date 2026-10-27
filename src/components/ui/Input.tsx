@@ -35,9 +35,17 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
   return <input ref={ref} className={join(fieldSize, className)} maxLength={maxLength ?? (textLike ? DEFAULT_INPUT_MAX_LENGTH : undefined)} {...props} />;
 });
 
-type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & { fieldSize?: FieldSize };
-export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function Select({ fieldSize = 'md', className, ...props }, ref) {
-  return <select ref={ref} className={join(fieldSize, className)} {...props} />;
+// The drop-down arrow for a custom-styled select (the native arrow is removed with appearance-none).
+const SELECT_CHEVRON: React.CSSProperties = {
+  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 0.875rem center',
+  backgroundSize: '1rem',
+};
+
+type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & { fieldSize?: FieldSize; /** Draw our own arrow instead of the browser's (used in the roomier forms). */ chevron?: boolean };
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function Select({ fieldSize = 'md', chevron = false, className, style, ...props }, ref) {
+  return <select ref={ref} className={join(fieldSize, chevron ? `cursor-pointer appearance-none ${className ?? ''}` : className)} style={chevron ? { ...SELECT_CHEVRON, ...style } : style} {...props} />;
 });
 
 type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & { fieldSize?: FieldSize; /** Tallest it grows before scrolling (px). Default 320. */ maxAutoHeight?: number; /** Set false for a fixed-height box. */ autoGrow?: boolean };
@@ -48,7 +56,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
     inner.current = el;
     if (typeof ref === 'function') ref(el); else if (ref) (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
   }, [ref]);
-  useAutoGrow(inner, autoGrow ? props.value ?? props.defaultValue : null, maxAutoHeight);
+  useAutoGrow(inner, props.value ?? props.defaultValue, maxAutoHeight, autoGrow);
   return (
     <textarea
       ref={setRefs}

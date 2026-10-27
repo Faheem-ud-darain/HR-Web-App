@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { syncThemeChrome } from '@/lib/theme';
 
 // Branded launch animation, shown once per app boot on every platform
 // (native Android/iOS *and* the plain web/Vercel site). It renders
@@ -73,17 +74,17 @@ export function SplashScreenOverlay() {
       // capacitor.config.ts. Belt-and-suspenders alongside
       // viewport-fit=cover (layout.tsx) + .pt-safe (globals.css): this
       // explicitly tells iOS the webview owns the area under the status bar
-      // (overlay, not push-down) and forces dark icons so they stay legible
-      // over TopNav's light, translucent background. No-op on Android
+      // (overlay, not push-down) and sets the icon style to suit the current theme
+      // so they stay legible over TopNav's translucent background. No-op on Android
       // (status bar there is already handled by the OS theme) and on web.
       // If this plugin isn't in the installed build yet (not synced), it
       // just fails silently — the existing CSS safe-area handling still
       // applies on its own.
-      import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+      import('@capacitor/status-bar').then(({ StatusBar }) => {
         StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
-        // Style.Dark in Capacitor means "dark content / dark icons" (for light backgrounds)
-        // Style.Light in Capacitor means "light content / white icons" (for dark backgrounds)
-        StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+        // The icon style follows the app's light/dark choice (Capacitor's Style.Dark is for DARK backgrounds, i.e.
+        // light icons), the same call the theme toggle makes.
+        syncThemeChrome();
       }).catch(() => {
         // Plugin not installed/synced into this build yet — safe to ignore.
       });

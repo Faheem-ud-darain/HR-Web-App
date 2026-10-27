@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Settings, Image as ImageIcon, MousePointerClick, WifiOff, ShieldAlert } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { TrackerStatusBadge } from './TrackerBadges';
 
 interface TrackerEmployeeListProps {
   canManage: boolean;
@@ -18,7 +19,6 @@ interface TrackerEmployeeListProps {
   settingsFor: (email: string) => TrackingSettings;
   heartbeatFor: (email: string) => TrackerHeartbeat | null;
   role: "admin" | "hr" | "team_lead";
-  TrackerStatusBadge: ({ hb, settings, align }: { hb: TrackerHeartbeat | null; settings: TrackingSettings; align: "center" | "end"; }) => React.JSX.Element;
   handleToggle: (email: string, enabled: boolean) => Promise<void>;
   handleIntervalChange: (email: string, minutes: number) => Promise<void>;
   handleExcludeToggle: (email: string, excludeFromAutoDelete: boolean) => Promise<void>;
@@ -30,7 +30,7 @@ interface TrackerEmployeeListProps {
   setForceDisconnectEmp: React.Dispatch<React.SetStateAction<Profile | null>>;
 }
 
-export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmployees, settingsFor, heartbeatFor, role, TrackerStatusBadge, handleToggle, handleIntervalChange, handleExcludeToggle, handleOpenSetup, handleOpenViewer, handleOpenMouseView, openShiftFor, setForceEndShiftEmp, setForceDisconnectEmp }: TrackerEmployeeListProps) {
+export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmployees, settingsFor, heartbeatFor, role, handleToggle, handleIntervalChange, handleExcludeToggle, handleOpenSetup, handleOpenViewer, handleOpenMouseView, openShiftFor, setForceEndShiftEmp, setForceDisconnectEmp }: TrackerEmployeeListProps) {
   return (
     <Card className="overflow-hidden p-0 border border-slate-200">
             <TableScroll hideOnMobile>
@@ -62,7 +62,7 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                         </Td>
                         <Td className="text-slate-600 font-semibold">{emp.region || 'Pakistan'}</Td>
                         <Td align="center">
-                          <TrackerStatusBadge hb={hb} settings={settings} align="center" />
+                          <TrackerStatusBadge hb={hb} settings={settings} openShift={openShiftFor(emp.email)} align="center" />
                         </Td>
                         <Td align="center">
                           {canManage ? (
@@ -187,7 +187,7 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                         <p className="text-sm font-bold text-slate-900">{displayName(emp, role)}</p>
                         <p className="text-[10px] text-slate-500">{emp.email}</p>
                       </div>
-                      <TrackerStatusBadge hb={hb} settings={settings} align="end" />
+                      <TrackerStatusBadge hb={hb} settings={settings} openShift={openShiftFor(emp.email)} align="end" />
                     </div>
                     <div className="grid grid-cols-2 gap-y-3 gap-x-2 mt-2">
                       <div>

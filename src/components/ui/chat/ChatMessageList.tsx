@@ -26,8 +26,7 @@ interface ChatMessageListProps {
   openForwardModal: (m: Message) => void;
   mentionLabels: string[];
   docTagList: { title: string; url: string; }[];
-  setLightboxSrc: React.Dispatch<React.SetStateAction<string | null>>;
-  setLightboxName: React.Dispatch<React.SetStateAction<string | undefined>>;
+  onOpenImage: (src: string, name?: string) => void;
   viewersForMessage: (msgId: string) => Profile[];
   openMessageViewers: (msgId: string) => void;
   currentUserRole: "admin" | "hr" | "employee" | "team_lead";
@@ -35,7 +34,7 @@ interface ChatMessageListProps {
   typingNames: string[];
 }
 
-export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, setLightboxSrc, setLightboxName, viewersForMessage, openMessageViewers, currentUserRole, isHrAdminLine, typingNames }: ChatMessageListProps) {
+export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, onOpenImage, viewersForMessage, openMessageViewers, currentUserRole, isHrAdminLine, typingNames }: ChatMessageListProps) {
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
       {messages.length >= messageLimit && (
@@ -77,7 +76,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                 <span className="text-slate-400 font-semibold normal-case ml-auto flex items-center gap-1.5">
                   {formatTimestamp(m.timestamp)}
                   {canForward && (
-                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors">
+                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors p-2 -m-2">
                       <Forward className="h-3 w-3" />
                     </button>
                   )}
@@ -92,7 +91,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                 isImageAttachment(m.attachmentName) ? (
                   <button
                     type="button"
-                    onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
+                    onClick={() => onOpenImage(m.attachmentUrl!, m.attachmentName)}
                     className={m.text ? 'block mt-2' : 'block'}
                   >
                     <OptimizedImage
@@ -166,7 +165,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                     isImageAttachment(m.attachmentName) ? (
                       <button
                         type="button"
-                        onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
+                        onClick={() => onOpenImage(m.attachmentUrl!, m.attachmentName)}
                         className="block mt-2"
                       >
                         <OptimizedImage
@@ -228,7 +227,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                 )}
                 <span className="text-[9px] text-slate-400 font-semibold">{formatTimestamp(m.timestamp)}</span>
                 {canForward && (
-                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors">
+                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors p-2 -m-2">
                     <Forward className="h-3 w-3" />
                   </button>
                 )}
@@ -249,7 +248,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                   isImageAttachment(m.attachmentName) ? (
                     <button
                       type="button"
-                      onClick={() => { setLightboxSrc(m.attachmentUrl!); setLightboxName(m.attachmentName); }}
+                      onClick={() => onOpenImage(m.attachmentUrl!, m.attachmentName)}
                       className={m.text ? 'block mt-2' : 'block'}
                     >
                       <OptimizedImage

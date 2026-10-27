@@ -23,6 +23,7 @@
 // non-visual fallback, and a legend + per-bar hover tooltip are always
 // present since this chart has two series.
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, InactivityLog, TimesheetEntry } from '@/lib/hrData';
@@ -172,8 +173,8 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
     <div className="space-y-4 md:space-y-6">
       {/* Today snapshot */}
       <div className="grid grid-cols-2 gap-3 md:gap-4">
-        <StatCard label="Active Today" icon={<span className="h-2 w-2 rounded-full bg-emerald-500" />} value={secondsToHM(selectedBucket?.activeSeconds || 0)} size="md" />
-        <StatCard label="Inactive Today" icon={<span className="h-2 w-2 rounded-full bg-amber-500" />} value={secondsToHM(selectedBucket?.inactiveSeconds || 0)} size="md" />
+        <StatCard label="Active Today" icon={<StatusDot tone="emerald" size="sm" />} value={secondsToHM(selectedBucket?.activeSeconds || 0)} size="md" />
+        <StatCard label="Inactive Today" icon={<StatusDot tone="amber" size="sm" />} value={secondsToHM(selectedBucket?.inactiveSeconds || 0)} size="md" />
       </div>
 
       {/* Week chart */}
@@ -188,8 +189,8 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
           <div className="flex items-center gap-3">
             {/* Legend — two series, always shown */}
             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Active</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Inactivity</span>
+              <span className="flex items-center gap-1.5"><StatusDot tone="emerald" size="sm" /> Active</span>
+              <span className="flex items-center gap-1.5"><StatusDot tone="amber" size="sm" /> Inactivity</span>
             </div>
             <button
               onClick={() => setShowTable(v => !v)}

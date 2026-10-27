@@ -618,3 +618,388 @@ input[type='radio']:focus-visible {
     font-size: 16px;
   }
 }
+
+/* Touch screens: tick boxes and radio buttons are drawn 16px in many forms, which is hard to hit with a
+   finger. Make them at least 22px on any device that has a touch screen, including laptops with one (their
+   main pointer is the mouse, so `pointer: coarse` alone would skip them). */
+@media (pointer: coarse), (any-pointer: coarse) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+}
+
+/* ── Apple Human Interface Guidelines, for phones and tablets ──────────────────────────────────────────
+   These apply on touch screens and on any window narrower than a laptop, so a tablet is treated like a
+   phone. Desktop keeps its compact look.
+   1. Text: Apple's smallest recommended size is 11pt, and grey text must reach 4.5:1 contrast. The app uses
+      8–10px labels and light grey (slate-400) in hundreds of places, so they are raised here once instead
+      of editing every screen. */
+@media (pointer: coarse), (max-width: 1023px) {
+  .text-\[8px\],
+  .text-\[9px\],
+  .text-\[10px\] {
+    font-size: 11px;
+  }
+  .text-slate-400:not(:hover),
+  .placeholder\:text-slate-400::placeholder {
+    color: #64748b; /* slate-500, 4.8:1 on white */
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
+}
+
+/* 2. Touch: every control gets a hit area of at least 44×44pt (Apple's minimum), drawn as an invisible
+      layer around the control so nothing moves on screen. `:where()` and the base layer keep this weaker
+      than any utility class, so buttons that are positioned absolutely or fixed stay that way. */
+@layer base {
+  @media (pointer: coarse) {
+    :where(button, [role='button'], [role='tab'], [role='switch'], summary) {
+      position: relative;
+    }
+    :where(button, [role='button'], [role='tab'], [role='switch'], summary)::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
+  /* No grey flash on tap and no double-tap-to-zoom delay: controls respond immediately, like native ones. */
+  :where(button, a, summary, select, label, [role='button'], [role='tab'], [role='switch']) {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* 3. Notch and rounded corners: when a phone is turned sideways the camera cut-out sits at the left or
+      right edge, so the page keeps clear of it. (Zero on every screen without a cut-out.) */
+@media (orientation: landscape) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+
+/* ── Dark mode, following Apple's Human Interface Guidelines ───────────────────────────────────────────
+   Switched by data-theme="dark" on <html> (see lib/theme.ts: Automatic / Light / Dark, like iOS).
+   - Colours are Apple's dark system palette: true-black page, then lighter grey the closer a surface is to
+     the viewer (cards #1c1c1e, sheets and popovers lighter still) instead of shadows, which do not show on
+     dark. Text is white with the grey "secondary" and "tertiary" label tones; separators are #38383a.
+   - Almost every screen is styled with Tailwind's slate / colour scales, so those scales are re-pointed
+     here once. Light text on dark surfaces and 4.5:1 contrast are kept throughout.
+   - Brand orange stays the accent; the pale tinted badges (bg-orange-50, bg-emerald-100, ...) become dim
+     tints of the same colour with light text, which is how iOS shows them. */
+:root {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #000000;
+  --foreground: #f2f2f7;
+  --surface: #1c1c1e;
+  --border: #38383a;
+  --primary-hover: #fb923c;
+
+  --color-white: #1c1c1e;
+  --color-slate-50: #0b0b0d;
+  --color-slate-100: #2c2c2e;
+  --color-slate-200: #38383a;
+  --color-slate-300: #48484a;
+  --color-slate-400: #8e8e93;
+  --color-slate-500: #9b9ba1;
+  --color-slate-600: #aeaeb2;
+  --color-slate-700: #c7c7cc;
+  --color-slate-800: #e5e5ea;
+  --color-slate-900: #f2f2f7;
+  --color-slate-950: #ffffff;
+
+  --color-orange-50: color-mix(in srgb, #f97316 13%, #1c1c1e);
+  --color-orange-100: color-mix(in srgb, #f97316 20%, #1c1c1e);
+  --color-orange-200: color-mix(in srgb, #f97316 30%, #1c1c1e);
+  --color-orange-700: #fb923c;
+  --color-orange-800: #fdba74;
+  --color-orange-900: #fed7aa;
+  --color-amber-50: color-mix(in srgb, #f59e0b 13%, #1c1c1e);
+  --color-amber-100: color-mix(in srgb, #f59e0b 20%, #1c1c1e);
+  --color-amber-200: color-mix(in srgb, #f59e0b 30%, #1c1c1e);
+  --color-amber-700: #fbbf24;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fde68a;
+  --color-yellow-50: color-mix(in srgb, #eab308 13%, #1c1c1e);
+  --color-yellow-100: color-mix(in srgb, #eab308 20%, #1c1c1e);
+  --color-yellow-200: color-mix(in srgb, #eab308 30%, #1c1c1e);
+  --color-yellow-700: #facc15;
+  --color-yellow-800: #fde047;
+  --color-yellow-900: #fef08a;
+  --color-red-50: color-mix(in srgb, #ef4444 13%, #1c1c1e);
+  --color-red-100: color-mix(in srgb, #ef4444 20%, #1c1c1e);
+  --color-red-200: color-mix(in srgb, #ef4444 30%, #1c1c1e);
+  --color-red-700: #f87171;
+  --color-red-800: #fca5a5;
+  --color-red-900: #fecaca;
+  --color-rose-50: color-mix(in srgb, #f43f5e 13%, #1c1c1e);
+  --color-rose-100: color-mix(in srgb, #f43f5e 20%, #1c1c1e);
+  --color-rose-200: color-mix(in srgb, #f43f5e 30%, #1c1c1e);
+  --color-rose-700: #fb7185;
+  --color-rose-800: #fda4af;
+  --color-rose-900: #fecdd3;
+  --color-pink-50: color-mix(in srgb, #ec4899 13%, #1c1c1e);
+  --color-pink-100: color-mix(in srgb, #ec4899 20%, #1c1c1e);
+  --color-pink-200: color-mix(in srgb, #ec4899 30%, #1c1c1e);
+  --color-pink-700: #f472b6;
+  --color-pink-800: #f9a8d4;
+  --color-pink-900: #fbcfe8;
+  --color-emerald-50: color-mix(in srgb, #10b981 13%, #1c1c1e);
+  --color-emerald-100: color-mix(in srgb, #10b981 20%, #1c1c1e);
+  --color-emerald-200: color-mix(in srgb, #10b981 30%, #1c1c1e);
+  --color-emerald-700: #34d399;
+  --color-emerald-800: #6ee7b7;
+  --color-emerald-900: #a7f3d0;
+  --color-green-50: color-mix(in srgb, #22c55e 13%, #1c1c1e);
+  --color-green-100: color-mix(in srgb, #22c55e 20%, #1c1c1e);
+  --color-green-200: color-mix(in srgb, #22c55e 30%, #1c1c1e);
+  --color-green-700: #4ade80;
+  --color-green-800: #86efac;
+  --color-green-900: #bbf7d0;
+  --color-teal-50: color-mix(in srgb, #14b8a6 13%, #1c1c1e);
+  --color-teal-100: color-mix(in srgb, #14b8a6 20%, #1c1c1e);
+  --color-teal-200: color-mix(in srgb, #14b8a6 30%, #1c1c1e);
+  --color-teal-700: #2dd4bf;
+  --color-teal-800: #5eead4;
+  --color-teal-900: #99f6e4;
+  --color-cyan-50: color-mix(in srgb, #06b6d4 13%, #1c1c1e);
+  --color-cyan-100: color-mix(in srgb, #06b6d4 20%, #1c1c1e);
+  --color-cyan-200: color-mix(in srgb, #06b6d4 30%, #1c1c1e);
+  --color-cyan-700: #22d3ee;
+  --color-cyan-800: #67e8f9;
+  --color-cyan-900: #a5f3fc;
+  --color-sky-50: color-mix(in srgb, #0ea5e9 13%, #1c1c1e);
+  --color-sky-100: color-mix(in srgb, #0ea5e9 20%, #1c1c1e);
+  --color-sky-200: color-mix(in srgb, #0ea5e9 30%, #1c1c1e);
+  --color-sky-700: #38bdf8;
+  --color-sky-800: #7dd3fc;
+  --color-sky-900: #bae6fd;
+  --color-blue-50: color-mix(in srgb, #3b82f6 13%, #1c1c1e);
+  --color-blue-100: color-mix(in srgb, #3b82f6 20%, #1c1c1e);
+  --color-blue-200: color-mix(in srgb, #3b82f6 30%, #1c1c1e);
+  --color-blue-700: #60a5fa;
+  --color-blue-800: #93c5fd;
+  --color-blue-900: #bfdbfe;
+  --color-indigo-50: color-mix(in srgb, #6366f1 13%, #1c1c1e);
+  --color-indigo-100: color-mix(in srgb, #6366f1 20%, #1c1c1e);
+  --color-indigo-200: color-mix(in srgb, #6366f1 30%, #1c1c1e);
+  --color-indigo-700: #818cf8;
+  --color-indigo-800: #a5b4fc;
+  --color-indigo-900: #c7d2fe;
+  --color-violet-50: color-mix(in srgb, #8b5cf6 13%, #1c1c1e);
+  --color-violet-100: color-mix(in srgb, #8b5cf6 20%, #1c1c1e);
+  --color-violet-200: color-mix(in srgb, #8b5cf6 30%, #1c1c1e);
+  --color-violet-700: #a78bfa;
+  --color-violet-800: #c4b5fd;
+  --color-violet-900: #ddd6fe;
+  --color-purple-50: color-mix(in srgb, #a855f7 13%, #1c1c1e);
+  --color-purple-100: color-mix(in srgb, #a855f7 20%, #1c1c1e);
+  --color-purple-200: color-mix(in srgb, #a855f7 30%, #1c1c1e);
+  --color-purple-700: #c084fc;
+  --color-purple-800: #d8b4fe;
+  --color-purple-900: #e9d5ff;
+  --color-fuchsia-50: color-mix(in srgb, #d946ef 13%, #1c1c1e);
+  --color-fuchsia-100: color-mix(in srgb, #d946ef 20%, #1c1c1e);
+  --color-fuchsia-200: color-mix(in srgb, #d946ef 30%, #1c1c1e);
+  --color-fuchsia-700: #e879f9;
+  --color-fuchsia-800: #f0abfc;
+  --color-fuchsia-900: #f5d0fe;
+  --color-lime-50: color-mix(in srgb, #84cc16 13%, #1c1c1e);
+  --color-lime-100: color-mix(in srgb, #84cc16 20%, #1c1c1e);
+  --color-lime-200: color-mix(in srgb, #84cc16 30%, #1c1c1e);
+  --color-lime-700: #a3e635;
+  --color-lime-800: #bef264;
+  --color-lime-900: #d9f99d;
+}
+
+/* White text stays white (it sits on orange, green, red... buttons), even though --color-white is now the
+   card colour. Dark panels that were slate-900 (tooltips, toasts, dark buttons) stay a dark grey. */
+:root[data-theme='dark'] .text-white,
+:root[data-theme='dark'] .hover\:text-white:hover,
+:root[data-theme='dark'] .group:hover .group-hover\:text-white {
+  color: #ffffff;
+}
+:root[data-theme='dark'] .bg-slate-900,
+:root[data-theme='dark'] .bg-slate-800,
+:root[data-theme='dark'] .bg-slate-950 {
+  background-color: #3a3a3c;
+}
+:root[data-theme='dark'] [class*='bg-slate-900/'],
+:root[data-theme='dark'] [class*='bg-slate-950/'] {
+  background-color: rgb(0 0 0 / 0.6);
+}
+
+/* Sheets, dialogs and pop-over menus sit above the page, so they are one step lighter (#2c2c2e) than the
+   cards behind them, the way iOS raises its elevated surfaces. */
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'],
+:root[data-theme='dark'] .popover-enter {
+  background-color: #2c2c2e;
+}
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'] input,
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'] textarea,
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'] select {
+  background-color: #1c1c1e;
+}
+
+/* The touch-screen grey fix above is for light mode only; dark mode has its own, already readable, greys. */
+:root[data-theme='dark'] .text-slate-400:not(:hover),
+:root[data-theme='dark'] .placeholder\:text-slate-400::placeholder {
+  color: #8e8e93;
+}
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+  color: #8e8e93;
+  opacity: 1;
+}
+
+/* Phones with "Increase Contrast" turned on get stronger separators and brighter secondary text. */
+@media (prefers-contrast: more) {
+  :root[data-theme='dark'] {
+    --color-slate-200: #5a5a5e;
+    --color-slate-400: #b0b0b6;
+    --color-slate-500: #c0c0c6;
+  }
+}
+
+
+/* ── Dark mode, part 2: true black, and readable colour ────────────────────────────────────────────────
+   True black (#000) is Apple's base layer in dark mode and lets OLED screens switch those pixels off. The
+   page, side bar and top bar are pure black; cards sit only one small step above it (#0f0f10) and are
+   outlined by the separator line, as in Apple's Stocks and Wallet. Sheets and menus stay lighter (#1c1c1e). */
+:root[data-theme='dark'] {
+  --color-white: #0f0f10;
+  --color-slate-50: #000000;
+  --color-slate-100: #1c1c1e;
+  --surface: #0f0f10;
+  --color-orange-950: #fed7aa;
+  --color-amber-950: #fde68a;
+  --color-yellow-950: #fef08a;
+  --color-red-950: #fecaca;
+  --color-rose-950: #fecdd3;
+  --color-pink-950: #fbcfe8;
+  --color-emerald-950: #a7f3d0;
+  --color-green-950: #bbf7d0;
+  --color-teal-950: #99f6e4;
+  --color-cyan-950: #a5f3fc;
+  --color-sky-950: #bae6fd;
+  --color-blue-950: #bfdbfe;
+  --color-indigo-950: #c7d2fe;
+  --color-violet-950: #ddd6fe;
+  --color-purple-950: #e9d5ff;
+  --color-fuchsia-950: #f5d0fe;
+  --color-lime-950: #d9f99d;
+  /* Filled buttons: the brand colours one step deeper, so white text on them reaches 4.5:1. */
+  --color-orange-600: #c2410c;
+  --color-emerald-600: #047857;
+  --color-sky-600: #0369a1;
+  --color-rose-500: #e11d48;
+}
+:root[data-theme='dark'] aside,
+:root[data-theme='dark'] header.sticky {
+  background-color: #000000;
+}
+:root[data-theme='dark'] header.sticky {
+  background-color: rgb(0 0 0 / 0.85);
+}
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'],
+:root[data-theme='dark'] .popover-enter {
+  background-color: #1c1c1e;
+}
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'] input,
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'] textarea,
+:root[data-theme='dark'] [role='dialog'][aria-modal='true'] select {
+  background-color: #000000;
+}
+
+/* Filled buttons (bg-X-600 hover:bg-X-700 with white text): the dark palette lightens every -700 token for
+   coloured TEXT, which would turn the hover fill pale with white text on it (about 2.3:1). On hover the fill
+   goes one step deeper instead. Touch screens keep :hover after a tap, so this matters there too. */
+:root[data-theme='dark'] .hover\:bg-orange-700:hover { background-color: #9a3412; }
+:root[data-theme='dark'] .hover\:bg-emerald-700:hover { background-color: #065f46; }
+:root[data-theme='dark'] .hover\:bg-sky-700:hover { background-color: #075985; }
+:root[data-theme='dark'] .hover\:bg-rose-700:hover { background-color: #be123c; }
+:root[data-theme='dark'] .hover\:bg-indigo-700:hover { background-color: #4338ca; }
+:root[data-theme='dark'] .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
+:root[data-theme='dark'] .hover\:bg-red-700:hover { background-color: #b91c1c; }
+:root[data-theme='dark'] .hover\:bg-green-700:hover { background-color: #15803d; }
+:root[data-theme='dark'] .hover\:bg-amber-700:hover { background-color: #b45309; }
+:root[data-theme='dark'] .hover\:bg-violet-700:hover { background-color: #6d28d9; }
+:root[data-theme='dark'] .hover\:bg-purple-700:hover { background-color: #7e22ce; }
+:root[data-theme='dark'] .hover\:bg-teal-700:hover { background-color: #0f766e; }
+:root[data-theme='dark'] .hover\:bg-cyan-700:hover { background-color: #0e7490; }
+:root[data-theme='dark'] .hover\:bg-pink-700:hover { background-color: #be185d; }
+
+/* Coloured text on dark: the saturated 500/600 shades are too dim on black, so they use the light 400 shade
+   (the same hue, brighter), as iOS does. Filled backgrounds keep their colour. */
+:root[data-theme='dark'] .text-orange-500,
+:root[data-theme='dark'] .text-orange-600 { color: #fb923c; }
+:root[data-theme='dark'] .text-amber-500,
+:root[data-theme='dark'] .text-amber-600 { color: #fbbf24; }
+:root[data-theme='dark'] .text-yellow-500,
+:root[data-theme='dark'] .text-yellow-600 { color: #facc15; }
+:root[data-theme='dark'] .text-red-500,
+:root[data-theme='dark'] .text-red-600 { color: #f87171; }
+:root[data-theme='dark'] .text-rose-500,
+:root[data-theme='dark'] .text-rose-600 { color: #fb7185; }
+:root[data-theme='dark'] .text-pink-500,
+:root[data-theme='dark'] .text-pink-600 { color: #f472b6; }
+:root[data-theme='dark'] .text-emerald-500,
+:root[data-theme='dark'] .text-emerald-600 { color: #34d399; }
+:root[data-theme='dark'] .text-green-500,
+:root[data-theme='dark'] .text-green-600 { color: #4ade80; }
+:root[data-theme='dark'] .text-teal-500,
+:root[data-theme='dark'] .text-teal-600 { color: #2dd4bf; }
+:root[data-theme='dark'] .text-cyan-500,
+:root[data-theme='dark'] .text-cyan-600 { color: #22d3ee; }
+:root[data-theme='dark'] .text-sky-500,
+:root[data-theme='dark'] .text-sky-600 { color: #38bdf8; }
+:root[data-theme='dark'] .text-blue-500,
+:root[data-theme='dark'] .text-blue-600 { color: #60a5fa; }
+:root[data-theme='dark'] .text-indigo-500,
+:root[data-theme='dark'] .text-indigo-600 { color: #818cf8; }
+:root[data-theme='dark'] .text-violet-500,
+:root[data-theme='dark'] .text-violet-600 { color: #a78bfa; }
+:root[data-theme='dark'] .text-purple-500,
+:root[data-theme='dark'] .text-purple-600 { color: #c084fc; }
+:root[data-theme='dark'] .text-fuchsia-500,
+:root[data-theme='dark'] .text-fuchsia-600 { color: #e879f9; }
+:root[data-theme='dark'] .text-lime-500,
+:root[data-theme='dark'] .text-lime-600 { color: #a3e635; }
+
+/* Theme switch: the browser cross-fades two snapshots by default; the circle animation is driven from theme.ts,
+   so turn the fade off and keep the snapshot being clipped on top (new one growing, old one shrinking). */
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+:root[data-theme-wipe='grow']::view-transition-new(root) { z-index: 2; clip-path: circle(0px at var(--wipe-x) var(--wipe-y)); }
+:root[data-theme-wipe='shrink']::view-transition-old(root) { z-index: 2; }
+
+/* Sun/moon icon swap in the theme toggle: scales and turns in, like the circle wipe's finishing touch. */
+@keyframes theme-icon-pop { from { opacity: 0; transform: scale(0.55) rotate(var(--spin, 25deg)); } to { opacity: 1; transform: none; } }
+.theme-icon-pop { animation: theme-icon-pop 0.33s ease-out; }
+@media (prefers-reduced-motion: reduce) { .theme-icon-pop { animation: none; } }
+
+/* Assistant window: grows out of the floating orb (bottom-right) and shrinks back into it. The orb sits 2rem
+   in from the window's right edge and 2rem up from its bottom edge: the window is anchored on the orb's spot. */
+@keyframes del-window-in { from { opacity: 0; transform: scale(0.08); } 40% { opacity: 1; } to { opacity: 1; transform: none; } }
+@keyframes del-window-out { from { opacity: 1; transform: none; } 60% { opacity: 1; } to { opacity: 0; transform: scale(0.08); } }
+.del-window-in { transform-origin: calc(100% - 2rem) calc(100% - 2rem); animation: del-window-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.del-window-out { transform-origin: calc(100% - 2rem) calc(100% - 2rem); animation: del-window-out 0.26s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) { .del-window-in, .del-window-out { animation: none; } }
+
+/* The orb in the assistant window's header arrives as the floating orb leaves, so Del seems to move inside. */
+@keyframes del-header-orb { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: none; } }
+.del-header-orb { animation: del-header-orb 0.3s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .del-header-orb { animation: none; } }

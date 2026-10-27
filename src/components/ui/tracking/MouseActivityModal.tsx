@@ -1,5 +1,6 @@
 'use client';
 
+import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, InactivityLog } from '@/lib/hrData';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, THead, Th, TBody, Tr, Td } from '@/components/ui/Table';
 import { formatTimeNY } from '@/lib/timezone';
-import { localDateString } from '@/components/ui/TrackingView';
+import { formatDuration, localDateString } from '@/lib/core/trackingWindow';
 
 interface MouseActivityModalProps {
   mouseEmp: Profile | null;
@@ -19,7 +20,6 @@ interface MouseActivityModalProps {
   handleMouseDayChange: (day: string) => void;
   mouseLoading: boolean;
   mouseShiftSeconds: number;
-  formatDuration: (seconds: number) => string;
   mouseTotalSeconds: number;
   mouseActiveSeconds: number;
   mouseLogs: InactivityLog[];
@@ -28,7 +28,7 @@ interface MouseActivityModalProps {
   mouseLogsByDay: () => { day: string; logs: InactivityLog[]; totalSeconds: number; }[];
 }
 
-export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRangeChange, mouseRange, mouseDay, handleMouseDayChange, mouseLoading, mouseShiftSeconds, formatDuration, mouseTotalSeconds, mouseActiveSeconds, mouseLogs, mouseLongestSeconds, mouseAvgSeconds, mouseLogsByDay }: MouseActivityModalProps) {
+export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRangeChange, mouseRange, mouseDay, handleMouseDayChange, mouseLoading, mouseShiftSeconds, mouseTotalSeconds, mouseActiveSeconds, mouseLogs, mouseLongestSeconds, mouseAvgSeconds, mouseLogsByDay }: MouseActivityModalProps) {
   return (
     <Modal isOpen={!!mouseEmp} onClose={() => setMouseEmp(null)} title={mouseEmp ? `Mouse Activity — ${displayName(mouseEmp, role)}` : 'Mouse Activity'}>
       {mouseEmp && (
@@ -121,8 +121,8 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                     />
                   </div>
                   <div className="flex items-center gap-4 text-[9px] font-semibold text-slate-500">
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Active</span>
-                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" /> Inactive</span>
+                    <span className="flex items-center gap-1"><StatusDot tone="emerald" size="sm" /> Active</span>
+                    <span className="flex items-center gap-1"><StatusDot tone="amber" size="sm" /> Inactive</span>
                   </div>
                 </div>
               )}

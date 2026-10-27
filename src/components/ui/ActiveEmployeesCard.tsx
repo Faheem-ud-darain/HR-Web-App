@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { Zap, Clock } from 'lucide-react';
 import { Profile, TimesheetEntry, displayName, formatDurationBetween, localShiftDate } from '@/lib/hrData';
-import { smoothLinePath, smoothAreaPath } from '@/lib/sparkline';
+import { Sparkline } from '@/components/ui/Sparkline';
 import { formatTimeNY, APP_TIMEZONE } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -81,22 +81,7 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
     () => days.map(day => timesheets.filter(t => localShiftDate(t.clockIn, t.date) === day).length),
     [days, timesheets]
   );
-  const maxCount = Math.max(1, ...counts);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Chart geometry — small enough to sit inside a stat tile alongside the
-  // headcount, big enough the trend is still legible. topPad keeps the
-  // line's peak off the very top edge instead of jamming into it.
-  const chartW = 132;
-  const chartH = 40;
-  const topPad = 6;
-  const pointGap = chartW / (counts.length - 1);
-  const pointX = (i: number) => i * pointGap;
-  const pointY = (count: number) => topPad + (1 - count / maxCount) * (chartH - topPad);
-  const linePoints = counts.map((c, i) => ({ x: pointX(i), y: pointY(c) }));
-  const smoothPath = smoothLinePath(linePoints);
-  const areaPath = smoothAreaPath(linePoints, chartH);
-  const todayPoint = linePoints[linePoints.length - 1];
 
   return (
     <>
@@ -124,70 +109,12 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
             </div>
           </div>
 
-          <div className="relative mt-2">
-            <svg viewBox={`0 0 ${chartW} ${chartH + 2}`} className="w-full h-10" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="activeEmployeesAreaFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f97316" stopOpacity={0.28} />
-                  <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <path d={areaPath} fill="url(#activeEmployeesAreaFill)" className="chart-area-fill" />
-              <path
-                d={smoothPath}
-                fill="none"
-                stroke="#f97316"
-                strokeWidth={1.75}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                pathLength={1}
-                className="chart-line-draw"
-              />
-              <circle cx={todayPoint.x} cy={todayPoint.y} r={2.75} fill="#f97316" stroke="#fff" strokeWidth={1.25} className="chart-dot-today" />
-              {hoveredIndex !== null && hoveredIndex !== linePoints.length - 1 && (
-                <circle
-                  cx={linePoints[hoveredIndex].x}
-                  cy={linePoints[hoveredIndex].y}
-                  r={2.75}
-                  fill="#f97316"
-                  stroke="#fff"
-                  strokeWidth={1.25}
-                  className="chart-hover-dot"
-                />
-              )}
-              {/* Invisible, generously-sized hit targets — the visible dots above
-                  are too small to reliably hover/tap on their own. Pointer events
-                  cover mouse hover on desktop and tap on touch devices in one
-                  handler; the click handler also toggles (so tapping the same
-                  point again on mobile dismisses the tooltip) and stops
-                  propagation so it doesn't also trigger the card's own onClick
-                  (which opens the roster modal). */}
-              {linePoints.map((p, i) => (
-                <circle
-                  key={i}
-                  cx={p.x}
-                  cy={p.y}
-                  r={9}
-                  fill="transparent"
-                  onPointerEnter={() => setHoveredIndex(i)}
-                  onPointerLeave={() => setHoveredIndex(prev => (prev === i ? null : prev))}
-                  onClick={e => { e.stopPropagation(); setHoveredIndex(prev => (prev === i ? null : i)); }}
-                  style={{ cursor: 'pointer' }}
-                />
-              ))}
-            </svg>
-            {hoveredIndex !== null && (
-              <div
-                className="absolute z-10 pointer-events-none chart-tooltip-in"
-                style={{ left: `${(linePoints[hoveredIndex].x / chartW) * 100}%`, top: '50%' }}
-              >
-                <div className="bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
-                  <span className="text-slate-300 font-semibold mr-1">{dayInfos[hoveredIndex].label}</span>
-                  {counts[hoveredIndex]} shift{counts[hoveredIndex] === 1 ? '' : 's'}
-                </div>
-              </div>
-            )}
-          </div>
+          <Sparkline
+            values={counts}
+            label={i => dayInfos[i].label}
+            detail={i => `${counts[i]} shift${counts[i] === 1 ? '' : 's'}`}
+            colorClass="text-orange-500"
+          />
           <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Shifts started, last 7 days</p>
         </CardContent>
       </Card>

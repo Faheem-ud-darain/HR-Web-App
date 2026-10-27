@@ -66,3 +66,5 @@ export function ticketActivityMs(ticket: Ticket): number {
   }
   return latest;
 }
+
+export type TicketRole = 'admin' | 'hr' | 'employee' | 'team_lead';

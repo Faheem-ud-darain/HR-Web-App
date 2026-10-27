@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ThinkingOrb } from 'thinking-orbs';
-import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, SquarePen, Trash2, X } from 'lucide-react';
+import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, Plus, SquarePen, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Markdown } from './Markdown';
@@ -130,16 +130,17 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
   const main = (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white">
       <div className="flex items-center gap-2.5 border-b border-slate-200 px-4 py-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center" aria-hidden="true">
-          <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={20} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${variant === 'window' ? 'del-header-orb' : ''}`} aria-hidden="true">
+          <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={32} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold leading-tight text-slate-900">Del</h2>
           <p className="truncate text-[11px] text-slate-500">{persona.tagline}</p>
         </div>
-        {messages.length > 0 && (
-          <button type="button" onClick={() => { clearAssistantChat(); setShowHistory(false); }} aria-label="New chat" title="New chat" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
-            <SquarePen className="h-4 w-4" aria-hidden="true" />
+        {(variant === 'page' || messages.length > 0) && (
+          // Full page: a plus on phones only (from tablet up the left column has its own "New chat").
+          <button type="button" onClick={() => { clearAssistantChat(); setShowHistory(false); }} aria-label="New chat" title="New chat" className={`${variant === 'page' ? 'md:hidden ' : ''}rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800`}>
+            {variant === 'page' ? <Plus className="h-4 w-4" aria-hidden="true" /> : <SquarePen className="h-4 w-4" aria-hidden="true" />}
           </button>
         )}
         <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${variant === 'page' ? 'md:hidden' : ''} ${showHistory ? 'bg-slate-100 text-slate-800' : 'text-slate-500'}`}>

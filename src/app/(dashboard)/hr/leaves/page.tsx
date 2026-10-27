@@ -1,18 +1,16 @@
 'use client';
 
+import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
 import { GripVertical, BarChart3, List, Download, Lock, Calendar, Loader2 } from 'lucide-react';
-import { LEAVE_TYPE_COLORS, LeaveStatusBadge } from '@/components/ui/StatusBadges';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
+import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
+import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
 import { Tabs } from '@/components/ui/Tabs';
-import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
+import { ListSkeleton } from '@/components/ui/Skeleton';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
-import { Select } from '@/components/ui/Input';
 
 const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: string; locked?: boolean }[] = [
   { key: 'pending',     label: 'Pending Review',       headerBg: 'bg-amber-50 border-amber-200'   },
@@ -33,6 +31,8 @@ export default function HRLeavesPage() {
   const { data: leaves = [], isLoading: leavesLoading, isFetching: leavesFetching, refetch: refetchLeaves } = useLeaves({ windowDays: leaveWindowDays });
   const { data: employees = [] } = useProfiles();
   const [dragId, setDragId] = useState<string | null>(null);
+  // Phone/tablet board: one status at a time. Until you pick one it shows the first status that has cards.
+  const [mobileColChoice, setMobileColChoice] = useState<LeaveApplication['status'] | null>(null);
   const [overCol, setOverCol] = useState<LeaveApplication['status'] | null>(null);
   const { showToast } = useActionToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,9 +47,6 @@ export default function HRLeavesPage() {
     return emp ? displayName(emp, 'hr') : employeeName;
   };
 
-  // History filters
-  const [histFilter, setHistFilter] = useState<LeaveApplication['status'] | 'all'>('all');
-  const [histType, setHistType] = useState<'all' | 'PTO' | 'Sick Leave' | 'Urgent' | 'Normal' | 'Parental Leave'>('all');
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   const handleSendToCEO = async (l: LeaveApplication) => {
@@ -57,7 +54,7 @@ export default function HRLeavesPage() {
     setProcessingLeaveId(l.id);
     try {
       await hrActions.updateLeaveStatus(l.id, 'hr_approved');
-      refetchLeaves();
+      await refetchLeaves(); // the guard stays on until the card shows its new status
       await hrActions.addNotification('all', 'admin', `CEO approval required for ${l.employeeName}'s leave.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('admin', 'leave', l.id));
       // Same gap as the Kanban path — only 'admin' was notified, so HR
       // itself never saw confirmation of its own action in the bell.
@@ -81,7 +78,7 @@ export default function HRLeavesPage() {
       const emp = employees.find((e: Profile) => e.fullName === l.employeeName);
       if (emp) await hrActions.addNotification(emp.email, 'employee', `Your leave (${l.duration.split(' - ')[0]}) was rejected.`, 'leave_task', 'Leave Rejected', undefined, buildNotificationLink('employee', 'leave', l.id));
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} rejected by HR.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
-      refetchLeaves();
+      await refetchLeaves();
       showToast({ type: 'success', message: 'Rejected!' });
     } finally {
       setProcessingLeaveId(null);
@@ -94,7 +91,7 @@ export default function HRLeavesPage() {
     try {
       await hrActions.updateLeaveStatus(l.id, 'pending');
       await hrActions.addNotification('all', 'hr', `Leave for ${l.employeeName} re-opened for reconsideration.`, 'leave_task', `${l.employeeName}'s Leave`, undefined, buildNotificationLink('hr', 'leave', l.id));
-      refetchLeaves();
+      await refetchLeaves();
       showToast({ type: 'success', message: 'Re-opened for review!' });
     } finally {
       setProcessingLeaveId(null);
@@ -125,6 +122,11 @@ export default function HRLeavesPage() {
   // browser limitation — so phones need a completely different interaction
   // to reach this same code path.
   const moveLeaveTo = async (leaf: LeaveApplication, targetStatus: LeaveApplication['status']) => {
+    if (processingLeaveId) return; // one change at a time: no double taps
+    setProcessingLeaveId(leaf.id);
+    try { await moveLeaveToNow(leaf, targetStatus); } finally { setProcessingLeaveId(null); }
+  };
+  const moveLeaveToNow = async (leaf: LeaveApplication, targetStatus: LeaveApplication['status']) => {
     if (leaf.status === targetStatus) return;
 
     // Final approval is a CEO/Admin-only decision (see admin/leaves page's
@@ -163,7 +165,7 @@ export default function HRLeavesPage() {
     }
 
     await hrActions.updateLeaveStatus(leaf.id, targetStatus);
-    refetchLeaves();
+    await refetchLeaves();
 
     showToast({ type: 'success', message: 'Leave status updated!' });
   };
@@ -180,22 +182,37 @@ export default function HRLeavesPage() {
     await moveLeaveTo(leaf, targetStatus);
   };
 
-  const filteredInCol = (status: LeaveApplication['status']) =>
-    leaves.filter(l =>
-      l.status === status &&
-      (l.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       l.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-       l.reason.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+  const filteredInCol = (status: LeaveApplication['status']) => leaves.filter(l => l.status === status && matchesLeaveSearch(l, searchQuery));
 
-  const historyLeaves = leaves.filter(l =>
-    (histFilter === 'all' || l.status === histFilter) &&
-    (histType === 'all' || l.type === histType) &&
-    (searchQuery === '' ||
-      l.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.reason.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const mobileCol = mobileColChoice ?? (COLUMNS.find(c => leaves.some(l => l.status === c.key))?.key ?? 'pending');
+
+  const filters = useLeaveFilters(leaves, searchQuery);
+  const historyLeaves = filters.rows;
+
+  // Row buttons for the History tab. A table row gets compact buttons; a phone card gets wide, tall ones.
+  const historyActions = (l: LeaveApplication, variant: 'row' | 'card') => {
+    const wide = variant === 'card';
+    const button = (tone: string, onClick: () => void, label: string, full = false) => (
+      <button
+        onClick={onClick}
+        disabled={processingLeaveId !== null}
+        className={`font-semibold transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 ${tone} ${
+          wide ? `min-h-11 text-[11px] font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded pointer-coarse:min-h-11'
+        }`}
+      >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}{label}</button>
+    );
+    if (l.status === 'pending') {
+      return (
+        <div className={`flex gap-2 ${wide ? 'w-full' : 'justify-center'}`}>
+          {button('text-emerald-600 bg-emerald-50 hover:bg-emerald-100', () => handleSendToCEO(l), 'Send to CEO')}
+          {button('text-rose-600 bg-rose-50 hover:bg-rose-100', () => handleHistoryReject(l), 'Reject')}
+        </div>
+      );
+    }
+    // A request sent to the CEO by mistake can be recalled; the CEO's own decision (approved) cannot.
+    if (l.status === 'rejected' || l.status === 'hr_approved') return button('text-slate-600 bg-slate-100 hover:bg-slate-200', () => handleReopenLeave(l), 'Re-open', true);
+    return <span className="text-xs text-slate-400 font-medium">—</span>;
+  };
 
   // Overview stats
   const stats = {
@@ -208,14 +225,7 @@ export default function HRLeavesPage() {
   const exportLeavesCSV = () => {
     const headers = ['Employee', 'Type', 'Duration', 'Reason', 'Status'];
     const rows = historyLeaves.map(l => [l.employeeName, l.type, l.duration, l.reason, l.status]);
-    const csvContent = 'data:text/csv;charset=utf-8,'
-      + [headers.join(','), ...rows.map(r => r.map(val => `"${val}"`).join(','))].join('\n');
-    const link = document.createElement('a');
-    link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `DelCargo_Leaves_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCsv(csvFilename('DelCargo_Leaves'), [headers, ...rows]);
   };
 
   return (
@@ -242,21 +252,14 @@ export default function HRLeavesPage() {
           also tacked on a PTO/Sick/Urgent type breakdown at the same visual
           weight, which duplicated the Type column already visible on every
           kanban card and history row without adding new information. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total',    value: stats.total,    bg: 'bg-slate-50 border-slate-200',          text: 'text-slate-700' },
-          { label: 'Pending',  value: stats.pending,  bg: 'bg-amber-50 border-amber-200',           text: 'text-amber-700' },
-          { label: 'Approved', value: stats.approved, bg: 'bg-emerald-50 border-emerald-200',       text: 'text-emerald-700' },
-          { label: 'Rejected', value: stats.rejected, bg: 'bg-rose-50 border-rose-200',             text: 'text-rose-700' },
-        ].map(s => (
-          <Card key={s.label} className={`border ${s.bg}`}>
-            <CardContent className="p-3 text-center">
-              <p className={`text-2xl font-bold ${s.text}`}>{s.value}</p>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <LeaveStatTiles
+        tiles={[
+          { label: 'Total', value: stats.total, tone: 'slate' },
+          { label: 'Pending', value: stats.pending, tone: 'amber' },
+          { label: 'Approved', value: stats.approved, tone: 'emerald' },
+          { label: 'Rejected', value: stats.rejected, tone: 'rose' },
+        ]}
+      />
 
       {/* Tab toggle */}
       <Tabs
@@ -281,7 +284,85 @@ export default function HRLeavesPage() {
       {/* ── KANBAN VIEW ── */}
       {activeTab === 'kanban' && leavesLoading && <ListSkeleton rows={4} />}
       {activeTab === 'kanban' && !leavesLoading && (
-        <div className="flex xl:grid xl:grid-cols-4 gap-4 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 xl:mx-0 xl:px-0 scrollbar-hide">
+        <div className="xl:hidden space-y-3">
+          {/* Phones and tablets: touch screens cannot drag cards, so the board is one status at a time with
+              clear buttons on each card. The buttons run the same moveLeaveTo() rules as the desktop drag. */}
+          <div
+            role="tablist"
+            aria-label="Leave status"
+            className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide"
+            onKeyDown={e => {
+              // Arrow keys / Home / End move between the status tabs (roving focus), as in the ARIA tabs pattern.
+              const i = COLUMNS.findIndex(c => c.key === mobileCol);
+              const to = e.key === 'ArrowRight' ? (i + 1) % COLUMNS.length : e.key === 'ArrowLeft' ? (i - 1 + COLUMNS.length) % COLUMNS.length : e.key === 'Home' ? 0 : e.key === 'End' ? COLUMNS.length - 1 : -1;
+              if (to < 0) return;
+              e.preventDefault();
+              setMobileColChoice(COLUMNS[to].key);
+              document.getElementById(`leave-tab-${COLUMNS[to].key}`)?.focus();
+            }}
+          >
+            {COLUMNS.map(col => {
+              const count = filteredInCol(col.key).length;
+              const active = mobileCol === col.key;
+              return (
+                <button
+                  key={col.key}
+                  type="button"
+                  role="tab"
+                  id={`leave-tab-${col.key}`}
+                  aria-controls="leave-status-panel"
+                  tabIndex={active ? 0 : -1}
+                  aria-selected={active}
+                  onClick={() => setMobileColChoice(col.key)}
+                  className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-bold transition-colors ${active ? `${col.headerBg} text-slate-900` : 'border-slate-200 bg-white text-slate-500'}`}
+                >
+                  {col.label}
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-slate-200 bg-white px-1 text-[11px] text-slate-600">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+          {(() => {
+            const cards = filteredInCol(mobileCol);
+            if (cards.length === 0) return <div id="leave-status-panel" role="tabpanel" aria-labelledby={`leave-tab-${mobileCol}`} className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">Nothing here</div>;
+            return (
+              <div id="leave-status-panel" role="tabpanel" aria-labelledby={`leave-tab-${mobileCol}`} className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {cards.map(leave => {
+                  const busy = processingLeaveId !== null; // one change at a time, so every card waits
+                  return (
+                    <div key={leave.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 text-sm font-bold leading-tight text-slate-900 break-words">{nameFor(leave.employeeName)}</div>
+                        <LeaveTypeBadge type={leave.type} className="shrink-0" />
+                      </div>
+                      <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Calendar className="h-3.5 w-3.5 shrink-0" /> {leave.duration}</div>
+                      {leave.reason && <p className="mt-2 text-xs leading-relaxed text-slate-500 break-words">{leave.reason}</p>}
+                      {leave.status === 'pending' && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'hr_approved')} className="min-h-11 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Send to CEO</button>
+                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'rejected')} className="min-h-11 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60">Reject</button>
+                        </div>
+                      )}
+                      {leave.status === 'hr_approved' && (
+                        <>
+                          <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">With the CEO for the final decision.</p>
+                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Recall to pending</button>
+                        </>
+                      )}
+                      {leave.status === 'approved' && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved by the CEO.</p>}
+                      {leave.status === 'rejected' && (
+                        <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-3 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Re-open for review</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+      {activeTab === 'kanban' && !leavesLoading && (
+        <div className="hidden xl:grid xl:grid-cols-4 gap-4">
           {COLUMNS.map(col => {
             const cards = filteredInCol(col.key);
             const isOver = overCol === col.key;
@@ -292,7 +373,7 @@ export default function HRLeavesPage() {
                 onDragOver={e => handleDragOver(e, col.key)}
                 onDragLeave={handleDragLeave}
                 onDrop={e => handleDrop(e, col.key)}
-                className={`snap-center shrink-0 w-[85vw] sm:w-[45vw] xl:w-auto rounded-xl border-2 flex flex-col transition-colors transition-transform transition-shadow duration-200 ${
+                className={`rounded-xl border-2 flex flex-col transition-colors transition-transform transition-shadow duration-200 ${
                   isOver ? `${col.headerBg} border-dashed scale-[1.01] shadow-md` : 'border-slate-200 bg-slate-50/50'
                 }`}
               >
@@ -325,30 +406,10 @@ export default function HRLeavesPage() {
                         <div className="font-bold text-slate-900 text-sm leading-tight">{nameFor(leave.employeeName)}</div>
                         <GripVertical className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5 hidden md:block" />
                       </div>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 ${LEAVE_TYPE_COLORS[leave.type] || 'bg-slate-100 text-slate-700'}`}>
-                        {leave.type}
-                      </span>
+                      <LeaveTypeBadge type={leave.type} className="inline-block mb-2" />
                       <div className="text-[10px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3 w-3" /> {leave.duration}</div>
                       <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">{leave.reason}</p>
 
-                      {/* Mobile-only status mover — native HTML5 drag-and-drop
-                          never fires on touch devices at all (a hard browser
-                          limitation, not a sizing bug), so dragging cards
-                          between columns silently does nothing on phones.
-                          This calls the exact same moveLeaveTo() path the
-                          desktop drag-and-drop uses, giving touch users a
-                          working equivalent action instead of a dead gesture. */}
-                      <Select
-                        value={leave.status}
-                        onChange={e => moveLeaveTo(leave, e.target.value as LeaveApplication['status'])}
-                        onClick={e => e.stopPropagation()}
-                        disabled={COLUMNS.find(c => c.key === leave.status)?.locked}
-                        fieldSize="md" className="md:hidden mt-2.5 disabled:opacity-60"
-                      >
-                        {COLUMNS.filter(c => !c.locked || c.key === leave.status).map(c => (
-                          <option key={c.key} value={c.key}>{c.label}</option>
-                        ))}
-                      </Select>
                     </div>
                   ))}
                   {cards.length === 0 && (
@@ -368,166 +429,7 @@ export default function HRLeavesPage() {
       )}
 
       {/* ── HISTORY VIEW ── */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap gap-3">
-            <Select
-              value={histFilter}
-              onChange={e => setHistFilter(e.target.value as LeaveApplication['status'] | 'all')}
-              fieldSize="md"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="hr_approved">HR Approved</option>
-              <option value="approved">CEO Approved</option>
-              <option value="rejected">Rejected</option>
-            </Select>
-            <Select
-              value={histType}
-              onChange={e => setHistType(e.target.value as typeof histType)}
-              fieldSize="md"
-            >
-              <option value="all">All Types</option>
-              <option value="PTO">PTO</option>
-              <option value="Sick Leave">Sick Leave</option>
-              <option value="Urgent">Urgent</option>
-              <option value="Normal">Normal</option>
-              <option value="Parental Leave">Parental Leave</option>
-            </Select>
-            <span className="text-xs text-slate-400 font-semibold self-center">{historyLeaves.length} records</span>
-          </div>
-
-          <Card className="overflow-hidden p-0 border border-slate-200">
-            <TableScroll hideOnMobile>
-              <Table minWidth={750}>
-                <THead>
-                  <tr>
-                    <Th>Employee</Th>
-                    <Th>Type</Th>
-                    <Th>Duration</Th>
-                    <Th>Reason</Th>
-                    <Th align="center">Status</Th>
-                    <Th align="center">Action</Th>
-                  </tr>
-                </THead>
-                <TBody>
-{leavesLoading ? (
-  <TableSkeletonRows rows={6} cols={6} />
-) : (
-<>
-                  {historyLeaves.map(l => (
-                    <Tr key={l.id}>
-                      <Td density="cozy" className="font-semibold text-slate-900">{nameFor(l.employeeName)}</Td>
-                      <Td density="cozy">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
-                      </Td>
-                      <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
-                      <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
-                      <Td align="center" density="cozy">
-                        <LeaveStatusBadge status={l.status} />
-                      </Td>
-                      <Td align="center" density="cozy">
-                        {l.status === 'pending' && (
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => handleSendToCEO(l)}
-                              disabled={processingLeaveId !== null}
-                              className="text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                            >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Send to CEO</button>
-                            <button
-                              onClick={() => handleHistoryReject(l)}
-                              disabled={processingLeaveId !== null}
-                              className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                            >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Reject</button>
-                          </div>
-                        )}
-                        {l.status === 'rejected' && (
-                          <button
-                            onClick={() => handleReopenLeave(l)}
-                            disabled={processingLeaveId !== null}
-                            className="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                          >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Re-open</button>
-                        )}
-                        {(l.status === 'approved' || l.status === 'hr_approved') && (
-                          <span className="text-xs text-slate-400 font-medium">—</span>
-                        )}
-                      </Td>
-                    </Tr>
-                  ))}
-                  {historyLeaves.length === 0 && (
-                    <Tr>
-                      <EmptyState as="td" colSpan={6} py={12} size="sm">
-                        No records match your filters.
-                      </EmptyState>
-                    </Tr>
-                  )}
-                </>
-)}
-</TBody>
-              </Table>
-            </TableScroll>
-
-            {/* Mobile card stack */}
-            <div className="md:hidden space-y-3 p-4">
-              {historyLeaves.map(l => (
-                <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-slate-900 truncate pr-2">{nameFor(l.employeeName)}</p>
-                    <LeaveStatusBadge status={l.status} className="shrink-0" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Type</p>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${LEAVE_TYPE_COLORS[l.type] || 'bg-slate-100 text-slate-700'}`}>{l.type}</span>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
-                      <p className="text-xs font-semibold text-slate-700">{l.duration}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
-                      <p className="text-xs font-medium text-slate-600 line-clamp-2">{l.reason}</p>
-                    </div>
-                  </div>
-                  <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
-                    {l.status === 'pending' && (
-                      <>
-                        <button
-                          onClick={() => handleSendToCEO(l)}
-                          disabled={processingLeaveId !== null}
-                          className="flex-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 py-2 rounded-lg transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                        >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Send to CEO</button>
-                        <button
-                          onClick={() => handleHistoryReject(l)}
-                          disabled={processingLeaveId !== null}
-                          className="flex-1 text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 py-2 rounded-lg transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                        >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Reject</button>
-                      </>
-                    )}
-                    {l.status === 'rejected' && (
-                      <button
-                        onClick={() => handleReopenLeave(l)}
-                        disabled={processingLeaveId !== null}
-                        className="w-full text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
-                      >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}Re-open</button>
-                    )}
-                    {(l.status === 'approved' || l.status === 'hr_approved') && (
-                      <span className="text-[10px] text-slate-400 font-medium w-full text-center py-1">—</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {leavesLoading && <ListSkeleton rows={3} />}
-              {!leavesLoading && historyLeaves.length === 0 && (
-                <EmptyState py={8} size="sm">
-                  No records match your filters.
-                </EmptyState>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
+      {activeTab === 'history' && <LeaveHistory filters={filters} loading={leavesLoading} nameFor={nameFor} actions={historyActions} />}
     </div>
   );
 }

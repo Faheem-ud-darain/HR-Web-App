@@ -54,6 +54,41 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
   const closing = exiting && !isOpen;
   const reducedMotion = usePrefersReducedMotion();
 
+  // Swipe-down-to-dismiss, as on every iPhone sheet: drag the handle or title bar down and let go past
+  // 110px (or flick it) to close; let go sooner and the sheet springs back. Phones only (the sheet is a
+  // centred card from the md breakpoint up).
+  const [dragY, setDragY] = useState<number | null>(null);
+  const [springing, setSpringing] = useState(false); // sliding back to rest after a short or cancelled drag
+  // Back to the normal enter/exit animations whenever the sheet closes (a reopened sheet must not stay drag-styled).
+  if (!isOpen && dragY !== null) { setDragY(null); setSpringing(false); }
+  const settle = () => { setSpringing(true); setDragY(0); };
+  const dragStart = useRef<{ y: number; t: number } | null>(null);
+  const onSheetDown = (e: React.PointerEvent) => {
+    if (window.matchMedia('(min-width: 768px)').matches) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    dragStart.current = { y: e.clientY, t: Date.now() };
+    setSpringing(false);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not an active pointer: dragging still works while it stays over the bar */ }
+    setDragY(0);
+  };
+  const onSheetMove = (e: React.PointerEvent) => {
+    if (!dragStart.current) return;
+    setDragY(Math.max(0, e.clientY - dragStart.current.y));
+  };
+  const onSheetUp = () => {
+    const start = dragStart.current;
+    dragStart.current = null;
+    if (!start || dragY === null) return;
+    const flick = dragY > 40 && Date.now() - start.t < 250;
+    if (dragY > 110 || flick) { setDragY(null); onClose(); }
+    else settle(); // slide back from where it was dropped, without replaying the entrance animation
+  };
+  // The browser took the touch away (an orientation change, a system gesture): that is not a release, so never close.
+  const onSheetCancel = () => {
+    dragStart.current = null;
+    if (dragY !== null) settle();
+  };
+
   const mounted = useIsClient();
 
   useEffect(() => {
@@ -143,20 +178,28 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
           ${closing ? 'md:animate-[exit-modal_180ms_ease-out_forwards] animate-[drawer-exit-bottom_180ms_ease-out_forwards]' : 'md:animate-[enter-modal_200ms_ease-out_forwards] animate-[drawer-in-bottom_320ms_ease-out_forwards]'}
           ${className || ''}
         `}
-        style={reducedMotion ? { animation: 'none' } : undefined}
+        style={dragY !== null ? { animation: 'none', transform: `translateY(${dragY}px)`, transition: springing ? 'transform 200ms ease-out' : undefined } : reducedMotion ? { animation: 'none' } : undefined}
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
       >
+        {/* Handle and title bar: on a phone they are the grab area for swipe-down-to-close */}
+        <div
+          className="contents"
+          onPointerDown={onSheetDown}
+          onPointerMove={onSheetMove}
+          onPointerUp={onSheetUp}
+          onPointerCancel={onSheetCancel}
+        >
         {/* Drag handle (mobile only) */}
-        <div className="md:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
+        <div className="md:hidden flex justify-center pt-3 pb-1 flex-shrink-0 touch-none cursor-grab">
           <div className="h-1 w-10 rounded-full bg-slate-300" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 flex-shrink-0 max-md:touch-none">
           <h2 id={titleId} className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title}</h2>
           <button
             type="button"
@@ -166,6 +209,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
+        </div>
         </div>
 
         {/* Content — scrollable. Uses an arbitrary-value padding-bottom

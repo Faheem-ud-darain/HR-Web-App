@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
+import { NoticeModal } from '@/components/ui/NoticeModal';
+import { ForgotPasswordModal } from './_components/ForgotPasswordModal';
 import { useRouter } from 'next/navigation';
 import { hrActions } from '@/lib/hrData';
 import {
@@ -23,8 +24,7 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { ArrowLeft, Eye, EyeOff, Mail, AlertTriangle } from 'lucide-react';
-import { OtpInput } from '@/components/ui/OtpInput';
+import { ArrowLeft, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
@@ -65,190 +65,6 @@ export default function AuthPage() {
   // (wrong password, offboarded, etc.) leaves this false.
   const [sessionConflict, setSessionConflict] = useState(false);
   const [isForgotOpen, setIsForgotOpen] = useState(false);
-  // Forgot Password / OTP self-service flow — see
-  // src/app/api/auth/forgot-password, src/app/api/auth/verify-reset-otp,
-  // and src/app/api/auth/reset-password.
-  // 'email' -> enter email, request a code; 'otp' -> enter the 6-digit code
-  // only (verified against verify-reset-otp before advancing); 'password'
-  // -> enter + confirm the new password, shown only after the code above
-  // was confirmed valid; 'done' -> success confirmation.
-  //
-  // This used to combine the code and the new-password fields into a
-  // single 'otp' step shown all at once — a wrong/expired code was only
-  // discovered after the user had already typed a new password too. Split
-  // into two steps so the code is checked (via the lightweight
-  // verify-reset-otp route) before the password fields even render.
-  const [forgotStep, setForgotStep] = useState<'email' | 'otp' | 'password' | 'done'>('email');
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
-  const [forgotShowPassword, setForgotShowPassword] = useState(false);
-  const [forgotLoading, setForgotLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
-  const [forgotError, setForgotError] = useState('');
-  const [forgotInfo, setForgotInfo] = useState('');
-
-  // Countdown timer for Resend OTP button rate limiting
-  useEffect(() => {
-    if (resendTimer <= 0) return;
-    const timer = setInterval(() => {
-      setResendTimer((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendTimer]);
-
-  const resetForgotFlow = () => {
-    setForgotStep('email');
-    setForgotEmail('');
-    setForgotOtp('');
-    setForgotNewPassword('');
-    setForgotConfirmPassword('');
-    setForgotError('');
-    setForgotInfo('');
-    setForgotLoading(false);
-    setResendLoading(false);
-    setResendTimer(0);
-  };
-
-  const handleRequestOtp = async () => {
-    setForgotError('');
-    const clean = forgotEmail.trim().toLowerCase();
-    if (!clean || !clean.includes('@')) {
-      setForgotError('Enter a valid email address.');
-      return;
-    }
-    setForgotLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: clean }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setForgotError(data?.error || 'Something went wrong. Please try again.');
-        if (data?.waitSeconds) {
-          setResendTimer(data.waitSeconds);
-        }
-        return;
-      }
-      setForgotInfo('If an account exists for that email, a 6-digit code has been sent — check your inbox (and spam folder).');
-      setForgotStep('otp');
-      const cooldown = data?.cooldownSec || 30;
-      setResendTimer(cooldown);
-    } catch (err) {
-      console.error('[forgot-password] Fetch error in handleRequestOtp:', err);
-      setForgotError('Could not reach the server. Check your connection and try again.');
-    } finally {
-      setForgotLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendTimer > 0 || resendLoading) return;
-    setForgotError('');
-    const clean = forgotEmail.trim().toLowerCase();
-    if (!clean || !clean.includes('@')) {
-      setForgotError('Enter a valid email address.');
-      return;
-    }
-    setResendLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: clean }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setForgotError(data?.error || 'Something went wrong sending a new code.');
-        if (data?.waitSeconds) {
-          setResendTimer(data.waitSeconds);
-        }
-        return;
-      }
-      setForgotInfo('A new 6-digit verification code has been sent to your email.');
-      const cooldown = data?.cooldownSec || 60;
-      setResendTimer(cooldown);
-    } catch (err) {
-      console.error('[forgot-password] Fetch error in handleResendOtp:', err);
-      setForgotError('Could not reach the server. Check your connection and try again.');
-    } finally {
-      setResendLoading(false);
-    }
-  };
-
-  // Advances 'otp' -> 'password'. Checks the code via the lightweight
-  // verify-reset-otp route (doesn't consume it or touch the password — see
-  // that route's comment) so a wrong/expired code is caught right here,
-  // before the new-password fields even render, instead of only surfacing
-  // after the user has typed a new password on the old combined screen.
-  const handleVerifyOtp = async () => {
-    setForgotError('');
-    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
-      setForgotError('Enter the 6-digit code from your email.');
-      return;
-    }
-    setForgotLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/verify-reset-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase(), otp: forgotOtp.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setForgotError(data?.error || 'Invalid code.');
-        return;
-      }
-      setForgotError('');
-      setForgotStep('password');
-    } catch {
-      setForgotError('Could not reach the server. Check your connection and try again.');
-    } finally {
-      setForgotLoading(false);
-    }
-  };
-
-  const handleSubmitReset = async () => {
-    setForgotError('');
-    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
-      setForgotError('Enter the 6-digit code from your email.');
-      return;
-    }
-    if (!forgotNewPassword || forgotNewPassword.length < 4) {
-      setForgotError('Choose a password at least 4 characters long.');
-      return;
-    }
-    if (forgotNewPassword !== forgotConfirmPassword) {
-      setForgotError('Passwords do not match.');
-      return;
-    }
-    setForgotLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: forgotEmail.trim().toLowerCase(),
-          otp: forgotOtp.trim(),
-          newPassword: forgotNewPassword,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setForgotError(data?.error || 'Something went wrong. Please try again.');
-        return;
-      }
-      setForgotStep('done');
-    } catch {
-      setForgotError('Could not reach the server. Check your connection and try again.');
-    } finally {
-      setForgotLoading(false);
-    }
-  };
   // Shown post-login (blocking navigation until acknowledged) when this
   // account's last shift was auto-ended by logging out — see
   // hrActions.performLogout in hrData.ts, which sets the localStorage flag
@@ -536,7 +352,7 @@ export default function AuthPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => { resetForgotFlow(); setForgotEmail(email); setIsForgotOpen(true); }}
+                    onClick={() => setIsForgotOpen(true)}
                     className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline"
                   >
                     Forgot password?
@@ -568,209 +384,26 @@ export default function AuthPage() {
         Privacy Policy
       </Link>
 
-      <Modal
-        isOpen={isForgotOpen}
-        onClose={() => { setIsForgotOpen(false); resetForgotFlow(); }}
-        title={forgotStep === 'done' ? 'Password Reset' : 'Forgot Password'}
-      >
-        <div className="space-y-4">
-          {forgotStep === 'email' && (
-            <>
-              <div className="flex items-start gap-3 bg-orange-50 border border-orange-100 p-4 rounded-xl">
-                <Mail className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                  Enter your account email and we&apos;ll send a 6-digit code you can use to set a new password.
-                </p>
-              </div>
-              <div>
-                <FieldLabel size="plain">Email</FieldLabel>
-                <Input
-                  type="email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="you@delcargo.us"
-                  fieldSize="md"
-                />
-              </div>
-              {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <p className="text-[11px] text-slate-400 font-semibold">Still stuck? Email hr@delcargo.us</p>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleRequestOtp}
-                  disabled={forgotLoading}
-                >
-                  {forgotLoading ? 'Sending…' : 'Send Code'}
-                </Button>
-              </div>
-            </>
-          )}
+      {isForgotOpen && (
+        <ForgotPasswordModal
+          initialEmail={email}
+          onClose={() => setIsForgotOpen(false)}
+          onFinished={resetEmail => { setEmail(resetEmail); setPassword(''); setIsForgotOpen(false); }}
+        />
+      )}
 
-          {forgotStep === 'otp' && (
-            <>
-              {forgotInfo && (
-                <div className="flex items-start gap-3 bg-orange-50 border border-orange-100 p-4 rounded-xl">
-                  <Mail className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
-                  <p className="text-xs text-slate-700 font-semibold leading-relaxed">{forgotInfo}</p>
-                </div>
-              )}
-              <div>
-                <label className="text-xs font-bold text-slate-700 mb-1 block text-center">6-digit security code</label>
-                <OtpInput
-                  length={6}
-                  value={forgotOtp}
-                  onChange={setForgotOtp}
-                  disabled={forgotLoading || resendLoading}
-                />
-                <div className="flex items-center justify-between mt-2 px-1">
-                  <span className="text-[11px] text-slate-400 font-medium">Didn&apos;t receive the code?</span>
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={resendTimer > 0 || resendLoading || forgotLoading}
-                    className="text-xs font-bold text-orange-600 hover:text-orange-700 disabled:text-slate-400 transition-colors flex items-center gap-1.5"
-                  >
-                    {resendLoading && (
-                      <svg className="animate-spin h-3.5 w-3.5 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    )}
-                    {resendLoading 
-                      ? 'Sending code…' 
-                      : resendTimer > 0 
-                        ? `Resend in ${resendTimer}s` 
-                        : 'Resend Code'}
-                  </button>
-                </div>
-              </div>
-              {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setForgotStep('email')}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-700"
-                >
-                  Use a different email
-                </button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleVerifyOtp}
-                  disabled={forgotLoading}
-                >
-                  {forgotLoading ? 'Verifying…' : 'Continue'}
-                </Button>
-              </div>
-            </>
-          )}
-
-          {forgotStep === 'password' && (
-            <>
-              <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
-                <Mail className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                  Code verified. Choose a new password for {forgotEmail}.
-                </p>
-              </div>
-              <div>
-                <FieldLabel size="plain">New password</FieldLabel>
-                <div className="relative">
-                  <input
-                    type={forgotShowPassword ? 'text' : 'password'}
-                    value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForgotShowPassword(v => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {forgotShowPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <FieldLabel size="plain">Confirm new password</FieldLabel>
-                <Input
-                  type={forgotShowPassword ? 'text' : 'password'}
-                  value={forgotConfirmPassword}
-                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                  fieldSize="md"
-                />
-              </div>
-              {forgotError && <p className="text-xs font-bold text-rose-600">{forgotError}</p>}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => { setForgotStep('otp'); setForgotError(''); }}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-700"
-                >
-                  Back
-                </button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleSubmitReset}
-                  disabled={forgotLoading}
-                >
-                  {forgotLoading ? 'Resetting…' : 'Reset Password'}
-                </Button>
-              </div>
-            </>
-          )}
-
-          {forgotStep === 'done' && (
-            <>
-              <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
-                <Mail className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                  Your password has been updated. You can now log in with your new password.
-                </p>
-              </div>
-              <div className="flex justify-end pt-2 border-t border-slate-200">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => {
-                    setEmail(forgotEmail);
-                    setPassword('');
-                    setIsForgotOpen(false);
-                    resetForgotFlow();
-                  }}
-                >
-                  Back to Login
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-      </Modal>
-
-      <Modal isOpen={shiftStoppedNotice} onClose={() => {}} title="Shift Ended On Logout">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 bg-amber-50 border border-amber-100 p-4 rounded-xl">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-              Your shift was still active when you last logged out, so it was automatically ended at that time. If you&apos;re continuing work, start a new shift from your dashboard.
-            </p>
-          </div>
-          <div className="flex justify-end pt-2 border-t border-slate-200">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                setShiftStoppedNotice(false);
-                if (pendingDashRoute) router.push(`/${pendingDashRoute}`);
-              }}
-            >
-              Continue to Dashboard
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {shiftStoppedNotice && (
+        <NoticeModal
+          title="Shift Ended On Logout"
+          tone="amber"
+          icon={AlertTriangle}
+          action={{ label: 'Continue to Dashboard', onClick: () => { setShiftStoppedNotice(false); if (pendingDashRoute) router.push(`/${pendingDashRoute}`); } }}
+          closeLabel={null}
+          onClose={() => {}}
+        >
+          Your shift was still active when you last logged out, so it was automatically ended at that time. If you&apos;re continuing work, start a new shift from your dashboard.
+        </NoticeModal>
+      )}
     </div>
   );
 }
