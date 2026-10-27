@@ -6,7 +6,7 @@ import { displayName, Profile, TrackingSettings, TrackerDiagnostics } from '@/li
 import { TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL } from '@/lib/trackerSetup';
 import { Download, Copy, RefreshCw, WifiOff, AlertTriangle } from 'lucide-react';
 import { formatDateTimeNY } from '@/lib/timezone';
-import { AGENT_SCRIPT_PATH } from '@/components/ui/TrackingView';
+import { AGENT_SCRIPT_PATH } from '@/lib/core/trackingWindow';
 
 interface TrackerSetupModalProps {
   setupEmp: Profile | null;

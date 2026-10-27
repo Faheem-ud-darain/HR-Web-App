@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, THead, Th, TBody, Tr, Td } from '@/components/ui/Table';
 import { formatTimeNY } from '@/lib/timezone';
-import { localDateString } from '@/components/ui/TrackingView';
+import { formatDuration, localDateString } from '@/lib/core/trackingWindow';
 
 interface MouseActivityModalProps {
   mouseEmp: Profile | null;
@@ -20,7 +20,6 @@ interface MouseActivityModalProps {
   handleMouseDayChange: (day: string) => void;
   mouseLoading: boolean;
   mouseShiftSeconds: number;
-  formatDuration: (seconds: number) => string;
   mouseTotalSeconds: number;
   mouseActiveSeconds: number;
   mouseLogs: InactivityLog[];
@@ -29,7 +28,7 @@ interface MouseActivityModalProps {
   mouseLogsByDay: () => { day: string; logs: InactivityLog[]; totalSeconds: number; }[];
 }
 
-export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRangeChange, mouseRange, mouseDay, handleMouseDayChange, mouseLoading, mouseShiftSeconds, formatDuration, mouseTotalSeconds, mouseActiveSeconds, mouseLogs, mouseLongestSeconds, mouseAvgSeconds, mouseLogsByDay }: MouseActivityModalProps) {
+export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRangeChange, mouseRange, mouseDay, handleMouseDayChange, mouseLoading, mouseShiftSeconds, mouseTotalSeconds, mouseActiveSeconds, mouseLogs, mouseLongestSeconds, mouseAvgSeconds, mouseLogsByDay }: MouseActivityModalProps) {
   return (
     <Modal isOpen={!!mouseEmp} onClose={() => setMouseEmp(null)} title={mouseEmp ? `Mouse Activity — ${displayName(mouseEmp, role)}` : 'Mouse Activity'}>
       {mouseEmp && (
