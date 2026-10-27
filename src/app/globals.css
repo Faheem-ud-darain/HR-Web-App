@@ -618,3 +618,13 @@ input[type='radio']:focus-visible {
     font-size: 16px;
   }
 }
+
+/* Touch screens: tick boxes and radio buttons are drawn 16px in many forms, which is hard to hit with a
+   finger. Make them at least 22px on devices whose main pointer is coarse (phones, tablets). */
+@media (pointer: coarse) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+}
