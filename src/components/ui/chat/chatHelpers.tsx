@@ -217,3 +217,7 @@ export function renderMessageText(
     return <React.Fragment key={i}>{part}</React.Fragment>;
   });
 }
+
+// Trimmed as well as lower-cased: a stray space on either side (e.g. from a copy-pasted email during onboarding)
+// would silently break an email lookup and show the initials fallback instead of the sender's photo.
+export const normEmail = (e: string): string => e.trim().toLowerCase();

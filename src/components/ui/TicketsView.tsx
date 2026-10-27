@@ -16,7 +16,7 @@ import { TicketConversationPanel } from '@/components/ui/tickets/TicketConversat
 import { TicketFilterBar, type DeptFilter, type StatusFilter, type ViewTab } from '@/components/ui/tickets/TicketFilterBar';
 import { NewTicketModal } from '@/components/ui/tickets/NewTicketModal';
 import { InspectEmployeeModal } from '@/components/ui/tickets/InspectEmployeeModal';
-import { ForwardTicketModal } from '@/components/ui/tickets/ForwardTicketModal';
+import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import { useTicketLiveState } from '@/components/ui/tickets/useTicketLiveState';
 import { useTicketReply } from '@/components/ui/tickets/useTicketReply';
 
@@ -284,7 +284,17 @@ export function TicketsView({ role }: TicketsViewProps) {
       <ImageLightbox src={lightbox?.src ?? null} alt={lightbox?.name} downloadName={lightbox?.name} onClose={() => setLightbox(null)} />
 
       {forwardingTicket && (
-        <ForwardTicketModal ticket={forwardingTicket} role={role} currentEmail={currentEmail} userProfile={userProfile} onClose={() => setForwardingTicket(null)} />
+        <ForwardToHrAdminModal
+          sender={{ email: currentEmail, name: userProfile?.fullName || (role === 'hr' ? 'HR Manager' : 'System Admin'), role: role === 'admin' ? 'admin' : 'hr' }}
+          kind="ticket"
+          sourceLabel={forwardingTicket.title}
+          sourceId={forwardingTicket.id}
+          heading="Ticket"
+          title={forwardingTicket.title}
+          body={forwardingTicket.description}
+          noun="ticket"
+          onClose={() => setForwardingTicket(null)}
+        />
       )}
 
       <ConfirmDialog
