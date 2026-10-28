@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Edit, Loader2, MapPin, Trash } from 'lucide-react';
+import { PencilSimpleLineIcon as Edit, CircleNotchIcon as Loader2, MapPinIcon as MapPin, TrashIcon as Trash } from '@phosphor-icons/react/dist/ssr';
 import { hrActions, useProfiles, useWarehouses, type Warehouse } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { SuccessNote } from '@/components/ui/SuccessNote';

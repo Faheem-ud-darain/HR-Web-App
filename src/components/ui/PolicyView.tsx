@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
-import { BookOpen, Calendar, HelpCircle, AlertCircle, Award, Info } from 'lucide-react';
+import { BookOpenIcon as BookOpen, CalendarBlankIcon as Calendar, QuestionIcon as HelpCircle, WarningCircleIcon as AlertCircle, MedalIcon as Award, InfoIcon as Info } from '@phosphor-icons/react/dist/ssr';
 import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 export function PolicyView() {

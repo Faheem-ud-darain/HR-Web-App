@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useProfiles, useTasks, displayName } from '@/lib/hrData';
 import { TaskBoard } from '@/components/ui/lazy';
 import { Badge } from '@/components/ui/Badge';
-import { Users, Star } from 'lucide-react';
+import { UsersIcon as Users, StarIcon as Star } from '@phosphor-icons/react/dist/ssr';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { useSessionEmail } from '@/lib/useSession';
@@ -24,7 +24,7 @@ export default function TeamLeadTasksPage() {
   if (!userProfile?.isTeamLead) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
-        <Users className="h-12 w-12 opacity-30" />
+        <Users weight="duotone" className="h-12 w-12 opacity-30" />
         <p className="font-semibold text-sm">You are not designated as a Team Lead.</p>
         <p className="text-xs">Contact HR to update your role.</p>
       </div>

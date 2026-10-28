@@ -5,7 +5,7 @@ import { clearSession, SessionRole } from '@/lib/session';
 import { Modal } from '@/components/ui/Modal';
 import { AvatarCropperModal } from '@/components/ui/lazy';
 import { compressImageToWebP, MAX_DOCUMENT_IMAGE_BYTES } from '@/lib/imageCompressor';
-import { ChevronRight, HelpCircle, LogOut } from 'lucide-react';
+import { CaretRightIcon as ChevronRight, QuestionIcon as HelpCircle, SignOutIcon as LogOut } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
 import { PoliciesSignOffStep } from "@/components/layout/onboarding/PoliciesSignOffStep";

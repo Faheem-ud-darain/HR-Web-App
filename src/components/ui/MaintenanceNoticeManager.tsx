@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent } from './Card';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { Wrench, PlusCircle, Trash2, Loader2 } from 'lucide-react';
+import { WrenchIcon as Wrench, PlusCircleIcon as PlusCircle, TrashIcon as Trash2, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { pktLocalToUtcIso, formatInViewerLocalTime } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';

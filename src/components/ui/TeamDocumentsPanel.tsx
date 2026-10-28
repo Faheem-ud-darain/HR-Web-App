@@ -5,12 +5,10 @@ import { Team, TeamDocument, useTeamDocuments, hrActions } from '@/lib/hrData';
 import { formatDateNY } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import {
-  Upload, FileText, FileImage, FileVideo, Download, Trash2, Loader2,
-  X, FolderOpen, File as FileIcon,
-} from 'lucide-react';
+import { UploadSimpleIcon as Upload, FileTextIcon as FileText, FileImageIcon as FileImage, FileVideoIcon as FileVideo, DownloadSimpleIcon as Download, TrashIcon as Trash2, CircleNotchIcon as Loader2, XIcon as X, FolderOpenIcon as FolderOpen, FileIcon as FileIcon } from '@phosphor-icons/react/dist/ssr';
 import { Input, Textarea } from '@/components/ui/Input';
 import { safeHref } from '@/lib/sanitize';
+import { formatBytes } from '@/lib/core/attachments';
 
 interface TeamDocumentsPanelProps {
   team: Team | null;
@@ -26,13 +24,6 @@ interface TeamDocumentsPanelProps {
 // create_team_documents_collection.py) — large enough for short
 // instructional videos, unlike the 15MB chat-attachment cap.
 const MAX_DOCUMENT_BYTES = 200 * 1024 * 1024;
-
-function formatBytes(bytes?: number): string {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function formatTimestamp(iso: string): string {
   try {
@@ -130,7 +121,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
   if (!team) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
-        <FolderOpen className="h-10 w-10 opacity-30" />
+        <FolderOpen weight="duotone" className="h-10 w-10 opacity-30" />
         <p className="font-semibold text-sm">Pick a team to see its documents.</p>
       </div>
     );
@@ -209,7 +200,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
         {isLoading && <p className="text-xs text-slate-400 text-center font-semibold py-6">Loading documents…</p>}
         {!isLoading && documents.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
-            <FolderOpen className="h-8 w-8 opacity-30" />
+            <FolderOpen weight="duotone" className="h-8 w-8 opacity-30" />
             <p className="text-xs font-semibold italic">
               {canManage ? 'No documents yet — upload the first onboarding guide.' : 'No documents have been shared with this team yet.'}
             </p>

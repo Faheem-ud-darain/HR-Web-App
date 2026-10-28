@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { WarningCircleIcon as AlertCircle } from '@phosphor-icons/react/dist/ssr';
 import { hrActions, updateProfileSelf, type Profile } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';

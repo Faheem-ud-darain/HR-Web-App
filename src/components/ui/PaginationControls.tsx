@@ -10,7 +10,7 @@
 // the nearest existing control on the pages this is used on.
 
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
 
 interface PaginationControlsProps {
   page: number;

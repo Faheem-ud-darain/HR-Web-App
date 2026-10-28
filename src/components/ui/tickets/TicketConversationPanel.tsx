@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeft, Headset, Loader2, Lock, RotateCcw, Forward, Eye } from 'lucide-react';
+import { ArrowLeftIcon as ArrowLeft, HeadsetIcon as Headset, CircleNotchIcon as Loader2, LockIcon as Lock, ArrowCounterClockwiseIcon as RotateCcw, ArrowBendUpRightIcon as Forward, EyeIcon as Eye } from '@phosphor-icons/react/dist/ssr';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { TicketReplyLog } from '@/components/ui/tickets/TicketReplyLog';
 import { TicketComposer } from '@/components/ui/tickets/TicketComposer';
 import { Ticket, Profile, TicketSeenState } from '@/lib/hrData';
@@ -29,29 +30,19 @@ interface TicketConversationPanelProps {
   ticketSeenState: TicketSeenState | null | undefined;
   onOpenImage: (src: string, name?: string) => void;
   typingNames: string[];
-  chatEndRef: React.RefObject<HTMLDivElement | null>;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
   isAdmin: boolean;
-  handleSendReply: (e: React.FormEvent) => void;
-  replyFileError: string;
-  replyFile: File | null;
-  setReplyFile: React.Dispatch<React.SetStateAction<File | null>>;
-  replyFileInputRef: React.RefObject<HTMLInputElement | null>;
-  handleReplyFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  replyTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
-  replyMsg: string;
-  handleReplyMsgChange: (value: string) => void;
-  sendReply: () => Promise<void>;
-  sendingReply: boolean;
+  onReplySent: () => void;
 }
 
-export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSelectedTicket, isEmp, isTicketLiveWithHR, isPrivileged, canCloseOwnTicket, isClosed, handleCloseTicket, updatingTicketStatusId, handleReopenTicket, canForwardToHrAdmin, openForward, handleInspectApplicant, nameFor, currentEmail, userProfile, profileFor, role, ticketSeenState, onOpenImage, typingNames, chatEndRef, isAdmin, handleSendReply, replyFileError, replyFile, setReplyFile, replyFileInputRef, handleReplyFileChange, replyTextareaRef, replyMsg, handleReplyMsgChange, sendReply, sendingReply }: TicketConversationPanelProps) {
+export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSelectedTicket, isEmp, isTicketLiveWithHR, isPrivileged, canCloseOwnTicket, isClosed, handleCloseTicket, updatingTicketStatusId, handleReopenTicket, canForwardToHrAdmin, openForward, handleInspectApplicant, nameFor, currentEmail, userProfile, profileFor, role, ticketSeenState, onOpenImage, typingNames, scrollRef, isAdmin, onReplySent }: TicketConversationPanelProps) {
   return (
     <div
       className={`lg:col-span-7 ${!selectedTicket ? 'hidden lg:block' : 'block fixed inset-0 z-40 bg-white lg:static lg:z-auto lg:bg-transparent'}`}
       style={selectedTicket && keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : undefined}
     >
       {selectedTicket ? (
-        <div className="border-0 lg:border border-slate-200 overflow-hidden flex flex-col h-full lg:h-[calc(100vh-220px)] min-h-[560px] lg:rounded-xl bg-white">
+        <div className="border-0 lg:border border-slate-200 overflow-hidden flex flex-col h-full lg:h-[calc(100vh-220px)] lg:min-h-[560px] lg:rounded-xl bg-white">
           {/* Header. Arbitrary-value pt (not `py-2.5 lg:py-4 pt-safe`
               combined) — this file's own globals.css comment warns that
               a bare .pt-safe/.pb-safe class stacked with a Tailwind
@@ -96,7 +87,7 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                   <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 truncate min-w-0">
                     <span className="truncate">{selectedTicket.title}</span>
                     {isEmp && isTicketLiveWithHR(selectedTicket.id) && (
-                      <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                         <Headset className="h-3 w-3" /> Live
                       </span>
                     )}
@@ -125,7 +116,7 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                       </button>
                     )}
                     {isClosed && !isPrivileged && (
-                      <span className="text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                      <span className="text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
                         <Lock className="h-3 w-3" /> Closed
                       </span>
                     )}
@@ -144,7 +135,7 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                     )}
                   </div>
                 </div>
-                <div className="text-[10px] text-slate-600 font-bold mt-0.5 flex items-center gap-1.5 min-w-0">
+                <div className="text-[11px] text-slate-600 font-bold mt-0.5 flex items-center gap-1.5 min-w-0">
                   <span className="shrink-0 whitespace-nowrap">Opened by:</span>
                   <button
                     onClick={() => handleInspectApplicant(selectedTicket.employeeEmail)}
@@ -159,19 +150,17 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
           </div>
     
           {/* Chat replies log */}
-          <TicketReplyLog currentEmail={currentEmail} selectedTicket={selectedTicket} userProfile={userProfile} profileFor={profileFor} nameFor={nameFor} role={role} isPrivileged={isPrivileged} ticketSeenState={ticketSeenState} onOpenImage={onOpenImage} typingNames={typingNames} chatEndRef={chatEndRef} />
+          <TicketReplyLog currentEmail={currentEmail} selectedTicket={selectedTicket} userProfile={userProfile} profileFor={profileFor} nameFor={nameFor} role={role} isPrivileged={isPrivileged} ticketSeenState={ticketSeenState} onOpenImage={onOpenImage} typingNames={typingNames} scrollRef={scrollRef} />
     
           {/* Chat input bar. Uses arbitrary-value padding-bottom
               (below) instead of `p-3 md:p-4 pb-safe` — both would set
               padding-bottom at the same cascade specificity; see
               globals.css's .pb-safe comment. Responsive base
               (0.75rem/1rem) preserved, inset added on top of each. */}
-          <TicketComposer isClosed={isClosed} selectedTicket={selectedTicket} isAdmin={isAdmin} handleSendReply={handleSendReply} replyFileError={replyFileError} replyFile={replyFile} setReplyFile={setReplyFile} replyFileInputRef={replyFileInputRef} handleReplyFileChange={handleReplyFileChange} replyTextareaRef={replyTextareaRef} replyMsg={replyMsg} handleReplyMsgChange={handleReplyMsgChange} sendReply={sendReply} sendingReply={sendingReply} />
+          <TicketComposer key={selectedTicket.id} isClosed={isClosed} selectedTicket={selectedTicket} isAdmin={isAdmin} role={role} currentEmail={currentEmail} userProfile={userProfile} onSent={onReplySent} />
         </div>
       ) : (
-        <div className="border-2 border-dashed border-slate-200 rounded-xl bg-white/50 py-32 text-center text-slate-400 font-semibold italic text-sm">
-          Select a support ticket from the list to view history and chat logs.
-        </div>
+        <EmptyState bordered py={12} size="sm" className="py-32">Select a support ticket from the list to read the conversation.</EmptyState>
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, ArrowCounterClockwiseIcon as RotateCcw, XIcon as X, MagnifyingGlassPlusIcon as ZoomIn, MagnifyingGlassMinusIcon as ZoomOut } from '@phosphor-icons/react/dist/ssr';
 import type { Screenshot } from '@/lib/hrData';
 import { formatDateTimeNY } from '@/lib/timezone';
 import { popModal, pushModal } from '@/lib/modalStack';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Calendar, CheckCircle2, DollarSign, XCircle } from 'lucide-react';
+import { WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, CheckCircleIcon as CheckCircle2, CurrencyDollarIcon as DollarSign, XCircleIcon as XCircle } from '@phosphor-icons/react/dist/ssr';
 import { formatMoney, type Profile } from '@/lib/hrData';
 
 const Check = ({ done, children }: { done: boolean; children: React.ReactNode }) => (

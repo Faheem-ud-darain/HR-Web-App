@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Eye, EyeOff, Mail } from 'lucide-react';
+import { EyeIcon as Eye, EyeSlashIcon as EyeOff, EnvelopeIcon as Mail } from '@phosphor-icons/react/dist/ssr';
 import { API_BASE } from '@/lib/apiBase';
 import { Button } from '@/components/ui/Button';
 import { FieldLabel } from '@/components/ui/FieldLabel';

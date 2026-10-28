@@ -4,7 +4,8 @@ import React from 'react';
 import type { PayrollSelf } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { getRemainingPTO, getPTOAccrualDate, getAccruedPTOForDisplay, formatMoney, Profile, LeaveApplication, Task } from '@/lib/hrData';
-import { Clock, CheckCircle2, AlertTriangle, Calendar, ChevronRight } from 'lucide-react';
+import { ClockIcon as Clock, CheckCircleIcon as CheckCircle2, WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
+import { IconChip } from '@/components/ui/IconChip';
 import { Badge } from '@/components/ui/Badge';
 import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 import { formatDateNY } from '@/lib/timezone';
@@ -38,9 +39,7 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
                   {userProfile ? getRemainingPTO(allLeaves || [], userProfile.fullName, getPTOAccrualDate(userProfile)) : 0} <span className="text-xs md:text-base font-medium">Days</span>
                 </p>
               </div>
-              <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 self-end md:self-auto">
-                <Clock className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
+              <IconChip tone="orange" icon={Clock} size="sm" />
             </div>
           </CardContent>
         </Card>
@@ -53,9 +52,7 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
                   {userProfile ? getAccruedPTOForDisplay(getPTOAccrualDate(userProfile)) : 0} <span className="text-xs md:text-base font-medium">Days</span>
                 </p>
               </div>
-              <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 self-end md:self-auto">
-                <CheckCircle2 className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
+              <IconChip tone="emerald" icon={CheckCircle2} size="sm" />
             </div>
           </CardContent>
         </Card>

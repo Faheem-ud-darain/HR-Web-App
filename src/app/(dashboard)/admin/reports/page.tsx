@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin, hrActions } from '@/lib/hrData';
-import { FileText, Download, MapPin, Monitor, Landmark, Loader2 } from 'lucide-react';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download, MapPinIcon as MapPin, MonitorIcon as Monitor, BankIcon as Landmark, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
@@ -478,7 +478,7 @@ export default function ReportsPage() {
             <div className="space-y-3">
               <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Workspace Screenshots</h4>
               <div className="border border-slate-200 p-6 rounded-xl bg-slate-50/50 text-center space-y-2 font-sans">
-                <Monitor className="h-6 w-6 text-slate-300 mx-auto" />
+                <Monitor weight="duotone" className="h-6 w-6 text-slate-300 mx-auto" />
                 <div>
                   <h5 className="text-xs font-bold text-slate-700">Managed from Screen Tracking</h5>
                   <p className="text-[10px] text-slate-400 leading-relaxed font-semibold mt-1">

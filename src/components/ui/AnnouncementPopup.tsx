@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { hrActions, useAnnouncements, isAnnouncementForProfile, Profile } from '@/lib/hrData';
 

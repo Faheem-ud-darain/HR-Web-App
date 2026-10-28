@@ -4,7 +4,8 @@ import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
-import { DollarSign, Users, Clock, ClipboardList, PlusCircle, Loader2, Video } from 'lucide-react';
+import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, CircleNotchIcon as Loader2, VideoCameraIcon as Video } from '@phosphor-icons/react/dist/ssr';
+import { IconChip } from '@/components/ui/IconChip';
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
@@ -160,9 +161,7 @@ export default function AdminDashboard() {
                 <p className="text-sm md:text-lg font-bold text-slate-900 mt-1">{formatMoney(totalPayrollUSD, 'USA')}</p>
                 <p className="text-[10px] md:text-xs font-semibold text-slate-500">{formatMoney(totalPayrollPKR, 'Pakistan')}</p>
               </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                <DollarSign className="h-5 w-5" />
-              </div>
+              <IconChip tone="emerald" icon={DollarSign} />
             </div>
           </CardContent>
         </Card>
@@ -179,9 +178,7 @@ export default function AdminDashboard() {
                 <p className="text-[10px] md:text-xs font-semibold text-slate-500">Total Employees</p>
                 <p className="text-base md:text-2xl font-bold text-slate-900 mt-1">{employees.length}</p>
               </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                <Users className="h-5 w-5" />
-              </div>
+              <IconChip tone="indigo" icon={Users} />
             </div>
           </CardContent>
         </Card>
@@ -198,9 +195,7 @@ export default function AdminDashboard() {
                 <p className="text-[10px] md:text-xs font-semibold text-slate-500">Awaiting CEO Approval</p>
                 <p className="text-base md:text-2xl font-bold text-slate-900 mt-1">{hrApprovedLeaves.length}</p>
               </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-                <Clock className="h-5 w-5" />
-              </div>
+              <IconChip tone="amber" icon={Clock} />
             </div>
           </CardContent>
         </Card>

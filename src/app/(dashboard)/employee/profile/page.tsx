@@ -15,7 +15,7 @@ import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal
 import { BankDetailsModal, ContactNumbersModal, DeleteAccountRequestModal, useAccountDeletionRequest } from '@/components/ui/profile/SelfServiceModals';
 import { useProfilePhoto } from '@/components/ui/profile/useProfilePhoto';
 import { useDocumentUploads } from '@/components/ui/profile/useDocumentUploads';
-import { Mail, Briefcase, User, Calendar, Users, ShieldCheck, KeyRound, Star, Landmark, Pencil, Camera, FileText, Upload, Phone } from 'lucide-react';
+import { EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, UserIcon as User, CalendarBlankIcon as Calendar, UsersIcon as Users, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, StarIcon as Star, BankIcon as Landmark, PencilSimpleIcon as Pencil, CameraIcon as Camera, FileTextIcon as FileText, UploadSimpleIcon as Upload, PhoneIcon as Phone } from '@phosphor-icons/react/dist/ssr';
 import { formatDateNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
 import { useSessionEmail } from '@/lib/useSession';
@@ -93,7 +93,7 @@ export default function EmployeeProfilePage() {
   return (
     // Wide enough for the two-column layout at lg. Phones never reach lg, so the native apps stay single-column
     // without a separate Capacitor check (responsive-only, like the rest of the app).
-    <div className="space-y-6 md:space-y-8 max-w-6xl">
+    <div className="space-y-6 md:space-y-8">
       <div>
         <h1 className="text-lg md:text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-xs md:text-sm text-slate-500 mt-0.5">Personal information and account settings.</p>

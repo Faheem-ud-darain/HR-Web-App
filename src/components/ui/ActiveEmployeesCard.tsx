@@ -4,7 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { Zap, Clock } from 'lucide-react';
+import { LightningIcon as Zap, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
+import { IconChip } from '@/components/ui/IconChip';
 import { Profile, TimesheetEntry, displayName, formatDurationBetween, localShiftDate } from '@/lib/hrData';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { formatTimeNY, APP_TIMEZONE } from '@/lib/timezone';
@@ -104,9 +105,7 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
               </p>
               <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{activeEntries.length}</p>
             </div>
-            <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-              <Zap className="h-4 w-4 md:h-5 md:w-5" />
-            </div>
+            <IconChip tone="emerald" icon={Zap} />
           </div>
 
           <Sparkline

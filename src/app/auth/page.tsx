@@ -24,7 +24,7 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { ArrowLeft, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { ArrowLeftIcon as ArrowLeft, EyeIcon as Eye, EyeSlashIcon as EyeOff, WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';

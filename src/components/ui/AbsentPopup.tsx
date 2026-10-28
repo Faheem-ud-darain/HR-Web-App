@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { WarningOctagonIcon as AlertOctagon, CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate } from '@/lib/hrData';
 

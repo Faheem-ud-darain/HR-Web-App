@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Building2, Star, Users } from 'lucide-react';
+import { BuildingsIcon as Building2, StarIcon as Star, UsersIcon as Users } from '@phosphor-icons/react/dist/ssr';
 import { displayName, type Profile, type Team } from '@/lib/hrData';
 import { isTeamLead, isWarehouseManager } from '@/lib/core/teams';
 import { Badge } from '@/components/ui/Badge';
@@ -30,7 +30,7 @@ function EmployeeCard({ emp, teams, onOpenProfile, onStartDrag, onToggleLead, on
           <div>
             <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
               {displayName(emp, 'hr')}
-              {lead && <span title={`Lead of: ${emp.leadTeams?.join(', ')}`} className="text-amber-500"><Star className="h-3 w-3 fill-amber-500" /></span>}
+              {lead && <span title={`Lead of: ${emp.leadTeams?.join(', ')}`} className="text-amber-500"><Star weight="fill" className="h-3 w-3" /></span>}
               {isWarehouseManager(emp) && (
                 <span title="Warehouse Manager" className="text-purple-700 font-bold text-xs flex items-center gap-0.5 cursor-help"><Building2 className="h-3 w-3" /> Manager</span>
               )}

@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
-import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
+import { TimerIcon as Timer, MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert, MapPinIcon as MapPin, DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle, SlidersHorizontalIcon as Settings2, PulseIcon as Activity } from '@phosphor-icons/react/dist/ssr';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmployeeActivityInsights } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -205,7 +205,7 @@ export default function TrackerPage() {
                     <StatusDot tone="emerald" /> On Shift
                   </span>
                   <div className="text-3xl md:text-4xl font-bold text-slate-900 font-mono pt-2 flex items-center justify-center gap-2">
-                    <Timer className="h-8 w-8 text-emerald-500" />
+                    <Timer weight="duotone" className="h-8 w-8 text-emerald-500" />
                     {elapsedLabel}
                   </div>
                   <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
@@ -215,7 +215,7 @@ export default function TrackerPage() {
                 </div>
               ) : (
                 <div className="text-center py-8 space-y-3 font-sans">
-                  <ShieldAlert className="h-10 w-10 text-slate-300 mx-auto" />
+                  <ShieldAlert weight="duotone" className="h-10 w-10 text-slate-300 mx-auto" />
                   <div>
                     <h3 className="text-sm font-bold text-slate-800">Off Shift</h3>
                     <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed font-semibold">

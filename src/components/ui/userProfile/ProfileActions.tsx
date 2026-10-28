@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import { DownloadSimpleIcon as Download, TrashIcon as Trash2 } from '@phosphor-icons/react/dist/ssr';
 import { hrActions, saveProfileExtras, type Profile } from '@/lib/hrData';
 import { Button } from '../Button';
 import { ConfirmDialog } from '../ConfirmDialog';

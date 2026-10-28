@@ -28,7 +28,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, InactivityLog, TimesheetEntry } from '@/lib/hrData';
 import { getNYDateString, getNYMidnight, formatShortDateNY, formatTimeNY } from '@/lib/timezone';
-import { Activity, MousePointerClick, Table2, BarChart3, Clock } from 'lucide-react';
+import { PulseIcon as Activity, CursorClickIcon as MousePointerClick, TableIcon as Table2, ChartBarIcon as BarChart3, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
 import { Table, TableScroll, THead, TBody, Th, Td } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/StatCard';
 import { useQuery } from '@tanstack/react-query';
@@ -154,7 +154,7 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
     return (
       <Card className="border border-slate-200 bg-white">
         <CardContent className="py-16 text-center space-y-2">
-          <Activity className="h-8 w-8 text-slate-300 mx-auto animate-pulse" />
+          <Activity weight="duotone" className="h-8 w-8 text-slate-300 mx-auto animate-pulse" />
           <p className="text-xs font-semibold text-slate-400">Loading your activity history…</p>
         </CardContent>
       </Card>
@@ -284,7 +284,7 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
         <CardContent className="p-0">
           {(!selectedBucket || selectedBucket.logs.length === 0) ? (
             <div className="py-10 text-center space-y-1.5">
-              <Clock className="h-7 w-7 text-slate-300 mx-auto" />
+              <Clock weight="duotone" className="h-7 w-7 text-slate-300 mx-auto" />
               <p className="text-xs font-semibold text-slate-500">No inactivity recorded on this day.</p>
             </div>
           ) : (

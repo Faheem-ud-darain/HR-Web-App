@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CareerPosition, CareerApplication, useCareers, useWarehouses, useTeams, hrActions, getCareerApplicationsAdmin } from '@/lib/hrData';
-import { MapPin, Plus, Trash2, ArrowRight, Users, Loader2 } from 'lucide-react';
+import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { useQuery } from '@tanstack/react-query';
 import { DEPARTMENTS } from '@/components/ui/careers/careerOptions';
@@ -87,7 +87,7 @@ export function CareersView({ role }: CareersViewProps) {
     // min-w-0 is required here: this component is rendered as a flex item
     // inside both the dashboard's flex-col main content wrapper and (via
     // Card contexts elsewhere) similar flex layouts.
-    <div className="space-y-8 sm:space-y-16 max-w-6xl mx-auto font-sans w-full min-w-0 px-1 sm:px-0 overflow-x-hidden">
+    <div className="space-y-8 sm:space-y-16 mx-auto font-sans w-full min-w-0 px-1 sm:px-0 overflow-x-hidden">
       
       {/* High-End Editorial Hero Section */}
       <section className="text-center space-y-3 py-3 sm:py-8 px-2 sm:px-4 w-full min-w-0 overflow-hidden">

@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, Screenshot, InactivityLog } from '@/lib/hrData';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Download, MousePointerClick, ZoomIn } from 'lucide-react';
+import { DownloadSimpleIcon as Download, CursorClickIcon as MousePointerClick, MagnifyingGlassPlusIcon as ZoomIn } from '@phosphor-icons/react/dist/ssr';
 import { formatShortDateNY, formatTimeNY, formatDateTimeNY } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';

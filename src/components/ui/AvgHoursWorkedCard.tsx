@@ -4,7 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { Clock } from 'lucide-react';
+import { ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
+import { IconChip } from '@/components/ui/IconChip';
 import { Profile, TimesheetEntry, displayName, localShiftDate } from '@/lib/hrData';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { APP_TIMEZONE } from '@/lib/timezone';
@@ -140,9 +141,7 @@ export function AvgHoursWorkedCard({ employees, timesheets, viewerRole }: AvgHou
                 {completedLast7.length === 0 ? '—' : formatHoursShort(overallAvgMinutes)}
               </p>
             </div>
-            <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600 shrink-0">
-              <Clock className="h-4 w-4 md:h-5 md:w-5" />
-            </div>
+            <IconChip tone="sky" icon={Clock} />
           </div>
 
           <Sparkline

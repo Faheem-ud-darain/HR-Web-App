@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { ClipboardList, Star, CheckCircle2, Loader2 } from 'lucide-react';
+import { ClipboardTextIcon as ClipboardList, StarIcon as Star, CheckCircleIcon as CheckCircle2, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { useTasks, useProfiles, useTeams, displayName, setTeamLeadAdmin } from '@/lib/hrData';
 import { Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';

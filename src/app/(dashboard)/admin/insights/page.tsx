@@ -29,7 +29,7 @@ import {
   formatMoney,
   AbsenceRecord,
 } from '@/lib/hrData';
-import { BarChart3, Users, Wallet, PiggyBank, Table2 } from 'lucide-react';
+import { ChartBarIcon as BarChart3, UsersIcon as Users, WalletIcon as Wallet, PiggyBankIcon as PiggyBank, TableIcon as Table2 } from '@phosphor-icons/react/dist/ssr';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/StatCard';
 
@@ -141,14 +141,14 @@ export default function AdminInsightsPage() {
 
       {/* Stat tiles */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Headcount" icon={<Users className="h-3.5 w-3.5" />} value={profiles.length} sub={<>{headcountByRegion[0].count} USA · {headcountByRegion[1].count} Pakistan</>} />
-        <StatCard label={<>Payroll Cost — {currentMonth ? monthLabel(currentMonth.month) : ''}</>} icon={<Wallet className="h-3.5 w-3.5" />} value={formatMoney(currentMonth?.usa || 0, 'USA')} size="sm">
+        <StatCard label="Total Headcount" icon={<Users weight="fill" className="h-3.5 w-3.5" />} value={profiles.length} sub={<>{headcountByRegion[0].count} USA · {headcountByRegion[1].count} Pakistan</>} />
+        <StatCard label={<>Payroll Cost — {currentMonth ? monthLabel(currentMonth.month) : ''}</>} icon={<Wallet weight="fill" className="h-3.5 w-3.5" />} value={formatMoney(currentMonth?.usa || 0, 'USA')} size="sm">
           <p className="text-sm font-bold text-slate-900">{formatMoney(currentMonth?.pakistan || 0, 'Pakistan')}</p>
         </StatCard>
-        <StatCard label="Pending Payroll Liability" icon={<BarChart3 className="h-3.5 w-3.5" />} value={formatMoney(pendingLiability.usa, 'USA')} size="sm" sub="Not-yet-processed payroll records">
+        <StatCard label="Pending Payroll Liability" icon={<BarChart3 weight="fill" className="h-3.5 w-3.5" />} value={formatMoney(pendingLiability.usa, 'USA')} size="sm" sub="Not-yet-processed payroll records">
           <p className="text-sm font-bold text-slate-900">{formatMoney(pendingLiability.pakistan, 'Pakistan')}</p>
         </StatCard>
-        <StatCard label="Reserved Salary Held" icon={<PiggyBank className="h-3.5 w-3.5" />} value={formatMoney(reservedHeld.usa, 'USA')} size="sm" sub="Paid out only at resignation/termination">
+        <StatCard label="Reserved Salary Held" icon={<PiggyBank weight="fill" className="h-3.5 w-3.5" />} value={formatMoney(reservedHeld.usa, 'USA')} size="sm" sub="Paid out only at resignation/termination">
           <p className="text-sm font-bold text-slate-900">{formatMoney(reservedHeld.pakistan, 'Pakistan')}</p>
         </StatCard>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckSquare, Sparkles, Square } from 'lucide-react';
+import { CheckSquareIcon as CheckSquare, SparkleIcon as Sparkles, SquareIcon as Square } from '@phosphor-icons/react/dist/ssr';
 import { displayName, type Profile, type Warehouse } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';

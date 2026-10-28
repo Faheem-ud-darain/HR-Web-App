@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
-import { Users, Clock, ClipboardList, PlusCircle, Video } from 'lucide-react';
+import { UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, VideoCameraIcon as Video } from '@phosphor-icons/react/dist/ssr';
+import { IconChip } from '@/components/ui/IconChip';
 import { useRouter } from 'next/navigation';
 import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTimesheets, displayName } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
@@ -131,9 +132,7 @@ export default function HRDashboard() {
                 <p className="text-[10px] md:text-xs font-semibold text-slate-500">Total Employees</p>
                 <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{employees.length}</p>
               </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <Users className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
+              <IconChip tone="indigo" icon={Users} />
             </div>
           </CardContent>
         </Card>
@@ -150,9 +149,7 @@ export default function HRDashboard() {
                 <p className="text-[10px] md:text-xs font-semibold text-slate-500">Pending Leaves</p>
                 <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{pendingLeaves}</p>
               </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
-                <Clock className="h-4 w-4 md:h-5 md:w-5" />
-              </div>
+              <IconChip tone="amber" icon={Clock} />
             </div>
           </CardContent>
         </Card>

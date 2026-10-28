@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download, FileText } from 'lucide-react';
+import { XIcon as X, DownloadSimpleIcon as Download, FileTextIcon as FileText } from '@phosphor-icons/react/dist/ssr';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { useIsClient } from '@/lib/useIsClient';
 

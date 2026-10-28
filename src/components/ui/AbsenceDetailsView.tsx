@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
-import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
+import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -482,7 +482,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
           ) : role === 'employee' ? (
             cumulativeAttendanceRows.length === 0 ? (
               <div className="py-16 text-center space-y-2">
-                <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
+                <UserCheck weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
                 <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
                 <p className="text-xs text-slate-400">
                   {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
@@ -560,7 +560,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             )
           ) : employeeAttendanceSummaries.length === 0 ? (
             <div className="py-16 text-center space-y-2">
-              <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
+              <UserCheck weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
               <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
               <p className="text-xs text-slate-400">
                 {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
@@ -818,7 +818,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             ) : role === 'employee' ? (
               filteredAbsences.length === 0 ? (
                 <div className="py-16 text-center space-y-2">
-                  <UserX className="h-8 w-8 text-slate-300 mx-auto" />
+                  <UserX weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
                   <p className="text-sm font-bold text-slate-700">No absence records found</p>
                   <p className="text-xs text-slate-400">
                     {selectedDate ? `No absence records for ${selectedDate}.` : 'No employees have been marked absent.'}
@@ -874,7 +874,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
               )
             ) : employeeAbsenceSummaries.length === 0 ? (
               <div className="py-16 text-center space-y-2">
-                <UserX className="h-8 w-8 text-slate-300 mx-auto" />
+                <UserX weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
                 <p className="text-sm font-bold text-slate-700">No absence records found</p>
                 <p className="text-xs text-slate-400">
                   {selectedDate ? `No absence records for ${selectedDate}.` : 'No employees have been marked absent.'}

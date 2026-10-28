@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileText, Loader2 } from 'lucide-react';
+import { FileTextIcon as FileText, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { hrActions } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';

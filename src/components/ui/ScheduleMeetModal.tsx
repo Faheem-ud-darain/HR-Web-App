@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useProfiles, useTeams, hrActions, Profile } from '@/lib/hrData';
-import { Video } from 'lucide-react';
+import { VideoCameraIcon as Video } from '@phosphor-icons/react/dist/ssr';
 import { getSessionEmail } from '@/lib/session';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';

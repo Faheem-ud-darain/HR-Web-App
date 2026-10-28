@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, ImageOff, Lock, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { WarningIcon as AlertTriangle, ImageBrokenIcon as ImageOff, LockIcon as Lock, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff } from '@phosphor-icons/react/dist/ssr';
 import { getCaptureGap, getCaptureHealth, hrActions, type TimesheetEntry, type TrackerHeartbeat, type TrackingSettings } from '@/lib/hrData';
 import { needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { Badge } from '@/components/ui/Badge';

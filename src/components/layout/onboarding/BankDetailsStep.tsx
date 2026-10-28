@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { useRouter } from 'next/navigation';
-import { User, LogOut, ChevronRight } from 'lucide-react';
+import { UserIcon as User, SignOutIcon as LogOut, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';

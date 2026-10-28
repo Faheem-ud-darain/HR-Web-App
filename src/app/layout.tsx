@@ -1,6 +1,7 @@
 import { THEME_BOOT_SCRIPT } from "@/lib/themeBoot";
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
+import { Questrial } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ToastNotification } from "@/components/ui/ToastNotification";
 import { ActionToastHost } from "@/components/ui/ActionToastHost";
@@ -9,25 +10,22 @@ import { SplashScreenOverlay } from "@/components/SplashScreenOverlay";
 import Providers from "./providers";
 
 
-// Display font — headings, page titles, stat numbers. Space Grotesk's
-// distinctive grotesk character (wide apertures, technical feel) is what
-// gives the app a less "default SaaS template" identity than a plain
-// system-ui stack, without sacrificing legibility.
-const spaceGrotesk = Space_Grotesk({
+// Display font — headings, page titles, stat numbers. Xmind is a variable font (weights 100–900), so every
+// heading weight the app asks for is a real weight, never a synthesised one.
+// It is bundled with the app (src/app/fonts) rather than fetched from Google, because Xmind is newer than the font
+// list this version of Next.js knows about; the file is Google Fonts' own latin subset (SIL Open Font License).
+const xmind = localFont({
+  src: [{ path: "./fonts/Xmind-latin-variable.woff2", weight: "100 900", style: "normal" }],
   variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  display: "swap",
 });
 
-// Body font — everything else (labels, table data, form copy, nav links).
-// Plus Jakarta Sans is a clean, highly legible grotesque that pairs with
-// Space Grotesk without competing with it (same x-height family, different
-// enough personality to read as a deliberate pairing, not two similar
-// geometric sans-serifs).
-const plusJakarta = Plus_Jakarta_Sans({
+// Body font — everything else (labels, table data, form copy, nav links). Questrial ships a single regular
+// weight (400); where the app asks for bold text in the body face, the browser thickens it.
+const questrial = Questrial({
   variable: "--font-body",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
@@ -78,7 +76,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${plusJakarta.variable} h-full antialiased`}
+      className={`${xmind.variable} ${questrial.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

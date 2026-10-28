@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Filter } from 'lucide-react';
+import { FunnelIcon as Filter } from '@phosphor-icons/react/dist/ssr';
 import type { Profile } from '@/lib/hrData';
 import { Select } from '@/components/ui/Input';
 import { SearchInput } from '@/components/ui/SearchInput';

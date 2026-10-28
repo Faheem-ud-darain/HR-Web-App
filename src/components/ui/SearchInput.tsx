@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, X } from 'lucide-react';
+import { MagnifyingGlassIcon as Search, XIcon as X } from '@phosphor-icons/react/dist/ssr';
 import { Input, type FieldSize } from './Input';
 
 type SearchInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size' | 'onChange' | 'value' | 'type'> & {

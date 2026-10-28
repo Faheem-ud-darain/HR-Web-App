@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BellRing, BellOff } from 'lucide-react';
+import { BellRingingIcon as BellRing, BellSlashIcon as BellOff } from '@phosphor-icons/react/dist/ssr';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
@@ -55,7 +55,7 @@ export function PushPermissionPrompt() {
     <Modal isOpen={show} onClose={() => setShow(false)} title="Turn on Notifications">
       <div className="space-y-4 text-center py-2">
         <div className="h-14 w-14 rounded-full bg-orange-50 flex items-center justify-center mx-auto">
-          <BellOff className="h-7 w-7 text-orange-600" />
+          <BellOff weight="duotone" className="h-7 w-7 text-orange-600" />
         </div>
         <div>
           <p className="text-sm text-slate-700 font-medium leading-relaxed">

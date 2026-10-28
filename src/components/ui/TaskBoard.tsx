@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, hrActions } from '@/lib/hrData';
-import { Trash2, CheckCircle2, RotateCcw, Clock, AlertTriangle, Briefcase, Calendar, User, Flag, ArrowRight, Building2, Loader2 } from 'lucide-react';
+import { TrashIcon as Trash2, CheckCircleIcon as CheckCircle2, ArrowCounterClockwiseIcon as RotateCcw, ClockIcon as Clock, WarningIcon as AlertTriangle, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, UserIcon as User, FlagIcon as Flag, ArrowRightIcon as ArrowRight, BuildingsIcon as Building2, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 
 interface TaskBoardProps {
@@ -107,7 +107,7 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
             { icon: Flag,      label: 'Created By',  value: task.createdBy },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="flex items-start gap-2.5 bg-slate-50 rounded-lg p-3 border border-slate-100">
-              <Icon className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
+              <Icon weight="duotone" className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
                 <p className="text-xs md:text-sm font-semibold text-slate-800 mt-0.5">{value}</p>

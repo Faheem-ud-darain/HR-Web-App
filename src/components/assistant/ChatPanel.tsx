@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ThinkingOrb } from 'thinking-orbs';
-import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, Plus, SquarePen, Trash2, X } from 'lucide-react';
+import { ArrowUpIcon as ArrowUp, CheckIcon as Check, CopyIcon as Copy, ArrowSquareOutIcon as ExternalLink, ClockCounterClockwiseIcon as History, ArrowsOutIcon as Maximize2, ArrowsInIcon as Minimize2, ChatCircleIcon as MessageCircle, PlusIcon as Plus, NotePencilIcon as SquarePen, TrashIcon as Trash2, XIcon as X } from '@phosphor-icons/react/dist/ssr';
 import { useRouter } from 'next/navigation';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Markdown } from './Markdown';

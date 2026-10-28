@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Wrench, CheckCircle2 } from 'lucide-react';
+import { WrenchIcon as Wrench, CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { formatInViewerLocalTime } from '@/lib/timezone';

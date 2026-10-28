@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Loader2, Star, Trash2 } from 'lucide-react';
+import { CircleNotchIcon as Loader2, StarIcon as Star, TrashIcon as Trash2 } from '@phosphor-icons/react/dist/ssr';
 import { displayName, type Profile, type Team, type Warehouse } from '@/lib/hrData';
 import { Select } from '@/components/ui/Input';
 import { ListSkeleton } from '@/components/ui/Skeleton';

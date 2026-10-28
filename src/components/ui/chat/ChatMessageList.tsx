@@ -3,13 +3,12 @@
 import React from 'react';
 import { ChatSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Megaphone, Crown, Forward, FileText, Download, ExternalLink } from 'lucide-react';
-import { RoleBadge, formatTimestamp, renderMessageText, isImageAttachment, ReadReceiptFacepile, FORWARD_KIND_LABEL, formatBytes } from '@/components/ui/chat/chatHelpers';
-import { OptimizedImage } from '@/components/ui/OptimizedImage';
+import { MegaphoneIcon as Megaphone, CrownIcon as Crown, ArrowBendUpRightIcon as Forward, ArrowSquareOutIcon as ExternalLink } from '@phosphor-icons/react/dist/ssr';
+import { RoleBadge, formatTimestamp, renderMessageText, ReadReceiptFacepile, FORWARD_KIND_LABEL } from '@/components/ui/chat/chatHelpers';
+import { MessageAttachment } from '@/components/ui/MessageAttachment';
 import { buildNotificationLink, Message, Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { TypingIndicator } from '@/components/ui/TypingIndicator';
-import { safeHref } from '@/lib/sanitize';
 
 interface ChatMessageListProps {
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -36,7 +35,7 @@ interface ChatMessageListProps {
 
 export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, onOpenImage, viewersForMessage, openMessageViewers, currentUserRole, isHrAdminLine, typingNames }: ChatMessageListProps) {
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
+    <div ref={scrollRef} role="log" aria-live="polite" aria-relevant="additions" aria-label="Messages" className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
       {messages.length >= messageLimit && (
         <div className="text-center py-2">
           <button
@@ -49,7 +48,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
       )}
       {isLoading && <ChatSkeleton />}
       {!isLoading && messages.length === 0 && (
-        <EmptyState py={6} size="xs">No messages yet — say hi 👋</EmptyState>
+        <EmptyState py={6} size="xs">No messages yet. Be the first to write one.</EmptyState>
       )}
       {!isLoading && messages.length > 0 && filteredMessages.length === 0 && (
         <EmptyState py={6} size="xs">No messages match your search/filters.</EmptyState>
@@ -70,13 +69,13 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
         if (m.isAnnouncement) {
           return (
             <div key={m.id} className="border-2 border-amber-300 bg-amber-50 rounded-xl px-4 py-3">
-              <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-black text-amber-700 uppercase tracking-wider mb-1">
                 <Megaphone className="h-3.5 w-3.5" /> Announcement · {label}
                 {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                <span className="text-slate-400 font-semibold normal-case ml-auto flex items-center gap-1.5">
+                <span className="text-slate-500 font-semibold normal-case ml-auto flex items-center gap-1.5">
                   {formatTimestamp(m.timestamp)}
                   {canForward && (
-                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-400 hover:text-orange-600 transition-colors p-2 -m-2">
+                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-500 hover:text-orange-600 transition-colors p-2 -m-2">
                       <Forward className="h-3 w-3" />
                     </button>
                   )}
@@ -88,25 +87,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                 </p>
               )}
               {m.attachmentUrl && (
-                isImageAttachment(m.attachmentName) ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenImage(m.attachmentUrl!, m.attachmentName)}
-                    className={m.text ? 'block mt-2' : 'block'}
-                  >
-                    <OptimizedImage
-                      src={m.attachmentUrl}
-                      alt={m.attachmentName || 'attachment'}
-                      width={400}
-                      height={220}
-                      className="rounded-lg max-h-56 object-cover"
-                    />
-                  </button>
-                ) : (
-                  <a href={safeHref(m.attachmentUrl)} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline text-amber-700 ${m.text ? 'mt-2' : ''}`}>
-                    <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
-                  </a>
-                )
+                <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced={!!m.text} linkClass="text-amber-700" onOpenImage={onOpenImage} />
               )}
               {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
             </div>
@@ -150,10 +131,10 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
               <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
               <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
                 <div className={`border ${c.border} bg-white rounded-xl px-4 py-3 ${isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
-                  <div className={`flex items-center gap-1.5 text-[10px] font-black ${c.text} uppercase tracking-wider mb-1`}>
+                  <div className={`flex flex-wrap items-center gap-1.5 text-[11px] font-black ${c.text} uppercase tracking-wider mb-1`}>
                     <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
                     {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                    <span className="text-slate-400 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
+                    <span className="text-slate-500 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
                   </div>
                   {m.forwardLabel && (
                     <p className="text-xs font-bold text-slate-800 break-words">{m.forwardLabel}</p>
@@ -162,25 +143,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                     <p className="text-xs font-medium text-slate-600 italic mt-1 whitespace-pre-wrap break-words">&ldquo;{m.forwardNote}&rdquo;</p>
                   )}
                   {m.attachmentUrl && (
-                    isImageAttachment(m.attachmentName) ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenImage(m.attachmentUrl!, m.attachmentName)}
-                        className="block mt-2"
-                      >
-                        <OptimizedImage
-                          src={m.attachmentUrl}
-                          alt={m.attachmentName || 'attachment'}
-                          width={400}
-                          height={220}
-                          className="rounded-lg max-h-56 object-cover"
-                        />
-                      </button>
-                    ) : (
-                      <a href={safeHref(m.attachmentUrl)} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-[11px] font-bold underline ${c.text} mt-2`}>
-                        <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'} <Download className="h-3 w-3 shrink-0" />
-                      </a>
-                    )
+                    <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced linkClass={c.text} onOpenImage={onOpenImage} />
                   )}
                   {originalHref && (
                     // Styled as a small pill button (not a plain text link) —
@@ -217,17 +180,17 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
             <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
             <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
               <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={`text-[10px] font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
+                <span className={`text-[11px] font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
                 {isAdminSender ? (
-                  <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
+                  <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
                     <Crown className="h-2.5 w-2.5" /> Admin
                   </span>
                 ) : (
                   <RoleBadge role={senderRole} />
                 )}
-                <span className="text-[9px] text-slate-400 font-semibold">{formatTimestamp(m.timestamp)}</span>
+                <span className="text-[11px] text-slate-500 font-semibold">{formatTimestamp(m.timestamp)}</span>
                 {canForward && (
-                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-300 hover:text-orange-600 transition-colors p-2 -m-2">
+                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-500 hover:text-orange-600 transition-colors p-2 -m-2">
                     <Forward className="h-3 w-3" />
                   </button>
                 )}
@@ -237,7 +200,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                   ? `bg-white border ${hrAdminColor.border} text-slate-800 ` + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
                   : isAdminSender
                     ? 'bg-purple-600 text-white ring-2 ring-purple-200 ' + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
-                    : isSelf ? 'bg-orange-600 text-white rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'
+                    : isSelf ? 'bg-bubble-own text-white rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'
               }`}>
                 {m.text && (
                   <p className="whitespace-pre-wrap break-words">
@@ -245,34 +208,14 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                   </p>
                 )}
                 {m.attachmentUrl && (
-                  isImageAttachment(m.attachmentName) ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenImage(m.attachmentUrl!, m.attachmentName)}
-                      className={m.text ? 'block mt-2' : 'block'}
-                    >
-                      <OptimizedImage
-                        src={m.attachmentUrl}
-                        alt={m.attachmentName || 'attachment'}
-                        width={400}
-                        height={220}
-                        className="rounded-lg max-h-56 object-cover"
-                      />
-                    </button>
-                  ) : (
-                    <a
-                      href={safeHref(m.attachmentUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`flex items-center gap-1.5 text-[11px] font-bold underline ${m.text ? 'mt-2' : ''} ${
-                        isHrAdminLine ? hrAdminColor.text : (isAdminSender || isSelf ? 'text-white' : 'text-orange-700')
-                      }`}
-                    >
-                      <FileText className="h-3.5 w-3.5 shrink-0" /> {m.attachmentName || 'Attachment'}
-                      {m.attachmentSize !== undefined && <span className="font-semibold opacity-80">({formatBytes(m.attachmentSize)})</span>}
-                      <Download className="h-3 w-3 shrink-0" />
-                    </a>
-                  )
+                  <MessageAttachment
+                    url={m.attachmentUrl}
+                    name={m.attachmentName}
+                    size={m.attachmentSize}
+                    spaced={!!m.text}
+                    linkClass={isHrAdminLine ? hrAdminColor.text : (isAdminSender || isSelf ? 'text-white' : 'text-orange-700')}
+                    onOpenImage={onOpenImage}
+                  />
                 )}
               </div>
               {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}

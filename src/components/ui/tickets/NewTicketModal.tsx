@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { AlertCircle, FileText, Loader2, Paperclip, X } from 'lucide-react';
+import { WarningCircleIcon as AlertCircle, FileTextIcon as FileText, CircleNotchIcon as Loader2, PaperclipIcon as Paperclip, XIcon as X } from '@phosphor-icons/react/dist/ssr';
 import { hrActions, type Profile } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
@@ -120,14 +120,14 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
 
         <FormField label="Attachment (optional)" size="md">
           {fileError && (
-            <div className="p-2 text-[10px] bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
+            <div className="p-2 text-[11px] bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />{fileError}
             </div>
           )}
           {file ? (
             <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600">
-              <span className="flex items-center gap-1.5 truncate"><FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" /> {file.name}</span>
-              <button type="button" onClick={() => setFile(null)} aria-label="Remove attachment" className="text-slate-400 hover:text-rose-600 shrink-0">
+              <span className="flex items-center gap-1.5 truncate"><FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" /> {file.name}</span>
+              <button type="button" onClick={() => setFile(null)} aria-label="Remove attachment" className="text-slate-500 hover:text-rose-600 shrink-0">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>

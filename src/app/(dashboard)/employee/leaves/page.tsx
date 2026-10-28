@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { PlusCircle, AlertCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
+import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, CircleNotchIcon as Loader2, TrashIcon as Trash2 } from '@phosphor-icons/react/dist/ssr';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';

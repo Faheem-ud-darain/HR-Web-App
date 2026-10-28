@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { TimesheetEntry, useProfiles, useTrackingSettings, useAllTrackerHeartbeats, useTimesheets, TrackerHeartbeat } from '@/lib/hrData';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Monitor, ShieldAlert } from 'lucide-react';
+import { MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react/dist/ssr';
 import { MouseActivityModal } from '@/components/ui/tracking/MouseActivityModal';
 import { ScreenshotsModal } from '@/components/ui/tracking/ScreenshotsModal';
 import { TrackerSetupModal } from '@/components/ui/tracking/TrackerSetupModal';

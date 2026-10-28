@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gift } from 'lucide-react';
+import { GiftIcon as Gift } from '@phosphor-icons/react/dist/ssr';
 
 const PERKS = [
   { title: 'Good Salary', text: 'We offer competitive salaries calibrated for regional standards, with guaranteed annual increments.' },

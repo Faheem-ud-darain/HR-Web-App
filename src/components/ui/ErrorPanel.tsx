@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
 
 // What every error page shows: plain words, a retry, and a way home. Used by app/error.tsx and
 // app/(dashboard)/error.tsx so a crash in one screen never leaves a blank page.
@@ -14,7 +14,7 @@ export function ErrorPanel({ error, onRetry, fullScreen = false }: { error: Erro
     <div role="alert" className={`${fullScreen ? 'min-h-screen' : 'min-h-[60vh]'} flex items-center justify-center bg-slate-50 p-6`}>
       <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 text-center shadow-sm">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
-          <AlertTriangle className="h-6 w-6" aria-hidden="true" />
+          <AlertTriangle weight="duotone" className="h-6 w-6" aria-hidden="true" />
         </div>
         <h1 className="text-lg font-bold text-slate-900">Something went wrong</h1>
         <p className="mt-1 text-sm text-slate-600">

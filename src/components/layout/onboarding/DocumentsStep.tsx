@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Upload, CheckCircle2, X, FileText, ChevronRight } from 'lucide-react';
+import { UploadSimpleIcon as Upload, CheckCircleIcon as CheckCircle2, XIcon as X, FileTextIcon as FileText, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { Profile } from '@/lib/hrData';
 

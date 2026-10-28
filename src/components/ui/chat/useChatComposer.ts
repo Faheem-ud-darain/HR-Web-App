@@ -199,7 +199,5 @@ export function useChatComposer({ activeTeamId, activeTeam, currentUserEmail, cu
     fileInputRef, textareaRef, emojiWrapperRef,
     mentionSuggestions, docTagSuggestions,
     handleFilePick, handleDraftChange, pickMention, pickDocTag, insertEmoji, handleSend,
-    // Switching channel drops any half-typed mention, tag or open picker.
-    resetForChannel: () => { setMention(null); setMentionedProfiles(new Map()); setDocTag(null); setShowEmojiPicker(false); },
   };
 }

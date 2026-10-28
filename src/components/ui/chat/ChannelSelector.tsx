@@ -24,12 +24,13 @@ export function ChannelSelector({ teams, activeTeamId, onSelect, oversight, mobi
           <button
             key={t.id}
             onClick={() => onSelect(t.id)}
+            aria-current={activeTeamId === t.id ? 'true' : undefined}
             className={`px-4 py-2 md:py-2.5 rounded-xl text-xs font-bold text-left whitespace-nowrap md:whitespace-normal transition-colors transition-shadow shrink-0 ${
               activeTeamId === t.id ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
             {t.name}
-            {oversight && <span className={`hidden md:block text-[9px] font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-400'}`}>{t.members.length} members</span>}
+            {oversight && <span className={`hidden md:block text-[11px] font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-500'}`}>{t.members.length} members</span>}
           </button>
         ))}
       </div>

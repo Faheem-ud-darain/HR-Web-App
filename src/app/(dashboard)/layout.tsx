@@ -16,7 +16,7 @@ import { ForcedPasswordChangeModal } from '@/components/ui/ForcedPasswordChangeM
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
 import { useAnyModalOpen } from '@/lib/modalStack';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/Button';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { OnboardingFlow } from '@/components/layout/OnboardingFlow';
@@ -92,23 +92,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // anymore, they get a small fixed bottom breathing-room padding instead of
   // the large pb-24 other tabs use to clear it.
   const isTicketsScreen = pathname?.endsWith('/tickets');
-  // Screen Tracking (TrackingView.tsx) got squeezed into the default
-  // max-w-6xl (1152px) page shell below, same as any ordinary form/list
-  // page — but its table has 7 columns including a 4-button Actions column
-  // (Setup Agent / Screenshots / Mouse Activity / Force End Shift / Force
-  // Disconnect), which needs real width. At max-w-6xl on a normal desktop
-  // viewport that left ~200px of dead space on each side while the Actions
-  // buttons themselves wrapped/cropped inside the table's own horizontal
-  // scrollbar. Covers all three roles that render TrackingView: HR/Admin's
-  // own pages plus the read-only Team Lead view.
-  // HR's Payroll Ledger (hr/payroll/page.tsx) has the same problem: 10
-  // columns (Employee Details / Base Salary / Increment / Onboarding
-  // Penalty / Bonus / Deductions with itemized breakdown lines / Net
-  // Payable / Reserved Salary / Status / Action) squeezed into max-w-6xl
-  // left the rightmost columns (Status/Action) cropped off-screen on normal
-  // desktop widths, with no visible cue that a horizontal scrollbar existed
-  // to reach them.
-  const isWideTableScreen = pathname?.endsWith('/tracking') || pathname?.endsWith('/hr/payroll');
+  // Every page fills the width of the screen up to 1800px (so wide tables such as Screen Tracking and the
+  // Payroll Ledger get real room too); beyond that the content stays centred, because lines of text and cards
+  // stretched across an ultrawide monitor are harder to read, not easier.
   // When the ticket conversation panel is open it calls pushModal() (see
   // TicketsView.tsx) — subscribe to that signal so we can switch the tickets
   // screen's <main> to overflow-hidden while it's open. Without this, the
@@ -279,7 +265,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm text-center space-y-4">
           <div className={`h-14 w-14 rounded-full flex items-center justify-center mx-auto ${isRejected ? 'bg-rose-50' : 'bg-amber-50'}`}>
             {isRejected ? (
-              <ShieldAlert className="h-7 w-7 text-rose-500" />
+              <ShieldAlert weight="duotone" className="h-7 w-7 text-rose-500" />
             ) : (
               <svg className="animate-spin h-7 w-7 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -340,7 +326,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden relative">
+    <div className="flex h-screen bg-chrome overflow-hidden relative">
       <NativeBackButtonHandler />
       <Sidebar role={role} />
       {/* min-w-0 here too: this is itself a flex item of the row above
@@ -352,23 +338,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           is a second, explicit guard against the same failure mode. */}
       <div className="flex flex-col flex-1 w-full min-w-0 overflow-hidden overflow-x-hidden">
         <TopNav />
-        <main className={`flex-1 w-full min-w-0 overflow-x-hidden ${
+        <main className={`flex-1 w-full min-w-0 overflow-x-hidden bg-app md:rounded-tl-2xl ${
           isChatScreen
-            ? 'overflow-hidden flex flex-col p-1.5 pb-2.5 md:px-8 md:py-8'
+            ? 'overflow-hidden flex flex-col p-1.5 pb-2.5 md:px-6 lg:px-8 2xl:px-12 md:py-8'
             : isTicketPanelOpen
               // Ticket conversation panel is open — lock the scroll container
               // exactly like the chat screen so the OS keyboard does not try
               // to pan/resize this element (which pushed the fixed panel up).
               ? 'overflow-hidden flex flex-col p-0'
               : isTicketsScreen
-                ? 'overflow-y-auto px-4 py-4 pb-2.5 md:px-8 md:py-8'
-                : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-8 md:py-8 pb-28 md:pb-8'
+                ? 'overflow-y-auto px-4 py-4 pb-2.5 md:px-6 lg:px-8 2xl:px-12 md:py-8'
+                : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-6 lg:px-8 2xl:px-12 md:py-8 pb-8'
         }`}>
           {/* key={pathname} forces PageTransition to remount on every
               nav-tab switch so its animating state (and page-enter) resets
               and re-triggers each time, not just on first load — previously
               content swapped instantly with zero motion. */}
-          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${isChatScreen ? 'flex-1 h-full max-w-none' : isWideTableScreen ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
+          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${isChatScreen ? 'flex-1 h-full max-w-none' : 'max-w-[1800px]'}`}>
             {children}
           </PageTransition>
         </main>

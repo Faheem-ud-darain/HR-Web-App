@@ -4,7 +4,7 @@ import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import type { RefetchOptions, QueryObserverResult } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Flag, LocateFixed, Smartphone, Wifi, WifiOff } from 'lucide-react';
+import { FlagIcon as Flag, CrosshairIcon as LocateFixed, DeviceMobileIcon as Smartphone, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff } from '@phosphor-icons/react/dist/ssr';
 import { hrActions, TrackerHeartbeat, hasStaleTrackerToken, displayName, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
 import { needsTrackerUpdate } from '@/lib/trackerSetup';
 import { Button } from '@/components/ui/Button';

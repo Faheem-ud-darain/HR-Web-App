@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download } from 'lucide-react';
+import { XIcon as X, DownloadSimpleIcon as Download } from '@phosphor-icons/react/dist/ssr';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { useIsClient } from '@/lib/useIsClient';
+import { useDialogFocus } from '@/lib/useDialogFocus';
 
 interface ImageLightboxProps {
   src: string | null;
@@ -42,6 +43,8 @@ export function ImageLightbox({ src, alt, downloadName, onClose }: ImageLightbox
   // Mounted-check for the SSR/hydration-safe createPortal pattern (matches
   // Modal.tsx).
   const mounted = useIsClient();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, !!src && mounted);
 
   if (!src || !mounted || typeof document === 'undefined') return null;
 
@@ -58,6 +61,11 @@ export function ImageLightbox({ src, alt, downloadName, onClose }: ImageLightbox
   // that class of bug entirely, regardless of what any ancestor does.
   return createPortal(
     <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt || 'Image preview'}
+      tabIndex={-1}
       className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4 fade-enter"
       onClick={onClose}
     >
@@ -68,19 +76,21 @@ export function ImageLightbox({ src, alt, downloadName, onClose }: ImageLightbox
           buttons; and bg-white/10 alone all but disappears over a
           light/white-background image. Both fixed here so download/close
           stay visible and tappable no matter what the image looks like. */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+      <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-10 flex items-center gap-2" onClick={e => e.stopPropagation()}>
         <a
           href={src}
           download={downloadName || 'image'}
-          className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-md hover:bg-black/55 text-white flex items-center justify-center transition-colors"
+          className="h-11 w-11 md:h-9 md:w-9 rounded-full bg-black/40 backdrop-blur-md hover:bg-black/55 text-white flex items-center justify-center transition-colors"
           title="Download"
+          aria-label="Download image"
         >
           <Download className="h-4 w-4" />
         </a>
         <button
           onClick={onClose}
-          className="h-9 w-9 rounded-full bg-black/40 backdrop-blur-md hover:bg-black/55 text-white flex items-center justify-center transition-colors"
+          className="h-11 w-11 md:h-9 md:w-9 rounded-full bg-black/40 backdrop-blur-md hover:bg-black/55 text-white flex items-center justify-center transition-colors"
           title="Close"
+          aria-label="Close preview"
         >
           <X className="h-4 w-4" />
         </button>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { receiptReplyIndex, isSentByOwner, ownerHasSeenMessage } from './ticketReceipts';
+import { receiptReplyIndex, isSentByOwner, ownerHasSeenMessage, lastReplyPreview } from './ticketReceipts';
 import type { TicketReply } from '../hr/types';
 
 const owner = { employeeEmail: 'Jane@delcargo.us', employeeName: 'Jane Doe' };
@@ -44,5 +44,18 @@ describe('ownerHasSeenMessage', () => {
     expect(ownerHasSeenMessage(null, '2026-10-19T10:00:00Z')).toBe(false);
     expect(ownerHasSeenMessage(undefined, '2026-10-19T10:00:00Z')).toBe(false);
     expect(ownerHasSeenMessage('not a date', '2026-10-19T10:00:00Z')).toBe(false);
+  });
+});
+
+describe('lastReplyPreview', () => {
+  it('is null for a ticket with no replies', () => {
+    expect(lastReplyPreview([])).toBeNull();
+  });
+  it('shows the newest real reply and skips close or reopen events', () => {
+    const replies = [reply({ senderName: 'Jane', message: 'first' }), reply({ senderName: 'HR Manager', message: '  fixed it  ' }), reply({ message: '', event: 'closed' })];
+    expect(lastReplyPreview(replies)).toEqual({ who: 'HR Manager', text: 'fixed it' });
+  });
+  it('names the file when a reply is only an attachment', () => {
+    expect(lastReplyPreview([reply({ message: '', attachmentName: 'screen.png' })])).toEqual({ who: 'HR Manager', text: 'Sent screen.png' });
   });
 });

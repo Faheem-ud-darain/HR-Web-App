@@ -1,21 +1,21 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   isTechnicalSupportMember, useAnnouncements, useCareers, useLeaves, usePayroll, useTasks, useTeams, useTickets, useWarehouses, type Profile,
 } from '@/lib/hrData';
 import { EMPTY_RESULTS, searchEverything } from '@/lib/core/globalSearch';
 
-// The top bar's global search: the typed text, which sheet is open, the datasets, and the results the signed-in role
+// The top bar's global search: the typed text, whether the search dialog is open, the datasets, and the results the signed-in role
 // may see (the rules are in lib/core/globalSearch). Typing also broadcasts a `globalSearch` event, which pages with
 // their own search box (payroll, leaves...) listen for.
 export function useGlobalSearch({ role, email, profiles, me, displayName }: { role: string | null; email: string | null; profiles?: Profile[]; me?: Profile; displayName: string }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [mobileOpen, setMobileOpen] = useState(false);
-  // The datasets are only needed once the person engages with search (focus, or the mobile sheet): fetching them on
-  // every page load cost about six collection reads, and recurring polls, for something most visits never use.
+  const [open, setOpen] = useState(false);
+  // The datasets are only needed once the person opens search: fetching them on every page load cost about six
+  // collection reads, and recurring polls, for something most visits never use.
   const [active, setActive] = useState(false);
   const enabled = { enabled: active };
   const { data: tasks } = useTasks(enabled);
@@ -38,15 +38,28 @@ export function useGlobalSearch({ role, email, profiles, me, displayName }: { ro
     setSearch(value);
     window.dispatchEvent(new CustomEvent('globalSearch', { detail: value }));
   };
-  const reset = () => { setSearch(''); setMobileOpen(false); };
+  const openSearch = () => { setActive(true); setOpen(true); };
+  // Closing clears the text, and tells the page behind it so a list it was filtering does not stay filtered.
+  const closeSearch = () => { onValue(''); setOpen(false); };
+
+  // Ctrl/Cmd+K opens search from anywhere; "/" does too unless the person is typing in a field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable="true"]');
+      if (((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey)) {
+        e.preventDefault();
+        setActive(true);
+        setOpen(true);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   return {
-    search, showResults: !!role && search.trim().length > 0, results, role, mobileOpen,
-    onValue,
-    onFocus: () => setActive(true),
-    openMobile: () => { setActive(true); setMobileOpen(true); },
-    closeMobile: reset,
-    go: (url: string) => { reset(); router.push(url); },
+    search, showResults: !!role && search.trim().length > 0, results, role, open,
+    onValue, openSearch, closeSearch,
+    go: (url: string) => { closeSearch(); router.push(url); },
   };
 }
 

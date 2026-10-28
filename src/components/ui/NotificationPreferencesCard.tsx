@@ -5,7 +5,7 @@ import { Card } from './Card';
 import { Button } from './Button';
 import { hrActions, NotificationPrefs } from '@/lib/hrData';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
-import { Bell, BellRing, BellOff, Megaphone, HelpCircle, AtSign, CalendarClock, Clock } from 'lucide-react';
+import { BellIcon as Bell, BellRingingIcon as BellRing, BellSlashIcon as BellOff, MegaphoneIcon as Megaphone, QuestionIcon as HelpCircle, AtIcon as AtSign, CalendarDotsIcon as CalendarClock, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
 import { Switch } from '@/components/ui/Switch';
 
 // Shared across all 3 profile pages (employee/hr/admin) — see
@@ -141,7 +141,7 @@ export function NotificationPreferencesCard({ email }: { email: string }) {
             <div key={key} className="px-4 md:px-6 py-3.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                  <Icon className="h-4 w-4 text-slate-500" />
+                  <Icon weight="duotone" className="h-4 w-4 text-slate-500" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900">{label}</p>

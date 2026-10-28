@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldAlert, User, X } from 'lucide-react';
+import { ShieldWarningIcon as ShieldAlert, UserIcon as User, XIcon as X } from '@phosphor-icons/react/dist/ssr';
 import { useProfiles } from '@/lib/hrData';
 import { profileAccess, type ViewerRole } from '@/lib/core/userProfile';
 import { pushModal, popModal } from '@/lib/modalStack';
@@ -51,7 +51,7 @@ export function UserProfileModal({ isOpen, onClose, employeeEmail, currentUserRo
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
         <div className="relative bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full text-center space-y-4">
-          <ShieldAlert className="h-10 w-10 text-rose-500 mx-auto" />
+          <ShieldAlert weight="duotone" className="h-10 w-10 text-rose-500 mx-auto" />
           <h3 className="font-bold text-slate-800">Access Restricted</h3>
           <p className="text-xs text-slate-500 font-semibold leading-relaxed">
             You do not have permission to view this profile. Profiles can only be viewed by administrators, HR, or team members and team leaders sharing the same department.

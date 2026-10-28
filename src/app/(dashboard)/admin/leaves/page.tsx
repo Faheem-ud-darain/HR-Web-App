@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { ShieldCheck, List, Loader2 } from 'lucide-react';
+import { ShieldCheckIcon as ShieldCheck, ListBulletsIcon as List, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
 import { useLeaves, useProfiles, hrActions, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';

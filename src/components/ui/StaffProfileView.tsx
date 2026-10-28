@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { InfoRow, ProfileCard } from '@/components/ui/profile/ProfileCard';
 import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal';
 import { useProfilePhoto } from '@/components/ui/profile/useProfilePhoto';
-import { User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, Camera } from 'lucide-react';
+import { UserIcon as User, EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, CameraIcon as Camera } from '@phosphor-icons/react/dist/ssr';
 import { useSessionEmail } from '@/lib/useSession';
 
 type StaffProfileViewProps = {
@@ -58,7 +58,7 @@ export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, def
 
   return (
     // Two columns from lg up; phone-sized viewports (including the native apps) never reach lg, so they stay single-column.
-    <div className="space-y-6 md:space-y-8 max-w-5xl font-sans">
+    <div className="space-y-6 md:space-y-8 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-lg md:text-2xl font-bold text-slate-900">{title}</h1>

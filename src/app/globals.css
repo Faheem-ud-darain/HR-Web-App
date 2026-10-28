@@ -16,6 +16,10 @@
 :root {
   /* Blueprint Canvas Theme: Strict light mode colors */
   --background: #f8fafc; /* Slate 50 background */
+  /* The app frame (sidebar and top bar) and the page tucked into it: two clearly different tones, so the bars need no outline. */
+  --chrome: #ffffff;
+  --app-bg: #f1f5f9; /* Slate 100: cards stay white on it */
+  --card-bg: #ffffff;
   --foreground: #0f172a; /* Slate 900 text */
   --surface: #ffffff;    /* Card and sidebar background */
   --border: #e2e8f0;     /* Slate 200 border */
@@ -56,7 +60,7 @@
   --color-emerald: var(--emerald);
   --color-amber: var(--amber);
   --color-rose: var(--rose);
-  /* Space Grotesk (display) + Plus Jakarta Sans (body) — see layout.tsx.
+  /* Xmind (display) + Questrial (body) — see layout.tsx.
      `font-display` is an opt-in Tailwind utility for headings/stat numbers;
      everything else defaults to `font-sans` (the body face). No third font
      loaded for mono — a system monospace stack covers the handful of
@@ -88,6 +92,24 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none; /* Native app feel, no pull-to-refresh bounce */
+}
+
+/* Your own message bubble: orange-700, so white text on it reads at 5.2:1 (on the brand orange-600 it was 3.6:1).
+   The dark theme already uses this shade for filled orange, so one value serves both. */
+@utility bg-bubble-own {
+  background-color: #c2410c;
+}
+
+@utility bg-chrome {
+  background-color: var(--chrome);
+}
+
+@utility bg-card {
+  background-color: var(--card-bg);
+}
+
+@utility bg-app {
+  background-color: var(--app-bg);
 }
 
 @layer utilities {
@@ -152,7 +174,7 @@ body {
    per-button (e.g. `min-h-[44px] md:min-h-0` on several form CTAs) — that's
    the correct, non-global way to do it. */
 
-/* Headings default to the display face (Space Grotesk) automatically —
+/* Headings default to the display face (Xmind) automatically —
    means every page's <h1>/<h2>/<h3> picks up the new pairing without a
    className change per instance. Anywhere that specifically wants the body
    face on a heading-level element can override with `font-sans`. */
@@ -701,6 +723,9 @@ input[type='radio']:focus-visible {
   color-scheme: light;
 }
 :root[data-theme='dark'] {
+  --chrome: #000000;
+  --app-bg: #171717;
+  --card-bg: #050505; /* Near-black cards (a touch lighter than the AMOLED frame) on the charcoal page */
   color-scheme: dark;
   --background: #000000;
   --foreground: #f2f2f7;

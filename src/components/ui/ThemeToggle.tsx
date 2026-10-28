@@ -1,9 +1,10 @@
 'use client';
 
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { MonitorIcon as Monitor, MoonIcon as Moon, SunIcon as Sun } from '@phosphor-icons/react/dist/ssr';
 import { originOf, setThemePreference, useResolvedTheme, useThemePreference, type ThemePreference } from '@/lib/theme';
 import { triggerHaptic } from '@/lib/haptics';
 import { Card } from './Card';
+import { IconButton } from './IconButton';
 
 const OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'Automatic', icon: Monitor },
@@ -29,7 +30,7 @@ export function ThemeSegmentedControl() {
               active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Icon className="h-4 w-4" aria-hidden="true" />
+            <Icon weight={active ? 'fill' : 'regular'} className="h-4 w-4" aria-hidden="true" />
             {label}
           </button>
         );
@@ -59,17 +60,15 @@ export function ThemeIconButton({ className = '' }: { className?: string }) {
   const resolved = useResolvedTheme();
   const dark = resolved === 'dark';
   return (
-    <button
-      type="button"
+    <IconButton
+      label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       onClick={e => { triggerHaptic.light(); setThemePreference(dark ? 'light' : 'dark', originOf(e.currentTarget)); }}
-      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={dark ? 'Light mode' : 'Dark mode'}
-      className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center ${className}`}
+      className={className}
     >
       {/* Keyed so the icon re-mounts and plays its pop-in each time the theme flips. */}
       <span key={dark ? 'sun' : 'moon'} className="theme-icon-pop flex" style={{ '--spin': dark ? '25deg' : '-25deg' } as React.CSSProperties}>
         {dark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
       </span>
-    </button>
+    </IconButton>
   );
 }

@@ -8,7 +8,7 @@ import { displayName, Profile, TrackingSettings, TrackerHeartbeat, TimesheetEntr
 import { Switch } from '@/components/ui/Switch';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
-import { Settings, Image as ImageIcon, MousePointerClick, WifiOff, ShieldAlert } from 'lucide-react';
+import { GearIcon as Settings, ImageIcon as ImageIcon, CursorClickIcon as MousePointerClick, WifiSlashIcon as WifiOff, ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react/dist/ssr';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TrackerStatusBadge } from './TrackerBadges';
 

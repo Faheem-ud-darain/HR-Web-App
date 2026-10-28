@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Button } from '@/components/ui/Button';
 import { Profile, useTasks, useProfiles } from '@/lib/hrData';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardTextIcon as ClipboardList } from '@phosphor-icons/react/dist/ssr';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 

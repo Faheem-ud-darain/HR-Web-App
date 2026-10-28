@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X } from 'lucide-react';
+import { XIcon as X } from '@phosphor-icons/react/dist/ssr';
 import { Input, Select } from '@/components/ui/Input';
 import { SearchInput } from '@/components/ui/SearchInput';
 import type { FileTypeFilter, SizeFilter } from './chatHelpers';
@@ -14,7 +14,7 @@ export function ChatFilterPanel({ filters }: { filters: ReturnType<typeof useCha
       <SearchInput fieldSize="sm" value={filters.searchQuery} onChange={filters.setSearchQuery} placeholder="Search messages, senders, or file names…" />
       <div className="flex flex-wrap gap-2 items-center">
         <Input type="date" value={filters.dateFrom} onChange={e => filters.setDateFrom(e.target.value)} fieldSize="md" />
-        <span className="text-[10px] text-slate-400 font-bold">to</span>
+        <span className="text-[11px] text-slate-500 font-bold">to</span>
         <Input type="date" value={filters.dateTo} onChange={e => filters.setDateTo(e.target.value)} fieldSize="md" />
 
         <Select value={filters.fileTypeFilter} onChange={e => filters.setFileTypeFilter(e.target.value as FileTypeFilter)} fieldSize="md">
@@ -34,7 +34,7 @@ export function ChatFilterPanel({ filters }: { filters: ReturnType<typeof useCha
         </Select>
 
         {filters.hasActiveFilters && (
-          <button onClick={filters.clear} className="flex items-center gap-1 text-[10px] font-bold text-rose-600 hover:text-rose-700 ml-auto">
+          <button onClick={filters.clear} className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 ml-auto">
             <X className="h-3 w-3" /> Clear
           </button>
         )}

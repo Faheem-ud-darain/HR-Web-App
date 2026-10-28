@@ -16,8 +16,8 @@ export function TypingIndicator({ names }: { names: string[] }) {
         : `${names[0]} and ${names.length - 1} others are typing`;
 
   return (
-    <div className="typing-row-in flex items-center gap-2 px-1 py-1 text-xs font-medium text-slate-400">
-      <span className="flex items-center gap-1 text-slate-400">
+    <div role="status" className="typing-row-in flex items-center gap-2 px-1 py-1 text-xs font-medium text-slate-500">
+      <span aria-hidden="true" className="flex items-center gap-1 text-slate-500">
         <span className="typing-dot" />
         <span className="typing-dot" />
         <span className="typing-dot" />
