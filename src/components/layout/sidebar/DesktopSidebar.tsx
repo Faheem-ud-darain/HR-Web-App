@@ -29,8 +29,8 @@ const subscribeWide = (cb: () => void) => {
 };
 const isWide = () => window.matchMedia('(min-width: 1024px)').matches;
 
-// The side menu for tablets and desktops: a slim icon rail that opens over the page when you point at it, tab to it, or
-// (on a touch screen) tap the logo. "Pin" keeps it open on desktop and moves the page over. Icons never move while it
+// The side menu for tablets and desktops: a slim icon rail that opens when you point at it, tab to it, or (on a touch
+// screen) tap the logo. On a desktop it moves the page over; on a tablet it opens over the page. "Pin" keeps it open. Icons never move while it
 // opens: only the panel widens and the labels fade in, so it feels like one surface unfolding.
 export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, onTogglePinned }: DesktopSidebarProps) {
   const [hover, setHover] = useState(false);
@@ -40,6 +40,8 @@ export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, o
   const wide = useSyncExternalStore(subscribeWide, isWide, () => true);
   const isPinned = pinned && wide;
   const expanded = isPinned || hover || focus || tapOpen;
+  // On a desktop the open menu moves the page over; on a tablet there is no room to spare, so it opens over the page.
+  const pushes = wide && expanded;
   const move = { duration: reduce ? 0 : 0.2, ease: 'easeOut' as const };
 
   // A tap-opened menu folds away after you go to a page.
@@ -72,8 +74,9 @@ export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, o
 
   return (
     <LazyMotion features={domAnimation}>
-      {/* The slot the page sits beside: always the rail's width, or the full width when pinned. The panel floats over it. */}
-      <m.div initial={false} animate={{ width: isPinned ? WIDE : RAIL }} transition={move} className="hidden md:block shrink-0 h-screen sticky top-0 z-30">
+      {/* The slot the page sits beside: the rail's width, or the full width while the menu is open on a desktop, which moves
+          the page over. On a tablet the slot stays the rail's width and the panel floats over the page. */}
+      <m.div initial={false} animate={{ width: pushes ? WIDE : RAIL }} transition={move} className="hidden md:block shrink-0 h-screen sticky top-0 z-30">
         <DismissibleArea open={tapOpen} onClose={() => setTapOpen(false)} className="h-full">
           <m.aside
             initial={false}
@@ -83,7 +86,7 @@ export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, o
             onPointerLeave={() => setHover(false)}
             onFocus={e => { if (e.target.matches(':focus-visible')) setFocus(true); }}
             onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFocus(false); }}
-            className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-white ${expanded && !isPinned ? 'shadow-xl' : ''}`}
+            className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-white ${expanded && !pushes ? 'shadow-xl' : ''}`}
           >
             <div className="h-16 flex items-center shrink-0 border-b border-slate-200 gap-3 pl-[18px] pr-4">
               <button
