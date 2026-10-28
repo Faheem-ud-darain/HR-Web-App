@@ -19,8 +19,8 @@ interface MobileTabBarProps {
 }
 
 // The phone's tab bar: a floating, frosted capsule with four pages and, for HR and Admin, Del (the full menu is opened
-// from the menu button in the top bar). The current page sits in an orange
-// circle with a filled icon. `bottom` adds the safe-area inset to the 1.5rem gap so the pill floats clear of the
+// from the menu button in the top bar). The current page sits in an orange tile with a filled icon; on Del's page the
+// orb sits in the same tile, drawn in white. `bottom` adds the safe-area inset to the 1.5rem gap so the pill floats clear of the
 // home indicator's swipe zone (the inset is 0 on Android and the web).
 export function MobileTabBar({ role, pathname, quick, dots, visible, assistant }: MobileTabBarProps) {
   const onDelPage = pathname.endsWith('/assistant');
@@ -62,9 +62,9 @@ export function MobileTabBar({ role, pathname, quick, dots, visible, assistant }
           aria-label="Del assistant"
           aria-current={onDelPage ? 'page' : undefined}
           onClick={() => triggerHaptic.light()}
-          className={`${slot} ${onDelPage ? 'ring-2 ring-orange-300' : ''}`}
+          className={onDelPage ? activeSlot : slot}
         >
-          <AssistantOrb size={32} />
+          <AssistantOrb size={32} onAccent={onDelPage} />
         </Link>
       )}
     </nav>
