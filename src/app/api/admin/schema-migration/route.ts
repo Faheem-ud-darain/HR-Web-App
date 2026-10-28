@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch } from '@/lib/pbAdmin';
+import { hasDocs, parseLegacyDocs } from '@/lib/core/profileDocs';
 import { parseLeaveDateStrings } from '@/lib/core/leaves';
 import { errMsg } from '@/lib/errors';
 import type { PbRow } from '@/lib/pbTypes';
@@ -679,6 +680,43 @@ export async function POST(request: Request) {
         }
       }
       return NextResponse.json({ ok: true, dryRun, count: results.length, results });
+    }
+    if (body.action === 'backfillProfileDocsFromKV') {
+      // The documents twin of backfillProfileExtrasFromKV: onboarding documents uploaded before plan 027 phase 2 are still
+      // in the old hr_delcargo_store rows (hr_profile_docs_<profileId>) and were never copied into the hr_profile_docs
+      // collection. The app already falls back to the old rows when reading (see core/profileDocs), so nothing is lost
+      // while this has not run; running it just finishes the move.
+      //
+      // The scans are large (base64), so each call copies at most `limit` employees (default 5, at most 20): call it
+      // again until `remaining` is 0 (in a dry run it stops at the same place each time, so it only previews one batch). Idempotent: an employee who already has a row in hr_profile_docs is left alone, and
+      // the old rows are never touched. Pass { dryRun: true } to see what would be copied without writing anything.
+      const dryRun = body.dryRun === true;
+      const limit = Math.min(Math.max(Number(body.limit) || 5, 1), 20);
+      const kvKeys = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?perPage=200&fields=id,key&filter=${encodeURIComponent('key ~ "hr_profile_docs_"')}`);
+      const allProfiles = await pbAdminFetch('/api/collections/hr_profiles/records?perPage=200&fields=id');
+      const profileIds = new Set<string>((allProfiles?.items || []).map((p: PbRow) => p.id));
+      const haveRows = await pbAdminFetch('/api/collections/hr_profile_docs/records?perPage=200&fields=id,profile_id');
+      const alreadyMoved = new Set<string>((haveRows?.items || []).map((r: PbRow) => r.profile_id));
+
+      const pending = (kvKeys?.items || [])
+        .map((r: PbRow) => ({ kvId: r.id as string, profileId: String(r.key || '').replace(/^hr_profile_docs_/, '') }))
+        .filter((r: { profileId: string }) => r.profileId && profileIds.has(r.profileId) && !alreadyMoved.has(r.profileId));
+
+      // Works down the list until `limit` employees have been copied (or previewed); an old row with no documents in it
+      // is skipped and does not count against the limit.
+      const results: Array<PbRow> = [];
+      let copied = 0;
+      let next = 0;
+      for (; next < pending.length && copied < limit; next++) {
+        const { kvId, profileId } = pending[next];
+        const kv = await pbAdminFetch(`/api/collections/hr_delcargo_store/records/${kvId}?fields=value`);
+        const docs = parseLegacyDocs(kv?.value);
+        if (!hasDocs(docs)) { results.push({ profileId, action: 'skipped', reason: 'no documents in the old row' }); continue; }
+        if (!dryRun) await pbAdminFetch('/api/collections/hr_profile_docs/records', { method: 'POST', body: JSON.stringify({ profile_id: profileId, data: docs }) });
+        results.push({ profileId, action: dryRun ? 'would_create' : 'created', fields: Object.keys(docs) });
+        copied++;
+      }
+      return NextResponse.json({ ok: true, dryRun, copied, remaining: pending.length - next, results });
     }
     if (body.action === 'addFieldIfMissing') {
       // Ad-hoc — add one field to an existing collection's schema if it

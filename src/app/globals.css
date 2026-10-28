@@ -81,14 +81,54 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Pinch-zoom stays allowed (accessibility), but a double tap no longer zooms the page in and leaves it zoomed. */
+  touch-action: manipulation;
 }
 
 /* Phones: scale the whole interface (text, spacing, icons: everything sized in rem) down one notch. Questrial is a wider,
    rounder face than the one it replaced and Phosphor icons fill their box more than the old ones did, so at the same
-   nominal size the app read bigger on a small screen. This is the one knob for it: 15px is 94% of the normal 16px. */
+   nominal size the app read bigger on a small screen. This is the one knob for it: 14px is 88% of the normal 16px. */
 @media (max-width: 767px) {
   html {
-    font-size: 15px;
+    font-size: 14px;
+  }
+  /* The two smallest steps are set in px: left in rem, the scale-down above would put the 12px label (text-xs) at
+     10.5px, smaller than the 11px caption, and turn the order upside down. Phone order: caption 11 < label 12 < body
+     13 < base 14 (the larger steps keep following the root size). */
+  :root {
+    --text-xs: 12px;
+    --text-xs--line-height: 16px;
+    --text-sm: 13px;
+    --text-sm--line-height: 18px;
+  }
+}
+
+/* Phone corner radii, following Apple's guidance (continuous, concentric corners; smaller on small things, larger on
+   containers, so a corner inside a corner always has the smaller radius). One scale for every rounded element:
+     6  tags and small chips         8  small controls and menu rows      12  buttons, inputs, list rows
+     16 cards and tiles              22 big panels, message bubbles, the page panel      28 large sheets
+   Full circles and pills (rounded-full) are untouched. Set in px so the phone scale-down above does not shrink them. */
+@media (max-width: 767px) {
+  :root {
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 22px;
+    --radius-3xl: 28px;
+  }
+  .rounded {
+    border-radius: 6px;
+  }
+}
+
+/* Apple's corners are "continuous" (a squircle, not a circle's arc). Browsers that support it draw them that way. */
+@supports (corner-shape: squircle) {
+  @media (max-width: 767px) {
+    [class*='rounded']:not([class*='rounded-full']):not([class*='rounded-none']) {
+      corner-shape: squircle;
+    }
   }
 }
 
