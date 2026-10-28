@@ -48,11 +48,11 @@ export function WarehousesTab({ employees, warehouses, cleaning, onCleanup, onTo
                     <Avatar src={emp.profilePicture} name={emp.fullName} size={32} />
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-slate-900 text-sm truncate">{displayName(emp, 'hr')}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold truncate">{emp.email} · {emp.jobTitle || 'USA Staff'}</div>
+                      <div className="text-caption text-slate-400 font-semibold truncate">{emp.email} · {emp.jobTitle || 'USA Staff'}</div>
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Assigned Warehouses</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Assigned Warehouses</p>
                     <div className="grid grid-cols-2 gap-2">
                       {warehouses.map(wh => {
                         const assigned = (emp.assignedWarehouses || []).includes(wh.id);

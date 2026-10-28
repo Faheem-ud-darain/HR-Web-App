@@ -160,7 +160,7 @@ export default function EmployeeSalaryPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-slate-500 text-xs uppercase tracking-wider">Current Base Salary</h3>
-              <span className="text-[9px] font-bold text-orange-500 uppercase tracking-wider">View breakdown →</span>
+              <span className="text-caption font-bold text-orange-500 uppercase tracking-wider">View breakdown →</span>
             </div>
             <p className="text-3xl font-bold text-slate-900 mt-2">
               {formatMoney(baseSalary, userProfile?.region)}{' '}
@@ -168,7 +168,7 @@ export default function EmployeeSalaryPage() {
             </p>
             {pendingIncrement > 0 && (
               <p
-                className="text-[10px] text-amber-600 font-semibold mt-1 hover:underline"
+                className="text-caption text-amber-600 font-semibold mt-1 hover:underline"
                 onClick={(e) => { e.stopPropagation(); if (userProfile) setShowPendingIncrementModal(true); }}
               >
                 +{formatMoney(pendingIncrement, userProfile?.region)} anniversary increment pending (covers any previously missed years too) — applies to base once processed
@@ -183,7 +183,7 @@ export default function EmployeeSalaryPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-slate-500 text-xs uppercase tracking-wider">Next Increment Date</h3>
-              {pendingIncrement > 0 && <span className="text-[9px] font-bold text-orange-500 uppercase tracking-wider">View amount →</span>}
+              {pendingIncrement > 0 && <span className="text-caption font-bold text-orange-500 uppercase tracking-wider">View amount →</span>}
             </div>
             <p className="text-3xl font-bold text-slate-900 mt-2">
               {nextAnniversaryDate ? nextAnniversaryDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : 'N/A'}
@@ -221,7 +221,7 @@ export default function EmployeeSalaryPage() {
                     <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-slate-800">{r.date}</p>
-                      <p className="text-[11px] text-slate-500 leading-snug">{reasonLabel(r)}</p>
+                      <p className="text-caption text-slate-500 leading-snug">{reasonLabel(r)}</p>
                     </div>
                   </div>
                   <span className="text-xs font-bold text-rose-600 shrink-0">-{formatMoney(reasonAmount(r), userProfile?.region)}</span>
@@ -304,25 +304,25 @@ export default function EmployeeSalaryPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Base</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Base</p>
                   <p className="text-xs font-semibold text-slate-700">{formatMoney(slip.base, userProfile?.region)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Net Received</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Net Received</p>
                   <p className="text-xs font-bold text-slate-900">{formatMoney(slip.net, userProfile?.region)}</p>
                 </div>
                 {slip.increment > 0 && (
                   <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Increment</p>
+                    <p className="text-caption text-slate-400 font-semibold uppercase">Increment</p>
                     <p className="text-xs font-semibold text-emerald-600">+{formatMoney(slip.increment, userProfile?.region)}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Deductions</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Deductions</p>
                   <p className="text-xs font-semibold text-rose-600">{slip.deductions > 0 ? `-${formatMoney(slip.deductions, userProfile?.region)}` : '—'}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Bonus</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Bonus</p>
                   <p className="text-xs font-semibold text-emerald-600">{slip.bonus > 0 ? `+${formatMoney(slip.bonus, userProfile?.region)}` : '—'}</p>
                 </div>
               </div>
@@ -348,25 +348,25 @@ export default function EmployeeSalaryPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200/50">
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1"><Calendar className="h-3 w-3" /> Joining Date</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Joining Date</p>
                 <p className="text-slate-800 font-semibold mt-0.5">{userProfile.joinedDate}</p>
               </div>
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1"><Calendar className="h-3 w-3" /> Salary Track Date</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Salary Track Date</p>
                 <p className="text-slate-800 font-semibold mt-0.5">{anniversarySource || '—'}</p>
               </div>
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Starting Base Salary</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption">Starting Base Salary</p>
                 <p className="text-slate-800 font-semibold mt-0.5">{formatMoney(incrementHistory.originalBaseSalary, userProfile.region)}</p>
               </div>
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Current Base Salary</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption">Current Base Salary</p>
                 <p className="text-slate-900 font-bold mt-0.5">{formatMoney(userProfile.baseSalary, userProfile.region)}</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" /> Increment History</p>
+              <p className="text-caption font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" /> Increment History</p>
               <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
                 {incrementHistory.events.length === 0 ? (
                   <p className="text-xs text-slate-400 italic text-center py-6">No anniversary increments have applied yet.</p>
@@ -382,7 +382,7 @@ export default function EmployeeSalaryPage() {
                   ))
                 )}
               </div>
-              <p className="text-[9px] text-slate-400 leading-relaxed pt-1">
+              <p className="text-caption text-slate-400 leading-relaxed pt-1">
                 This is a best-effort reconstruction based on your salary track date and processing history, not a separately audited ledger — it assumes your base salary was never manually adjusted outside the normal increment process.
               </p>
             </div>
@@ -395,9 +395,9 @@ export default function EmployeeSalaryPage() {
         {userProfile && (
           <div className="space-y-5">
             <div className="text-center bg-amber-50 border border-amber-200 rounded-xl p-5">
-              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">You will receive</p>
+              <p className="text-caption font-bold text-amber-700 uppercase tracking-wider">You will receive</p>
               <p className="text-3xl font-bold text-amber-700 mt-1">+{formatMoney(pendingIncrement, userProfile.region)}</p>
-              <p className="text-[10px] text-amber-600 font-semibold mt-1">
+              <p className="text-caption text-amber-600 font-semibold mt-1">
                 Covering {missedYears} anniversary year{missedYears !== 1 ? 's' : ''} not yet applied to your base salary
               </p>
             </div>
@@ -409,7 +409,7 @@ export default function EmployeeSalaryPage() {
                 </div>
               ))}
             </div>
-            <p className="text-[9px] text-slate-400 leading-relaxed">
+            <p className="text-caption text-slate-400 leading-relaxed">
               This amount is added to your base salary once HR/Admin processes it via Payroll — it isn&apos;t paid out automatically.
             </p>
           </div>
@@ -424,7 +424,7 @@ export default function EmployeeSalaryPage() {
             <div className="flex justify-between items-center border-b border-slate-200 pb-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">DelCargo Logistics Ltd.</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">HR Operations Paystub Receipt</p>
+                <p className="text-caption text-slate-400 mt-0.5">HR Operations Paystub Receipt</p>
               </div>
               <Badge variant={selectedSlip.processed ? 'success' : 'warning'}>{selectedSlip.processed ? 'Paid' : 'Pending Processing'}</Badge>
             </div>
@@ -432,26 +432,26 @@ export default function EmployeeSalaryPage() {
             {/* Employee details */}
             <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200/50">
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Employee Name</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption">Employee Name</p>
                 <p className="text-slate-800 font-semibold mt-0.5">{userProfile?.fullName}</p>
               </div>
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Department</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption">Department</p>
                 <p className="text-slate-800 font-semibold mt-0.5">{userProfile?.teams.join(', ')}</p>
               </div>
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Billing Cycle</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption">Billing Cycle</p>
                 <p className="text-slate-800 font-semibold mt-0.5">{selectedSlip.month}</p>
               </div>
               <div>
-                <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Confidentiality Code</p>
-                <p className="text-slate-800 font-mono text-[10px] mt-0.5">DC-{userProfile?.id.toUpperCase()}-PAY</p>
+                <p className="text-slate-400 font-bold uppercase tracking-wider text-caption">Confidentiality Code</p>
+                <p className="text-slate-800 font-mono text-caption mt-0.5">DC-{userProfile?.id.toUpperCase()}-PAY</p>
               </div>
             </div>
 
             {/* Calculations Breakdown */}
             <div className="space-y-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Salary Breakdown</p>
+              <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Salary Breakdown</p>
               <div className="space-y-2 divide-y divide-slate-100 text-xs border border-slate-200 rounded-lg p-4 bg-white">
                 <div className="flex justify-between items-center py-1">
                   <span className="text-slate-500 font-semibold">Base salary</span>
@@ -472,7 +472,7 @@ export default function EmployeeSalaryPage() {
                     <span className="text-slate-500 font-semibold block mb-1">Deductions — why</span>
                     {selectedSlip.deductionBreakdown.map((item, i) => (
                       <div key={i} className="flex justify-between items-start gap-3 pl-2">
-                        <span className="text-slate-500 text-[11px] leading-snug">{item.label}</span>
+                        <span className="text-slate-500 text-caption leading-snug">{item.label}</span>
                         <span className="text-rose-600 font-semibold shrink-0">-{formatMoney(item.amount, userProfile?.region)}</span>
                       </div>
                     ))}

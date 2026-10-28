@@ -34,7 +34,7 @@ function DocumentRow({ label, fileName, busy, onPick }: { label: string; fileNam
       <div className="flex items-center gap-3 min-w-0">
         <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0"><FileText className="h-4 w-4 text-slate-500" /></div>
         <div className="min-w-0">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+          <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">{label}</p>
           <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{fileName || 'Not uploaded yet'}</p>
         </div>
       </div>
@@ -117,7 +117,7 @@ export default function EmployeeProfilePage() {
                 aria-label="Change profile picture"
                 className="absolute -bottom-0.5 -right-0.5 h-5 w-5 md:h-6 md:w-6 rounded-full bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center shadow-sm border-[1.5px] border-white transition-colors transition-transform active:scale-90"
               >
-                <Camera className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                <Camera className="h-3.5 w-3.5 md:h-3.5 md:w-3.5" />
               </button>
               <input ref={photoInputRef} type="file" accept="image/*" onChange={photo.handleInputChange} className="hidden" />
             </div>
@@ -130,7 +130,7 @@ export default function EmployeeProfilePage() {
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <Badge variant="warning" className="capitalize">{profile.jobTitle || profile.role}</Badge>
             {profile.isTeamLead && (profile.leadTeams?.length ?? 0) > 0 && (
-              <Badge variant="warning" className="gap-1"><Star className="h-3 w-3" /> Team Lead · {profile.leadTeams?.join(', ')}</Badge>
+              <Badge variant="warning" className="gap-1"><Star className="h-3.5 w-3.5" /> Team Lead · {profile.leadTeams?.join(', ')}</Badge>
             )}
           </div>
         </div>
@@ -199,7 +199,7 @@ export default function EmployeeProfilePage() {
               <div className="px-6 py-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{usa ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">{usa ? 'Driver License / Work Permit' : 'CNIC (Front/Back)'}</p>
                     <p className="text-xs text-slate-500 mt-0.5">{identityDocs.length} document(s) on file</p>
                   </div>
                   <Button variant="secondary" size="md" onClick={() => idInputRef.current?.click()} disabled={docs.busy === 'id'} className="flex-shrink-0 border border-slate-200">

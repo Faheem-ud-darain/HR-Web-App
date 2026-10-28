@@ -22,7 +22,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
         <div className="lg:col-span-7 space-y-5 sm:space-y-6">
           <div className="space-y-2">
-            <span className="inline-block text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 border border-orange-100 px-3 py-1 rounded-full">
+            <span className="inline-block text-caption font-bold text-orange-600 uppercase tracking-widest bg-orange-50 border border-orange-100 px-3 py-1 rounded-full">
               Global Freight & Software
             </span>
             <h3 className="text-xl sm:text-2xl font-light text-slate-900 uppercase tracking-wider mt-2" style={serif}>Who We Are</h3>
@@ -39,7 +39,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
             {stats.map(s => (
               <div key={s.label} className="text-center sm:text-left">
                 <p className="text-base sm:text-lg font-bold text-slate-900">{s.value}</p>
-                <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">{s.label}</p>
+                <p className="text-caption sm:text-caption text-slate-400 font-bold uppercase tracking-wider">{s.label}</p>
               </div>
             ))}
           </div>
@@ -56,7 +56,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
             className="w-full h-48 sm:h-64 object-cover object-center group-hover:scale-103 transition-transform duration-500"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex flex-col justify-end p-4">
-            <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Operations Hub</p>
+            <p className="text-caption text-orange-400 font-bold uppercase tracking-wider">Operations Hub</p>
             <p className="text-white text-xs font-bold mt-0.5">Automated Warehouse JFK Center</p>
           </div>
         </div>
@@ -70,7 +70,7 @@ export function LifeAtDelcargo() {
     <section className="bg-slate-50/50 py-8 sm:py-12 px-5 sm:px-12 border border-slate-200 rounded-xl space-y-6 sm:space-y-8">
       <div className="text-center space-y-1.5">
         <h3 className="text-lg sm:text-xl font-light text-slate-900 uppercase tracking-widest" style={serif}>Life at DelCargo</h3>
-        <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Perks & Compensation</p>
+        <p className="text-caption sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Perks & Compensation</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-left">
         {PERKS.map(p => (

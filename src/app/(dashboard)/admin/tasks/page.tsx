@@ -133,7 +133,7 @@ export default function AdminTasksPage() {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Current Team Leads</p>
             {employees.filter(e => e.isTeamLead && (e.leadTeams?.length ?? 0) > 0).map(emp => (
               <div key={emp.id} className="flex items-center justify-between text-xs bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                <span className="font-semibold text-slate-800 flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" /> {displayName(emp, 'admin')}</span>
+                <span className="font-semibold text-slate-800 flex items-center gap-1"><Star className="h-3.5 w-3.5 text-amber-500" /> {displayName(emp, 'admin')}</span>
                 <span className="text-amber-700 font-semibold">{emp.leadTeams?.join(', ')}</span>
               </div>
             ))}

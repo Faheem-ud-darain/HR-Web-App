@@ -44,11 +44,11 @@ export function AppVersionCard() {
                 <Icon weight="duotone" className="h-4 w-4 text-slate-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">{label}</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">Version {APP_VERSIONS[key]}</p>
               </div>
               {isCurrent && (
-                <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full flex-shrink-0">
+                <span className="text-caption font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full flex-shrink-0">
                   You&apos;re here
                 </span>
               )}

@@ -263,7 +263,7 @@ export default function AuthPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/30 to-transparent z-10" />
           <div className="absolute right-0 top-0 bottom-0 w-36 bg-gradient-to-r from-transparent via-white/20 via-white/60 to-white z-10 pointer-events-none" />
           <div className="relative z-20 space-y-1">
-            <span className="text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-full w-fit">
+            <span className="text-caption font-bold text-orange-400 uppercase tracking-widest bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-full w-fit">
               DelCargo Portal
             </span>
             <h2 className="text-xl font-bold text-white uppercase tracking-wider mt-1" style={{ fontFamily: 'Georgia, serif' }}>
@@ -379,7 +379,7 @@ export default function AuthPage() {
 
       <Link
         href="/privacy"
-        className="mt-4 text-[11px] font-semibold text-slate-400 hover:text-orange-600 transition-colors"
+        className="mt-4 text-caption font-semibold text-slate-400 hover:text-orange-600 transition-colors"
       >
         Privacy Policy
       </Link>

@@ -130,7 +130,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-slate-500 font-medium">
+        <p className="text-caption text-slate-500 font-medium">
           Onboarding guides, instructions, and reference files for <span className="font-bold text-slate-700">{team.name}</span>.
           Tag one in Team Chat by typing <span className="font-mono font-bold text-sky-700">#</span> followed by its title.
         </p>
@@ -141,14 +141,14 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
             onClick={() => setShowUpload(v => !v)}
             className="transition-shadow shrink-0"
           >
-            <Upload className="h-3 w-3" /> Upload
+            <Upload className="h-3.5 w-3.5" /> Upload
           </Button>
         )}
       </div>
 
       {showUpload && canManage && (
         <div className="mx-4 mb-3 border border-slate-200 rounded-xl bg-slate-50/80 p-3 space-y-2 shrink-0">
-          {error && <p className="text-[10px] text-rose-600 font-bold">{error}</p>}
+          {error && <p className="text-caption text-rose-600 font-bold">{error}</p>}
           <Input
             type="text"
             value={title}
@@ -164,7 +164,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
             fieldSize="md" className="resize-none"
           />
           <div className="flex items-center gap-2">
-            <label className="flex-1 flex items-center gap-2 bg-white border border-dashed border-slate-300 rounded-lg py-2 px-3 text-[10px] font-bold text-slate-500 cursor-pointer hover:border-orange-400">
+            <label className="flex-1 flex items-center gap-2 bg-white border border-dashed border-slate-300 rounded-lg py-2 px-3 text-caption font-bold text-slate-500 cursor-pointer hover:border-orange-400">
               <Upload className="h-3.5 w-3.5 shrink-0" />
               {pendingFile ? pendingFile.name : 'Choose a file (image, video, PDF, doc…)'}
               <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFilePick(e.target.files?.[0])} />
@@ -189,7 +189,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
               onClick={handleUpload}
               disabled={uploading || !title.trim() || !pendingFile}
             >
-              {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
               Save to team
             </Button>
           </div>
@@ -217,8 +217,8 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-slate-800 truncate">{doc.title}</p>
-                    {doc.description && <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{doc.description}</p>}
-                    <p className="text-[9px] text-slate-400 font-semibold mt-1">
+                    {doc.description && <p className="text-caption text-slate-500 mt-0.5 line-clamp-2">{doc.description}</p>}
+                    <p className="text-caption text-slate-400 font-semibold mt-1">
                       {doc.uploadedByName} · {formatTimestamp(doc.timestamp)}{doc.fileSize !== undefined ? ` · ${formatBytes(doc.fileSize)}` : ''}
                     </p>
                   </div>
@@ -236,17 +236,17 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
                     href={safeHref(doc.fileUrl)}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-1 text-[10px] font-bold text-orange-700 hover:text-orange-800"
+                    className="flex items-center gap-1 text-caption font-bold text-orange-700 hover:text-orange-800"
                   >
-                    <Download className="h-3 w-3" /> Open / Download
+                    <Download className="h-3.5 w-3.5" /> Open / Download
                   </a>
                   {canManage && (
                     <button
                       onClick={() => handleDelete(doc)}
                       disabled={deletingId === doc.id}
-                      className="flex items-center gap-1 text-[10px] font-bold text-rose-500 hover:text-rose-700 ml-auto disabled:opacity-50"
+                      className="flex items-center gap-1 text-caption font-bold text-rose-500 hover:text-rose-700 ml-auto disabled:opacity-50"
                     >
-                      {deletingId === doc.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      {deletingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     </button>
                   )}
                 </div>

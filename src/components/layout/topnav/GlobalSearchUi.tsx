@@ -19,7 +19,7 @@ export function SearchField({ s }: { s: GlobalSearch }) {
       >
         <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="flex-1 text-left truncate">Search people, tickets, payroll…</span>
-        <kbd className="hidden lg:inline rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Ctrl K</kbd>
+        <kbd className="hidden lg:inline rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-caption font-semibold text-slate-500">Ctrl K</kbd>
       </button>
   );
 }

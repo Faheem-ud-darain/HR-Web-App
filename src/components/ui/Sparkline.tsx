@@ -74,7 +74,7 @@ export function Sparkline({ values: rawValues, label, detail, colorClass }: Spar
       </svg>
       {hovered !== null && (
         <div className="absolute z-10 pointer-events-none chart-tooltip-in" style={{ left: `${(points[hovered].x / W) * 100}%`, top: '50%' }}>
-          <div className="bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
+          <div className="bg-slate-900 text-white text-caption font-bold px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
             <span className="text-slate-300 font-semibold mr-1">{label(hovered)}</span>
             {detail(hovered)}
           </div>

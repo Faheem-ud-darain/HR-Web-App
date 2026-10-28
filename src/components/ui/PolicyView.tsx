@@ -65,7 +65,7 @@ export function PolicyView() {
                   <span className={`font-bold ${row.isCap ? 'text-orange-950' : 'text-slate-700'}`}>{row.year}</span>
                   <span className={`font-mono text-xs ${row.isCap ? 'text-orange-950' : 'text-slate-700'}`}>{row.rate}</span>
                 </div>
-                <div className={`text-[10px] ${row.isCap ? 'text-orange-900 font-bold' : 'text-slate-500 font-medium'}`}>
+                <div className={`text-caption ${row.isCap ? 'text-orange-900 font-bold' : 'text-slate-500 font-medium'}`}>
                   {row.days}
                 </div>
               </div>

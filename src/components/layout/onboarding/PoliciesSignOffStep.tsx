@@ -35,7 +35,7 @@ export function PoliciesSignOffStep({ setActivePolicy, acceptedDocs, setAccepted
               <button 
                 type="button" 
                 onClick={() => setActivePolicy('conduct')} 
-                className="text-[10px] font-bold text-orange-600 hover:underline text-left"
+                className="text-caption font-bold text-orange-600 hover:underline text-left"
               >
                 (Read Agreement)
               </button>
@@ -57,7 +57,7 @@ export function PoliciesSignOffStep({ setActivePolicy, acceptedDocs, setAccepted
               <button 
                 type="button" 
                 onClick={() => setActivePolicy('handbook')} 
-                className="text-[10px] font-bold text-orange-600 hover:underline text-left"
+                className="text-caption font-bold text-orange-600 hover:underline text-left"
               >
                 (Read Agreement)
               </button>
@@ -79,7 +79,7 @@ export function PoliciesSignOffStep({ setActivePolicy, acceptedDocs, setAccepted
               <button 
                 type="button" 
                 onClick={() => setActivePolicy('privacy')} 
-                className="text-[10px] font-bold text-orange-600 hover:underline text-left"
+                className="text-caption font-bold text-orange-600 hover:underline text-left"
               >
                 (Read Agreement)
               </button>
@@ -97,7 +97,7 @@ export function PoliciesSignOffStep({ setActivePolicy, acceptedDocs, setAccepted
     
       <div className="space-y-3">
         <FieldLabel size="md">
-          Digital Signature <span className="text-slate-400 font-semibold text-[10px] lowercase">(Case-insensitive: must match your full name &quot;{profile.fullName}&quot; exactly)</span>
+          Digital Signature <span className="text-slate-400 font-semibold text-caption lowercase">(Case-insensitive: must match your full name &quot;{profile.fullName}&quot; exactly)</span>
         </FieldLabel>
         <Input 
           type="text" 

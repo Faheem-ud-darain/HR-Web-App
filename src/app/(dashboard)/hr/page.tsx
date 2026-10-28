@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { StatCard } from '@/components/ui/StatCard';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, VideoCameraIcon as Video } from '@phosphor-icons/react/dist/ssr';
-import { IconChip } from '@/components/ui/IconChip';
 import { useRouter } from 'next/navigation';
 import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTimesheets, displayName } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
@@ -119,40 +119,8 @@ export default function HRDashboard() {
         <StatCardSkeletonGrid count={4} className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" />
       ) : (
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <Card
-          onClick={() => router.push('/hr/teams')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push('/hr/teams'); } }}
-          className="cursor-pointer"
-        >
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Total Employees</p>
-                <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{employees.length}</p>
-              </div>
-              <IconChip tone="indigo" icon={Users} />
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          onClick={() => router.push('/hr/leaves')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push('/hr/leaves'); } }}
-          className="cursor-pointer"
-        >
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Pending Leaves</p>
-                <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{pendingLeaves}</p>
-              </div>
-              <IconChip tone="amber" icon={Clock} />
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard label="Total Employees" value={employees.length} size="xl" chip={{ icon: Users, tone: 'indigo' }} onClick={() => router.push('/hr/teams')} />
+        <StatCard label="Pending Leaves" value={pendingLeaves} size="xl" chip={{ icon: Clock, tone: 'amber' }} onClick={() => router.push('/hr/leaves')} />
         <AvgHoursWorkedCard employees={employees} timesheets={timesheets} viewerRole="hr" />
         <ActiveEmployeesCard employees={employees} timesheets={timesheets} viewerRole="hr" />
       </div>
@@ -164,7 +132,7 @@ export default function HRDashboard() {
         <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h2 className="text-sm md:text-base font-bold text-slate-900">Pending Leave Requests</h2>
-            <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">Requests awaiting your decision.</p>
+            <p className="text-caption md:text-xs text-slate-500 mt-0.5">Requests awaiting your decision.</p>
           </div>
           <button
             onClick={() => router.push('/hr/leaves')}
@@ -194,7 +162,7 @@ export default function HRDashboard() {
       <Card className="p-0">
         <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100">
           <h2 className="text-sm md:text-base font-bold text-slate-900">Organisation Calendar</h2>
-          <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">Leaves, task deadlines, and schedule conflicts — all teams in one view.</p>
+          <p className="text-caption md:text-xs text-slate-500 mt-0.5">Leaves, task deadlines, and schedule conflicts — all teams in one view.</p>
         </div>
         <div className="p-3 md:p-6">
           <OrgCalendar leaves={leaves} tasks={tasks} employees={employees} />

@@ -83,6 +83,15 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Phones: scale the whole interface (text, spacing, icons: everything sized in rem) down one notch. Questrial is a wider,
+   rounder face than the one it replaced and Phosphor icons fill their box more than the old ones did, so at the same
+   nominal size the app read bigger on a small screen. This is the one knob for it: 15px is 94% of the normal 16px. */
+@media (max-width: 767px) {
+  html {
+    font-size: 15px;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -98,6 +107,12 @@ body {
    The dark theme already uses this shade for filled orange, so one value serves both. */
 @utility bg-bubble-own {
   background-color: #c2410c;
+}
+
+/* The smallest text in the app: badges, timestamps, hints. One named step instead of 8px, 9px, 10px and 11px. */
+@utility text-caption {
+  font-size: 11px; /* in px, not rem, so the phone scale-down below never takes it under the 11px floor */
+  line-height: 16px;
 }
 
 @utility bg-chrome {
@@ -655,15 +670,9 @@ input[type='radio']:focus-visible {
 /* ── Apple Human Interface Guidelines, for phones and tablets ──────────────────────────────────────────
    These apply on touch screens and on any window narrower than a laptop, so a tablet is treated like a
    phone. Desktop keeps its compact look.
-   1. Text: Apple's smallest recommended size is 11pt, and grey text must reach 4.5:1 contrast. The app uses
-      8–10px labels and light grey (slate-400) in hundreds of places, so they are raised here once instead
-      of editing every screen. */
+   1. Text: grey text must reach 4.5:1 contrast, and light grey (slate-400) is used in hundreds of places, so it is
+      darkened here once instead of editing every screen. (The smallest text size is the text-caption step.) */
 @media (pointer: coarse), (max-width: 1023px) {
-  .text-\[8px\],
-  .text-\[9px\],
-  .text-\[10px\] {
-    font-size: 11px;
-  }
   .text-slate-400:not(:hover),
   .placeholder\:text-slate-400::placeholder {
     color: #64748b; /* slate-500, 4.8:1 on white */

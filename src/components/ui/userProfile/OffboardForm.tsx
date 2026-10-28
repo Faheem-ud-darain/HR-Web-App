@@ -35,13 +35,13 @@ export function OffboardForm({ profile, leaves, onCancel, onSubmit }: OffboardFo
     <form onSubmit={e => { e.preventDefault(); if (!blocked) onSubmit(values); }} className="space-y-4">
       <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl space-y-1.5">
         <p className="font-bold text-rose-800 text-xs flex items-center gap-1.5"><ShieldAlert className="h-4 w-4" /> Account Offboarding Checklist</p>
-        <p className="text-[11px] text-rose-700 font-semibold leading-relaxed">Completing this checklist deactivates this user&apos;s account and blocks all access to the workspace immediately.</p>
+        <p className="text-caption text-rose-700 font-semibold leading-relaxed">Completing this checklist deactivates this user&apos;s account and blocks all access to the workspace immediately.</p>
       </div>
 
       <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
         <div>
-          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Final PTO/Sick Bank Payout</p>
-          <p className="text-[9px] text-emerald-600 font-semibold mt-0.5">
+          <p className="text-caption font-bold text-emerald-700 uppercase tracking-wider">Final PTO/Sick Bank Payout</p>
+          <p className="text-caption text-emerald-600 font-semibold mt-0.5">
             {getRemainingPTO(leaves, profile.fullName, getPTOAccrualDate(profile))} remaining days × daily rate (monthly salary ÷ 22)
           </p>
         </div>
@@ -57,12 +57,12 @@ export function OffboardForm({ profile, leaves, onCancel, onSubmit }: OffboardFo
             4. Company-Allocated Number ({profile.companyPhone}) Returned <span className="text-rose-600">*Required</span>
           </CheckRow>
         ) : (
-          <p className="text-[10px] text-slate-400 italic pl-0.5">4. No company-allocated number on file — nothing to return.</p>
+          <p className="text-caption text-slate-400 italic pl-0.5">4. No company-allocated number on file — nothing to return.</p>
         )}
       </div>
 
       {blocked && (
-        <p className="text-[10px] text-rose-600 font-semibold bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 leading-relaxed">
+        <p className="text-caption text-rose-600 font-semibold bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 leading-relaxed">
           This employee has a company-allocated number on file. Confirm it&apos;s been returned before offboarding can be completed.
         </p>
       )}

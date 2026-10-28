@@ -180,8 +180,8 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
           <h3 className="font-bold text-slate-900 text-sm">Google Account & Calendar</h3>
         </div>
         {googleData?.connectedEmail && (
-          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" /> Connected
+          <span className="text-caption font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Connected
           </span>
         )}
       </div>
@@ -212,7 +212,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
               // nothing when tapped.
               <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-left max-w-sm mx-auto">
                 <Smartphone className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-slate-700 font-semibold leading-relaxed">
+                <p className="text-caption text-slate-700 font-semibold leading-relaxed">
                   Connecting a Google Account isn&apos;t available in the mobile app. Open the web dashboard on a desktop/laptop browser and connect it from your profile there — it&apos;ll apply to this app too.
                 </p>
               </div>
@@ -242,7 +242,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-900 truncate">{googleData.connectedEmail}</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">Linked Google Account</p>
+                  <p className="text-caption text-slate-400 font-semibold">Linked Google Account</p>
                 </div>
               </div>
               <button
@@ -260,7 +260,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                   <Calendar className="h-4 w-4 text-orange-600 shrink-0" />
                   <div>
                     <p className="text-xs font-semibold text-slate-800">Sync Google Calendar</p>
-                    <p className="text-[10px] text-slate-400">Sync shifts & meetings directly to your Google Calendar</p>
+                    <p className="text-caption text-slate-400">Sync shifts & meetings directly to your Google Calendar</p>
                   </div>
                 </div>
                 <input
@@ -276,7 +276,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                   <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                   <div>
                     <p className="text-xs font-semibold text-slate-800">Gmail 2FA Verification</p>
-                    <p className="text-[10px] text-slate-400">Send 2FA security codes to {googleData.connectedEmail}</p>
+                    <p className="text-caption text-slate-400">Send 2FA security codes to {googleData.connectedEmail}</p>
                   </div>
                 </div>
                 <input
@@ -292,7 +292,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                   <Mail className="h-4 w-4 text-indigo-600 shrink-0" />
                   <div>
                     <p className="text-xs font-semibold text-slate-800">Password Reset via Connected Gmail</p>
-                    <p className="text-[10px] text-slate-400">Allow resetting password using this connected Gmail</p>
+                    <p className="text-caption text-slate-400">Allow resetting password using this connected Gmail</p>
                   </div>
                 </div>
                 <input

@@ -50,13 +50,13 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                 <div>
                   <span className="text-sm font-bold text-slate-900">1. Profile Picture (Mandatory) *</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">JPG or PNG format. Front facing photo.</p>
+                  <p className="text-caption text-slate-400 mt-0.5">JPG or PNG format. Front facing photo.</p>
                 </div>
                 {profilePicture ? (
                   <div className="flex items-center gap-2">
                     <img src={profilePicture} alt="Preview" className="h-8 w-8 rounded-full object-cover border border-slate-200" />
                     <span className="text-emerald-600 font-bold text-xs flex items-center gap-0.5"><CheckCircle2 className="h-4 w-4" /> Added</span>
-                    <label className="text-[10px] text-slate-500 hover:text-orange-600 font-bold cursor-pointer underline">
+                    <label className="text-caption text-slate-500 hover:text-orange-600 font-bold cursor-pointer underline">
                       Change
                       <input
                         type="file"
@@ -75,7 +75,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
                       title="Remove photo"
                       className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ) : uploadingPic ? (
@@ -103,7 +103,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                 <div>
                   <span className="text-sm font-bold text-slate-900">2. Curriculum Vitae (CV) *</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">PDF only, under 4MB</p>
+                  <p className="text-caption text-slate-400 mt-0.5">PDF only, under 4MB</p>
                 </div>
                 {cvFile ? (
                   <span className="text-emerald-600 font-bold text-xs flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Uploaded</span>
@@ -130,7 +130,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
                     title="Remove and re-upload"
                     className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               )}
@@ -150,7 +150,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
                   <span className="text-sm font-bold text-slate-900">
                     3. {profile?.region === 'USA' ? 'Driver License / Work Permit *' : 'CNIC Card (Both Sides) *'}
                   </span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
+                  <p className="text-caption text-slate-400 mt-0.5">
                     {profile?.region === 'USA' ? 'Upload 1 front scan.' : 'Upload 2 scans (Front and Back side scans required).'}
                   </p>
                 </div>
@@ -181,7 +181,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
                         title="Remove and re-upload"
                         className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
@@ -201,7 +201,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                 <div>
                   <span className="text-sm font-bold text-slate-900">4. Passport (Secondary ID) (Optional)</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">JPG or PNG image scan. Optional.</p>
+                  <p className="text-caption text-slate-400 mt-0.5">JPG or PNG image scan. Optional.</p>
                 </div>
                 {passportFile ? (
                   <span className="text-emerald-600 font-bold text-xs flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Uploaded</span>
@@ -228,7 +228,7 @@ export function DocumentsStep({ step2SubStep, uploadError, profilePicture, setPe
                     title="Remove and re-upload"
                     className="h-5 w-5 shrink-0 flex items-center justify-center rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               )}

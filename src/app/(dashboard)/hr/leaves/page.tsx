@@ -197,9 +197,9 @@ export default function HRLeavesPage() {
         onClick={onClick}
         disabled={processingLeaveId !== null}
         className={`font-semibold transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 ${tone} ${
-          wide ? `min-h-11 text-[11px] font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded pointer-coarse:min-h-11'
+          wide ? `min-h-11 text-caption font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded pointer-coarse:min-h-11'
         }`}
-      >{processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />}{label}</button>
+      >{processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{label}</button>
     );
     if (l.status === 'pending') {
       return (
@@ -317,7 +317,7 @@ export default function HRLeavesPage() {
                   className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-bold transition-colors ${active ? `${col.headerBg} text-slate-900` : 'border-slate-200 bg-white text-slate-500'}`}
                 >
                   {col.label}
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-slate-200 bg-white px-1 text-[11px] text-slate-600">{count}</span>
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-slate-200 bg-white px-1 text-caption text-slate-600">{count}</span>
                 </button>
               );
             })}
@@ -382,7 +382,7 @@ export default function HRLeavesPage() {
                     {col.label}
                     {col.locked && (
                       <span title="CEO/Admin decides this — see the Admin dashboard's CEO Approval Queue">
-                        <Lock className="h-3 w-3 text-slate-400" />
+                        <Lock className="h-3.5 w-3.5 text-slate-400" />
                       </span>
                     )}
                   </span>
@@ -407,8 +407,8 @@ export default function HRLeavesPage() {
                         <GripVertical className="h-4 w-4 text-slate-300 flex-shrink-0 mt-0.5 hidden md:block" />
                       </div>
                       <LeaveTypeBadge type={leave.type} className="inline-block mb-2" />
-                      <div className="text-[10px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3 w-3" /> {leave.duration}</div>
-                      <p className="text-[10px] text-slate-400 leading-relaxed line-clamp-2">{leave.reason}</p>
+                      <div className="text-caption font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {leave.duration}</div>
+                      <p className="text-caption text-slate-400 leading-relaxed line-clamp-2">{leave.reason}</p>
 
                     </div>
                   ))}

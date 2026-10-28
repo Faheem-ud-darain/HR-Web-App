@@ -12,7 +12,7 @@ function Group<T>({ icon: Icon, title, items, limit, keyOf, onPick, rowClass = '
   if (items.length === 0) return null;
   return (
     <div className="p-3">
-      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+      <div className="text-caption font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
         <Icon className="h-3 w-3" /> {title} ({items.length})
       </div>
       <div className="space-y-1">
@@ -32,7 +32,7 @@ const Lines = ({ title, detail, badge, tone = 'default' }: { title: string; deta
   <>
     <div className="min-w-0 flex-1">
       <p className="font-bold text-slate-800 truncate">{title}</p>
-      {detail !== undefined && <p className="text-[10px] text-slate-400 truncate">{detail}</p>}
+      {detail !== undefined && <p className="text-caption text-slate-400 truncate">{detail}</p>}
     </div>
     {badge && <Badge size="sm" variant={tone} className="uppercase ml-2">{badge}</Badge>}
   </>
@@ -49,7 +49,7 @@ export function SearchResults({ results: r, role, limit, onGo }: { results: Resu
           <>
             <div>
               <p className="font-bold text-slate-800">{resolveDisplayName(emp, role as 'hr' | 'admin')}</p>
-              <p className="text-[10px] text-slate-400">{emp.email}</p>
+              <p className="text-caption text-slate-400">{emp.email}</p>
             </div>
             <Badge size="sm" className="uppercase">{emp.role}</Badge>
           </>
@@ -65,7 +65,7 @@ export function SearchResults({ results: r, role, limit, onGo }: { results: Resu
         {t => (
           <>
             <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-slate-400" /> {t.name}</span>
-            <span className="text-[9px] uppercase font-bold text-orange-600">View</span>
+            <span className="text-caption uppercase font-bold text-orange-600">View</span>
           </>
         )}
       </Group>
@@ -73,7 +73,7 @@ export function SearchResults({ results: r, role, limit, onGo }: { results: Resu
         {w => (
           <>
             <span>{w.name}</span>
-            <span className="text-[9px] uppercase font-bold text-orange-600">View</span>
+            <span className="text-caption uppercase font-bold text-orange-600">View</span>
           </>
         )}
       </Group>
@@ -90,7 +90,7 @@ export function SearchResults({ results: r, role, limit, onGo }: { results: Resu
         {a => (
           <>
             <p className="font-bold text-slate-800 truncate">{a.title}</p>
-            <p className="text-[10px] text-slate-400 truncate">{a.content}</p>
+            <p className="text-caption text-slate-400 truncate">{a.content}</p>
           </>
         )}
       </Group>

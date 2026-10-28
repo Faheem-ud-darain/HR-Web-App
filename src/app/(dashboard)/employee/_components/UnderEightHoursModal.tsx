@@ -36,7 +36,7 @@ export function UnderEightHoursModal({ workedMinutes, remainingMinutes, onClose 
           </div>
         </div>
 
-        <p className="text-slate-500 text-[11px] leading-relaxed">
+        <p className="text-slate-500 text-caption leading-relaxed">
           If your shift was split into multiple parts due to internet/app disconnections, your total worked time today is combined. If this looks wrong, contact HR.
         </p>
 

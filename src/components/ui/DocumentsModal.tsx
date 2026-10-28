@@ -43,13 +43,13 @@ function DocRow({ label, fileName, fileData }: { label: string; fileName?: strin
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={() => { const href = safeHref(fileData); if (href) window.open(href, '_blank', 'noopener,noreferrer'); }}
-          className="text-[10px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1"
+          className="text-caption font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1"
         >
           <Eye className="h-3.5 w-3.5" /> View
         </button>
         <button
           onClick={() => downloadDataUrl(fileData, fileName || `${label}.dat`)}
-          className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1"
+          className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1"
         >
           <Download className="h-3.5 w-3.5" /> Download
         </button>

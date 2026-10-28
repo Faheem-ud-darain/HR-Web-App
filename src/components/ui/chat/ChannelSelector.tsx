@@ -30,7 +30,7 @@ export function ChannelSelector({ teams, activeTeamId, onSelect, oversight, mobi
             }`}
           >
             {t.name}
-            {oversight && <span className={`hidden md:block text-[11px] font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-500'}`}>{t.members.length} members</span>}
+            {oversight && <span className={`hidden md:block text-caption font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-500'}`}>{t.members.length} members</span>}
           </button>
         ))}
       </div>

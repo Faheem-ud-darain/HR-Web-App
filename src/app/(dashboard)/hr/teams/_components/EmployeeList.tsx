@@ -30,31 +30,31 @@ function EmployeeCard({ emp, teams, onOpenProfile, onStartDrag, onToggleLead, on
           <div>
             <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
               {displayName(emp, 'hr')}
-              {lead && <span title={`Lead of: ${emp.leadTeams?.join(', ')}`} className="text-amber-500"><Star weight="fill" className="h-3 w-3" /></span>}
+              {lead && <span title={`Lead of: ${emp.leadTeams?.join(', ')}`} className="text-amber-500"><Star weight="fill" className="h-3.5 w-3.5" /></span>}
               {isWarehouseManager(emp) && (
-                <span title="Warehouse Manager" className="text-purple-700 font-bold text-xs flex items-center gap-0.5 cursor-help"><Building2 className="h-3 w-3" /> Manager</span>
+                <span title="Warehouse Manager" className="text-purple-700 font-bold text-xs flex items-center gap-0.5 cursor-help"><Building2 className="h-3.5 w-3.5" /> Manager</span>
               )}
             </div>
-            <div className="text-[10px] text-slate-600 mt-0.5 uppercase tracking-wide font-medium">{emp.jobTitle || emp.role}</div>
+            <div className="text-caption text-slate-600 mt-0.5 uppercase tracking-wide font-medium">{emp.jobTitle || emp.role}</div>
           </div>
           <button
             onMouseDown={e => e.stopPropagation()}
             onClick={e => { e.stopPropagation(); onToggleLead(emp); }}
             title={lead ? 'Remove team lead' : 'Make team lead'}
-            className={`flex-shrink-0 flex min-h-9 items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors transition-transform active:scale-95 lg:min-h-0 ${
+            className={`flex-shrink-0 flex min-h-9 items-center gap-1 text-caption font-bold px-2 py-1 rounded-lg border transition-colors transition-transform active:scale-95 lg:min-h-0 ${
               lead
                 ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700'
                 : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700'
             }`}
           >
-            <Star className="h-3 w-3" />
+            <Star className="h-3.5 w-3.5" />
             {lead ? 'Lead' : 'Set Lead'}
           </button>
         </div>
         <div className="flex flex-wrap gap-1 mt-2">
           {emp.teams.length === 0
-            ? <span className="text-[10px] text-slate-400">No teams assigned</span>
-            : emp.teams.map(t => <Badge key={t} variant="default" className="text-[9px] px-1.5 py-0.2">{t}</Badge>)}
+            ? <span className="text-caption text-slate-400">No teams assigned</span>
+            : emp.teams.map(t => <Badge key={t} variant="default" className="text-caption px-1.5 py-0.2">{t}</Badge>)}
         </div>
         {/* Touch screens never fire HTML5 drag and drop, so phones get this select; it runs the same assign() as a drop. */}
         {teams.length > 0 && (

@@ -25,7 +25,7 @@ export function PaginationControls({ page, totalPages, setPage, totalCount, item
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 py-2">
-      <p className="text-[11px] font-semibold text-slate-500">
+      <p className="text-caption font-semibold text-slate-500">
         {totalCount} {itemLabel} total · Page {page} of {totalPages}
       </p>
       <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">

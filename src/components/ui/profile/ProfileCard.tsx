@@ -9,7 +9,7 @@ export function ProfileCard({ title, subtitle, action, children }: { title: stri
       <div className={`px-6 pt-5 pb-2 border-b border-slate-100 ${action ? 'flex items-center justify-between' : ''}`}>
         <div>
           <h3 className="font-bold text-slate-900 text-sm">{title}</h3>
-          {subtitle && <p className="text-[10px] text-slate-400 mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-caption text-slate-400 mt-1">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -37,7 +37,7 @@ export function InfoRow({ icon: Icon, label, value, mono = false, iconClass = 'b
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+        <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">{label}</p>
         <p className={`text-sm font-semibold mt-0.5 truncate ${mono ? 'font-mono' : ''} ${valueClass}`}>{value}</p>
       </div>
     </div>

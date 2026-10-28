@@ -40,7 +40,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
         <div className="text-center py-2">
           <button
             onClick={() => setMessageLimit(prev => prev + 50)}
-            className="text-[11px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-colors"
+            className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-colors"
           >
             Load earlier messages
           </button>
@@ -69,14 +69,14 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
         if (m.isAnnouncement) {
           return (
             <div key={m.id} className="border-2 border-amber-300 bg-amber-50 rounded-xl px-4 py-3">
-              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-black text-amber-700 uppercase tracking-wider mb-1">
+              <div className="flex flex-wrap items-center gap-1.5 text-caption font-black text-amber-700 uppercase tracking-wider mb-1">
                 <Megaphone className="h-3.5 w-3.5" /> Announcement · {label}
-                {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
+                {isAdminSender ? <Crown className="h-3.5 w-3.5 text-purple-600" /> : <RoleBadge role={senderRole} />}
                 <span className="text-slate-500 font-semibold normal-case ml-auto flex items-center gap-1.5">
                   {formatTimestamp(m.timestamp)}
                   {canForward && (
                     <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-500 hover:text-orange-600 transition-colors p-2 -m-2">
-                      <Forward className="h-3 w-3" />
+                      <Forward className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </span>
@@ -131,9 +131,9 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
               <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
               <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
                 <div className={`border ${c.border} bg-white rounded-xl px-4 py-3 ${isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
-                  <div className={`flex flex-wrap items-center gap-1.5 text-[11px] font-black ${c.text} uppercase tracking-wider mb-1`}>
+                  <div className={`flex flex-wrap items-center gap-1.5 text-caption font-black ${c.text} uppercase tracking-wider mb-1`}>
                     <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
-                    {isAdminSender ? <Crown className="h-3 w-3 text-purple-600" /> : <RoleBadge role={senderRole} />}
+                    {isAdminSender ? <Crown className="h-3.5 w-3.5 text-purple-600" /> : <RoleBadge role={senderRole} />}
                     <span className="text-slate-500 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
                   </div>
                   {m.forwardLabel && (
@@ -151,9 +151,9 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
                     // thing, click to jump straight to it" affordance.
                     <a
                       href={originalHref}
-                      className={`inline-flex items-center gap-1.5 text-[11px] font-black ${c.text} bg-white border ${c.border} rounded-full px-2.5 py-1 mt-2 ${c.btnHover} hover:text-white transition-colors`}
+                      className={`inline-flex items-center gap-1.5 text-caption font-black ${c.text} bg-white border ${c.border} rounded-full px-2.5 py-1 mt-2 ${c.btnHover} hover:text-white transition-colors`}
                     >
-                      View original <ExternalLink className="h-3 w-3 shrink-0" />
+                      View original <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                     </a>
                   )}
                 </div>
@@ -180,18 +180,18 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
             <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
             <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
               <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={`text-[11px] font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
+                <span className={`text-caption font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
                 {isAdminSender ? (
-                  <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
-                    <Crown className="h-2.5 w-2.5" /> Admin
+                  <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-caption font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
+                    <Crown className="h-3.5 w-3.5" /> Admin
                   </span>
                 ) : (
                   <RoleBadge role={senderRole} />
                 )}
-                <span className="text-[11px] text-slate-500 font-semibold">{formatTimestamp(m.timestamp)}</span>
+                <span className="text-caption text-slate-500 font-semibold">{formatTimestamp(m.timestamp)}</span>
                 {canForward && (
                   <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-500 hover:text-orange-600 transition-colors p-2 -m-2">
-                    <Forward className="h-3 w-3" />
+                    <Forward className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>

@@ -209,7 +209,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         </div>
         {isEmp && (
           <Button variant="primary" size="md" onClick={() => setIsNewOpen(true)}>
-            <Plus className="h-4.5 w-4.5" /> File a Ticket
+            <Plus className="h-5 w-5" /> File a Ticket
           </Button>
         )}
       </div>

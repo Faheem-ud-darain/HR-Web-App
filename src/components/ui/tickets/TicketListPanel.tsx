@@ -50,7 +50,7 @@ export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTic
               <span className="font-bold text-slate-900 text-sm line-clamp-1 flex items-center gap-1.5">
                 {t.title}
                 {isEmp && isTicketLiveWithHR(t.id) && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
+                  <span className="inline-flex items-center gap-1 text-caption font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full shrink-0">
                     <StatusDot tone="emerald" pulse /> LIVE
                   </span>
                 )}
@@ -66,11 +66,11 @@ export function TicketListPanel({ visibleTickets, selectedTicket, setSelectedTic
               const last = lastReplyPreview(t.replies);
               return <p className="text-xs text-slate-500 line-clamp-1 mb-2">{last ? <><span className="font-semibold">{nameFor(last.who)}:</span> {last.text}</> : t.description}</p>;
             })()}
-            <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+            <div className="flex items-center justify-between text-caption text-slate-500 font-semibold">
               <span className="flex items-center gap-1">
-                <User className="h-3 w-3" /> {nameFor(t.employeeName)}
+                <User className="h-3.5 w-3.5" /> {nameFor(t.employeeName)}
                 {t.employeeEmail.toLowerCase() === (currentEmail || '').toLowerCase() && (
-                  <span className="text-[11px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1 rounded">You</span>
+                  <span className="text-caption font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1 rounded">You</span>
                 )}
               </span>
               <span>{formatTicketDate(t.createdAt)}</span>

@@ -87,7 +87,7 @@ export function AssignLeadModal(p: AssignLeadModalProps) {
                 </label>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 mt-2">{p.hint}</p>
+            <p className="text-caption text-slate-400 mt-2">{p.hint}</p>
           </FormField>
         )}
 

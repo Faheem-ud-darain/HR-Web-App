@@ -47,7 +47,7 @@ function WarehouseFields({ value, onChange }: { value: WhForm; onChange: (next: 
 }
 
 const ErrorNote = ({ children }: { children: React.ReactNode }) => (
-  <div className="bg-rose-50 border border-rose-200 text-rose-700 font-semibold px-3 py-2 rounded-lg text-[11px]">{children}</div>
+  <div className="bg-rose-50 border border-rose-200 text-rose-700 font-semibold px-3 py-2 rounded-lg text-caption">{children}</div>
 );
 
 // layout "split": form on the left, list on the right (wide page). "stacked": form above the list (a column).
@@ -150,7 +150,7 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
                         closing ")" wrap onto its own line on narrow screens. Normalised here for display only. */}
                     <span className="truncate">{wh.name.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')}</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                  <div className="text-caption text-slate-400 font-bold uppercase tracking-wider mt-1">
                     Coords: <span className="font-mono text-slate-600">{wh.latitude}, {wh.longitude}</span> · Radius: <span className="text-orange-600 font-mono">{wh.radius}m</span>
                   </div>
                 </div>

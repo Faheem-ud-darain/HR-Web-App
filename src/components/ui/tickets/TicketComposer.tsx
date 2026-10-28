@@ -45,7 +45,7 @@ export function TicketComposer({ isClosed, selectedTicket, isAdmin, role, curren
       ) : (
         <form onSubmit={handleSendReply} className="space-y-2">
           {replyFileError && (
-            <div className="p-2 text-[11px] bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
+            <div className="p-2 text-caption bg-rose-50 text-rose-600 border border-rose-100 rounded-lg font-semibold flex items-center gap-1.5">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />{replyFileError}
             </div>
           )}

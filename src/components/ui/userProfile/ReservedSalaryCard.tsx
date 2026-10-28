@@ -33,16 +33,16 @@ export function ReservedSalaryCard({ profile, onChanged }: { profile: Profile; o
     }
   };
 
-  const small = 'text-[10px] font-bold px-2.5 py-1.5 rounded-md active:scale-97 transition-colors transition-transform';
+  const small = 'text-caption font-bold px-2.5 py-1.5 rounded-md active:scale-97 transition-colors transition-transform';
   return (
     <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 text-xs">
       <p className="font-bold text-indigo-900 flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Reserved Salary</p>
-      <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-indigo-800">
-        <div><span className="block text-[9px] text-indigo-400 font-bold uppercase">Auto-Reserved (system)</span>{formatMoney(profile.reservedSalaryBalance || 0, profile.region)}</div>
-        <div><span className="block text-[9px] text-indigo-400 font-bold uppercase">Manually Reserved</span>{formatMoney(profile.manualReservedAmount || 0, profile.region)}</div>
+      <div className="grid grid-cols-2 gap-2 text-caption font-medium text-indigo-800">
+        <div><span className="block text-caption text-indigo-400 font-bold uppercase">Auto-Reserved (system)</span>{formatMoney(profile.reservedSalaryBalance || 0, profile.region)}</div>
+        <div><span className="block text-caption text-indigo-400 font-bold uppercase">Manually Reserved</span>{formatMoney(profile.manualReservedAmount || 0, profile.region)}</div>
       </div>
-      {profile.manualReservedNote && <p className="text-[10px] text-indigo-700 italic">Note: {profile.manualReservedNote}</p>}
-      <p className="text-[9px] text-indigo-500 leading-relaxed">
+      {profile.manualReservedNote && <p className="text-caption text-indigo-700 italic">Note: {profile.manualReservedNote}</p>}
+      <p className="text-caption text-indigo-500 leading-relaxed">
         Both amounts are held and paid out only at resignation/termination — neither is deducted from this employee&apos;s current pay.
       </p>
 

@@ -68,7 +68,7 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               button real-estate instead explains that plainly so it
               doesn't read as "missing" a Start Shift button. */}
           {userProfile?.region === 'USA' ? (
-            <div className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5">
+            <div className="shrink-0 text-caption font-bold text-slate-400 uppercase tracking-wider px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5">
               <LocateFixed className="h-3.5 w-3.5" /> Auto Geofencing
             </div>
           ) : (
@@ -320,12 +320,12 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
         {userProfile?.region === 'USA' ? (
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-1.5">
             {(!userProfile.assignedWarehouses || userProfile.assignedWarehouses.length === 0) ? (
-              <p className="text-[10px] text-slate-400 italic">No warehouses assigned by HR yet — geofenced check-in will activate once a warehouse is assigned to your profile.</p>
+              <p className="text-caption text-slate-400 italic">No warehouses assigned by HR yet — geofenced check-in will activate once a warehouse is assigned to your profile.</p>
             ) : geoPermission === 'unsupported' ? (
-              <p className="text-[10px] text-rose-600 font-semibold leading-relaxed">Your browser/device does not support GPS location. Automatic geofenced check-in is unavailable here — please use a modern mobile or desktop browser.</p>
+              <p className="text-caption text-rose-600 font-semibold leading-relaxed">Your browser/device does not support GPS location. Automatic geofenced check-in is unavailable here — please use a modern mobile or desktop browser.</p>
             ) : geoPermission === 'denied' ? (
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] text-rose-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
+                <p className="text-caption text-rose-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
                 <Button
                   variant="danger"
                   size="sm"
@@ -336,26 +336,26 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                 </Button>
               </div>
             ) : (
-              <p className="text-[9px] text-slate-400 leading-relaxed">Your shift starts and ends automatically as you enter or leave an assigned warehouse&apos;s geofence — no manual check-in needed.</p>
+              <p className="text-caption text-slate-400 leading-relaxed">Your shift starts and ends automatically as you enter or leave an assigned warehouse&apos;s geofence — no manual check-in needed.</p>
             )}
           </div>
         ) : (
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
             {userProfile && isMobileApp && !shiftActive && (
-              <div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[10px] font-bold bg-rose-50 border-rose-200 text-rose-700">
-                <Smartphone className="h-3 w-3 shrink-0" />
+              <div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-caption font-bold bg-rose-50 border-rose-200 text-rose-700">
+                <Smartphone className="h-3.5 w-3.5 shrink-0" />
                 Shifts can only be started from a desktop/laptop browser — manual Start Shift is not available on a mobile device.
               </div>
             )}
             {userProfile && isTrackingLiveFor(userProfile) && !isMobileApp && !shiftActive && (
-              <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[10px] font-bold ${hrActions.isHeartbeatLive(trackerHeartbeat) ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                {hrActions.isHeartbeatLive(trackerHeartbeat) ? <Wifi className="h-3 w-3 shrink-0" /> : <WifiOff className="h-3 w-3 shrink-0" />}
+              <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-caption font-bold ${hrActions.isHeartbeatLive(trackerHeartbeat) ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                {hrActions.isHeartbeatLive(trackerHeartbeat) ? <Wifi className="h-3.5 w-3.5 shrink-0" /> : <WifiOff className="h-3.5 w-3.5 shrink-0" />}
                 {hrActions.isHeartbeatLive(trackerHeartbeat)
                   ? 'Tracker app connected — you can start your shift.'
                   : 'Tracker app not detected in recent check. Make sure it\'s running — we\'ll verify live before starting your shift.'}
               </div>
             )}
-            <p className="text-[9px] text-slate-400 leading-relaxed">
+            <p className="text-caption text-slate-400 leading-relaxed">
               If your account has screen tracking configured by HR/Admin, starting a shift activates it for the duration of your shift; ending your shift turns it off.
             </p>
           </div>

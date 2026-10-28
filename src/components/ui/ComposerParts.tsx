@@ -22,15 +22,17 @@ export const COMPOSER_TEXT = 'flex-1 w-full bg-transparent py-2.5 px-3 text-sm o
  *  new line, because a phone keyboard has no Shift key to combine it with. */
 export const enterSends = (e: React.KeyboardEvent): boolean => e.key === 'Enter' && !e.shiftKey && !isNativeMobileApp();
 
-export function AttachButton({ inputRef, onPick, accept, title = 'Attach a file' }: {
+export function AttachButton({ inputRef, onPick, accept, title = 'Attach a file', className = '' }: {
   inputRef: React.RefObject<HTMLInputElement | null>;
   onPick: (file: File | undefined) => void;
   accept?: string;
   title?: string;
+  /** Extra classes for the button (the picker itself stays in the page either way, so another control can open it). */
+  className?: string;
 }) {
   return (
     <>
-      <button type="button" title={title} aria-label={title} onClick={() => inputRef.current?.click()} className={`${ROUND_BTN} bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors`}>
+      <button type="button" title={title} aria-label={title} onClick={() => inputRef.current?.click()} className={`${ROUND_BTN} bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors ${className}`}>
         <Paperclip className="h-4 w-4" />
       </button>
       <input ref={inputRef} type="file" accept={accept} tabIndex={-1} className="hidden" onChange={e => { onPick(e.target.files?.[0]); e.target.value = ''; }} />
@@ -61,7 +63,7 @@ export function SendButton({ disabled, busy, onClick, className = 'bg-orange-600
 /** The file picked but not yet sent, with a remove button. */
 export function PendingFileChip({ name, onRemove }: { name: string; onRemove: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-slate-600">
+    <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-caption font-semibold text-slate-600">
       <span className="flex items-center gap-1.5 truncate"><FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" /> {name}</span>
       <button type="button" onClick={onRemove} aria-label="Remove attachment" className="text-slate-500 hover:text-rose-600 shrink-0">
         <X className="h-3.5 w-3.5" />

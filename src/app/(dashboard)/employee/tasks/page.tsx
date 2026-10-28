@@ -56,7 +56,7 @@ export default function TeamLeadTasksPage() {
         <div className="flex flex-wrap items-center gap-2 mt-1">
           <p className="text-slate-500 text-sm">You are Team Lead of:</p>
           {leadTeams.map(t => (
-            <Badge key={t} variant="default" className="text-xs flex items-center gap-1"><Star className="h-3 w-3" /> {t}</Badge>
+            <Badge key={t} variant="default" className="text-xs flex items-center gap-1"><Star className="h-3.5 w-3.5" /> {t}</Badge>
           ))}
         </div>
       </div>

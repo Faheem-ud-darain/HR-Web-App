@@ -58,11 +58,26 @@ export function navGroups(role: NavRole, { trackingEnabled = false, isTeamLead =
   ];
 }
 
+/** The four pages on the phone's tab bar (a fifth slot, "More", opens the full menu). */
+export function quickLinks(role: NavRole, { isTeamLead = false }: NavFlags = {}): NavItem[] {
+  const r = navRoot(role);
+  if (role === 'admin' || role === 'hr') {
+    return [item('Home', r, 'dashboard'), item('Tasks', `${r}/tasks`, 'tasks'), item('Chats', `${r}/team-chats`, 'teamChat'), item('Tickets', `${r}/tickets`, 'tickets')];
+  }
+  return [
+    item('Home', r, 'dashboard'), item('Chats', `${r}/chat`, 'teamChat'), item('Tickets', `${r}/tickets`, 'tickets'),
+    isTeamLead ? item('Tasks', `${r}/tasks`, 'teamTasks') : item('Salary', `${r}/salary`, 'payroll'),
+  ];
+}
+
 /** A page is current on its own address and on anything below it; a home page only on its exact address. */
 export function isNavActive(pathname: string | null | undefined, href: string, role: NavRole): boolean {
   const path = pathname || '';
   return href === navRoot(role) ? path === href : path === href || path.startsWith(`${href}/`);
 }
+
+/** The chat screens have their own full-height layout and a message box at the bottom, so the phone tab bar stays away. */
+export const isChatScreen = (pathname: string | null | undefined): boolean => /\/(chat|team-chats|direct-messages)$/.test(pathname || '');
 
 /** Which "unseen activity" dot, if any, belongs on this link. */
 export function navDotKey(href: string): DotKey | null {

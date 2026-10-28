@@ -88,10 +88,10 @@ export function LoggedInDevicesCard({ email }: { email: string }) {
                   <p className="text-sm font-semibold text-slate-900 truncate flex items-center gap-2">
                     {s.deviceLabel || 'Unknown device'}
                     {isThisDevice && (
-                      <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">This device</span>
+                      <span className="text-caption font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">This device</span>
                     )}
                   </p>
-                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                  <p className="text-caption text-slate-400 font-semibold mt-0.5">
                     Last active {formatDateTimeNY(s.lastSeenAt)}
                   </p>
                 </div>

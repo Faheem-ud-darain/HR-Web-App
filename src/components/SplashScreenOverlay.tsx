@@ -179,7 +179,7 @@ export function SplashScreenOverlay() {
           Employee Portal
         </p>
         <p
-          className="splash-tagline-in text-[11px] font-semibold text-amber-200/90"
+          className="splash-tagline-in text-caption font-semibold text-amber-200/90"
           style={{ letterSpacing: '0.12em' }}
         >
           by DelCargo

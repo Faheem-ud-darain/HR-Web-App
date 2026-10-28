@@ -52,14 +52,14 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
 
       <FormField label={<>Alias <span className="normal-case font-medium text-slate-400">(shown to their team instead of their real name)</span></>}>
         <Input type="text" {...bind('alias')} placeholder="e.g. Falcon, Agent-07, Employee 14" fieldSize="sm" />
-        <p className="text-[10px] text-slate-400 font-medium">Only HR/Admin ever see the real name. Leave blank to show the real name to everyone (not recommended once this is enforced in production).</p>
+        <p className="text-caption text-slate-400 font-medium">Only HR/Admin ever see the real name. Leave blank to show the real name to everyone (not recommended once this is enforced in production).</p>
       </FormField>
 
       <FormField label="Email Address *"><Input type="email" required {...bind('email')} fieldSize="sm" /></FormField>
 
       <FormField label="Account Password">
         <Input type="text" {...bind('password')} placeholder="Leave blank to keep the current password" minLength={6} fieldSize="sm" />
-        <p className="text-[10px] text-slate-400 font-medium">Their current password is never shown here for security. Only fill this in to set a new one (at least 6 characters) — otherwise leave it blank.</p>
+        <p className="text-caption text-slate-400 font-medium">Their current password is never shown here for security. Only fill this in to set a new one (at least 6 characters) — otherwise leave it blank.</p>
       </FormField>
 
       <div className="grid grid-cols-2 gap-3">
@@ -92,7 +92,7 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
 
       <FormField label={<span title="PTO accrual is calculated from this date instead of the joining date">Account Creation Date *</span>}>
         <Input type="date" required {...bind('accountCreationDate')} fieldSize="sm" className={pointer} />
-        <p className="text-[9px] text-slate-400 font-semibold">PTO accrual is calculated from this date, not the joining date.</p>
+        <p className="text-caption text-slate-400 font-semibold">PTO accrual is calculated from this date, not the joining date.</p>
       </FormField>
 
       <div className="space-y-1.5">

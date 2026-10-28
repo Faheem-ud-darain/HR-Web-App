@@ -85,7 +85,7 @@ export function AnnouncementPopup({ email, profile }: AnnouncementPopupProps) {
             <AlertTriangle className="h-5 w-5 text-amber-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Important Announcement</p>
+            <p className="text-caption font-bold text-amber-700 uppercase tracking-wider">Important Announcement</p>
             <h2 id="announcement-popup-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
               {current.title}
             </h2>
@@ -94,11 +94,11 @@ export function AnnouncementPopup({ email, profile }: AnnouncementPopupProps) {
 
         <div className="px-5 py-4 max-h-[45vh] overflow-y-auto">
           <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{current.content}</p>
-          <p className="text-[10px] text-slate-400 font-semibold mt-3">Posted by {current.createdBy} · {current.timestamp}</p>
+          <p className="text-caption text-slate-400 font-semibold mt-3">Posted by {current.createdBy} · {current.timestamp}</p>
         </div>
 
         <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <p className="text-[10px] text-slate-400 font-semibold">
+          <p className="text-caption text-slate-400 font-semibold">
             {pending.length > 1 ? `${pending.length} important announcements need your attention` : 'This will keep appearing until you acknowledge it'}
           </p>
           <Button

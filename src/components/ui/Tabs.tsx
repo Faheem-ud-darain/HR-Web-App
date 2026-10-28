@@ -69,7 +69,7 @@ export function Tabs<T extends string>({ value, onChange, items, variant = 'unde
             {React.isValidElement(item.icon) ? React.cloneElement(item.icon as React.ReactElement<{ weight?: IconWeight }>, { weight: active ? 'fill' : 'regular' }) : item.icon}
             {item.label}
             {item.count !== undefined && <span>({item.count})</span>}
-            {item.badge ? <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span> : null}
+            {item.badge ? <span className="bg-amber-500 text-white text-caption font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span> : null}
           </button>
         );
       })}

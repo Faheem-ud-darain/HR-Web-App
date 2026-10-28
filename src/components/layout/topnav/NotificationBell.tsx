@@ -31,7 +31,7 @@ export function NotificationBell({ role, email, open, onOpenChange }: { role: st
     const content = (
       <>
         <div className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words">{n.message}</div>
-        <div className="text-[11px] text-slate-500 font-medium text-right">{when}{when && n.timestamp ? ' • ' : ''}{n.timestamp}</div>
+        <div className="text-caption text-slate-500 font-medium text-right">{when}{when && n.timestamp ? ' • ' : ''}{n.timestamp}</div>
       </>
     );
     // Only notifications with a `link` (ticket / leave / chat mention: see buildNotificationLink) are clickable;
@@ -69,18 +69,18 @@ export function NotificationBell({ role, email, open, onOpenChange }: { role: st
             <span className="font-bold text-xs text-slate-800">Notifications</span>
             <div className="flex items-center gap-2">
               {bell.notifications.length > 0 && (
-                <button onClick={bell.clearAll} disabled={bell.clearing} className="text-[11px] font-bold text-slate-500 hover:text-rose-600 disabled:opacity-50 flex items-center gap-1 transition-colors">
-                  <Trash2 className="h-3 w-3" /> {bell.clearing ? 'Clearing…' : 'Clear All'}
+                <button onClick={bell.clearAll} disabled={bell.clearing} className="text-caption font-bold text-slate-500 hover:text-rose-600 disabled:opacity-50 flex items-center gap-1 transition-colors">
+                  <Trash2 className="h-3.5 w-3.5" /> {bell.clearing ? 'Clearing…' : 'Clear All'}
                 </button>
               )}
-              <span className="text-[11px] text-slate-500 font-semibold capitalize">Scope: {role}</span>
+              <span className="text-caption text-slate-500 font-semibold capitalize">Scope: {role}</span>
             </div>
           </div>
           <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
             {bell.notifications.map(row)}
             {bell.notifications.length === 0 && <div className="p-8 text-center text-slate-500 font-medium text-xs">No alerts active</div>}
             {bell.canLoadMore && (
-              <button onClick={bell.loadMore} disabled={bell.loadingMore} className="w-full p-3 text-[11px] font-bold text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-60">
+              <button onClick={bell.loadMore} disabled={bell.loadingMore} className="w-full p-3 text-caption font-bold text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-60">
                 {bell.loadingMore ? 'Loading…' : 'Load older alerts'}
               </button>
             )}

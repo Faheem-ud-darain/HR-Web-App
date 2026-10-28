@@ -59,7 +59,7 @@ export function ApplicationsModal({ isOpen, onClose, applications, onChanged }: 
             <option value="All">All Statuses</option>
             {APPLICATION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </Select>
-          <span className="ml-auto self-center text-[10px] font-semibold text-slate-400">{shown.length} of {applications.length} shown</span>
+          <span className="ml-auto self-center text-caption font-semibold text-slate-400">{shown.length} of {applications.length} shown</span>
         </div>
 
         <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
@@ -76,11 +76,11 @@ export function ApplicationsModal({ isOpen, onClose, applications, onChanged }: 
                 <button onClick={() => setExpandedId(expanded ? null : app.id)} className="w-full flex items-center justify-between text-left">
                   <div>
                     <p className="text-sm font-bold text-slate-900">{app.applicantName}</p>
-                    <p className="text-[10px] text-orange-600 font-bold uppercase tracking-wider">{app.positionTitle}</p>
+                    <p className="text-caption text-orange-600 font-bold uppercase tracking-wider">{app.positionTitle}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={status?.variant} size="sm" className="uppercase tracking-wider">{status?.label || app.status}</Badge>
-                    <span className="text-[9px] text-slate-400 font-semibold shrink-0">{app.submittedAt}</span>
+                    <span className="text-caption text-slate-400 font-semibold shrink-0">{app.submittedAt}</span>
                   </div>
                 </button>
 
@@ -89,7 +89,7 @@ export function ApplicationsModal({ isOpen, onClose, applications, onChanged }: 
                     <p className="text-xs text-slate-500 font-semibold">{app.applicantEmail}</p>
                     {app.coverLetter && <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{app.coverLetter}</p>}
                     <div className="flex items-center gap-2 pt-1">
-                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Status</label>
+                      <label className="text-caption font-bold text-slate-400 uppercase tracking-widest shrink-0">Status</label>
                       <Select
                         value={app.status}
                         disabled={updatingId === app.id}

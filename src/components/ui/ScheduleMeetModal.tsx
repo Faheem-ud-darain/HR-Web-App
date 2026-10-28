@@ -200,7 +200,7 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
             <Video className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>Google Meet Room</span>
           </div>
-          <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/70 px-2 py-0.5 rounded">Instant Auto-Link</span>
+          <span className="text-caption text-emerald-700 font-bold bg-emerald-100/70 px-2 py-0.5 rounded">Instant Auto-Link</span>
         </div>
 
         <div className="flex justify-end gap-3 pt-3 border-t border-slate-200">

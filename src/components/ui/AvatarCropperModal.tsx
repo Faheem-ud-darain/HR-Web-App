@@ -157,7 +157,7 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
           {loadError && (
             <div className="flex items-start gap-3 p-3 rounded-xl border bg-rose-50 border-rose-200">
               <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-slate-700 font-semibold leading-relaxed">{loadError}</p>
+              <p className="text-caption text-slate-700 font-semibold leading-relaxed">{loadError}</p>
             </div>
           )}
           <div
@@ -183,7 +183,7 @@ export function AvatarCropperModal({ file, onClose, onSave }: AvatarCropperModal
             {/* Circular frame overlay guide */}
             <div className="absolute inset-0 rounded-full ring-2 ring-inset ring-white/70 pointer-events-none" />
           </div>
-          <p className="text-center text-[10px] text-slate-400 font-semibold">Drag to reposition · use the controls below to zoom or rotate</p>
+          <p className="text-center text-caption text-slate-400 font-semibold">Drag to reposition · use the controls below to zoom or rotate</p>
 
           <div className="space-y-3">
             <div className="flex items-center gap-3">

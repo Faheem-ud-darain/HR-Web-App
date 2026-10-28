@@ -90,13 +90,13 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
             <h2 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-1.5">
               <Wrench className="h-4 w-4 text-sky-600" /> System Maintenance Notices
             </h2>
-            <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">
+            <p className="text-caption md:text-xs text-slate-500 mt-0.5">
               Warn everyone before you push an update — shown as a blocking popup to Employees, Team Leads, HR, and Admin alike.
             </p>
           </div>
           <button
             onClick={() => { resetForm(); setIsOpen(true); }}
-            className="shrink-0 bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-2 rounded-xl text-[11px] active:scale-97 transition-colors transition-transform shadow-sm flex items-center gap-1.5"
+            className="shrink-0 bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-2 rounded-xl text-caption active:scale-97 transition-colors transition-transform shadow-sm flex items-center gap-1.5"
           >
             <PlusCircle className="h-3.5 w-3.5" /> New Notice
           </button>
@@ -123,7 +123,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
                       {deletingId === n.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     </button>
                   </div>
-                  <p className={`text-[10px] font-bold ${isPast ? 'text-slate-400' : 'text-sky-700'}`}>
+                  <p className={`text-caption font-bold ${isPast ? 'text-slate-400' : 'text-sky-700'}`}>
                     {isPast ? 'Ended' : 'Window'}: {formatInViewerLocalTime(n.startAt)} — {formatInViewerLocalTime(n.endAt)} (your local time)
                   </p>
                 </div>
@@ -195,7 +195,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
           </div>
 
           <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
-            <p className="text-[11px] text-sky-800 font-semibold leading-relaxed">
+            <p className="text-caption text-sky-800 font-semibold leading-relaxed">
               Enter the time in Pakistan Standard Time — every employee, HR, and Admin will see it automatically
               converted to their own device&apos;s local time, plus a blocking popup and push notification.
             </p>

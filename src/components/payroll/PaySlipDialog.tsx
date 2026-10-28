@@ -37,9 +37,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       type="button"
       aria-label={`Copy ${label}`}
       onClick={() => { navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {}); }}
-      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+      className="inline-flex items-center gap-1 text-caption font-semibold text-slate-500 hover:text-slate-800"
     >
-      {done ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}{done ? 'Copied' : 'Copy'}
+      {done ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}{done ? 'Copied' : 'Copy'}
     </button>
   );
 }
@@ -74,10 +74,10 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
     <Modal isOpen={isOpen} onClose={onClose} title={`Salary for ${payPeriod(record.month).salaryMonth} — ${record.name}`}>
       <div className="space-y-4 font-sans text-xs">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Amount to pay</p>
+          <p className="text-caption font-bold uppercase tracking-wider text-emerald-700">Amount to pay</p>
           <p className="mt-1 text-2xl font-black text-emerald-900">{money(net)}</p>
           <div className="mt-2">{record.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Not paid yet</Badge>}</div>
-          <p className="mt-2 text-[11px] font-semibold text-emerald-800">Salary for {payPeriod(record.month).salaryMonth} · paid at the start of {payPeriod(record.month).paidMonth}</p>
+          <p className="mt-2 text-caption font-semibold text-emerald-800">Salary for {payPeriod(record.month).salaryMonth} · paid at the start of {payPeriod(record.month).paidMonth}</p>
         </div>
 
         {flags.length > 0 && (
@@ -180,7 +180,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                     <li key={c.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
                       <p className="font-bold">{money(c.previousAmount)} → {money(c.correctedAmount)} <span className={c.difference > 0 ? 'text-emerald-700' : 'text-rose-700'}>({c.difference > 0 ? '+' : '−'}{money(Math.abs(c.difference))})</span></p>
                       <p className="mt-0.5 leading-snug">{c.reason}</p>
-                      <p className="mt-1 text-[11px] text-amber-800/80">{new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {c.createdBy} · {c.settled ? 'Settled' : c.difference > 0 ? 'Still to pay the employee' : 'Still to recover'}</p>
+                      <p className="mt-1 text-caption text-amber-800/80">{new Date(c.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · {c.createdBy} · {c.settled ? 'Settled' : c.difference > 0 ? 'Still to pay the employee' : 'Still to recover'}</p>
                     </li>
                   ))}
                 </ul>

@@ -69,7 +69,7 @@ export function ProfileActions({ profile, onEdit, onOffboard, onChanged, onDelet
           </Button>
           {archive.exporting && archive.progress && (
             <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3" role="status" aria-live="polite">
-              <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-slate-600">
+              <div className="flex items-center justify-between gap-2 text-caption font-semibold text-slate-600">
                 <span className="min-w-0 truncate">{archive.progress.label}</span>
                 <span className="shrink-0 tabular-nums">{archive.progress.percent}%</span>
               </div>
@@ -77,12 +77,12 @@ export function ProfileActions({ profile, onEdit, onOffboard, onChanged, onDelet
                 <div className="h-full rounded-full bg-orange-500 transition-all duration-300" style={{ width: `${archive.progress.percent}%` }} />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-medium text-slate-400">Large accounts with many screenshots can take a few minutes. Keep this window open.</p>
-                <button type="button" onClick={archive.cancel} className="shrink-0 text-[11px] font-bold text-rose-600 hover:underline">Cancel</button>
+                <p className="text-caption font-medium text-slate-400">Large accounts with many screenshots can take a few minutes. Keep this window open.</p>
+                <button type="button" onClick={archive.cancel} className="shrink-0 text-caption font-bold text-rose-600 hover:underline">Cancel</button>
               </div>
             </div>
           )}
-          {!archive.exporting && archive.note && <p className="text-[11px] font-semibold text-slate-500 text-center" role="status">{archive.note}</p>}
+          {!archive.exporting && archive.note && <p className="text-caption font-semibold text-slate-500 text-center" role="status">{archive.note}</p>}
           <button
             onClick={() => setConfirmingDelete(true)}
             disabled={!archive.downloaded}
@@ -92,7 +92,7 @@ export function ProfileActions({ profile, onEdit, onOffboard, onChanged, onDelet
             <Trash2 className="h-3.5 w-3.5" /> Delete Account Permanently
           </button>
           {!archive.downloaded && (
-            <p className="text-[10px] text-slate-400 font-medium text-center">Download their data first — includes documents, payroll, leave/task/ticket history, and screenshots. Deletion cannot be undone.</p>
+            <p className="text-caption text-slate-400 font-medium text-center">Download their data first — includes documents, payroll, leave/task/ticket history, and screenshots. Deletion cannot be undone.</p>
           )}
         </div>
       )}

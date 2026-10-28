@@ -44,11 +44,11 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                 ? 'bg-bubble-own text-white rounded-tr-none' 
                 : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
             }`}>
-              <p className={`font-bold text-[11px] mb-0.5 ${isAuthorSelf ? 'text-white/90' : 'text-slate-500'}`}>
+              <p className={`font-bold text-caption mb-0.5 ${isAuthorSelf ? 'text-white/90' : 'text-slate-500'}`}>
                 {nameFor(selectedTicket.employeeName)} (Author)
               </p>
               <p className="font-medium leading-relaxed whitespace-pre-wrap break-words">{selectedTicket.description}</p>
-              <span className={`block text-[11px] mt-1 text-right ${isAuthorSelf ? 'text-white/90' : 'text-slate-500'}`}>
+              <span className={`block text-caption mt-1 text-right ${isAuthorSelf ? 'text-white/90' : 'text-slate-500'}`}>
                 {formatTicketDate(selectedTicket.createdAt)}
               </span>
             </div>
@@ -62,7 +62,7 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
           const who = rep.senderRole === 'hr' ? 'HR' : rep.senderRole === 'admin' ? 'Admin' : 'employee';
           return (
             <div key={rep.id} className="flex justify-center py-1">
-              <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-full px-3 py-1 text-center">
+              <span className="text-caption font-semibold text-slate-500 bg-slate-100 rounded-full px-3 py-1 text-center">
                 Ticket {rep.event} by {nameFor(rep.senderName)} ({who}) · {formatTicketDate(rep.timestamp)}
               </span>
             </div>
@@ -134,7 +134,7 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                     ? 'bg-orange-50/80 border-2 border-orange-300/80 text-slate-800 rounded-tl-none shadow-orange-100/50'
                     : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
               }`}>
-                <p className={`font-bold text-[11px] mb-0.5 ${
+                <p className={`font-bold text-caption mb-0.5 ${
                   isSenderSelf
                     ? 'text-white/90'
                     : isAdminViewer && isHrSender
@@ -156,7 +156,7 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                     plainImage
                   />
                 )}
-                <span className={`block text-[11px] mt-1 text-right ${
+                <span className={`block text-caption mt-1 text-right ${
                   isSenderSelf
                     ? 'text-white/90'
                     : isAdminViewer && isHrSender
@@ -167,7 +167,7 @@ export function TicketReplyLog({ currentEmail, selectedTicket, userProfile, prof
                 </span>
               </div>
               {showReceipt && (
-                <span className={`block text-[11px] font-semibold mt-1 ${isSenderSelf ? 'text-right' : 'text-left'} ${ownerHasSeen ? 'text-emerald-600' : 'text-slate-500'}`}>
+                <span className={`block text-caption font-semibold mt-1 ${isSenderSelf ? 'text-right' : 'text-left'} ${ownerHasSeen ? 'text-emerald-600' : 'text-slate-500'}`}>
                   {ownerHasSeen
                     ? `Seen by ${nameFor(selectedTicket.employeeName)} · ${formatTicketDate(ticketSeenState!.employeeSeenAt)}`
                     : `Not seen yet by ${nameFor(selectedTicket.employeeName)}`}

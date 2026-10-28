@@ -75,27 +75,27 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
                   <p className="text-sm font-bold text-slate-800">{mouseShiftSeconds > 0 ? formatDuration(mouseShiftSeconds) : '—'}</p>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Shift Time</p>
+                  <p className="text-caption text-slate-500 font-bold uppercase tracking-wider mt-0.5">Shift Time</p>
                 </div>
                 <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 text-center">
                   <p className="text-sm font-bold text-amber-800">{formatDuration(mouseTotalSeconds)}</p>
-                  <p className="text-[9px] text-amber-600 font-bold uppercase tracking-wider mt-0.5">Total Inactive</p>
+                  <p className="text-caption text-amber-600 font-bold uppercase tracking-wider mt-0.5">Total Inactive</p>
                 </div>
                 <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 text-center" title="Shift Time minus Total Inactive">
                   <p className="text-sm font-bold text-emerald-800">{mouseShiftSeconds > 0 ? formatDuration(mouseActiveSeconds) : '—'}</p>
-                  <p className="text-[9px] text-emerald-600 font-bold uppercase tracking-wider mt-0.5">Active Time</p>
+                  <p className="text-caption text-emerald-600 font-bold uppercase tracking-wider mt-0.5">Active Time</p>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
                   <p className="text-sm font-bold text-slate-800">{mouseLogs.length}</p>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Events</p>
+                  <p className="text-caption text-slate-500 font-bold uppercase tracking-wider mt-0.5">Events</p>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
                   <p className="text-sm font-bold text-slate-800">{mouseLogs.length ? formatDuration(mouseLongestSeconds) : '—'}</p>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Longest Stretch</p>
+                  <p className="text-caption text-slate-500 font-bold uppercase tracking-wider mt-0.5">Longest Stretch</p>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
                   <p className="text-sm font-bold text-slate-800">{mouseLogs.length ? formatDuration(mouseAvgSeconds) : '—'}</p>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Average / Event</p>
+                  <p className="text-caption text-slate-500 font-bold uppercase tracking-wider mt-0.5">Average / Event</p>
                 </div>
               </div>
     
@@ -104,7 +104,7 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                   plain divs keep it dependency-free). */}
               {mouseShiftSeconds > 0 && (
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <div className="flex items-center justify-between text-caption font-bold uppercase tracking-wider text-slate-400">
                     <span>Active vs Inactive (this period)</span>
                     <span>{Math.round((mouseActiveSeconds / mouseShiftSeconds) * 100)}% active</span>
                   </div>
@@ -120,7 +120,7 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                       title={`Inactive: ${formatDuration(mouseTotalSeconds)}`}
                     />
                   </div>
-                  <div className="flex items-center gap-4 text-[9px] font-semibold text-slate-500">
+                  <div className="flex items-center gap-4 text-caption font-semibold text-slate-500">
                     <span className="flex items-center gap-1"><StatusDot tone="emerald" size="sm" /> Active</span>
                     <span className="flex items-center gap-1"><StatusDot tone="amber" size="sm" /> Inactive</span>
                   </div>
@@ -136,16 +136,16 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                 const maxSeconds = Math.max(...chronological.map(g => g.totalSeconds), 1);
                 return (
                   <div className="space-y-1.5">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Inactive Time by Day</p>
+                    <p className="text-caption font-bold uppercase tracking-wider text-slate-400">Inactive Time by Day</p>
                     <div className="flex items-end gap-2 h-28 border-b border-slate-200 pb-1 overflow-x-auto">
                       {chronological.map(group => (
                         <div key={group.day} className="flex flex-col items-center gap-1 min-w-[2.5rem] shrink-0" title={`${group.day}: ${formatDuration(group.totalSeconds)}`}>
-                          <span className="text-[8px] font-bold text-amber-700">{formatDuration(group.totalSeconds)}</span>
+                          <span className="text-caption font-bold text-amber-700">{formatDuration(group.totalSeconds)}</span>
                           <div
                             className="w-6 bg-amber-400 rounded-t-sm"
                             style={{ height: `${Math.max(4, (group.totalSeconds / maxSeconds) * 80)}px` }}
                           />
-                          <span className="text-[8px] font-semibold text-slate-400 whitespace-nowrap">{group.day.replace(/, \d{4}$/, '')}</span>
+                          <span className="text-caption font-semibold text-slate-400 whitespace-nowrap">{group.day.replace(/, \d{4}$/, '')}</span>
                         </div>
                       ))}
                     </div>
@@ -165,11 +165,11 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                   {mouseLogsByDay().map(group => (
                     <div key={group.day} className="space-y-1.5">
                       <div className="flex items-center justify-between border-b border-slate-200 pb-1">
-                        <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">{group.day}</p>
-                        <p className="text-[10px] font-bold text-amber-700">{formatDuration(group.totalSeconds)} total</p>
+                        <p className="text-caption font-bold text-slate-700 uppercase tracking-wider">{group.day}</p>
+                        <p className="text-caption font-bold text-amber-700">{formatDuration(group.totalSeconds)} total</p>
                       </div>
                       <Table size="xs" density="tight">
-                        <THead className="text-[9px] text-slate-400">
+                        <THead className="text-caption text-slate-400">
                           <tr>
                             <Th>Start</Th>
                             <Th>End</Th>
@@ -183,7 +183,7 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
                               <Td className="font-semibold text-slate-700">{formatTimeNY(log.startAt)}</Td>
                               <Td className="font-semibold text-slate-700">{formatTimeNY(log.endAt)}</Td>
                               <Td align="right" className="font-bold text-amber-700">{formatDuration(log.durationSeconds)}</Td>
-                              <Td align="right" className="text-slate-400 text-[10px]">{log.deviceLabel || '—'}</Td>
+                              <Td align="right" className="text-slate-400 text-caption">{log.deviceLabel || '—'}</Td>
                             </Tr>
                           ))}
                         </TBody>

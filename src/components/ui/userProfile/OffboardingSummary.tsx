@@ -21,8 +21,8 @@ export function OffboardingSummary({ profile }: { profile: Profile }) {
   return (
     <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl space-y-2 text-xs">
       <p className="font-bold text-rose-800 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Offboarding Clearance</p>
-      <div className="space-y-1 text-[11px] font-semibold text-rose-700">
-        <p className="flex items-center gap-1.5"><Calendar className="h-3 w-3" /> Offboard Date: {profile.offboardDate}</p>
+      <div className="space-y-1 text-caption font-semibold text-rose-700">
+        <p className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Offboard Date: {profile.offboardDate}</p>
         <div className="mt-1 space-y-1">
           <Check done={s.itClearance}>IT Hardware Clearance</Check>
           <Check done={s.financeClearance}>Finance Settlement</Check>

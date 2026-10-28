@@ -2,13 +2,14 @@
 
 import React, { useId, useState } from 'react';
 import { useAutoGrow } from '@/lib/useAutoGrow';
-import { CrownIcon as Crown, MegaphoneIcon as Megaphone, FileTextIcon as FileText, VideoCameraIcon as Video, SmileyIcon as Smile } from '@phosphor-icons/react/dist/ssr';
+import { CrownIcon as Crown, MegaphoneIcon as Megaphone, FileTextIcon as FileText, VideoCameraIcon as Video, SmileyIcon as Smile, PlusIcon as Plus, PaperclipIcon as Paperclip } from '@phosphor-icons/react/dist/ssr';
 import { Avatar } from '@/components/ui/Avatar';
 import { displayName, Team, Profile } from '@/lib/hrData';
 import { EmojiPicker } from '@/components/ui/chat/chatHelpers';
 import { AttachButton, SendButton, PendingFileChip, enterSends, SuggestionList, ROUND_BTN, COMPOSER_BAR, COMPOSER_FIELD, COMPOSER_TEXT } from '@/components/ui/ComposerParts';
 import type { TeamDocument } from '@/lib/hrData';
 import { useChatComposer } from '@/components/ui/chat/useChatComposer';
+import { DismissibleArea } from '@/components/ui/DismissibleArea';
 
 interface ChatComposerProps {
   oversight: boolean;
@@ -37,16 +38,22 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
   const docOpen = !mentionOpen && !!docTag && docTagSuggestions.length > 0;
   const suggestionCount = mentionOpen ? mentionSuggestions.length : docOpen ? docTagSuggestions.length : 0;
   const active = Math.min(activeIdx, Math.max(suggestionCount - 1, 0));
+  // On phones the attach, Meet and announcement buttons fold into one "+" menu so the text box keeps its width.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const addMeetLink = () => {
+    const title = '🎥 Google Meet Video Room\nClick to join video call: https://meet.google.com/new';
+    setDraft(prev => prev ? `${prev}\n${title}` : title);
+  };
   useAutoGrow(textareaRef, draft, 192); // grows and shrinks with what is typed
   return (
     <div className={`${COMPOSER_BAR} shrink-0 relative`}>
       {oversight && (
-        <p className="text-[11px] text-purple-600 font-bold mb-2 flex items-center gap-1"><Crown className="h-3 w-3" /> Posting as Admin — this message will be highlighted for everyone in {activeTeam?.name || 'this team'}.</p>
+        <p className="text-caption text-purple-600 font-bold mb-2 flex items-center gap-1"><Crown className="h-3.5 w-3.5 shrink-0" /> Posting as Admin — highlighted for everyone in {activeTeam?.name || 'this team'}.</p>
       )}
       {draftIsAnnouncement && (
-        <p className="text-[11px] text-amber-700 font-bold mb-2 flex items-center gap-1"><Megaphone className="h-3 w-3" /> Sending as a pinned Announcement — everyone in {activeTeam?.name || 'this team'} will see it highlighted at the top.</p>
+        <p className="text-caption text-amber-700 font-bold mb-2 flex items-center gap-1"><Megaphone className="h-3.5 w-3.5 shrink-0" /> Pinned announcement — shown at the top for everyone in {activeTeam?.name || 'this team'}.</p>
       )}
-      {sendError && <p className="text-[11px] text-rose-600 font-bold mb-1.5 px-1">{sendError}</p>}
+      {sendError && <p className="text-caption text-rose-600 font-bold mb-1.5 px-1">{sendError}</p>}
       {pendingFile && (
         <div className="mb-2">
           <PendingFileChip name={pendingFile.name} onRemove={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} />
@@ -59,7 +66,7 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
             <>
               <Avatar src={p.profilePicture} name={displayName(p, currentUserRole)} size={22} />
               <span className="text-xs font-bold text-slate-800 truncate">{displayName(p, currentUserRole)}</span>
-              {p.role === 'admin' && <Crown className="h-3 w-3 text-purple-600 ml-auto shrink-0" />}
+              {p.role === 'admin' && <Crown className="h-3.5 w-3.5 text-purple-600 ml-auto shrink-0" />}
             </>
           )}
         </SuggestionList>
@@ -77,39 +84,61 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
       )}
       {docTag && docTagSuggestions.length === 0 && teamDocuments.length === 0 && (
         <div className="absolute bottom-full left-3 mb-1 w-64 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10 px-3 py-2">
-          <span className="text-[11px] text-slate-500 font-semibold">No documents in this team yet.</span>
+          <span className="text-caption text-slate-500 font-semibold">No documents in this team yet.</span>
         </div>
       )}
     
       <div className="flex items-center gap-1.5 md:gap-2">
-        <AttachButton inputRef={fileInputRef} onPick={handleFilePick} title="Attach file" />
-    
+        <AttachButton inputRef={fileInputRef} onPick={handleFilePick} title="Attach file" className="max-md:hidden" />
+
         <button
           type="button"
-          onClick={() => {
-            const meetLink = 'https://meet.google.com/new';
-            const title = `🎥 Google Meet Video Room\nClick to join video call: ${meetLink}`;
-            setDraft(prev => prev ? `${prev}\n${title}` : title);
-          }}
+          onClick={addMeetLink}
           title="Create Google Meet Video Call" aria-label="Create Google Meet Video Call"
-          className={`${ROUND_BTN} bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors`}
+          className={`${ROUND_BTN} max-md:hidden bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors`}
         >
           <Video className="h-4 w-4" />
         </button>
-        
+
         {oversight && (
           <button
             type="button"
             onClick={() => setDraftIsAnnouncement(v => !v)}
-            title="Send as Announcement" aria-label="Send as Announcement"
-            className={`${ROUND_BTN} transition-colors ${
+            title="Send as Announcement" aria-label="Send as Announcement" aria-pressed={draftIsAnnouncement}
+            className={`${ROUND_BTN} max-md:hidden transition-colors ${
               draftIsAnnouncement ? 'bg-amber-500 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
             }`}
           >
             <Megaphone className="h-4 w-4" />
           </button>
         )}
-    
+
+        <DismissibleArea open={menuOpen} onClose={() => setMenuOpen(false)} className="relative md:hidden">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label="More actions" aria-haspopup="true" aria-expanded={menuOpen}
+            className={`${ROUND_BTN} transition-colors ${draftIsAnnouncement ? 'bg-amber-500 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'}`}
+          >
+            <Plus className={`h-5 w-5 transition-transform ${menuOpen ? 'rotate-45' : ''}`} />
+          </button>
+          {menuOpen && (
+            <div role="menu" className="absolute bottom-full left-0 mb-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1.5 popover-enter">
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <Paperclip className="h-5 w-5 text-slate-500" /> Attach a file
+              </button>
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); addMeetLink(); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <Video className="h-5 w-5 text-emerald-600" /> Add a Google Meet link
+              </button>
+              {oversight && (
+                <button type="button" role="menuitemcheckbox" aria-checked={draftIsAnnouncement} onClick={() => { setMenuOpen(false); setDraftIsAnnouncement(v => !v); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  <Megaphone className="h-5 w-5 text-amber-600" /> {draftIsAnnouncement ? 'Sending as announcement' : 'Send as announcement'}
+                </button>
+              )}
+            </div>
+          )}
+        </DismissibleArea>
+
         <div className={`${COMPOSER_FIELD} pl-1 pr-3`}>
           <div ref={emojiWrapperRef} className="shrink-0">
             <button

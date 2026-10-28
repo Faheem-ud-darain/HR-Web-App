@@ -265,7 +265,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm text-center space-y-4">
           <div className={`h-14 w-14 rounded-full flex items-center justify-center mx-auto ${isRejected ? 'bg-rose-50' : 'bg-amber-50'}`}>
             {isRejected ? (
-              <ShieldAlert weight="duotone" className="h-7 w-7 text-rose-500" />
+              <ShieldAlert weight="duotone" className="h-6 w-6 text-rose-500" />
             ) : (
               <svg className="animate-spin h-7 w-7 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -338,7 +338,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           is a second, explicit guard against the same failure mode. */}
       <div className="flex flex-col flex-1 w-full min-w-0 overflow-hidden overflow-x-hidden">
         <TopNav />
-        <main className={`flex-1 w-full min-w-0 overflow-x-hidden bg-app md:rounded-tl-2xl ${
+        <main className={`flex-1 w-full min-w-0 overflow-x-hidden bg-app rounded-t-2xl ${
           isChatScreen
             ? 'overflow-hidden flex flex-col p-1.5 pb-2.5 md:px-6 lg:px-8 2xl:px-12 md:py-8'
             : isTicketPanelOpen
@@ -348,7 +348,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ? 'overflow-hidden flex flex-col p-0'
               : isTicketsScreen
                 ? 'overflow-y-auto px-4 py-4 pb-2.5 md:px-6 lg:px-8 2xl:px-12 md:py-8'
-                : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-6 lg:px-8 2xl:px-12 md:py-8 pb-8'
+                : 'overflow-y-auto px-3 py-4 sm:px-4 md:px-6 lg:px-8 2xl:px-12 md:py-8 pb-28 md:pb-8'
         }`}>
           {/* key={pathname} forces PageTransition to remount on every
               nav-tab switch so its animating state (and page-enter) resets

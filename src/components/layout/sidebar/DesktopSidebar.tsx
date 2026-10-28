@@ -95,7 +95,7 @@ export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, o
               >
                 <span className="text-white font-black text-sm">D</span>
               </button>
-              <m.span {...fade} className="font-display font-bold text-[15px] text-slate-900 tracking-tight leading-none whitespace-nowrap">
+              <m.span {...fade} className="font-display font-bold text-sm text-slate-900 tracking-tight leading-none whitespace-nowrap">
                 DelCargo <span className="text-slate-500 font-semibold">HR</span>
               </m.span>
             </div>
@@ -105,7 +105,7 @@ export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, o
                 <div key={group.title ?? 'home'}>
                   {i > 0 && (
                     <div className="relative h-7">
-                      <m.span {...fade} className="absolute left-3 bottom-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">{group.title}</m.span>
+                      <m.span {...fade} className="absolute left-3 bottom-1 text-caption font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">{group.title}</m.span>
                       <m.span aria-hidden="true" animate={{ opacity: expanded ? 0 : 1 }} transition={move} className="absolute inset-x-2 bottom-3 h-px bg-slate-200" />
                     </div>
                   )}

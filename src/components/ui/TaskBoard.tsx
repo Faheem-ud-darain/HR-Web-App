@@ -17,8 +17,8 @@ interface TaskBoardProps {
 }
 
 const PRIORITY_ICON: Record<Task['priority'], React.ReactNode> = {
-  high:   <AlertTriangle className="h-3 w-3" />,
-  medium: <Clock className="h-3 w-3" />,
+  high:   <AlertTriangle className="h-3.5 w-3.5" />,
+  medium: <Clock className="h-3.5 w-3.5" />,
   low:    null,
 };
 
@@ -109,7 +109,7 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
             <div key={label} className="flex items-start gap-2.5 bg-slate-50 rounded-lg p-3 border border-slate-100">
               <Icon weight="duotone" className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+                <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">{label}</p>
                 <p className="text-xs md:text-sm font-semibold text-slate-800 mt-0.5">{value}</p>
               </div>
             </div>
@@ -123,7 +123,7 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
               <span className={`px-2.5 py-1 rounded-full border whitespace-nowrap ${task.status === s ? TASK_STATUS_STYLES[s] : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
                 {TASK_STATUS_LABELS[s]}
               </span>
-              {i < STATUS_SEQUENCE.length - 1 && <ArrowRight className="h-3 w-3 text-slate-300 flex-shrink-0" />}
+              {i < STATUS_SEQUENCE.length - 1 && <ArrowRight className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />}
             </React.Fragment>
           ))}
         </div>
@@ -258,7 +258,7 @@ export function TaskBoard({ tasks, onUpdate, filterEmails, canDelete = true, rea
                 task.status === 'in_progress' ? 'border-indigo-400 bg-indigo-50' :
                 'border-slate-300 bg-white group-hover:border-orange-400'
               }`}>
-                {task.status === 'done'        && <CheckCircle2 className="h-3 w-3" />}
+                {task.status === 'done'        && <CheckCircle2 className="h-3.5 w-3.5" />}
                 {task.status === 'in_progress' && <div className="h-2 w-2 rounded-full bg-indigo-400" />}
               </div>
 
@@ -267,28 +267,28 @@ export function TaskBoard({ tasks, onUpdate, filterEmails, canDelete = true, rea
                   <span className={`font-bold text-slate-900 text-xs md:text-sm ${task.status === 'done' ? 'line-through opacity-60' : ''}`}>
                     {task.title}
                   </span>
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>
+                  <span className={`inline-flex items-center gap-1 text-caption font-bold px-2 py-0.5 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>
                     {PRIORITY_ICON[task.priority]}{task.priority}
                   </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>
+                  <span className={`text-caption font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>
                     {TASK_STATUS_LABELS[task.status]}
                   </span>
-                  {isOverdue(task.dueDate, task.status)  && <span className="text-[10px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-full">OVERDUE</span>}
-                  {isDueSoon(task.dueDate) && task.status !== 'done' && <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">DUE SOON</span>}
+                  {isOverdue(task.dueDate, task.status)  && <span className="text-caption font-bold text-rose-700 bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-full">OVERDUE</span>}
+                  {isDueSoon(task.dueDate) && task.status !== 'done' && <span className="text-caption font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">DUE SOON</span>}
                 </div>
 
                 {task.description && (
                   <p className="text-xs text-slate-500 mb-2 leading-relaxed line-clamp-1">{task.description}</p>
                 )}
 
-                <div className="flex flex-wrap gap-2 md:gap-3 text-[10px] text-slate-400 font-semibold">
-                  <span className="flex items-center gap-1"><User className="h-3 w-3" /> {task.assignedTo}</span>
-                  <span className="flex items-center gap-1"><Building2 className="h-3 w-3" /> {task.team}</span>
-                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                <div className="flex flex-wrap gap-2 md:gap-3 text-caption text-slate-400 font-semibold">
+                  <span className="flex items-center gap-1"><User className="h-3.5 w-3.5" /> {task.assignedTo}</span>
+                  <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {task.team}</span>
+                  <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                 </div>
               </div>
 
-              <span className="hidden sm:block text-[10px] text-slate-400 font-semibold flex-shrink-0 mt-1 group-hover:text-orange-500 transition-colors">Click to open →</span>
+              <span className="hidden sm:block text-caption text-slate-400 font-semibold flex-shrink-0 mt-1 group-hover:text-orange-500 transition-colors">Click to open →</span>
             </div>
           </Card>
         ))}

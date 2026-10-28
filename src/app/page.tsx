@@ -69,11 +69,11 @@ export default function Home() {
       <header className="min-h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-12 sticky top-0 z-50 shadow-sm min-w-0 pt-safe">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="font-bold text-base sm:text-lg text-orange-600 tracking-tight leading-none truncate">DelCargo <span className="hidden sm:inline">Logistics</span></div>
-          <span className="hidden sm:inline-block text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">Careers Portal</span>
+          <span className="hidden sm:inline-block text-caption font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">Careers Portal</span>
         </div>
         <Link 
           href="/auth"
-          className="shrink-0 text-[10px] sm:text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-colors transition-transform shadow-sm shadow-orange-600/10 active:scale-97 whitespace-nowrap"
+          className="shrink-0 text-caption sm:text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-colors transition-transform shadow-sm shadow-orange-600/10 active:scale-97 whitespace-nowrap"
         >
           <span className="hidden sm:inline">Sign In to Employee Portal</span><span className="sm:inline md:hidden">Sign In</span> →
         </Link>
@@ -85,7 +85,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="h-14 border-t border-slate-200 bg-white flex items-center justify-center gap-3 text-[10px] font-semibold text-slate-400">
+      <footer className="h-14 border-t border-slate-200 bg-white flex items-center justify-center gap-3 text-caption font-semibold text-slate-400">
         <span>© {new Date().getFullYear()} DelCargo Operations Team. All rights reserved.</span>
         <span className="text-slate-300">•</span>
         <Link href="/privacy" className="hover:text-orange-600 transition-colors">Privacy Policy</Link>

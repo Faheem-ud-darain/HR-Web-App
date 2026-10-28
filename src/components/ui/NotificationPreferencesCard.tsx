@@ -129,7 +129,7 @@ export function NotificationPreferencesCard({ email }: { email: string }) {
       </div>
 
       {!permissionGranted && osPermission !== null && (
-        <p className="px-4 md:px-6 pt-3 text-[10px] text-slate-400 leading-relaxed">
+        <p className="px-4 md:px-6 pt-3 text-caption text-slate-400 leading-relaxed">
           If tapping Enable doesn&apos;t prompt you, notifications were likely blocked before — open your phone/browser Settings for this app and turn notifications on there, then come back.
         </p>
       )}

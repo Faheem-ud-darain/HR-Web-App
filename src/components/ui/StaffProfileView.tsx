@@ -85,7 +85,7 @@ export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, def
                 aria-label="Change profile picture"
                 className="absolute bottom-0 right-0 h-5 w-5 md:h-7 md:w-7 rounded-full bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center shadow-md border-2 border-white transition-colors transition-transform active:scale-90"
               >
-                <Camera className="h-2.5 w-2.5 md:h-3.5 md:w-3.5" />
+                <Camera className="h-3.5 w-3.5 md:h-3.5 md:w-3.5" />
               </button>
               <input ref={photoInputRef} type="file" accept="image/*" onChange={photo.handleInputChange} className="hidden" />
             </div>

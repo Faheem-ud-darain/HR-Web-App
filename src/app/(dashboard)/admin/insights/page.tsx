@@ -160,18 +160,18 @@ export default function AdminInsightsPage() {
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
               <BarChart3 className="h-3.5 w-3.5" style={{ color: SERIES.usa }} /> Payroll Cost — Last 6 Months
             </h3>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+            <p className="text-caption text-slate-400 font-semibold mt-0.5">
               USA (USD) and Pakistan (PKR) shown separately — never summed, since they&apos;re different currencies.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+            <div className="flex items-center gap-3 text-caption font-bold text-slate-500">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES.usa }} /> USA</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES.pakistan }} /> Pakistan</span>
             </div>
             <button
               onClick={() => setShowPayrollTable(v => !v)}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-caption font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
             >
               <Table2 className="h-3.5 w-3.5" /> {showPayrollTable ? 'Chart View' : 'Table View'}
             </button>
@@ -209,7 +209,7 @@ export default function AdminInsightsPage() {
                   <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
                     <div className="relative w-full flex items-end justify-center gap-1" style={{ height: totalPx }}>
                       {hover?.chart === 'payroll' && hover.idx === idx && (
-                        <div className="absolute -top-14 z-10 bg-slate-900 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                        <div className="absolute -top-14 z-10 bg-slate-900 text-white text-caption font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
                           <div>{monthLabel(m.month)}</div>
                           <div>{hover.seriesLabel}: <span className="font-bold">{hover.value}</span></div>
                         </div>
@@ -227,7 +227,7 @@ export default function AdminInsightsPage() {
                         onMouseLeave={() => setHover(null)}
                       />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500">{monthLabel(m.month)}</span>
+                    <span className="text-caption font-bold text-slate-500">{monthLabel(m.month)}</span>
                   </div>
                 );
               })}
@@ -243,19 +243,19 @@ export default function AdminInsightsPage() {
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
               <BarChart3 className="h-3.5 w-3.5" style={{ color: SERIES.absence }} /> Absence &amp; Leave — Last 6 Months
             </h3>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+            <p className="text-caption text-slate-400 font-semibold mt-0.5">
               Urgent/Normal leave counted in days actually falling in that month; absence is unexplained no-clock-in/inactivity/under-4-hours records.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+            <div className="flex items-center gap-3 text-caption font-bold text-slate-500">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES.urgent }} /> Urgent Leave</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES.normal }} /> Normal Leave</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: SERIES.absence }} /> Absence</span>
             </div>
             <button
               onClick={() => setShowAbsenceTable(v => !v)}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-caption font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
             >
               <Table2 className="h-3.5 w-3.5" /> {showAbsenceTable ? 'Chart View' : 'Table View'}
             </button>
@@ -302,7 +302,7 @@ export default function AdminInsightsPage() {
                       onMouseLeave={() => setHover(null)}
                     >
                       {hover?.chart === 'absence' && hover.idx === idx && (
-                        <div className="absolute -top-20 z-10 bg-slate-900 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                        <div className="absolute -top-20 z-10 bg-slate-900 text-white text-caption font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
                           <div>{monthLabel(m.month)}</div>
                           <div>Urgent: <span className="font-bold">{m.urgentDays}d</span></div>
                           <div>Normal: <span className="font-bold">{m.normalDays}d</span></div>
@@ -319,7 +319,7 @@ export default function AdminInsightsPage() {
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500">{monthLabel(m.month)}</span>
+                    <span className="text-caption font-bold text-slate-500">{monthLabel(m.month)}</span>
                   </div>
                 );
               })}
@@ -334,7 +334,7 @@ export default function AdminInsightsPage() {
           <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5 text-slate-500" /> Headcount by Region
           </h3>
-          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Current snapshot from active employee profiles.</p>
+          <p className="text-caption text-slate-400 font-semibold mt-0.5">Current snapshot from active employee profiles.</p>
         </div>
         <CardContent className="p-4 md:p-6 space-y-3">
           {headcountByRegion.map((h, idx) => (
@@ -350,7 +350,7 @@ export default function AdminInsightsPage() {
                   style={{ width: `${(h.count / maxHeadcount) * 100}%`, backgroundColor: h.color }}
                 />
                 {hover?.chart === 'headcount' && hover.idx === idx && (
-                  <div className="absolute -top-11 left-0 z-10 bg-slate-900 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                  <div className="absolute -top-11 left-0 z-10 bg-slate-900 text-white text-caption font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
                     {h.label}: <span className="font-bold">{h.count}</span>
                   </div>
                 )}

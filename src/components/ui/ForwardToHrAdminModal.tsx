@@ -53,14 +53,14 @@ export function ForwardToHrAdminModal({ sender, kind, sourceLabel, sourceId, hea
     <Modal isOpen onClose={() => !busy && onClose()} title="Forward to HR & Admin">
       <div className="space-y-4">
         <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{heading}</p>
+          <p className="text-caption font-bold text-slate-400 uppercase tracking-wider mb-1">{heading}</p>
           {title && <p className="text-xs font-bold text-slate-800 break-words">{title}</p>}
           <p className={`text-xs mt-1 line-clamp-3 whitespace-pre-wrap break-words ${title ? 'text-slate-500' : 'font-semibold text-slate-700 mt-0'}`}>
             {body || <span className="italic text-slate-400">(no text)</span>}
           </p>
           {attachmentName && (
-            <p className="text-[11px] font-bold text-slate-500 mt-1.5 flex items-center gap-1">
-              <FileText className="h-3 w-3 shrink-0" /> {attachmentName}
+            <p className="text-caption font-bold text-slate-500 mt-1.5 flex items-center gap-1">
+              <FileText className="h-3.5 w-3.5 shrink-0" /> {attachmentName}
             </p>
           )}
         </div>

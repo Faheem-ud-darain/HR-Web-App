@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { StatCard } from '@/components/ui/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
 import { LightningIcon as Zap, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
-import { IconChip } from '@/components/ui/IconChip';
 import { Profile, TimesheetEntry, displayName, formatDurationBetween, localShiftDate } from '@/lib/hrData';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { formatTimeNY, APP_TIMEZONE } from '@/lib/timezone';
@@ -86,37 +85,27 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
 
   return (
     <>
-      <Card
-        onClick={() => setIsOpen(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(true); } }}
-        className="cursor-pointer"
-      >
-        <CardContent className="pt-4 md:pt-5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[10px] md:text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                Active Employees Now
-                <span className="relative flex h-1.5 w-1.5 shrink-0">
+      <StatCard
+        label="Active Employees Now"
+        labelExtra={
+          <span className="relative flex h-1.5 w-1.5 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
                 </span>
-              </p>
-              <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">{activeEntries.length}</p>
-            </div>
-            <IconChip tone="emerald" icon={Zap} />
-          </div>
-
-          <Sparkline
+        }
+        value={activeEntries.length}
+        size="xl"
+        chip={{ icon: Zap, tone: 'emerald' }}
+        onClick={() => setIsOpen(true)}
+        sub="Shifts started, last 7 days"
+      >
+        <Sparkline
             values={counts}
             label={i => dayInfos[i].label}
             detail={i => `${counts[i]} shift${counts[i] === 1 ? '' : 's'}`}
             colorClass="text-orange-500"
           />
-          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Shifts started, last 7 days</p>
-        </CardContent>
-      </Card>
+      </StatCard>
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={`Active Employees (${activeRoster.length})`}>
         {activeRoster.length === 0 ? (
@@ -130,13 +119,13 @@ export function ActiveEmployeesCard({ employees, timesheets, viewerRole }: Activ
                   <p className="text-sm font-bold text-slate-900 truncate">
                     {profile ? displayName(profile, viewerRole) : entry.employeeEmail}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">{profile?.jobTitle || profile?.role || entry.employeeEmail}</p>
+                  <p className="text-caption text-slate-400 truncate">{profile?.jobTitle || profile?.role || entry.employeeEmail}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs font-bold text-emerald-700 flex items-center gap-1 justify-end">
-                    <Clock className="h-3 w-3" /> {formatDurationBetween(entry.clockIn, new Date().toISOString())}
+                    <Clock className="h-3.5 w-3.5" /> {formatDurationBetween(entry.clockIn, new Date().toISOString())}
                   </p>
-                  <p className="text-[9px] text-slate-400 font-semibold">
+                  <p className="text-caption text-slate-400 font-semibold">
                     since {formatTimeNY(entry.clockIn)}
                   </p>
                 </div>

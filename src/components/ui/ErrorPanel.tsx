@@ -20,7 +20,7 @@ export function ErrorPanel({ error, onRetry, fullScreen = false }: { error: Erro
         <p className="mt-1 text-sm text-slate-600">
           This screen could not load. Your data is safe. Try again, and if it keeps happening tell HR or Admin what you were doing.
         </p>
-        {error.digest && <p className="mt-2 text-[11px] text-slate-400">Reference: {error.digest}</p>}
+        {error.digest && <p className="mt-2 text-caption text-slate-400">Reference: {error.digest}</p>}
         <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
           <button type="button" onClick={onRetry} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-700 min-h-[44px]">
             Try again

@@ -149,7 +149,7 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
           </button>
           <button
             onClick={() => setViewDate(new Date(today.getFullYear(), today.getMonth(), 1))}
-            className="text-[10px] sm:text-xs font-bold px-2 py-1 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
+            className="text-caption sm:text-xs font-bold px-2 py-1 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
           >
             Today
           </button>
@@ -160,10 +160,10 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 text-[10px] font-bold">
-        <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-blue-100 border border-blue-300"></span><Palmtree className="h-3 w-3" /> Leave (approved)</span>
-        <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-orange-50 border border-orange-300"></span><ClipboardList className="h-3 w-3" /> Task due</span>
-        <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-amber-50 border border-amber-300"></span><AlertTriangle className="h-3 w-3" /> Conflict: task + leave overlap</span>
+      <div className="flex flex-wrap gap-3 text-caption font-bold">
+        <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-blue-100 border border-blue-300"></span><Palmtree className="h-3.5 w-3.5" /> Leave (approved)</span>
+        <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-orange-50 border border-orange-300"></span><ClipboardList className="h-3.5 w-3.5" /> Task due</span>
+        <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-amber-50 border border-amber-300"></span><AlertTriangle className="h-3.5 w-3.5" /> Conflict: task + leave overlap</span>
       </div>
 
       {/* Grid */}
@@ -171,63 +171,81 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
         {/* Weekday headers */}
         <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
           {weekdays.map(d => (
-            <div key={d} className="text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider py-2">{d}</div>
+            <div key={d} className="text-center text-caption font-bold text-slate-500 uppercase tracking-wider py-2">{d}</div>
           ))}
         </div>
 
         {/* Day cells */}
         <div className="grid grid-cols-7 divide-x divide-y divide-slate-100">
           {daysInMonth.map((date, i) => {
-            if (!date) return <div key={`pad-${i}`} className="bg-slate-50/30 h-20 sm:h-24" />;
+            if (!date) return <div key={`pad-${i}`} className="bg-slate-50/30 h-14 sm:h-24" />;
 
             const dayData = getDayData(date);
             const isToday = isSameDay(date, today);
             const hasEvents = dayData.events.length > 0;
 
+            const hasLeave = dayData.events.some(e => e.type === 'leave');
+            const hasTask = dayData.events.some(e => e.type === 'task');
+            // On a phone a day that has something on it is just tinted (amber when a task clashes with leave, blue for
+            // leave, orange for a task) and carries dots; tapping it opens the day's details.
+            const phoneTint = dayData.hasConflict ? 'max-sm:bg-amber-50' : hasLeave && hasTask ? 'max-sm:bg-amber-50' : hasLeave ? 'max-sm:bg-blue-50' : hasTask ? 'max-sm:bg-orange-50' : '';
+            const label = `${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${hasEvents ? `, ${dayData.events.length} on this day` : ''}`;
+
             return (
-              <div
+              <button
+                type="button"
                 key={date.toISOString()}
                 onClick={() => setModalDay(dayData)}
-                className={`h-20 sm:h-24 p-1 cursor-pointer transition-colors flex flex-col group relative ${
-                  dayData.hasConflict ? 'bg-amber-50/40 hover:bg-amber-50' :
-                  hasEvents ? 'bg-white hover:bg-slate-50/80' :
+                aria-label={label}
+                className={`h-14 sm:h-24 p-1 text-left transition-colors flex flex-col items-center sm:items-stretch group relative ${phoneTint} ${
+                  dayData.hasConflict ? 'sm:bg-amber-50/40 sm:hover:bg-amber-50' :
+                  hasEvents ? 'sm:bg-white sm:hover:bg-slate-50/80' :
                   'bg-white hover:bg-slate-50/30'
                 }`}
               >
                 {/* Date number */}
-                <div className={`text-[10px] sm:text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full mb-0.5 ${
+                <div className={`text-xs font-bold w-6 h-6 sm:w-5 sm:h-5 flex items-center justify-center rounded-full mb-0.5 ${
                   isToday ? 'bg-orange-600 text-white' : 'text-slate-600 group-hover:text-slate-900'
                 }`}>
                   {date.getDate()}
                 </div>
 
-                {/* Conflict badge */}
-                {dayData.hasConflict && (
-                  <div className="flex items-center gap-0.5 text-[8px] font-bold text-amber-700 mb-0.5 bg-amber-50 border border-amber-200 rounded px-1 w-fit">
-                    <AlertTriangle className="h-2.5 w-2.5" /> Conflict
+                {/* Phone: one dot per kind of thing on the day */}
+                {hasEvents && (
+                  <div className="sm:hidden flex items-center gap-0.5" aria-hidden="true">
+                    {hasLeave && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+                    {hasTask && <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />}
+                    {dayData.hasConflict && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
                   </div>
                 )}
 
-                {/* Event pills — show up to 2 */}
-                <div className="space-y-0.5 flex-1 overflow-hidden">
+                {/* Conflict badge */}
+                {dayData.hasConflict && (
+                  <div className="max-sm:hidden flex items-center gap-0.5 text-caption font-bold text-amber-700 mb-0.5 bg-amber-50 border border-amber-200 rounded px-1 w-fit">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Conflict
+                  </div>
+                )}
+
+                {/* Event pills — show up to 2 (tablet and up) */}
+                <div className="max-sm:hidden space-y-0.5 flex-1 overflow-hidden">
                   {dayData.events.slice(0, 2).map((event, idx) => (
                     <div
                       key={idx}
-                      className={`text-[8px] font-semibold px-1 py-0.5 rounded truncate border ${event.isConflict ? 'ring-1 ring-amber-400' : ''} ${
+                      className={`text-caption font-semibold px-1 py-0.5 rounded truncate border ${event.isConflict ? 'ring-1 ring-amber-400' : ''} ${
                         event.type === 'leave' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-orange-50 text-orange-800 border-orange-200'
                       }`}
                     >
                       <span className="inline-flex items-center gap-0.5">
-                        {event.type === 'task' ? <ClipboardList className="h-2 w-2" /> : <Palmtree className="h-2 w-2" />}
+                        {event.type === 'task' ? <ClipboardList className="h-3.5 w-3.5" /> : <Palmtree className="h-3.5 w-3.5" />}
                         {event.label.split('—')[0].split(':')[0]}
                       </span>
                     </div>
                   ))}
                   {dayData.events.length > 2 && (
-                    <div className="text-[8px] text-slate-400 font-semibold pl-1">+{dayData.events.length - 2} more</div>
+                    <div className="text-caption text-slate-500 font-semibold pl-1">+{dayData.events.length - 2} more</div>
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -246,7 +264,7 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
                 <AlertTriangle className="h-4 w-4 text-amber-700 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold">Schedule Conflict Detected</p>
-                  <p className="text-[11px] text-amber-800 font-medium mt-0.5">An employee has a task due on a day they are scheduled for leave.</p>
+                  <p className="text-caption text-amber-800 font-medium mt-0.5">An employee has a task due on a day they are scheduled for leave.</p>
                 </div>
               </div>
             )}
@@ -274,23 +292,23 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <h5 className="text-xs font-bold text-slate-900">{event.label}</h5>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
+                        <span className={`text-caption font-bold px-1.5 py-0.5 rounded border uppercase ${
                           event.type === 'leave' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-orange-50 border-orange-200 text-orange-700'
                         }`}>
                           {event.type}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 font-semibold mt-1">
+                      <p className="text-caption text-slate-500 font-semibold mt-1">
                         Department: {event.team}
-                        {event.isConflict && <span className="text-amber-700 font-bold ml-2 inline-flex items-center gap-0.5"><AlertTriangle className="h-2.5 w-2.5" /> Conflict</span>}
+                        {event.isConflict && <span className="text-amber-700 font-bold ml-2 inline-flex items-center gap-0.5"><AlertTriangle className="h-3.5 w-3.5" /> Conflict</span>}
                       </p>
                       {event.rawLeave && (
-                        <p className="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed border-t border-slate-100 pt-1 whitespace-pre-wrap break-words">
+                        <p className="text-caption text-slate-400 font-medium mt-1 leading-relaxed border-t border-slate-100 pt-1 whitespace-pre-wrap break-words">
                           Reason: {event.rawLeave.reason}
                         </p>
                       )}
                       {event.rawTask && (
-                        <p className="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed border-t border-slate-100 pt-1 whitespace-pre-wrap break-words">
+                        <p className="text-caption text-slate-400 font-medium mt-1 leading-relaxed border-t border-slate-100 pt-1 whitespace-pre-wrap break-words">
                           Description: {event.rawTask.description || 'No description provided'}
                         </p>
                       )}

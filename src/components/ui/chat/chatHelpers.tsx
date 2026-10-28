@@ -39,7 +39,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => vo
     >
       {EMOJI_GROUPS.map(group => (
         <div key={group.label}>
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-0.5 mb-1">{group.label}</p>
+          <p className="text-caption font-bold text-slate-500 uppercase tracking-wider px-0.5 mb-1">{group.label}</p>
           <div className="grid grid-cols-8 gap-0.5">
             {group.emojis.map(emoji => (
               <button
@@ -77,7 +77,7 @@ export function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; o
           <Avatar key={v.id} src={v.profilePicture} name={v.fullName} size={13} className="ring-1 ring-white" />
         ))}
       </div>
-      <span className="text-[11px] font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
+      <span className="text-caption font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
         Seen{viewers.length > 3 ? ` by ${viewers.length}` : ''}
       </span>
     </button>
@@ -106,7 +106,7 @@ export function RoleBadge({ role, className = '' }: { role?: string; className?:
   if (!info) return null;
   const Icon = info.icon;
   return (
-    <span className={`flex items-center gap-0.5 ${info.bg} ${info.text} text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${className}`}>
+    <span className={`flex items-center gap-0.5 ${info.bg} ${info.text} text-caption font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${className}`}>
       <Icon className="h-2.5 w-2.5" /> {info.label}
     </span>
   );

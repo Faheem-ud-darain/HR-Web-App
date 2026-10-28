@@ -22,7 +22,7 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
         <div>
           <p className="text-xs text-slate-500 font-semibold">Reviewing Employee</p>
           <p className="text-sm font-bold text-slate-900">{displayName(selectedReviewEmp, userProfile?.role)}</p>
-          <p className="text-[10px] text-slate-500 font-bold">{selectedReviewEmp.email} · {selectedReviewEmp.jobTitle || 'Staff'}</p>
+          <p className="text-caption text-slate-500 font-bold">{selectedReviewEmp.email} · {selectedReviewEmp.jobTitle || 'Staff'}</p>
         </div>
         <Badge variant={selectedReviewEmp.region === 'USA' ? 'default' : 'success'}>
           {selectedReviewEmp.region === 'USA' ? 'USA Operations' : 'Pakistan Remote'}
@@ -48,8 +48,8 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
                 {reviewEntries.map((entry, idx) => (
                   <Tr key={idx}>
                     <Td className="font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</Td>
-                    <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
-                    <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
+                    <Td className="text-slate-600 font-medium font-mono text-caption">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
+                    <Td className="text-slate-600 font-medium font-mono text-caption">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                     <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                     <Td align="right">
                       <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
@@ -78,7 +78,7 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Clock In / Out</p>
+                    <p className="text-caption text-slate-400 font-semibold uppercase">Clock In / Out</p>
                     <p className="text-xs font-semibold text-slate-700 font-mono">
                       {entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}
                       {' → '}
@@ -86,7 +86,7 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
+                    <p className="text-caption text-slate-400 font-semibold uppercase">Duration</p>
                     <p className="text-xs font-bold text-slate-900">{entry.duration || '—'}</p>
                   </div>
                 </div>

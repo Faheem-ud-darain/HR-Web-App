@@ -38,11 +38,11 @@ export function MessageAttachment({ url, name, size, spaced, linkClass, onOpenIm
     <a
       href={safeHref(url)}
       {...(download ? { download: name } : { target: '_blank', rel: 'noreferrer' })}
-      className={`flex items-center gap-1.5 min-w-0 break-all text-[11px] font-bold underline ${spaced ? 'mt-2' : ''} ${linkClass}`}
+      className={`flex items-center gap-1.5 min-w-0 break-all text-caption font-bold underline ${spaced ? 'mt-2' : ''} ${linkClass}`}
     >
       <FileText className="h-3.5 w-3.5 shrink-0" /> {name || 'Attachment'}
       {size !== undefined && <span className="font-semibold opacity-80">({formatBytes(size)})</span>}
-      <Download className="h-3 w-3 shrink-0" />
+      <Download className="h-3.5 w-3.5 shrink-0" />
     </a>
   );
 }

@@ -56,7 +56,7 @@ export function ScreenshotLightbox({ shots, index, total, onClose, onNav }: Scre
         <span className="text-xs font-semibold text-slate-200">{formatDateTimeNY(shot.timestamp)} · {index + 1} / {total}</span>
         <div className="flex items-center gap-1.5">
           <button onClick={zoomOut} disabled={zoom <= 1} aria-label="Zoom out" className={`${BUTTON} disabled:opacity-40`}><ZoomOut className="h-4 w-4" /></button>
-          <span className="text-[10px] font-bold w-10 text-center">{Math.round(zoom * 100)}%</span>
+          <span className="text-caption font-bold w-10 text-center">{Math.round(zoom * 100)}%</span>
           <button onClick={zoomIn} disabled={zoom >= 4} aria-label="Zoom in" className={`${BUTTON} disabled:opacity-40`}><ZoomIn className="h-4 w-4" /></button>
           <button onClick={() => setZoom(1)} title="Reset zoom" aria-label="Reset zoom" className={BUTTON}><RotateCcw className="h-4 w-4" /></button>
           <button onClick={onClose} aria-label="Close" className={`${BUTTON} ml-1`}><X className="h-4 w-4" /></button>

@@ -20,7 +20,7 @@ function DocumentFileRow({ name, kind, url, onPreview }: { name: string; kind: s
       <div className="flex items-center gap-2 min-w-0">
         <FileText className="h-4 w-4 text-orange-600 shrink-0" />
         <span className="truncate">{name}</span>
-        <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded">{kind}</span>
+        <span className="text-caption text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded">{kind}</span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button type="button" onClick={onPreview} className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors">
@@ -36,7 +36,7 @@ function DocumentFileRow({ name, kind, url, onPreview }: { name: string; kind: s
 
 const Field = ({ label, value }: { label: string; value: string }) => (
   <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-    <p className="text-[9px] font-bold text-slate-400 uppercase">{label}</p>
+    <p className="text-caption font-bold text-slate-400 uppercase">{label}</p>
     <p className="text-xs font-semibold text-slate-800">{value}</p>
   </div>
 );

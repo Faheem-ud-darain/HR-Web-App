@@ -67,15 +67,15 @@ export function TeamZones({ teams, employees, warehouses, loading, deletingName,
                     <span>{displayName(member, 'hr')}</span>
                     <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                       {member.isTeamLead && member.leadTeams?.includes(team.name) && (
-                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                          <Star className="h-2.5 w-2.5" /> Lead
+                        <span className="text-caption font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <Star className="h-3.5 w-3.5" /> Lead
                         </span>
                       )}
-                      <button onClick={() => onRemoveMember(member, team.name)} className="min-h-9 px-2 text-slate-400 hover:text-rose-600 text-[10px] font-bold lg:min-h-0 lg:px-0">Remove</button>
+                      <button onClick={() => onRemoveMember(member, team.name)} className="min-h-9 px-2 text-slate-400 hover:text-rose-600 text-caption font-bold lg:min-h-0 lg:px-0">Remove</button>
                     </div>
                   </div>
                 ))}
-                {members.length === 0 && <div className="h-full flex items-center justify-center text-slate-400 text-[10px] font-bold py-6">Drag members here</div>}
+                {members.length === 0 && <div className="h-full flex items-center justify-center text-slate-400 text-caption font-bold py-6">Drag members here</div>}
               </div>
             </div>
           );

@@ -72,7 +72,7 @@ export function BankDetailsModal({ initial, region, onSaved, onClose }: {
         <FormField label="Bank Name" size="md"><Input type="text" value={bankName} onChange={e => setBankName(e.target.value)} fieldSize="md" placeholder="e.g. Habib Bank Limited" /></FormField>
         <FormField label="Account Number" size="md"><Input type="text" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} fieldSize="md" className="font-mono" placeholder="Enter your account number" /></FormField>
         <FormField label={usa ? 'Routing Number' : 'IBAN'} size="md"><Input type="text" value={iban} onChange={e => setIban(e.target.value)} fieldSize="md" className="font-mono" placeholder={usa ? 'e.g. 021000021' : 'e.g. PK12ABCD0000001234567890'} /></FormField>
-        <p className="text-[10px] text-slate-400 leading-relaxed">Changes to your bank details are saved immediately and visible to HR/Payroll for your next salary cycle.</p>
+        <p className="text-caption text-slate-400 leading-relaxed">Changes to your bank details are saved immediately and visible to HR/Payroll for your next salary cycle.</p>
         <FormFooter busy={busy} onClose={onClose} submitLabel={busy ? 'Saving…' : 'Save Bank Details'} />
       </form>
     </Modal>
@@ -102,7 +102,7 @@ export function ContactNumbersModal({ initial, onSaved, onClose }: {
         <FormError>{error}</FormError>
         <FormField label="Own Number" size="md"><Input type="tel" value={personal} onChange={e => setPersonal(e.target.value)} fieldSize="md" placeholder="e.g. +92 300 1234567" /></FormField>
         <FormField label="Company Allocated Number (if applicable)" size="md"><Input type="tel" value={company} onChange={e => setCompany(e.target.value)} fieldSize="md" placeholder="Leave blank if none issued" /></FormField>
-        <p className="text-[10px] text-slate-400 leading-relaxed">Changes to your contact numbers are saved immediately and visible to HR/Admin.</p>
+        <p className="text-caption text-slate-400 leading-relaxed">Changes to your contact numbers are saved immediately and visible to HR/Admin.</p>
         <FormFooter busy={busy} onClose={onClose} submitLabel={busy ? 'Saving…' : 'Save Contact Numbers'} />
       </form>
     </Modal>

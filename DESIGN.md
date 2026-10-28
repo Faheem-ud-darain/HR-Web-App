@@ -76,11 +76,13 @@ Colors in DelCargo HR serve a functional utility, indicating focus and roles wit
 
 ## 3. Typography
 
-**Display Font:** Geist Sans (with system-ui, sans-serif)
-**Body Font:** Geist Sans (with system-ui, sans-serif)
-**Label/Mono Font:** Geist Mono (with monospace)
+**Display Font:** Xmind (headings, page titles, stat numbers; `font-display`, applied to `h1`–`h3` automatically)
+**Body Font:** Questrial (everything else; it has one regular weight, so bold text in the body face is thickened by the browser)
+**Mono:** the system monospace stack
 
-**Character:** A modern, clean neo-grotesque pairing that ensures technical clarity and dense, legible information layout.
+Both are set in `src/app/layout.tsx`; Xmind is bundled in `src/app/fonts` because it is newer than Next.js's built-in Google font list.
+
+**Character:** A clean grotesque headline face over a light geometric body face, for legible, dense information layouts.
 
 ### Hierarchy
 - **Display** (Bold (700), clamp(2rem, 5vw, 3rem), 1.2): Used for primary hero headers and dashboard main titles.
@@ -88,6 +90,13 @@ Colors in DelCargo HR serve a functional utility, indicating focus and roles wit
 - **Title** (Medium (500), 1.125rem, 1.4): Used for subheadings and card details.
 - **Body** (Regular (400), 0.875rem, 1.5): Used for standard data labels, form copy, and text tables. Line length is capped at 75ch.
 - **Label** (Medium (500), 0.75rem, normal): Used for badges, utility tags, and uppercase headers.
+
+### Type and icon scale (use only these)
+Sizes are Tailwind steps; never write an arbitrary `text-[Npx]`.
+- **Caption** `text-caption` (11px): badges, timestamps, hints. The smallest text in the app.
+- **Label** `text-xs` (12px) · **Body** `text-sm` (14px) · **Title** `text-base` (16px) · then `text-lg`, `text-xl`, `text-2xl`, `text-3xl` for headings and numbers.
+- **Icons** (Phosphor): `h-3.5` (14px) beside caption or label text · `h-4` (16px) in buttons and rows · `h-5` (20px) in tiles and nav · `h-6` (24px) for icon buttons and headings · `h-8`, `h-10`, `h-12` only for empty states. Not 12px, 18px or 28px.
+- **Icon weight:** outline by default; **fill** for the current page, the selected tab and card tiles; **duotone** for decorative icons (empty states, notice popups, information rows).
 
 ## 4. Elevation
 

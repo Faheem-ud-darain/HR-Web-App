@@ -87,8 +87,8 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                   <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 truncate min-w-0">
                     <span className="truncate">{selectedTicket.title}</span>
                     {isEmp && isTicketLiveWithHR(selectedTicket.id) && (
-                      <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                        <Headset className="h-3 w-3" /> Live
+                      <span className="inline-flex shrink-0 items-center gap-1 text-caption font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        <Headset className="h-3.5 w-3.5" /> Live
                       </span>
                     )}
                   </h3>
@@ -116,8 +116,8 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                       </button>
                     )}
                     {isClosed && !isPrivileged && (
-                      <span className="text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
-                        <Lock className="h-3 w-3" /> Closed
+                      <span className="text-caption font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                        <Lock className="h-3.5 w-3.5" /> Closed
                       </span>
                     )}
                     {/* Available on closed tickets too — no status
@@ -135,14 +135,14 @@ export function TicketConversationPanel({ selectedTicket, keyboardHeight, setSel
                     )}
                   </div>
                 </div>
-                <div className="text-[11px] text-slate-600 font-bold mt-0.5 flex items-center gap-1.5 min-w-0">
+                <div className="text-caption text-slate-600 font-bold mt-0.5 flex items-center gap-1.5 min-w-0">
                   <span className="shrink-0 whitespace-nowrap">Opened by:</span>
                   <button
                     onClick={() => handleInspectApplicant(selectedTicket.employeeEmail)}
                     className="text-orange-700 hover:underline flex items-center gap-0.5 min-w-0"
                   >
                     <span className="truncate min-w-0">{nameFor(selectedTicket.employeeName)}</span>
-                    <Eye className="h-3 w-3 shrink-0" />
+                    <Eye className="h-3.5 w-3.5 shrink-0" />
                   </button>
                 </div>
               </div>

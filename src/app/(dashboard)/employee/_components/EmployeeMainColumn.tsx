@@ -34,7 +34,7 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
           <CardContent className="pt-4 md:pt-5 px-3 md:px-5">
             <div className="flex flex-col-reverse md:flex-row md:items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Leave Balance</p>
+                <p className="text-caption md:text-xs font-semibold text-slate-500">Leave Balance</p>
                 <p className="text-xl md:text-2xl font-bold text-slate-900 mt-0.5 md:mt-1 tracking-tight">
                   {userProfile ? getRemainingPTO(allLeaves || [], userProfile.fullName, getPTOAccrualDate(userProfile)) : 0} <span className="text-xs md:text-base font-medium">Days</span>
                 </p>
@@ -47,7 +47,7 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
           <CardContent className="pt-4 md:pt-5 px-3 md:px-5">
             <div className="flex flex-col-reverse md:flex-row md:items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Accrued</p>
+                <p className="text-caption md:text-xs font-semibold text-slate-500">Accrued</p>
                 <p className="text-xl md:text-2xl font-bold text-slate-900 mt-0.5 md:mt-1 tracking-tight">
                   {userProfile ? getAccruedPTOForDisplay(getPTOAccrualDate(userProfile)) : 0} <span className="text-xs md:text-base font-medium">Days</span>
                 </p>
@@ -89,7 +89,7 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
                   )}
                 </p>
                 {payrollSelf.payrollRecord.deductions > 0 && (
-                  <p className="text-[10px] text-emerald-700 mt-1">
+                  <p className="text-caption text-emerald-700 mt-1">
                     Includes {formatMoney(payrollSelf.payrollRecord.deductions, payrollSelf.region)} in deductions — see My Salary for the full breakdown.
                   </p>
                 )}
@@ -120,15 +120,15 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <span className={`font-bold text-sm text-slate-900 ${task.status === 'done' ? 'line-through opacity-50' : ''}`}>{task.title}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>{task.priority}</span>
-                        {isOverdue && <span className="text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded-full">OVERDUE</span>}
-                        {isDueSoon && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.2 rounded-full">DUE SOON</span>}
+                        <span className={`text-caption font-bold px-1.5 py-0.2 rounded-full border ${TASK_PRIORITY_STYLES[task.priority]}`}>{task.priority}</span>
+                        {isOverdue && <span className="text-caption font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.2 rounded-full">OVERDUE</span>}
+                        {isDueSoon && <span className="text-caption font-bold text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.2 rounded-full">DUE SOON</span>}
                       </div>
                       {task.description && <p className="text-xs text-slate-500 mb-1.5 line-clamp-1">{task.description}</p>}
-                      <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-1"><Calendar className="h-3 w-3 shrink-0" /> Due: {formatDateNY(task.dueDate)} · {task.team}</p>
+                      <p className="text-caption text-slate-400 font-semibold flex items-center gap-1"><Calendar className="h-3.5 w-3.5 shrink-0" /> Due: {formatDateNY(task.dueDate)} · {task.team}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>{TASK_STATUS_LABELS[task.status]}</span>
+                      <span className={`text-caption font-bold px-2 py-0.5 rounded-full border ${TASK_STATUS_STYLES[task.status]}`}>{TASK_STATUS_LABELS[task.status]}</span>
                       <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-orange-500 transition-colors" />
                     </div>
                   </div>
@@ -191,11 +191,11 @@ export function EmployeeMainColumn({ userProfile, allLeaves, tasksNeedingAttenti
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
+                      <p className="text-caption text-slate-400 font-semibold uppercase">Duration</p>
                       <p className="text-xs font-semibold text-slate-700">{leave.duration}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
+                      <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
                       <p className="text-xs font-semibold text-slate-700">{leave.reason}</p>
                     </div>
                   </div>

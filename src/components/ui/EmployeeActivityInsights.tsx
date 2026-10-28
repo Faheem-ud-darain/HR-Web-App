@@ -184,17 +184,17 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
               <BarChart3 className="h-3.5 w-3.5 text-orange-500" /> Last 7 Days
             </h3>
-            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Tap a day to see its breakdown below. Only your own last week is shown.</p>
+            <p className="text-caption text-slate-400 font-semibold mt-0.5">Tap a day to see its breakdown below. Only your own last week is shown.</p>
           </div>
           <div className="flex items-center gap-3">
             {/* Legend — two series, always shown */}
-            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+            <div className="flex items-center gap-3 text-caption font-bold text-slate-500">
               <span className="flex items-center gap-1.5"><StatusDot tone="emerald" size="sm" /> Active</span>
               <span className="flex items-center gap-1.5"><StatusDot tone="amber" size="sm" /> Inactivity</span>
             </div>
             <button
               onClick={() => setShowTable(v => !v)}
-              className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-caption font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
             >
               <Table2 className="h-3.5 w-3.5" /> {showTable ? 'Chart View' : 'Table View'}
             </button>
@@ -242,7 +242,7 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
                       onMouseLeave={() => setHoverIdx(null)}
                     >
                       {hoverIdx === idx && (
-                        <div className="absolute -top-14 z-10 bg-slate-900 text-white text-[10px] font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                        <div className="absolute -top-14 z-10 bg-slate-900 text-white text-caption font-semibold rounded-lg px-2.5 py-1.5 whitespace-nowrap shadow-lg">
                           <div>{d.label}</div>
                           <div className="text-emerald-300">Active {secondsToHM(d.activeSeconds)}</div>
                           <div className="text-amber-300">Inactive {secondsToHM(d.inactiveSeconds)}</div>
@@ -264,7 +264,7 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
                         </div>
                       )}
                     </div>
-                    <span className={`text-[10px] font-bold ${isSelected ? 'text-orange-600' : 'text-slate-500'}`}>{d.label}</span>
+                    <span className={`text-caption font-bold ${isSelected ? 'text-orange-600' : 'text-slate-500'}`}>{d.label}</span>
                   </div>
                 );
               })}
@@ -279,12 +279,12 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
           <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
             <MousePointerClick className="h-3.5 w-3.5 text-orange-500" /> Breakdown — {selectedBucket?.label}
           </h3>
-          <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Every continuous stretch (3+ min) of no mouse activity during a tracked shift that day.</p>
+          <p className="text-caption text-slate-400 font-semibold mt-0.5">Every continuous stretch (3+ min) of no mouse activity during a tracked shift that day.</p>
         </div>
         <CardContent className="p-0">
           {(!selectedBucket || selectedBucket.logs.length === 0) ? (
             <div className="py-10 text-center space-y-1.5">
-              <Clock weight="duotone" className="h-7 w-7 text-slate-300 mx-auto" />
+              <Clock weight="duotone" className="h-6 w-6 text-slate-300 mx-auto" />
               <p className="text-xs font-semibold text-slate-500">No inactivity recorded on this day.</p>
             </div>
           ) : (

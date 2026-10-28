@@ -13,7 +13,7 @@ export default function PublicCareersPage() {
       <header className="min-h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sm:px-12 sticky top-0 z-50 pt-safe">
         <div className="flex items-center gap-2">
           <div className="font-bold text-lg text-orange-600 tracking-tight">DelCargo Logistics</div>
-          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Careers</span>
+          <span className="text-caption font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Careers</span>
         </div>
         <Link 
           href="/auth"
@@ -37,7 +37,7 @@ export default function PublicCareersPage() {
             <div className="space-y-1 text-slate-500 font-medium leading-relaxed">
               <p>⏱️ USA Operations: 9:00 AM - 5:00 PM EST</p>
               <p>⏱️ Remote PK Team: 12:00 PM - 9:00 PM PKT</p>
-              <p className="text-[10px] text-slate-400 mt-1.5">Mon - Fri (Saturday/Sunday Off)</p>
+              <p className="text-caption text-slate-400 mt-1.5">Mon - Fri (Saturday/Sunday Off)</p>
             </div>
           </div>
 
@@ -54,7 +54,7 @@ export default function PublicCareersPage() {
               />
               <button 
                 type="submit" 
-                className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold active:scale-97 transition-colors transition-transform shrink-0"
+                className="bg-orange-600 hover:bg-orange-700 text-white rounded-lg px-3 py-1.5 text-caption font-bold active:scale-97 transition-colors transition-transform shrink-0"
               >
                 Subscribe
               </button>
@@ -73,7 +73,7 @@ export default function PublicCareersPage() {
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto border-t border-slate-100 mt-10 pt-6 text-center text-[10px] text-slate-400 font-bold">
+        <div className="max-w-5xl mx-auto border-t border-slate-100 mt-10 pt-6 text-center text-caption text-slate-400 font-bold">
           © {new Date().getFullYear()} DelCargo Operations Team. All rights reserved.
         </div>
       </footer>

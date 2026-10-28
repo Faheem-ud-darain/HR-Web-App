@@ -163,7 +163,7 @@ export function CareersView({ role }: CareersViewProps) {
                   <div>
                     <h3 className="font-bold text-slate-900 text-base sm:text-lg tracking-tight leading-snug">{job.title}</h3>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-semibold mt-1.5">
-                      <span className="text-orange-700 font-bold uppercase tracking-wider text-[10px] bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{job.department}</span>
+                      <span className="text-orange-700 font-bold uppercase tracking-wider text-caption bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{job.department}</span>
                       <span className="flex items-center gap-1 text-slate-500"><MapPin className="h-3.5 w-3.5 text-slate-400" /> {job.location}</span>
                     </div>
                   </div>
@@ -182,7 +182,7 @@ export function CareersView({ role }: CareersViewProps) {
 
                 {job.requirements.length > 0 && (
                   <div className="space-y-2 pt-1">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Requirements</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-widest">Requirements</p>
                     <ul className="space-y-1.5">
                       {job.requirements.map((req, idx: number) => (
                         <li key={idx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
@@ -204,7 +204,7 @@ export function CareersView({ role }: CareersViewProps) {
                     Apply now <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 ) : (
-                  <span className="text-[10px] font-semibold text-slate-400 italic">
+                  <span className="text-caption font-semibold text-slate-400 italic">
                     External applicants only — see HR for internal transfers
                   </span>
                 )}

@@ -73,7 +73,7 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                     <p className="text-xs text-slate-600 leading-relaxed">
                       <span className="font-bold text-slate-800">Step 2.</span> Copy this one-time setup code and have them paste it into the app when it first opens.
                     </p>
-                    <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-[10px] leading-relaxed overflow-x-auto break-all">
+                    <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-caption leading-relaxed overflow-x-auto break-all">
                       {encodeSetupCode(getPocketBaseConfig().url, settings.agentToken)}
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
@@ -100,9 +100,9 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                   </div>
     
                   <details className="border-t border-slate-200 pt-3">
-                    <summary className="text-[10px] font-bold text-slate-500 uppercase tracking-wider cursor-pointer">Advanced: raw script (requires Python)</summary>
+                    <summary className="text-caption font-bold text-slate-500 uppercase tracking-wider cursor-pointer">Advanced: raw script (requires Python)</summary>
                     <div className="mt-2 space-y-2">
-                      <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-[10px] leading-relaxed overflow-x-auto whitespace-pre">
+                      <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-caption leading-relaxed overflow-x-auto whitespace-pre">
     {`POCKETBASE_URL=${POCKETBASE_URL}
     AGENT_TOKEN=${settings.agentToken}`}
                       </div>
@@ -121,7 +121,7 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                           <Download className="h-3.5 w-3.5" /> Download .py Script
                         </a>
                       </div>
-                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                      <p className="text-caption text-slate-400 leading-relaxed">
                         Requires Python 3 installed on the employee&apos;s machine. Run <code className="bg-slate-100 px-1 rounded">pip install pyautogui pillow requests --break-system-packages</code> then <code className="bg-slate-100 px-1 rounded">python delcargo_tracker_agent.py</code>.
                       </p>
                     </div>
@@ -170,7 +170,7 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                     {diagnosticsStatus === 'timeout' && (
                       <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 p-3 rounded-lg">
                         <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-slate-700 leading-relaxed">
+                        <p className="text-caption text-slate-700 leading-relaxed">
                           No response after 10 seconds. This means either the tracker isn&apos;t running right now, or it&apos;s still on an older build (pre-v19) that doesn&apos;t know how to answer yet — not necessarily that anything is broken.
                         </p>
                       </div>
@@ -179,30 +179,30 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                     {diagnosticsStatus === 'error' && (
                       <div role="alert" className="flex items-start gap-2 bg-rose-50 border border-rose-200 p-3 rounded-lg">
                         <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-slate-700 leading-relaxed">Could not send the diagnostics request. Check the connection and try again.</p>
+                        <p className="text-caption text-slate-700 leading-relaxed">Could not send the diagnostics request. Check the connection and try again.</p>
                       </div>
                     )}
 
                     {diagnosticsStatus === 'ok' && diagnosticsResult && (
                       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          <span className="text-caption font-bold text-slate-500 uppercase tracking-wider">
                             Responded {formatDateTimeNY(diagnosticsResult.respondedAt)}
                           </span>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] font-mono text-slate-400">
+                            <span className="text-caption font-mono text-slate-400">
                               v{diagnosticsResult.appVersion} · {diagnosticsResult.platform}
                             </span>
                             <button
                               onClick={() => copyDiagnosticsReport(setupEmp, diagnosticsResult)}
                               title="Copy this report as plain text — paste it into a ticket, Slack, or an AI chat for help troubleshooting"
-                              className="text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 px-2 py-1 rounded-md flex items-center gap-1 active:scale-97 transition-colors transition-transform"
+                              className="text-caption font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 px-2 py-1 rounded-md flex items-center gap-1 active:scale-97 transition-colors transition-transform"
                             >
-                              <Copy className="h-3 w-3" /> {copiedDiagnostics ? 'Copied!' : 'Copy Report'}
+                              <Copy className="h-3.5 w-3.5" /> {copiedDiagnostics ? 'Copied!' : 'Copy Report'}
                             </button>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-caption text-slate-700">
                           <span>Connection: <span className="font-semibold">{diagnosticsResult.connectionStatus || (diagnosticsResult.connected ? 'connected' : 'disconnected')}</span></span>
                           <span>Tracking (HR): <span className="font-semibold">{diagnosticsResult.enabledByHr ? 'enabled' : 'disabled'}</span></span>
                           <span>Shift active: <span className="font-semibold">{diagnosticsResult.shiftActive ? 'yes' : 'no'}</span></span>
@@ -213,16 +213,16 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                           <span>Last capture: <span className="font-semibold">{diagnosticsResult.lastCaptureAt ? formatDateTimeNY(diagnosticsResult.lastCaptureAt) : 'never'}</span></span>
                         </div>
                         {diagnosticsResult.lastError && (
-                          <p className="text-[11px] text-rose-600 font-semibold pt-1">Last error: {diagnosticsResult.lastError}</p>
+                          <p className="text-caption text-rose-600 font-semibold pt-1">Last error: {diagnosticsResult.lastError}</p>
                         )}
                         {diagnosticsResult.logTail && (
                           <details className="pt-1">
-                            <summary className="text-[11px] font-semibold text-slate-600 cursor-pointer">Recent tracker log</summary>
-                            <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-slate-900 p-2 text-[10px] leading-snug text-slate-100 whitespace-pre-wrap break-words">{diagnosticsResult.logTail}</pre>
+                            <summary className="text-caption font-semibold text-slate-600 cursor-pointer">Recent tracker log</summary>
+                            <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-slate-900 p-2 text-caption leading-snug text-slate-100 whitespace-pre-wrap break-words">{diagnosticsResult.logTail}</pre>
                           </details>
                         )}
                         {diagnosticsResult.updateAvailableVersion && (
-                          <p className="text-[11px] text-amber-700 font-semibold pt-1">
+                          <p className="text-caption text-amber-700 font-semibold pt-1">
                             Update available: v{diagnosticsResult.updateAvailableVersion} — ask the employee to restart the tracker app to pick it up.
                           </p>
                         )}
@@ -230,7 +230,7 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                     )}
                   </div>
     
-                  <p className="text-[10px] text-slate-400 leading-relaxed border-t border-slate-200 pt-3">
+                  <p className="text-caption text-slate-400 leading-relaxed border-t border-slate-200 pt-3">
                     Tracking must be toggled &quot;Active&quot; above for captures to be accepted. The app only captures while that toggle is on and (for remote employees) their shift is active.
                   </p>
                 </div>
