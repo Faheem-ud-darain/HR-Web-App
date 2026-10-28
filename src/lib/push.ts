@@ -39,7 +39,16 @@ export const ONESIGNAL_APP_ID: string = '429b20a0-defd-4807-badd-460ec334cf35';
 // Exported (not just used internally) so PushWebScript.tsx can check this
 // too, instead of re-doing the same comparison itself — single source of
 // truth for "is push actually configured".
-export const isPushConfigured = (): boolean => !!ONESIGNAL_APP_ID && ONESIGNAL_APP_ID !== 'YOUR_ONESIGNAL_APP_ID';
+// The OneSignal web app is registered for the live site only. On any other address (localhost, a preview URL) its SDK
+// refuses to start ("Can only be used on https://hub.delcargo.us") and every later login/logout call then throws, so
+// push is simply switched off there. The native Android/iOS apps are not tied to a web address.
+export const PUSH_WEB_HOST = 'hub.delcargo.us';
+
+export const isPushConfigured = (): boolean => {
+  if (!ONESIGNAL_APP_ID || ONESIGNAL_APP_ID === 'YOUR_ONESIGNAL_APP_ID') return false;
+  if (typeof window === 'undefined' || Capacitor.isNativePlatform()) return true;
+  return window.location.hostname === PUSH_WEB_HOST;
+};
 
 let initStarted = false;
 
@@ -56,7 +65,7 @@ let initStarted = false;
 export async function initPush(externalId?: string): Promise<void> {
   if (typeof window === 'undefined') return;
   if (!isPushConfigured()) {
-    console.warn('[push] OneSignal App ID not set yet — see src/lib/push.ts. Skipping push init.');
+    console.info('[push] Push is not set up for this address (or the OneSignal App ID is missing) — see src/lib/push.ts. Skipping push init.');
     return;
   }
 

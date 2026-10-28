@@ -8,7 +8,7 @@ import { FormError } from '@/components/ui/FormError';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { StatusDot } from '@/components/ui/StatusDot';
+import { SuccessNote } from '@/components/ui/SuccessNote';
 
 const today = () => new Date().toISOString().split('T')[0];
 const emptyForm = () => ({ fullName: '', email: '', jobTitle: '', gender: 'male', role: 'employee', region: 'Pakistan', salary: '', team: '', tempPassword: '' });
@@ -100,12 +100,7 @@ export function OnboardEmployeeModal({ teams, onRegistered, onClose }: { teams: 
     <Modal isOpen onClose={onClose} title="Onboard New Employee" className="md:max-w-2xl">
       <form onSubmit={submit} className="space-y-4 pt-1">
         <FormError>{error}</FormError>
-        {success && (
-          <div className="p-3.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl font-semibold flex items-center gap-2">
-            <StatusDot tone="emerald" />
-            {success}
-          </div>
-        )}
+        <SuccessNote className="p-3.5 rounded-xl">{success}</SuccessNote>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField label="Full Name *"><Input type="text" required value={form.fullName} onChange={field('fullName')} fieldSize="soft" placeholder="e.g. John Doe" /></FormField>

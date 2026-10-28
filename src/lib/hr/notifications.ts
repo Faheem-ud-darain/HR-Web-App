@@ -260,9 +260,6 @@ export const notificationActions = {
   // only dismissed for this user via the per-user cleared list. If a real
   // delete is refused, it falls back to the same per-user dismissal so the
   // notification still disappears for them.
-  deleteNotificationFor: async (n: Notification, email: string, role: string): Promise<void> => {
-    await hrActions.deleteNotificationsFor([n], email, role);
-  },
   deleteNotificationsFor: async (notifications: Notification[], email: string, role: string): Promise<void> => {
     const lower = email.toLowerCase();
     const personal = notifications.filter(n => n.recipientEmail.toLowerCase() === lower);
@@ -276,9 +273,6 @@ export const notificationActions = {
       await pbMarkIdsInField('hr_notification_reads', 'read_ids', broadcasts.map(n => n.id), email);
     }
     if (toDismiss.length > 0) await pbMarkIdsInField('hr_notification_cleared', 'cleared_ids', toDismiss, email);
-  },
-  clearAllNotificationsFor: async (notifications: Notification[], email: string, role: string): Promise<void> => {
-    await hrActions.deleteNotificationsFor(notifications, email, role);
   },
 
   // ── Push notification preferences (hr_notification_prefs_v1) ───────────

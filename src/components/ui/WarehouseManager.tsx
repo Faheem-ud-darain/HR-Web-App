@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, Edit, Loader2, MapPin, Trash } from 'lucide-react';
+import { Edit, Loader2, MapPin, Trash } from 'lucide-react';
 import { hrActions, useProfiles, useWarehouses, type Warehouse } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
+import { SuccessNote } from '@/components/ui/SuccessNote';
+import { useFlash } from '@/lib/useFlash';
 import { Card, CardContent } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -57,12 +59,11 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
   const [form, setForm] = useState<WhForm>(EMPTY_FORM);
   const [editing, setEditing] = useState<{ id: string; form: WhForm } | null>(null);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [success, done] = useFlash(1500);
   const [busy, setBusy] = useState<'create' | 'save' | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const done = (message: string) => { setSuccess(message); setTimeout(() => setSuccess(''), 1500); };
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,12 +123,7 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {success && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fade-in shadow-sm">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          {success}
-        </div>
-      )}
+      <SuccessNote className="px-4 py-3 rounded-xl animate-fade-in shadow-sm">{success}</SuccessNote>
 
       {error && !editing && <ErrorNote>{error}</ErrorNote>}
 
