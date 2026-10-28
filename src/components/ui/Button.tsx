@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 // same radius as Card/Modal (rounded-xl, 12px — DESIGN.md's stated cap),
 // same 150ms snappy transition + scale(0.97) press feedback defined
 // globally in globals.css, same weight/size scale everywhere.
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'ghost' | 'outline';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -27,6 +27,7 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
   warning: 'bg-amber-600 hover:bg-amber-700 text-white disabled:bg-amber-300',
   success: 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-emerald-300',
   indigo: 'bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-indigo-300',
+  purple: 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-300',
   // Text-only, for low-emphasis actions inline with content (e.g. "View all →").
   ghost: 'bg-transparent hover:bg-slate-100 text-slate-600 disabled:opacity-50',
   // Bordered, for a secondary action that still needs to read as a real
