@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { ShieldWarningIcon as ShieldAlert, UserIcon as User, XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { ShieldWarningIcon as ShieldAlert, UserIcon as User, XIcon as X } from '@/components/ui/icons';
 import { useProfiles } from '@/lib/hrData';
 import { profileAccess, type ViewerRole } from '@/lib/core/userProfile';
 import { pushModal, popModal } from '@/lib/modalStack';

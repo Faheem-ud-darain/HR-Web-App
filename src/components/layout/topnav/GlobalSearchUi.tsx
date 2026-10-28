@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { MagnifyingGlassIcon as Search } from '@phosphor-icons/react/dist/ssr';
+import { MagnifyingGlassIcon as Search } from '@/components/ui/icons';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { IconButton } from '@/components/ui/IconButton';
 import { Modal } from '@/components/ui/Modal';

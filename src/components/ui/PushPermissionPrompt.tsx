@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BellRingingIcon as BellRing, BellSlashIcon as BellOff } from '@phosphor-icons/react/dist/ssr';
+import { BellRingingIcon as BellRing, BellSlashIcon as BellOff } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';

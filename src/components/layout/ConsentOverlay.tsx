@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
+import { CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import type { Profile } from '@/lib/hrData';
 

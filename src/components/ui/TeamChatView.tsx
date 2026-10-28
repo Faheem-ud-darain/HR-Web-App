@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Team, Profile, Message, useMessages, useTeamDocuments, displayName, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
-import { ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/ssr';
+import { ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { ImageLightbox } from './ImageLightbox';
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import { normEmail } from '@/components/ui/chat/chatHelpers';

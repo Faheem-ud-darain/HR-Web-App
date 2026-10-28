@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useTimesheets, displayName } from '@/lib/hrData';
-import { FileTextIcon as FileText, DownloadSimpleIcon as Download, ClockIcon as Clock, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar, BankIcon as Landmark } from '@phosphor-icons/react/dist/ssr';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download, ClockIcon as Clock, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar, BankIcon as Landmark } from '@/components/ui/icons';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';

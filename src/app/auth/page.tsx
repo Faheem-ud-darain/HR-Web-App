@@ -24,7 +24,7 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { ArrowLeftIcon as ArrowLeft, EyeIcon as Eye, EyeSlashIcon as EyeOff, WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeftIcon as ArrowLeft, EyeIcon as Eye, EyeSlashIcon as EyeOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';

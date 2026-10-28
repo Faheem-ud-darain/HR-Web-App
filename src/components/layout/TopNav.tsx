@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { CaretLeftIcon as ChevronLeft, ListIcon as Menu } from '@phosphor-icons/react/dist/ssr';
+import { CaretLeftIcon as ChevronLeft, ListIcon as Menu } from '@/components/ui/icons';
 import { useProfiles } from '@/lib/hrData';
 import { useSessionEmail, useSessionRole } from '@/lib/useSession';
 import { pageTitle } from '@/lib/core/pageTitle';

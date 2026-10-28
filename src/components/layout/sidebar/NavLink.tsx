@@ -4,7 +4,7 @@ import React from 'react';
 import {
   SquaresFourIcon, BroadcastIcon, QuestionIcon, ChatTextIcon, ChatCircleIcon, SparkleIcon, ClipboardTextIcon, MapPinIcon, BriefcaseIcon, ClockIcon,
   UserCheckIcon, WalletIcon, FileTextIcon, ChartBarIcon, MonitorIcon, UserPlusIcon, UsersIcon, StarIcon, BookOpenIcon,
-} from '@phosphor-icons/react/dist/ssr';
+} from '@/components/ui/icons';
 import type { Icon } from '@phosphor-icons/react';
 import type { NavIcon } from '@/lib/core/nav';
 

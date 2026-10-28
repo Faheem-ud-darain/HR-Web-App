@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { BuildingsIcon as Building2, UserGearIcon as UserCog, UsersIcon as Users, StarIcon as Star } from '@phosphor-icons/react/dist/ssr';
+import { BuildingsIcon as Building2, UserGearIcon as UserCog, UsersIcon as Users, StarIcon as Star } from '@/components/ui/icons';
 import { displayName, hrActions, useProfiles, useTeams, useWarehouses } from '@/lib/hrData';
 import { isTeamLead, isWarehouseManager } from '@/lib/core/teams';
 import { useSessionEmail } from '@/lib/useSession';

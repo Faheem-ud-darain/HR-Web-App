@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, TreePalmIcon as Palmtree, ClipboardTextIcon as ClipboardList } from '@phosphor-icons/react/dist/ssr';
+import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, TreePalmIcon as Palmtree, ClipboardTextIcon as ClipboardList } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { LeaveApplication, Task, Profile } from '@/lib/hrData';

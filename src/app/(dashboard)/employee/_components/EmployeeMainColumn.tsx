@@ -4,7 +4,7 @@ import React from 'react';
 import type { PayrollSelf } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { getRemainingPTO, getPTOAccrualDate, getAccruedPTOForDisplay, formatMoney, Profile, LeaveApplication, Task } from '@/lib/hrData';
-import { ClockIcon as Clock, CheckCircleIcon as CheckCircle2, WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
+import { ClockIcon as Clock, CheckCircleIcon as CheckCircle2, WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { IconChip } from '@/components/ui/IconChip';
 import { Badge } from '@/components/ui/Badge';
 import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';

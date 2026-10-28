@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
+import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { hrActions, type CareerPosition } from '@/lib/hrData';
 import { errMsg } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';

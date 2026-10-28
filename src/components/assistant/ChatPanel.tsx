@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ThinkingOrb } from 'thinking-orbs';
 import { AssistantOrb } from './AssistantOrb';
-import { ArrowUpIcon as ArrowUp, CaretLeftIcon as ChevronLeft, CheckIcon as Check, CopyIcon as Copy, ArrowSquareOutIcon as ExternalLink, ClockCounterClockwiseIcon as History, ArrowsOutIcon as Maximize2, ArrowsInIcon as Minimize2, ChatCircleIcon as MessageCircle, PlusIcon as Plus, NotePencilIcon as SquarePen, TrashIcon as Trash2, XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { ArrowUpIcon as ArrowUp, CaretLeftIcon as ChevronLeft, CheckIcon as Check, CopyIcon as Copy, ArrowSquareOutIcon as ExternalLink, ClockCounterClockwiseIcon as History, ArrowsOutIcon as Maximize2, ArrowsInIcon as Minimize2, ChatCircleIcon as MessageCircle, PlusIcon as Plus, NotePencilIcon as SquarePen, TrashIcon as Trash2, XIcon as X } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Markdown } from './Markdown';

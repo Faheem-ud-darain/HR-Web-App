@@ -15,7 +15,7 @@ import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal
 import { BankDetailsModal, ContactNumbersModal, DeleteAccountRequestModal, useAccountDeletionRequest } from '@/components/ui/profile/SelfServiceModals';
 import { useProfilePhoto } from '@/components/ui/profile/useProfilePhoto';
 import { useDocumentUploads } from '@/components/ui/profile/useDocumentUploads';
-import { EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, UserIcon as User, CalendarBlankIcon as Calendar, UsersIcon as Users, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, StarIcon as Star, BankIcon as Landmark, PencilSimpleIcon as Pencil, CameraIcon as Camera, FileTextIcon as FileText, UploadSimpleIcon as Upload, PhoneIcon as Phone } from '@phosphor-icons/react/dist/ssr';
+import { EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, UserIcon as User, CalendarBlankIcon as Calendar, UsersIcon as Users, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, StarIcon as Star, BankIcon as Landmark, PencilSimpleIcon as Pencil, CameraIcon as Camera, FileTextIcon as FileText, UploadSimpleIcon as Upload, PhoneIcon as Phone } from '@/components/ui/icons';
 import { formatDateNY } from '@/lib/timezone';
 import { Button } from '@/components/ui/Button';
 import { useSessionEmail } from '@/lib/useSession';

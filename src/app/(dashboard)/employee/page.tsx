@@ -8,7 +8,7 @@ import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehous
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone, BankIcon as Landmark } from '@phosphor-icons/react/dist/ssr';
+import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone, BankIcon as Landmark } from '@/components/ui/icons';
 import { isMobileDevice, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';

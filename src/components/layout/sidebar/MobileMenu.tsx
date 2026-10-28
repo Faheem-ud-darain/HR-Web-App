@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from 'framer-motion';
-import { XIcon as X, UserCircleIcon as UserCircle, SunIcon as Sun, MoonIcon as Moon, SignOutIcon as SignOut } from '@phosphor-icons/react/dist/ssr';
+import { XIcon as X, UserCircleIcon as UserCircle, SunIcon as Sun, MoonIcon as Moon, SignOutIcon as SignOut } from '@/components/ui/icons';
 import { Avatar } from '@/components/ui/Avatar';
 import { compactName } from '@/lib/core/names';
 import { useAccountActions } from '../topnav/useAccountActions';

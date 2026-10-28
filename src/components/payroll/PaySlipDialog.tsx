@@ -4,7 +4,7 @@
 // out, and (Admin only) a button to mark it paid. Replaces the old "Net Payable" popup and the
 // bonus/deduction boxes that used to sit in every table row and saved on every keystroke.
 import React, { useState } from 'react';
-import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, CircleNotchIcon as Loader2, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@phosphor-icons/react/dist/ssr';
+import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, CircleNotchIcon as Loader2, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';

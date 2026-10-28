@@ -1,6 +1,6 @@
 'use client';
 
-import { MonitorIcon as Monitor, MoonIcon as Moon, SunIcon as Sun } from '@phosphor-icons/react/dist/ssr';
+import { MonitorIcon as Monitor, MoonIcon as Moon, SunIcon as Sun } from '@/components/ui/icons';
 import { originOf, setThemePreference, useResolvedTheme, useThemePreference, type ThemePreference } from '@/lib/theme';
 import { triggerHaptic } from '@/lib/haptics';
 import { Card } from './Card';

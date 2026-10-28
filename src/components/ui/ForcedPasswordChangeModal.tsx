@@ -2,7 +2,7 @@
 
 import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState } from 'react';
-import { KeyIcon as KeyRound, ShieldCheckIcon as ShieldCheck } from '@phosphor-icons/react/dist/ssr';
+import { KeyIcon as KeyRound, ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Profile, changeOwnPassword } from '@/lib/hrData';
 import { Input } from '@/components/ui/Input';

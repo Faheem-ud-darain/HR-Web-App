@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
+import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 
 // What every error page shows: plain words, a retry, and a way home. Used by app/error.tsx and
 // app/(dashboard)/error.tsx so a crash in one screen never leaves a blank page.

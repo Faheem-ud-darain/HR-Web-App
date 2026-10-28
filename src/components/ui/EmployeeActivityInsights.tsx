@@ -28,7 +28,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, InactivityLog, TimesheetEntry } from '@/lib/hrData';
 import { getNYDateString, getNYMidnight, formatShortDateNY, formatTimeNY } from '@/lib/timezone';
-import { PulseIcon as Activity, CursorClickIcon as MousePointerClick, TableIcon as Table2, ChartBarIcon as BarChart3, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
+import { PulseIcon as Activity, CursorClickIcon as MousePointerClick, TableIcon as Table2, ChartBarIcon as BarChart3, ClockIcon as Clock } from '@/components/ui/icons';
 import { Table, TableScroll, THead, TBody, Th, Td } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/StatCard';
 import { useQuery } from '@tanstack/react-query';

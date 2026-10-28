@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { FolderOpenIcon as FolderOpen, MegaphoneIcon as Megaphone, ChatCircleIcon as MessageCircle, SlidersHorizontalIcon as SlidersHorizontal, UsersIcon as Users } from '@phosphor-icons/react/dist/ssr';
+import { FolderOpenIcon as FolderOpen, MegaphoneIcon as Megaphone, ChatCircleIcon as MessageCircle, SlidersHorizontalIcon as SlidersHorizontal, UsersIcon as Users } from '@/components/ui/icons';
 import type { Message } from '@/lib/hrData';
 import { formatTimestamp } from './chatHelpers';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useProfiles, useTasks, displayName } from '@/lib/hrData';
 import { TaskBoard } from '@/components/ui/lazy';
 import { Badge } from '@/components/ui/Badge';
-import { UsersIcon as Users, StarIcon as Star } from '@phosphor-icons/react/dist/ssr';
+import { UsersIcon as Users, StarIcon as Star } from '@/components/ui/icons';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { useSessionEmail } from '@/lib/useSession';

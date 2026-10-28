@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CareerPosition, CareerApplication, useCareers, useWarehouses, useTeams, hrActions, getCareerApplicationsAdmin } from '@/lib/hrData';
-import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { useQuery } from '@tanstack/react-query';
 import { DEPARTMENTS } from '@/components/ui/careers/careerOptions';

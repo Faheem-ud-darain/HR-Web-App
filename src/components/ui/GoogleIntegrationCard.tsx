@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Profile } from '@/lib/hrData';
 import { getAuthToken } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { CheckCircleIcon as CheckCircle2, WarningCircleIcon as AlertCircle, CalendarBlankIcon as Calendar, ShieldCheckIcon as ShieldCheck, EnvelopeIcon as Mail, TrashIcon as Trash2, DeviceMobileIcon as Smartphone } from '@phosphor-icons/react/dist/ssr';
+import { CheckCircleIcon as CheckCircle2, WarningCircleIcon as AlertCircle, CalendarBlankIcon as Calendar, ShieldCheckIcon as ShieldCheck, EnvelopeIcon as Mail, TrashIcon as Trash2, DeviceMobileIcon as Smartphone } from '@/components/ui/icons';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 interface GoogleIntegrationCardProps {

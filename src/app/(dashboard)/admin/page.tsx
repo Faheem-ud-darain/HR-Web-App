@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card } from '@/components/ui/Card';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
-import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, CircleNotchIcon as Loader2, VideoCameraIcon as Video } from '@phosphor-icons/react/dist/ssr';
+import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, CircleNotchIcon as Loader2, VideoCameraIcon as Video } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { HeadsetIcon as Headset, UserIcon as User } from '@phosphor-icons/react/dist/ssr';
+import { HeadsetIcon as Headset, UserIcon as User } from '@/components/ui/icons';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 

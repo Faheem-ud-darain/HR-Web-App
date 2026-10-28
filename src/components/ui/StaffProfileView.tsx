@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { InfoRow, ProfileCard } from '@/components/ui/profile/ProfileCard';
 import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal';
 import { useProfilePhoto } from '@/components/ui/profile/useProfilePhoto';
-import { UserIcon as User, EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, CameraIcon as Camera } from '@phosphor-icons/react/dist/ssr';
+import { UserIcon as User, EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, CameraIcon as Camera } from '@/components/ui/icons';
 import { useSessionEmail } from '@/lib/useSession';
 
 type StaffProfileViewProps = {

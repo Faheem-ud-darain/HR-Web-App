@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheckIcon as ShieldCheck, CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
+import { ShieldCheckIcon as ShieldCheck, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';

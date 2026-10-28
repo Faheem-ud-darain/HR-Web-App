@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
-import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
 import { Tabs } from '@/components/ui/Tabs';

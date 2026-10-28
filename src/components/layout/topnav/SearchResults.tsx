@@ -1,5 +1,5 @@
 import React from 'react';
-import { BriefcaseIcon as Briefcase, ClipboardTextIcon as ClipboardList, ClockIcon as Clock, QuestionIcon as HelpCircle, MegaphoneIcon as Megaphone, MapPinIcon as MapPin, UserIcon as User, UsersIcon as Users, WalletIcon as Wallet } from '@phosphor-icons/react/dist/ssr';
+import { BriefcaseIcon as Briefcase, ClipboardTextIcon as ClipboardList, ClockIcon as Clock, QuestionIcon as HelpCircle, MegaphoneIcon as Megaphone, MapPinIcon as MapPin, UserIcon as User, UsersIcon as Users, WalletIcon as Wallet } from '@/components/ui/icons';
 import { displayName as resolveDisplayName } from '@/lib/hrData';
 import { hasAnyResult, searchLinks, type SearchResults as Results } from '@/lib/core/globalSearch';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';

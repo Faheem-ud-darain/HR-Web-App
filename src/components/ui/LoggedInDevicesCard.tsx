@@ -6,7 +6,7 @@ import { Card } from './Card';
 import { hrActions, UserSessionSlot } from '@/lib/hrData';
 import { getOrCreateDeviceId, clearSession, getSessionRole } from '@/lib/session';
 import { formatDateTimeNY } from '@/lib/timezone';
-import { LaptopIcon as Laptop, SignOutIcon as LogOut, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { LaptopIcon as Laptop, SignOutIcon as LogOut, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { useQuery } from '@tanstack/react-query';
 
 // Employee-facing (and Team Lead, who shares the Employee dashboard) view

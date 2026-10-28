@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useProfiles, useTickets, hrActions, Ticket, Profile, displayName, isTechnicalSupportMember } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { useStickToBottom } from '@/lib/useStickToBottom';
-import { PlusIcon as Plus } from '@phosphor-icons/react/dist/ssr';
+import { PlusIcon as Plus } from '@/components/ui/icons';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { pushModal, popModal } from '@/lib/modalStack';

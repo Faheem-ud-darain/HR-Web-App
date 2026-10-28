@@ -5,7 +5,7 @@ import { Team, TeamDocument, useTeamDocuments, hrActions } from '@/lib/hrData';
 import { formatDateNY } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import { UploadSimpleIcon as Upload, FileTextIcon as FileText, FileImageIcon as FileImage, FileVideoIcon as FileVideo, DownloadSimpleIcon as Download, TrashIcon as Trash2, CircleNotchIcon as Loader2, XIcon as X, FolderOpenIcon as FolderOpen, FileIcon as FileIcon } from '@phosphor-icons/react/dist/ssr';
+import { UploadSimpleIcon as Upload, FileTextIcon as FileText, FileImageIcon as FileImage, FileVideoIcon as FileVideo, DownloadSimpleIcon as Download, TrashIcon as Trash2, CircleNotchIcon as Loader2, XIcon as X, FolderOpenIcon as FolderOpen, FileIcon as FileIcon } from '@/components/ui/icons';
 import { Input, Textarea } from '@/components/ui/Input';
 import { safeHref } from '@/lib/sanitize';
 import { formatBytes } from '@/lib/core/attachments';

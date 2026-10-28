@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { XIcon as X } from '@/components/ui/icons';
 import { Input, Select } from '@/components/ui/Input';
 import { SearchInput } from '@/components/ui/SearchInput';
 import type { FileTypeFilter, SizeFilter } from './chatHelpers';

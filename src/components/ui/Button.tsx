@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 
 // Every button in this app used to be a hand-typed Tailwind string —
 // dozens of near-identical variants (rounded-lg vs rounded-xl, text-xs vs

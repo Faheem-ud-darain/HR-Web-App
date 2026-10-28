@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, hrActions } from '@/lib/hrData';
-import { TrashIcon as Trash2, CheckCircleIcon as CheckCircle2, ArrowCounterClockwiseIcon as RotateCcw, ClockIcon as Clock, WarningIcon as AlertTriangle, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, UserIcon as User, FlagIcon as Flag, ArrowRightIcon as ArrowRight, BuildingsIcon as Building2, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { TrashIcon as Trash2, CheckCircleIcon as CheckCircle2, ArrowCounterClockwiseIcon as RotateCcw, ClockIcon as Clock, WarningIcon as AlertTriangle, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, UserIcon as User, FlagIcon as Flag, ArrowRightIcon as ArrowRight, BuildingsIcon as Building2, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 
 interface TaskBoardProps {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent } from './Card';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { WrenchIcon as Wrench, PlusCircleIcon as PlusCircle, TrashIcon as Trash2, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { WrenchIcon as Wrench, PlusCircleIcon as PlusCircle, TrashIcon as Trash2, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { pktLocalToUtcIso, formatInViewerLocalTime } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';

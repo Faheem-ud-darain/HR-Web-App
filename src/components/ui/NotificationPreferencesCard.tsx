@@ -5,7 +5,7 @@ import { Card } from './Card';
 import { Button } from './Button';
 import { hrActions, NotificationPrefs } from '@/lib/hrData';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
-import { BellIcon as Bell, BellRingingIcon as BellRing, BellSlashIcon as BellOff, MegaphoneIcon as Megaphone, QuestionIcon as HelpCircle, AtIcon as AtSign, CalendarDotsIcon as CalendarClock, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
+import { BellIcon as Bell, BellRingingIcon as BellRing, BellSlashIcon as BellOff, MegaphoneIcon as Megaphone, QuestionIcon as HelpCircle, AtIcon as AtSign, CalendarDotsIcon as CalendarClock, ClockIcon as Clock } from '@/components/ui/icons';
 import { Switch } from '@/components/ui/Switch';
 
 // Shared across all 3 profile pages (employee/hr/admin) — see

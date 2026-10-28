@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar, InfoIcon as Info, WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
+import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar, InfoIcon as Info, WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { APP_TIMEZONE } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';

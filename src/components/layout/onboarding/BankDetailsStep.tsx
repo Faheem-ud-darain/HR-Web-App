@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { useRouter } from 'next/navigation';
-import { UserIcon as User, SignOutIcon as LogOut, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
+import { UserIcon as User, SignOutIcon as LogOut, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';

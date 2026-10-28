@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { hrActions } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';

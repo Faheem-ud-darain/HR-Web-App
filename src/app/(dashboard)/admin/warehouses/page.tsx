@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { MapPinIcon as MapPin } from '@phosphor-icons/react/dist/ssr';
+import { MapPinIcon as MapPin } from '@/components/ui/icons';
 import { WarehouseManager } from '@/components/ui/WarehouseManager';
 
 export default function AdminWarehousesPage() {

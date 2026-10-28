@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { WarningCircleIcon as AlertCircle, FileTextIcon as FileText, CircleNotchIcon as Loader2, PaperclipIcon as Paperclip, XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { WarningCircleIcon as AlertCircle, FileTextIcon as FileText, CircleNotchIcon as Loader2, PaperclipIcon as Paperclip, XIcon as X } from '@/components/ui/icons';
 import { hrActions, type Profile } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { WarningCircleIcon as AlertCircle } from '@phosphor-icons/react/dist/ssr';
+import { WarningCircleIcon as AlertCircle } from '@/components/ui/icons';
 
 // The red message box at the top of a form when saving fails. Renders nothing for an empty message.
 export function FormError({ children }: { children?: React.ReactNode }) {

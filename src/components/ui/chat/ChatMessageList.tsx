@@ -3,7 +3,7 @@
 import React from 'react';
 import { ChatSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { MegaphoneIcon as Megaphone, CrownIcon as Crown, ArrowBendUpRightIcon as Forward, ArrowSquareOutIcon as ExternalLink } from '@phosphor-icons/react/dist/ssr';
+import { MegaphoneIcon as Megaphone, CrownIcon as Crown, ArrowBendUpRightIcon as Forward, ArrowSquareOutIcon as ExternalLink } from '@/components/ui/icons';
 import { RoleBadge, formatTimestamp, renderMessageText, ReadReceiptFacepile, FORWARD_KIND_LABEL } from '@/components/ui/chat/chatHelpers';
 import { MessageAttachment } from '@/components/ui/MessageAttachment';
 import { buildNotificationLink, Message, Profile } from '@/lib/hrData';

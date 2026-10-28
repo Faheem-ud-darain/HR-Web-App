@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, Profile, hrActions, displayName } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 

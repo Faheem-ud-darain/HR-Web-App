@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react/dist/ssr';
+import { ShieldWarningIcon as ShieldAlert } from '@/components/ui/icons';
 import { formatMoney, getFinalLeavePayout, getPTOAccrualDate, getRemainingPTO, type LeaveApplication, type Profile } from '@/lib/hrData';
 import { companyNumberBlocksOffboard, offboardFormFrom, type OffboardForm as Values } from '@/lib/core/userProfile';
 import { Button } from '../Button';

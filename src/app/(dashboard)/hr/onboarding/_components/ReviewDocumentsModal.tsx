@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { DownloadSimpleIcon as Download, EyeIcon as Eye, FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, XCircleIcon as XCircle } from '@phosphor-icons/react/dist/ssr';
+import { DownloadSimpleIcon as Download, EyeIcon as Eye, FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, XCircleIcon as XCircle } from '@/components/ui/icons';
 import { approveOnboardingServer, displayName, rejectOnboardingServer, useProfileDocuments, type Profile } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { onboardingStatus } from '@/lib/core/onboarding';

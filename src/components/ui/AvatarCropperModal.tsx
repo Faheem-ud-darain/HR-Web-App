@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { compressImageToWebP, MAX_PROFILE_PICTURE_BYTES } from '@/lib/imageCompressor';
-import { ArrowCounterClockwiseIcon as RotateCcw, ArrowClockwiseIcon as RotateCw, MagnifyingGlassPlusIcon as ZoomIn, MagnifyingGlassMinusIcon as ZoomOut, CheckIcon as Check, XIcon as X, WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
+import { ArrowCounterClockwiseIcon as RotateCcw, ArrowClockwiseIcon as RotateCw, MagnifyingGlassPlusIcon as ZoomIn, MagnifyingGlassMinusIcon as ZoomOut, CheckIcon as Check, XIcon as X, WarningIcon as AlertTriangle } from '@/components/ui/icons';
 
 interface AvatarCropperModalProps {
   file: File | null;

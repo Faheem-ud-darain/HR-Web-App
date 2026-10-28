@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PaperclipIcon as Paperclip, FileTextIcon as FileText, XIcon as X, PaperPlaneRightIcon as Send, CircleNotchIcon as Loader2 } from '@phosphor-icons/react/dist/ssr';
+import { PaperclipIcon as Paperclip, FileTextIcon as FileText, XIcon as X, PaperPlaneRightIcon as Send, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 // Pieces shared by the chat and ticket message boxes.

@@ -1,6 +1,6 @@
 'use client';
 
-import { FileTextIcon as FileText, DownloadSimpleIcon as Download } from '@phosphor-icons/react/dist/ssr';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download } from '@/components/ui/icons';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { isImageAttachment, formatBytes } from '@/lib/core/attachments';
 import { safeHref } from '@/lib/sanitize';

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ListChecksIcon as ClipboardCheck } from '@phosphor-icons/react/dist/ssr';
+import { ListChecksIcon as ClipboardCheck } from '@/components/ui/icons';
 import { displayName, type Profile } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';

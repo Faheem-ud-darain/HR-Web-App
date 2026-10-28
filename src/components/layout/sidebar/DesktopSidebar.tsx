@@ -3,7 +3,7 @@
 import React, { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { LazyMotion, domAnimation, m, useReducedMotion } from 'framer-motion';
-import { PushPinIcon as Pin, PushPinSlashIcon as PinOff } from '@phosphor-icons/react/dist/ssr';
+import { PushPinIcon as Pin, PushPinSlashIcon as PinOff } from '@/components/ui/icons';
 import { DismissibleArea } from '@/components/ui/DismissibleArea';
 import { isNavActive, navDotKey, type DotKey, type NavGroup, type NavItem, type NavRole } from '@/lib/core/nav';
 import { ActivityDot, NavGlyph } from './NavLink';

@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
-import { TimerIcon as Timer, MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert, MapPinIcon as MapPin, DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle, SlidersHorizontalIcon as Settings2, PulseIcon as Activity } from '@phosphor-icons/react/dist/ssr';
+import { TimerIcon as Timer, MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert, MapPinIcon as MapPin, DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle, SlidersHorizontalIcon as Settings2, PulseIcon as Activity } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmployeeActivityInsights } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';

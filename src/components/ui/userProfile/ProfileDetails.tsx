@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CalendarBlankIcon as Calendar, CurrencyDollarIcon as DollarSign, BankIcon as Landmark, EnvelopeIcon as Mail, MapPinIcon as MapPin, PhoneIcon as Phone, ShieldIcon as Shield } from '@phosphor-icons/react/dist/ssr';
+import { CalendarBlankIcon as Calendar, CurrencyDollarIcon as DollarSign, BankIcon as Landmark, EnvelopeIcon as Mail, MapPinIcon as MapPin, PhoneIcon as Phone, ShieldIcon as Shield } from '@/components/ui/icons';
 import { formatMoney, updateProfileAdmin, type Profile, type Warehouse } from '@/lib/hrData';
 import type { ViewerRole } from '@/lib/core/userProfile';
 import { Badge } from '../Badge';

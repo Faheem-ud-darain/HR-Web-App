@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CheckSquareIcon as CheckSquare, SparkleIcon as Sparkles, SquareIcon as Square } from '@phosphor-icons/react/dist/ssr';
+import { CheckSquareIcon as CheckSquare, SparkleIcon as Sparkles, SquareIcon as Square } from '@/components/ui/icons';
 import { displayName, type Profile, type Warehouse } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircleIcon as CheckCircle2 } from '@phosphor-icons/react/dist/ssr';
+import { CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 
 // The green confirmation box, the counterpart of FormError. Renders nothing for an empty message.
 export function SuccessNote({ children, className = '' }: { children?: React.ReactNode; className?: string }) {

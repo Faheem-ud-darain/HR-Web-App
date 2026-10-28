@@ -1,7 +1,7 @@
 'use client';
 import { Card } from './Card';
 import { Capacitor } from '@capacitor/core';
-import { InfoIcon as Info, GlobeIcon as Globe, DeviceMobileIcon as Smartphone, AppleLogoIcon as Apple } from '@phosphor-icons/react/dist/ssr';
+import { InfoIcon as Info, GlobeIcon as Globe, DeviceMobileIcon as Smartphone, AppleLogoIcon as Apple } from '@/components/ui/icons';
 import { APP_VERSIONS, AppPlatform } from '@/lib/appVersion';
 import { useIsClient } from '@/lib/useIsClient';
 

@@ -8,7 +8,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { announcementWhen } from '@/lib/core/announcements';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { CheckCircleIcon as CheckCircle2, CircleNotchIcon as Loader2, TrashIcon as Trash2, EyeIcon as Eye, WarningIcon as AlertTriangle, ArrowBendUpRightIcon as Forward } from '@phosphor-icons/react/dist/ssr';
+import { CheckCircleIcon as CheckCircle2, CircleNotchIcon as Loader2, TrashIcon as Trash2, EyeIcon as Eye, WarningIcon as AlertTriangle, ArrowBendUpRightIcon as Forward } from '@/components/ui/icons';
 import { hrActions, Profile, Announcement, useProfiles, useAnnouncements, useWarehouses, displayName } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';

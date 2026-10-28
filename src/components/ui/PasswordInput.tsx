@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { EyeIcon as Eye, EyeSlashIcon as EyeOff } from '@phosphor-icons/react/dist/ssr';
+import { EyeIcon as Eye, EyeSlashIcon as EyeOff } from '@/components/ui/icons';
 
 interface PasswordInputProps {
   value: string;

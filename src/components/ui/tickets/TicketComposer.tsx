@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { LockIcon as Lock, WarningCircleIcon as AlertCircle } from '@phosphor-icons/react/dist/ssr';
+import { LockIcon as Lock, WarningCircleIcon as AlertCircle } from '@/components/ui/icons';
 import { AttachButton, SendButton, PendingFileChip, enterSends, COMPOSER_BAR, COMPOSER_FIELD, COMPOSER_TEXT } from '@/components/ui/ComposerParts';
 import type { Profile, Ticket } from '@/lib/hrData';
 import { useTicketReply } from '@/components/ui/tickets/useTicketReply';

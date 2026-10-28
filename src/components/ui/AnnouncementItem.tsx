@@ -1,5 +1,5 @@
 import React from 'react';
-import { WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
+import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Badge } from '@/components/ui/Badge';
 import { ExpandableText } from '@/components/ui/ExpandableText';
 

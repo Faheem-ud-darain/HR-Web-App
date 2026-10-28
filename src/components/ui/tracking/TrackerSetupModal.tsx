@@ -4,7 +4,7 @@ import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, TrackingSettings, TrackerDiagnostics } from '@/lib/hrData';
 import { TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL } from '@/lib/trackerSetup';
-import { DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle } from '@phosphor-icons/react/dist/ssr';
+import { DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { formatDateTimeNY } from '@/lib/timezone';
 import { AGENT_SCRIPT_PATH } from '@/lib/core/trackingWindow';
 

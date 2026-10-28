@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BuildingsIcon as Building2, StarIcon as Star, UsersIcon as Users } from '@phosphor-icons/react/dist/ssr';
+import { BuildingsIcon as Building2, StarIcon as Star, UsersIcon as Users } from '@/components/ui/icons';
 import { displayName, type Profile, type Team } from '@/lib/hrData';
 import { isTeamLead, isWarehouseManager } from '@/lib/core/teams';
 import { Badge } from '@/components/ui/Badge';

@@ -29,7 +29,7 @@ import {
   formatMoney,
   AbsenceRecord,
 } from '@/lib/hrData';
-import { ChartBarIcon as BarChart3, UsersIcon as Users, WalletIcon as Wallet, PiggyBankIcon as PiggyBank, TableIcon as Table2 } from '@phosphor-icons/react/dist/ssr';
+import { ChartBarIcon as BarChart3, UsersIcon as Users, WalletIcon as Wallet, PiggyBankIcon as PiggyBank, TableIcon as Table2 } from '@/components/ui/icons';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/StatCard';
 

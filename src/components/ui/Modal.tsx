@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { XIcon as X } from '@/components/ui/icons';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { triggerHaptic } from '@/lib/haptics';
 import { useIsClient } from '@/lib/useIsClient';

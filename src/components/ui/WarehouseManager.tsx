@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { PencilSimpleLineIcon as Edit, CircleNotchIcon as Loader2, MapPinIcon as MapPin, TrashIcon as Trash } from '@phosphor-icons/react/dist/ssr';
+import { PencilSimpleLineIcon as Edit, CircleNotchIcon as Loader2, MapPinIcon as MapPin, TrashIcon as Trash } from '@/components/ui/icons';
 import { hrActions, useProfiles, useWarehouses, type Warehouse } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { SuccessNote } from '@/components/ui/SuccessNote';

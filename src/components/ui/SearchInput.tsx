@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { MagnifyingGlassIcon as Search, XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { MagnifyingGlassIcon as Search, XIcon as X } from '@/components/ui/icons';
 import { Input, type FieldSize } from './Input';
 
 type SearchInputProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size' | 'onChange' | 'value' | 'type'> & {

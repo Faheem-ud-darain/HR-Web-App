@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { WarningIcon as AlertTriangle, ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react/dist/ssr';
+import { WarningIcon as AlertTriangle, ShieldWarningIcon as ShieldAlert } from '@/components/ui/icons';
 import { displayName, type Profile, type TimesheetEntry } from '@/lib/hrData';
 import { NoticeModal } from '@/components/ui/NoticeModal';
 

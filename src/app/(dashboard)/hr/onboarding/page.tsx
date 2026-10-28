@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Profile, useProfiles, useTeams } from '@/lib/hrData';
 import { matchesOnboardingTab, type OnboardingTab } from '@/lib/core/onboarding';
-import { UserPlusIcon as UserPlus } from '@phosphor-icons/react/dist/ssr';
+import { UserPlusIcon as UserPlus } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
 import { OnboardEmployeeModal } from './_components/OnboardEmployeeModal';

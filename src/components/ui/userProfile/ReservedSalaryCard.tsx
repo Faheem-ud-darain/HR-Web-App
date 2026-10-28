@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CurrencyDollarIcon as DollarSign } from '@phosphor-icons/react/dist/ssr';
+import { CurrencyDollarIcon as DollarSign } from '@/components/ui/icons';
 import { formatMoney, updateProfileAdmin, type Profile } from '@/lib/hrData';
 import { parseReserveAmount } from '@/lib/core/userProfile';
 import { FieldLabel } from '@/components/ui/FieldLabel';

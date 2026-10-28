@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { BellIcon as Bell, TrashIcon as Trash2 } from '@phosphor-icons/react/dist/ssr';
+import { BellIcon as Bell, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import type { Notification } from '@/lib/hrData';
 import { formatRelativeDateNY } from '@/lib/timezone';

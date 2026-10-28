@@ -16,7 +16,7 @@ import { ForcedPasswordChangeModal } from '@/components/ui/ForcedPasswordChangeM
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
 import { useAnyModalOpen } from '@/lib/modalStack';
-import { ShieldWarningIcon as ShieldAlert } from '@phosphor-icons/react/dist/ssr';
+import { ShieldWarningIcon as ShieldAlert } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { OnboardingFlow } from '@/components/layout/OnboardingFlow';

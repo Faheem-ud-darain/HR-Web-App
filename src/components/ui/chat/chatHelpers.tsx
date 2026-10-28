@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
-import { CrownIcon as Crown, HeadsetIcon as Headset, StarIcon as Star } from '@phosphor-icons/react/dist/ssr';
+import { CrownIcon as Crown, HeadsetIcon as Headset, StarIcon as Star } from '@/components/ui/icons';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 import { safeHref } from '@/lib/sanitize';
 import { isImageAttachment } from '@/lib/core/attachments';

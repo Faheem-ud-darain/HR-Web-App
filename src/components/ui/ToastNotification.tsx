@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { BellIcon as Bell, XIcon as X } from '@phosphor-icons/react/dist/ssr';
+import { BellIcon as Bell, XIcon as X } from '@/components/ui/icons';
 import { pb } from '@/lib/pocketbase';
 import { getSessionEmail, getSessionRole } from '@/lib/session';
 

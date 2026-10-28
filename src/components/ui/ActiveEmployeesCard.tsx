@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { StatCard } from '@/components/ui/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { LightningIcon as Zap, ClockIcon as Clock } from '@phosphor-icons/react/dist/ssr';
+import { LightningIcon as Zap, ClockIcon as Clock } from '@/components/ui/icons';
 import { Profile, TimesheetEntry, displayName, formatDurationBetween, localShiftDate } from '@/lib/hrData';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { formatTimeNY, APP_TIMEZONE } from '@/lib/timezone';

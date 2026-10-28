@@ -2,7 +2,7 @@
 
 import React, { useId, useState } from 'react';
 import { useAutoGrow } from '@/lib/useAutoGrow';
-import { CrownIcon as Crown, MegaphoneIcon as Megaphone, FileTextIcon as FileText, VideoCameraIcon as Video, SmileyIcon as Smile, PlusIcon as Plus, PaperclipIcon as Paperclip } from '@phosphor-icons/react/dist/ssr';
+import { CrownIcon as Crown, MegaphoneIcon as Megaphone, FileTextIcon as FileText, VideoCameraIcon as Video, SmileyIcon as Smile, PlusIcon as Plus, PaperclipIcon as Paperclip } from '@/components/ui/icons';
 import { Avatar } from '@/components/ui/Avatar';
 import { displayName, Team, Profile } from '@/lib/hrData';
 import { EmojiPicker } from '@/components/ui/chat/chatHelpers';

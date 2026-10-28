@@ -3,7 +3,7 @@
 import type { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, displayName, Profile } from '@/lib/hrData';
-import { StarIcon as Star, GiftIcon as Gift } from '@phosphor-icons/react/dist/ssr';
+import { StarIcon as Star, GiftIcon as Gift } from '@/components/ui/icons';
 import { Badge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';

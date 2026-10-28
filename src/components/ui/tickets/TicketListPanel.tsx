@@ -4,7 +4,7 @@ import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { UserIcon as User } from '@phosphor-icons/react/dist/ssr';
+import { UserIcon as User } from '@/components/ui/icons';
 import { formatTicketDate } from '@/components/ui/tickets/ticketHelpers';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';

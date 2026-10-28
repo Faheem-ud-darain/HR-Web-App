@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { UploadSimpleIcon as Upload, CheckCircleIcon as CheckCircle2, XIcon as X, FileTextIcon as FileText, CaretRightIcon as ChevronRight } from '@phosphor-icons/react/dist/ssr';
+import { UploadSimpleIcon as Upload, CheckCircleIcon as CheckCircle2, XIcon as X, FileTextIcon as FileText, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Profile } from '@/lib/hrData';
 

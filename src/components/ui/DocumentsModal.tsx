@@ -3,7 +3,7 @@
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, displayName } from '@/lib/hrData';
-import { FileTextIcon as FileText, DownloadSimpleIcon as Download, EyeIcon as Eye } from '@phosphor-icons/react/dist/ssr';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download, EyeIcon as Eye } from '@/components/ui/icons';
 import { safeHref } from '@/lib/sanitize';
 
 interface DocumentsModalProps {

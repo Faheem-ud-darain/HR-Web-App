@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeftIcon as ArrowLeft, HeadsetIcon as Headset, CircleNotchIcon as Loader2, LockIcon as Lock, ArrowCounterClockwiseIcon as RotateCcw, ArrowBendUpRightIcon as Forward, EyeIcon as Eye } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeftIcon as ArrowLeft, HeadsetIcon as Headset, CircleNotchIcon as Loader2, LockIcon as Lock, ArrowCounterClockwiseIcon as RotateCcw, ArrowBendUpRightIcon as Forward, EyeIcon as Eye } from '@/components/ui/icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TicketReplyLog } from '@/components/ui/tickets/TicketReplyLog';
 import { TicketComposer } from '@/components/ui/tickets/TicketComposer';

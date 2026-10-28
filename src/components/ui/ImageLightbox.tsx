@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { XIcon as X, DownloadSimpleIcon as Download } from '@phosphor-icons/react/dist/ssr';
+import { XIcon as X, DownloadSimpleIcon as Download } from '@/components/ui/icons';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { useIsClient } from '@/lib/useIsClient';
 import { useDialogFocus } from '@/lib/useDialogFocus';

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CaretDownIcon as ChevronDown, SignOutIcon as LogOut, UserCircleIcon as UserCircle } from '@phosphor-icons/react/dist/ssr';
+import { CaretDownIcon as ChevronDown, SignOutIcon as LogOut, UserCircleIcon as UserCircle } from '@/components/ui/icons';
 import { compactName } from '@/lib/core/names';
 import { Avatar } from '@/components/ui/Avatar';
 import { DismissibleArea } from '@/components/ui/DismissibleArea';
