@@ -81,7 +81,7 @@ export function MobileMenu({ role, pathname, open, onClose, groups, policy, dots
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={slide}
-              className="absolute right-0 inset-y-0 w-[min(20rem,86vw)] bg-white shadow-2xl flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+              className="absolute right-0 inset-y-0 w-[min(20rem,86vw)] bg-white shadow-2xl rounded-l-3xl overflow-hidden flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
             >
               <div className="h-14 shrink-0 flex items-center justify-between gap-3 pl-5 pr-2 border-b border-slate-200">
                 <div className="flex items-center gap-2.5 min-w-0">

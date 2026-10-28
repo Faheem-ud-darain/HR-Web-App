@@ -86,7 +86,7 @@ export function DesktopSidebar({ role, pathname, groups, policy, dots, pinned, o
             onPointerLeave={() => setHover(false)}
             onFocus={e => { if (e.target.matches(':focus-visible')) setFocus(true); }}
             onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFocus(false); }}
-            className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-white ${expanded && !pushes ? 'shadow-xl' : ''}`}
+            className={`absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-white max-lg:rounded-r-2xl ${expanded && !pushes ? 'shadow-xl' : ''}`}
           >
             <div className="h-16 flex items-center shrink-0 border-b border-slate-200 gap-3 pl-[18px] pr-4">
               <button
