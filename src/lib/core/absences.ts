@@ -2,7 +2,7 @@
 // import from the browser, Next route handlers and the Edge runtime alike.
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import { getNYDateString } from '../timezone';
-import type { AbsenceRecord, Profile, TimesheetEntry, LeaveApplication, InactivityLog } from '../hr/types';
+import type { AbsenceRecord, MyAbsenceRecord, Profile, TimesheetEntry, LeaveApplication, InactivityLog } from '../hr/types';
 import { getWeekdaysInMonth, isWeekday, localShiftDate, addDays, eachDay } from './dates';
 import { isApprovedLeaveOnDate } from './leaves';
 import { elapsedMinutes } from './timesheets';
@@ -105,6 +105,34 @@ export function describeAbsence(reason: AbsenceCandidate['reason'], dateStr: str
     ? `worked only ${worked} (under 4 hours minimum)`
     : 'not starting a shift';
   return { reasonText, empReasonDetail };
+}
+
+/** One day on the employee's "Daily Deductions" list: what happened, and what was actually charged for it. */
+export interface DeductionLine { id: string; date: string; label: string; amount: number; covered: boolean }
+
+const hoursMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${Math.round(minutes) % 60}m`;
+
+/**
+ * The employee-facing line for each absence record, newest day first. A day that an approved leave now covers (approved
+ * after the absence was recorded) reads as that leave and is charged nothing, matching what payroll really deducts.
+ * `leaveOn` finds the approved leave covering a date, if any.
+ */
+export function deductionLines(records: MyAbsenceRecord[], leaveOn: (date: string) => LeaveApplication | null): DeductionLine[] {
+  return [...records].sort((a, b) => b.date.localeCompare(a.date)).map(r => {
+    const leave = leaveOn(r.date);
+    if (leave) return { id: r.id, date: r.date, label: `On ${leave.type} leave (approved after this was recorded)`, amount: 0, covered: true };
+    const label = r.reason === 'no_clock_in'
+      ? "Didn't start a shift that day"
+      : r.reason === 'under_4_hours'
+        ? `Only ${hoursMinutes(r.workedMinutes || 0)} worked (the minimum is ${MIN_REQUIRED_WORK_MINUTES / 60} hours)`
+        : `Mouse inactive for ${Math.round(r.inactivityMinutes || INACTIVITY_THRESHOLD_SECONDS / 60)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})`;
+    return { id: r.id, date: r.date, label, amount: r.deductionAmount, covered: false };
+  });
+}
+
+/** The pay months ("YYYY-MM") that have a deduction, plus the current one, newest first. */
+export function deductionMonths(records: Pick<MyAbsenceRecord, 'date'>[], currentMonth: string): string[] {
+  return [...new Set([currentMonth, ...records.map(r => r.date.slice(0, 7))])].sort().reverse();
 }
 
 // Day bucketing

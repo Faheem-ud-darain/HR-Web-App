@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { WarningOctagonIcon as AlertOctagon } from '@/components/ui/icons';
 import { AcknowledgeModal } from '@/components/ui/AcknowledgeModal';
+import { INACTIVITY_THRESHOLD_SECONDS } from '@/lib/core/absences';
 import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate } from '@/lib/hrData';
 
 interface AbsentPopupProps {
@@ -72,7 +73,7 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
   const reasonText = coveringLeave
     ? `This day is now covered by your approved ${coveringLeave.type} Leave request (approved after this was originally recorded) — it's no longer treated as an unexplained absence.`
     : current.reason === 'inactivity'
-    ? `Our tracker recorded ${current.inactivityMinutes} minute(s) of continuous mouse inactivity during your shift that day, which crosses the 35-minute limit.`
+    ? `Our tracker recorded ${current.inactivityMinutes} minute(s) of continuous mouse inactivity during your shift that day, which crosses the ${INACTIVITY_THRESHOLD_SECONDS / 60}-minute limit.`
     : current.reason === 'under_4_hours'
     ? `Your total shift time was under the required 4-hour minimum (${Math.floor((current.workedMinutes || 0) / 60)}h ${(current.workedMinutes || 0) % 60}m recorded) on this day.`
     : `You did not start a shift on this day and there was no approved leave covering it.`;

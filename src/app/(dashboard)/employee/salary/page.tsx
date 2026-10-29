@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { usePayrollSelf, useMyAbsenceRecords, useLeaves, getApprovedLeaveOnDate, formatMoney, getMissedIncrementEvents, getIncrementHistory } from '@/lib/hrData';
+import { usePayrollSelf, useMyAbsenceRecords, useLeaves, formatMoney, getMissedIncrementEvents, getIncrementHistory } from '@/lib/hrData';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar, InfoIcon as Info, WarningIcon as AlertTriangle } from '@/components/ui/icons';
+import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { APP_TIMEZONE } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { DailyDeductionsCard } from '@/components/payroll/DailyDeductionsCard';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 interface Payslip {
@@ -100,42 +101,6 @@ export default function EmployeeSalaryPage() {
 
   const filteredSlips: Payslip[] = currentSlip ? [currentSlip] : [];
 
-  // This calendar month's daily deductions, newest first — same
-  // America/New_York month bucketing runAbsenceCheck uses to decide which
-  // payroll month a given absence date belongs to, so this always lines up
-  // with the current, in-progress payslip above rather than drifting to a
-  // different month boundary.
-  const currentMonthParts = new Date().toLocaleDateString('en-US', { timeZone: APP_TIMEZONE, year: 'numeric', month: '2-digit' }).split('/'); // ["MM", "YYYY"]
-  const curMonthNum = Number(currentMonthParts[0]);
-  const curYearNum = Number(currentMonthParts[1]);
-  const thisMonthDeductions = myAbsenceRecords
-    .filter(r => {
-      const [y, m] = r.date.split('-').map(Number);
-      return y === curYearNum && m === curMonthNum;
-    })
-    .sort((a, b) => b.date.localeCompare(a.date));
-
-  // Always re-checks live leave coverage first, rather than trusting the
-  // record's frozen `reason` — see the comment on the `leaves` hook above.
-  // A day that's really an approved Leave now reads as that leave and its
-  // type, not as an unexplained "didn't start a shift".
-  const reasonLabel = (r: typeof thisMonthDeductions[number]): string => {
-    const coveringLeave = userProfile ? getApprovedLeaveOnDate(leaves, userProfile.fullName, r.date) : null;
-    if (coveringLeave) return `On Leave (${coveringLeave.type}) — approved after this was recorded`;
-    if (r.reason === 'no_clock_in') return "Didn't start a shift that day";
-    if (r.reason === 'under_4_hours') return `Shift under 4 hours worked${r.workedMinutes != null ? ` (${Math.round(r.workedMinutes)} min)` : ''}`;
-    if (r.reason === 'inactivity') return `Mouse inactive 30+ min during shift${r.inactivityMinutes != null ? ` (${Math.round(r.inactivityMinutes)} min)` : ''}`;
-    return r.reason;
-  };
-
-  // Matches getAbsenceDeductionForMonth's own exclusion — a leave-covered
-  // record is kept for history (see AbsenceDetailsView's leave-protected-
-  // delete popup) but is no longer actually charged as an absence; showing
-  // its old frozen deductionAmount here would contradict the real payroll
-  // total above it.
-  const reasonAmount = (r: typeof thisMonthDeductions[number]): number =>
-    (userProfile && getApprovedLeaveOnDate(leaves, userProfile.fullName, r.date)) ? 0 : r.deductionAmount;
-
   const incrementHistory = userProfile ? getIncrementHistory(userProfile) : { originalBaseSalary: 0, events: [] };
   const missedYears = userProfile ? getMissedIncrementEvents(userProfile) : 0;
   const anniversarySource = userProfile ? (userProfile.salaryStartDate || userProfile.joinedDate) : '';
@@ -201,43 +166,7 @@ export default function EmployeeSalaryPage() {
         </div>
       )}
 
-      <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Daily Deductions This Month</h2>
-      <Card className="overflow-hidden border border-slate-200">
-        <CardContent className="p-4 md:p-6 space-y-4">
-          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900">
-            <Info className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
-            <p className="text-xs leading-relaxed">
-              Deductions for a given day are only finalized once that day is fully over — so if you had to start your shift again after an error or a disconnect earlier in the day, don&apos;t worry: it won&apos;t show up here as a mistake. Check back the next day for that date&apos;s correct, final total. If something still looks wrong after that, reach out to HR before your salary is processed for the month.
-            </p>
-          </div>
-
-          {thisMonthDeductions.length === 0 ? (
-            <p className="text-xs text-slate-400 italic text-center py-4">No deductions recorded so far this month.</p>
-          ) : (
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
-              {thisMonthDeductions.map((r) => (
-                <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-white">
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-slate-800">{r.date}</p>
-                      <p className="text-caption text-slate-500 leading-snug">{reasonLabel(r)}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-rose-600 shrink-0">-{formatMoney(reasonAmount(r), userProfile?.region)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {thisMonthDeductions.length > 0 && (
-            <div className="flex justify-between items-center pt-1 text-xs font-bold text-slate-700">
-              <span>Total deducted this month so far</span>
-              <span className="text-rose-600">-{formatMoney(thisMonthDeductions.reduce((sum, r) => sum + reasonAmount(r), 0), userProfile?.region)}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} />
 
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Historical Pay slips</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">
