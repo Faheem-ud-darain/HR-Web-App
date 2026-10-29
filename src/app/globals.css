@@ -1175,6 +1175,31 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
   --color-white: #ffffff;
   --color-black: #000000;
 }
+/* A blur that grows toward the bottom of the hero, three stacked layers each fading in over the last, so what is in the
+   video seems to sink into it. It sits over the video and under the cards. */
+.landing-blur {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 60%;
+  pointer-events: none;
+}
+.landing-blur > i {
+  position: absolute;
+  inset: 0;
+}
+.landing-blur > i:nth-child(1) {
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 40%, transparent 60%);
+}
+.landing-blur > i:nth-child(2) {
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  mask-image: linear-gradient(to bottom, transparent 20%, #000 40%, #000 60%, transparent 80%);
+}
+.landing-blur > i:nth-child(3) {
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  mask-image: linear-gradient(to bottom, transparent 40%, #000 65%);
+}
 @keyframes marquee-scroll {
   to { transform: translateX(-50%); }
 }

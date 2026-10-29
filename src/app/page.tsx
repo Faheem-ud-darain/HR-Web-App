@@ -77,7 +77,8 @@ export default function Home() {
         <div aria-hidden="true" className="absolute inset-0 -z-20 bg-cover bg-center" style={{ backgroundImage: 'url(/delcargo_hero_poster.jpg)' }}>
           <video src="/delcargo_hero.mp4" poster="/delcargo_hero_poster.jpg" autoPlay muted loop playsInline preload="auto" className="h-full w-full object-cover motion-reduce:hidden" />
         </div>
-        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-black/10 to-black/70" />
+        <div aria-hidden="true" className="landing-blur -z-10"><i /><i /><i /></div>
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-black/5 via-60% to-black" />
 
         <header className="pt-safe px-3 sm:px-8 pt-3 sm:pt-5">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full bg-white py-2 pl-5 pr-2 text-black">
