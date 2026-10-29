@@ -487,6 +487,8 @@ export interface ProfileSelf {
   cvFileName: string;
   identityDocs: { name: string; data: string }[];
   passportFileName: string;
+  /** How much of the shared documents budget is used (see DOCS_BUDGET_BYTES). */
+  docsBytes?: number;
 }
 
 

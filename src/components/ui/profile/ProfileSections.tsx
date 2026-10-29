@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { UploadSlot } from '@/components/ui/UploadSlot';
 import type { Profile } from '@/lib/hrData';
+import { DOCS_BUDGET_MB } from '@/lib/core/onboarding';
 import { formatDateNY } from '@/lib/timezone';
 import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal';
 import { DeleteAccountRequestModal, useAccountDeletionRequest } from '@/components/ui/profile/SelfServiceModals';
@@ -48,13 +49,14 @@ export function SecurityCard({ logTag, onChanged }: { logTag: string; onChanged?
   );
 }
 
-type Docs = null | undefined | { cvFileName?: string; passportFileName?: string; identityDocs?: { name: string }[] } | undefined;
+type Docs = null | undefined | { cvFileName?: string; passportFileName?: string; identityDocs?: { name: string }[]; docsBytes?: number };
 
 // CV, identity documents and passport: what is on file, with a button to add or replace each.
 export function DocumentsCard({ docs, uploads, usa }: { docs: Docs; uploads: ReturnType<typeof useDocumentUploads>; usa: boolean }) {
   const identity = docs?.identityDocs || [];
+  const used = ((docs?.docsBytes ?? 0) / 1.37 / 1048576).toFixed(1);
   return (
-    <ProfileCard title="My Documents" subtitle="Images up to 3 MB (converted to WebP), PDFs up to 5 MB. Visible to HR/Admin under Master Reports.">
+    <ProfileCard title="My Documents" subtitle={`All documents together can take about ${DOCS_BUDGET_MB} MB (${used} MB used). Images are converted to WebP. Visible to HR/Admin under Master Reports.`}>
       <div className="p-4 md:p-6 space-y-3">
         <UploadSlot
           title="CV / Resume" hint="PDF or image." accept="image/*,application/pdf" replaceable pickLabel="Upload"

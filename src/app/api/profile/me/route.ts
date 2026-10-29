@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireSession, verifyPassword, hashPassword } from '@/lib/serverAuth';
 import type { PbRow } from '@/lib/pbTypes';
 import { classifySelfProfilePatch } from '@/lib/profileSelfFields';
+import { DOCS_BUDGET_BYTES, overBudgetMessage, storedDocsBytes } from '@/lib/core/onboarding';
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
@@ -55,8 +56,7 @@ async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
   const existing = await getExtras(profileId);
   await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
 }
-async function mergeDocs(profileId: string, patch: PbRow): Promise<void> {
-  const existing = await adminGetProfileDocs(profileId);
+async function mergeDocs(profileId: string, existing: PbRow, patch: PbRow): Promise<void> {
   await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
 }
 
@@ -83,6 +83,8 @@ export async function GET(request: Request) {
       cvFileName: docs?.cvFileName || '',
       identityDocs: docs?.identityDocs || [],
       passportFileName: docs?.passportFileName || '',
+      // How much of the shared documents budget is used (the files themselves are never sent here).
+      docsBytes: storedDocsBytes(docs),
       // File *data* (base64) is intentionally omitted from the GET response
       // beyond what's needed to show "a document is on file" — the profile
       // page only needs the filenames to render its "Uploaded" state, not
@@ -147,6 +149,21 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // The documents (CV, identity scans, passport) share one stored record with a size limit. Check that BEFORE
+    // anything is written, so a too-large file cannot leave the bank details or phones half-saved.
+    const docUpdates: PbRow = {};
+    for (const key of KV_DOC_KEYS) {
+      if (body[key] !== undefined) docUpdates[key] = body[key];
+    }
+    const existingDocs: PbRow = Object.keys(docUpdates).length > 0 ? await adminGetProfileDocs(profile.id) : {};
+    if (Object.keys(docUpdates).length > 0) {
+      const kept = Object.fromEntries(Object.entries(existingDocs).filter(([key]) => !(key in docUpdates)));
+      const left = DOCS_BUDGET_BYTES - storedDocsBytes(kept);
+      if (storedDocsBytes({ ...kept, ...docUpdates }) > DOCS_BUDGET_BYTES) {
+        return NextResponse.json({ error: overBudgetMessage(left) }, { status: 413 });
+      }
+    }
+
     const realFields: PbRow = {};
     for (const [clientKey, pbKey] of Object.entries(REAL_FIELD_MAP)) {
       if (body[clientKey] !== undefined) realFields[pbKey] = body[clientKey];
@@ -169,12 +186,8 @@ export async function PATCH(request: Request) {
       await mergeExtras(profile.id, extraUpdates);
     }
 
-    const docUpdates: PbRow = {};
-    for (const key of KV_DOC_KEYS) {
-      if (body[key] !== undefined) docUpdates[key] = body[key];
-    }
     if (Object.keys(docUpdates).length > 0) {
-      await mergeDocs(profile.id, docUpdates);
+      await mergeDocs(profile.id, existingDocs, docUpdates);
     }
 
     if (body.profilePicture !== undefined) {

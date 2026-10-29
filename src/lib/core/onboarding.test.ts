@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DOCS_BUDGET_BYTES, bankIdLabel, canReviewDocuments, docsBytes, documentPages, identityScansNeeded, isPdf, matchesOnboardingTab, onboardingStatus, overBudgetMessage, validateBankDetails, validateSignature } from './onboarding';
+import { DOCS_BUDGET_BYTES, storedDocsBytes, bankIdLabel, canReviewDocuments, docsBytes, documentPages, identityScansNeeded, isPdf, matchesOnboardingTab, onboardingStatus, overBudgetMessage, validateBankDetails, validateSignature } from './onboarding';
 
 const person = (approvalStatus?: 'pending' | 'approved' | 'rejected', onboardingCompleted = false) => ({ approvalStatus, onboardingCompleted });
 
@@ -88,6 +88,8 @@ describe('documents', () => {
   it('adds up the stored size and says how much room is left', () => {
     expect(docsBytes('abc', null, undefined, 'de')).toBe(5);
     expect(overBudgetMessage(DOCS_BUDGET_BYTES)).toMatch(/about 5 MB/);
+    expect(storedDocsBytes(null)).toBe(0);
+    expect(storedDocsBytes({ a: 'xyz' })).toBe(JSON.stringify({ a: 'xyz' }).length);
     expect(overBudgetMessage(-5)).toMatch(/about 0 KB/);
   });
 });
