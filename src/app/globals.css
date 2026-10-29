@@ -51,6 +51,8 @@
 
 @theme inline {
   --color-ink: var(--ln-ink);
+  --color-brandfg: var(--ln-on-brand);
+  --color-brandfg-inv: var(--ln-on-brand-inv);
   --color-paper: var(--ln-paper);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -1177,11 +1179,15 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
   color-scheme: light;
   --ln-ink: #000000;
   --ln-paper: #ededed;
+  --ln-on-brand: #ffffff; /* what sits on the brand orange: white in light mode, black in dark (and its opposite for buttons) */
+  --ln-on-brand-inv: #000000;
 }
 :root[data-theme='dark'] .landing-root {
   color-scheme: dark;
   --ln-ink: #ffffff;
   --ln-paper: #000000;
+  --ln-on-brand: #000000;
+  --ln-on-brand-inv: #ffffff;
 }
 /* A blur that grows down the hero and is back to nothing at its bottom edge (so the ticker below is never blurred): three
    stacked layers, each fading in over the last, so what is in the video seems to sink into it. It sits over the video

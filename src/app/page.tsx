@@ -4,9 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CareersView } from '@/components/ui/CareersView';
 import { ButtonLink } from '@/components/ui/Button';
-import { ArrowDownIcon as ArrowDown, ArrowRightIcon as ArrowRight } from '@/components/ui/icons';
+import { ArrowDownIcon as ArrowDown } from '@/components/ui/icons';
 import { CAREERS_HERO, DEPARTMENTS } from '@/components/ui/careers/careerOptions';
-import { LandingFooter } from './_landing/LandingFooter';
+import { LandingNav } from '@/components/landing/LandingNav';
+import { LandingFooter } from '@/components/landing/LandingFooter';
 import { PhotoStrip } from './_landing/PhotoStrip';
 import { RoleTicker } from './_landing/RoleTicker';
 import {
@@ -19,7 +20,6 @@ import {
 } from '@/lib/session';
 import { PageLoader } from '@/components/ui/Spinner';
 import { useResolvedTheme } from '@/lib/theme';
-import { ThemeIconButton } from '@/components/ui/ThemeToggle';
 
 // The hero video for each theme: the same ribbon on black, or on pale grey.
 const HERO_MEDIA = {
@@ -27,11 +27,6 @@ const HERO_MEDIA = {
   light: { video: '/delcargo_hero_light.mp4', poster: '/delcargo_hero_light_poster.jpg' },
 };
 
-const NAV_LINKS = [
-  { href: '#who-we-are', label: 'Who We Are' },
-  { href: '#life-at-delcargo', label: 'Life at DelCargo' },
-  { href: '#open-positions', label: 'Open Positions' },
-];
 
 export default function Home() {
   const router = useRouter();
@@ -89,23 +84,7 @@ export default function Home() {
         <div aria-hidden="true" className="landing-blur -z-10"><i /><i /><i /></div>
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-paper/40 via-paper/5 via-60% to-paper" />
 
-        <header className="pt-safe px-3 sm:px-8 pt-3 sm:pt-5">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full bg-ink py-2 pl-5 pr-2 text-paper">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="font-display font-black text-base sm:text-lg tracking-tight leading-none truncate">DelCargo <span className="hidden sm:inline">Logistics</span></div>
-              <span className="hidden md:inline-block text-caption font-bold border border-paper/25 px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 text-paper/70">Careers Portal</span>
-            </div>
-            <nav aria-label="Page sections" className="hidden lg:flex items-center gap-8 text-sm font-semibold text-paper/70">
-              {NAV_LINKS.map(l => <a key={l.href} href={l.href} className="hover:text-paper transition-colors">{l.label}</a>)}
-            </nav>
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              <ThemeIconButton className="text-paper/70! hover:bg-paper/15! hover:text-paper!" />
-              <ButtonLink href="/auth" variant="ink" size="md" className="shrink-0 rounded-full bg-paper! text-ink! hover:bg-paper/80!">
-              <span className="hidden sm:inline">Sign In to Employee Portal</span><span className="sm:hidden">Sign In</span> <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
-              </ButtonLink>
-            </div>
-          </div>
-        </header>
+        <LandingNav />
 
         <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 sm:px-8 pt-10 sm:pt-16 pb-12 sm:pb-20 text-center">
           <h1 className="font-display font-black [font-size:clamp(2.5rem,5.6vw,4.75rem)] leading-[1] tracking-[-0.03em] text-balance break-words">
