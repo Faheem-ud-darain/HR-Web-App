@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { MapPinIcon as MapPin, ArrowRightIcon as ArrowRight, PlusIcon as Plus } from '@/components/ui/icons';
-import { StatusDot } from '@/components/ui/StatusDot';
 import type { CareerPosition } from '@/lib/hrData';
 import { DEPARTMENTS } from '@/components/ui/careers/careerOptions';
 
@@ -66,10 +65,7 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
                         <p className="text-caption font-bold uppercase tracking-widest text-white/45">Requirements</p>
                         <ul className="space-y-1.5 max-w-3xl">
                           {job.requirements.map((req, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-white/70">
-                              <StatusDot tone="orange" className="mt-2" />
-                              <span>{req}</span>
-                            </li>
+                            <li key={i} className="text-sm text-white/70 border-l-2 border-white/15 pl-3">{req}</li>
                           ))}
                         </ul>
                       </div>

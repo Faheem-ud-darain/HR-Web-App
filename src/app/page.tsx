@@ -78,7 +78,6 @@ export default function Home() {
         <header className="pt-safe px-3 sm:px-8 pt-3 sm:pt-5">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full bg-white py-2 pl-5 pr-2 text-black">
             <div className="flex items-center gap-3 min-w-0">
-              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand" />
               <div className="font-display font-black text-base sm:text-lg tracking-tight leading-none truncate">DelCargo <span className="hidden sm:inline">Logistics</span></div>
               <span className="hidden md:inline-block text-caption font-bold border border-black/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 text-black/70">Careers Portal</span>
             </div>
