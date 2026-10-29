@@ -70,10 +70,14 @@ export default function Home() {
 
   return (
     <div className="landing-root min-h-screen bg-black flex flex-col font-sans">
-      {/* The hero: centred words on black, then the warehouse in five crops drifting past. The nav is a white pill. pt-safe
+      {/* The hero: centred words over a looping video, then the warehouse in five crops drifting past. The nav is a white pill. pt-safe
           keeps it clear of the status bar on notched phones (layout.tsx draws the WebView under it). */}
       <section className="relative isolate overflow-hidden text-white pb-10 sm:pb-14">
-        <div aria-hidden="true" className="landing-glow absolute inset-0 -z-10" />
+        {/* The video is the hero's backdrop; people who ask for less motion get its first frame instead. */}
+        <div aria-hidden="true" className="absolute inset-0 -z-20 bg-cover bg-center" style={{ backgroundImage: 'url(/delcargo_hero_poster.jpg)' }}>
+          <video src="/delcargo_hero.mp4" poster="/delcargo_hero_poster.jpg" autoPlay muted loop playsInline preload="auto" className="h-full w-full object-cover motion-reduce:hidden" />
+        </div>
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-black/10 to-black/70" />
 
         <header className="pt-safe px-3 sm:px-8 pt-3 sm:pt-5">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full bg-white py-2 pl-5 pr-2 text-black">

@@ -1167,21 +1167,13 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 }
 
 /* ── Landing page ────────────────────────────────────────────────────────────────────────────────────────
-   A dark hero: centred words under a grid and an orange glow, a strip of warehouse crops drifting past, the nav a
-   pill, and the ticker scrolling the departments hiring. Every moving piece stands still for reduced motion. */
+   A dark hero: centred words over a looping video, a strip of warehouse crops drifting past, the nav a pill, and the
+   ticker scrolling the departments hiring. Every moving piece stands still for reduced motion. */
 /* The landing page is dark whatever theme the app is in: pin the two colours the dark theme re-points. */
 .landing-root {
   color-scheme: dark;
   --color-white: #ffffff;
   --color-black: #000000;
-}
-.landing-glow {
-  background: radial-gradient(55% 60% at 50% 12%, color-mix(in srgb, var(--primary) 30%, transparent), transparent 70%);
-}
-.landing-grid {
-  background-image: linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(80% 70% at 50% 40%, #000, transparent);
 }
 @keyframes marquee-scroll {
   to { transform: translateX(-50%); }
