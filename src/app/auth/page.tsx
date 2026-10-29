@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { PublicPage } from '@/components/landing/PublicPage';
-import { FloatingPaths } from '@/components/landing/FloatingPaths';
+import { Globe } from '@/components/landing/Globe';
 import { NoticeModal } from '@/components/ui/NoticeModal';
 import { ForgotPasswordModal } from './_components/ForgotPasswordModal';
 import { useRouter } from 'next/navigation';
@@ -238,23 +238,13 @@ export default function AuthPage() {
   return (
     <PublicPage badge="Sign In" signIn={false}>
       <div className="fade-enter mx-auto w-full max-w-6xl px-4 sm:px-8 pt-8 sm:pt-12 grid gap-6 lg:grid-cols-2 lg:gap-10">
-        {/* The panel: drifting lines over the warehouse, and what the portal is for. */}
-        <div className="relative hidden lg:flex min-h-[34rem] flex-col justify-end overflow-hidden rounded-3xl bg-ink/5 p-10">
-          <img
-            src="/delcargo_warehouse_hightech.webp"
-            alt="Sign In Visual Cover"
-            width={900}
-            height={900}
-            fetchPriority="high"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover object-center opacity-30"
-          />
-          <FloatingPaths />
-          <div className="absolute inset-0 bg-gradient-to-t from-paper via-paper/40 to-transparent" />
+        {/* The panel: what the portal is for, and the globe rising under it. */}
+        <div className="relative hidden lg:flex min-h-[34rem] flex-col overflow-hidden rounded-3xl bg-ink/5 p-10">
           <div className="relative space-y-1">
             <p className="text-caption font-bold uppercase tracking-widest text-brand">DelCargo Portal</p>
-            <p className="font-display text-2xl font-black uppercase tracking-tight text-ink">Streamlining Supply Chains</p>
+            <p className="font-display text-3xl xl:text-4xl font-black uppercase tracking-tight text-ink leading-[0.95]">Streamlining Supply Chains</p>
           </div>
+          <Globe className="absolute left-[-6%] top-[27%] w-[112%]" />
         </div>
 
         {/* The form. */}
