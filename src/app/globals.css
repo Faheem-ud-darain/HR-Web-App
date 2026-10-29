@@ -1167,15 +1167,8 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 }
 
 /* ── Landing page ────────────────────────────────────────────────────────────────────────────────────────
-   A dark, cinematic hero: the warehouse photo drifts slowly under a grid and an orange glow, the nav floats as a glass
-   pill, and the ticker scrolls the departments hiring. Every moving piece stands still for reduced motion. */
-@keyframes hero-drift {
-  from { transform: scale(1.06) translate3d(0, 0, 0); }
-  to { transform: scale(1.16) translate3d(-1.5%, -1%, 0); }
-}
-.landing-hero-photo {
-  animation: hero-drift 24s ease-in-out infinite alternate;
-}
+   A dark hero: centred words under a grid and an orange glow, a strip of warehouse crops drifting past, the nav a
+   pill, and the ticker scrolling the departments hiring. Every moving piece stands still for reduced motion. */
 .landing-glow {
   background: radial-gradient(60% 55% at 78% 18%, color-mix(in srgb, var(--primary) 55%, transparent), transparent 70%);
 }
@@ -1183,12 +1176,6 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
   background-image: linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: radial-gradient(80% 70% at 50% 40%, #000, transparent);
-}
-.landing-glass {
-  background: rgb(255 255 255 / 0.07);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid rgb(255 255 255 / 0.14);
 }
 .landing-text-glow {
   background: linear-gradient(100deg, var(--primary), color-mix(in srgb, var(--primary) 45%, white));
@@ -1206,5 +1193,5 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
   animation-play-state: paused;
 }
 @media (prefers-reduced-motion: reduce) {
-  .landing-hero-photo, .landing-marquee-track { animation: none; }
+  .landing-marquee-track { animation: none; }
 }
