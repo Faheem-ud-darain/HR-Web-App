@@ -155,6 +155,14 @@ body {
   line-height: 16px;
 }
 
+/* The brand orange as a surface that does not change with the theme (the landing page's hero and ticker). */
+@utility bg-brand {
+  background-color: var(--primary);
+}
+@utility text-brand {
+  color: var(--primary);
+}
+
 @utility bg-chrome {
   background-color: var(--chrome);
 }
@@ -1138,7 +1146,7 @@ svg[data-icon='caret-right'], svg[data-icon='sign-out'] { --icon-pose: translate
 svg[data-icon='arrow-right'] { --icon-pose: translateX(4px); }
 svg[data-icon='caret-left'] { --icon-pose: translateX(-3px); }
 svg[data-icon='arrow-left'] { --icon-pose: translateX(-4px); }
-svg[data-icon='caret-down'], svg[data-icon='download-simple'] { --icon-pose: translateY(3px); }
+svg[data-icon='caret-down'], svg[data-icon='download-simple'], svg[data-icon='arrow-down'] { --icon-pose: translateY(3px); }
 svg[data-icon='arrow-up'], svg[data-icon='upload-simple'] { --icon-pose: translateY(-3px); }
 svg[data-icon='arrow-square-out'] { --icon-pose: translate(2px, -2px); }
 svg[data-icon='plus'], svg[data-icon='plus-circle'], svg[data-icon='x'], svg[data-icon='x-circle'] { --icon-pose: rotate(90deg) scale(1.1); }
@@ -1156,4 +1164,30 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
     animation: none !important;
     transform: none !important;
   }
+}
+
+/* ── Landing page motion ─────────────────────────────────────────────────────────────────────────────────
+   The hero photo is cut into vertical slats that roll open like a loading-dock door, one after another; the ticker under
+   it scrolls the roles on offer. Both stand still for people who ask their device for reduced motion. */
+@keyframes slat-open {
+  from { transform: scaleY(0.08); }
+  to { transform: scaleY(1); }
+}
+.landing-slat {
+  transform-origin: top;
+  animation: slat-open 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms + 150ms);
+}
+@keyframes marquee-scroll {
+  to { transform: translateX(-50%); }
+}
+.landing-marquee-track {
+  animation: marquee-scroll 32s linear infinite;
+}
+.landing-marquee:hover .landing-marquee-track {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-slat { animation: none; }
+  .landing-marquee-track { animation: none; }
 }

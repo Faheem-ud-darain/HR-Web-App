@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 
 // Every button in this app used to be a hand-typed Tailwind string —
@@ -10,7 +11,7 @@ import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 // same radius as Card/Modal (rounded-xl, 12px — DESIGN.md's stated cap),
 // same 150ms snappy transition + scale(0.97) press feedback defined
 // globally in globals.css, same weight/size scale everywhere.
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -22,6 +23,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
   primary: 'bg-orange-600 hover:bg-orange-700 text-white disabled:bg-orange-300',
+  // Black with white text, for a button that sits on the brand orange (the landing page).
+  ink: 'bg-black hover:bg-black/80 text-white disabled:opacity-50',
   secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-50',
   danger: 'bg-rose-600 hover:bg-rose-700 text-white disabled:bg-rose-300',
   warning: 'bg-amber-600 hover:bg-amber-700 text-white disabled:bg-amber-300',
@@ -71,5 +74,26 @@ export function Button({
       {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
       {children}
     </button>
+  );
+}
+
+// A link that looks like a Button (same variants and sizes), so a call to action that navigates is a real <a>.
+export function ButtonLink({
+  href,
+  variant = 'primary',
+  size = 'md',
+  fullWidth = false,
+  className = '',
+  children,
+  ...props
+}: { href: string; variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center justify-center rounded-xl font-bold transition-colors transition-transform duration-200 ease-out active:scale-97 ${VARIANT_STYLES[variant]} ${SIZE_STYLES[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      {...props}
+    >
+      {children}
+    </Link>
   );
 }

@@ -7,7 +7,7 @@ import { CareerPosition, CareerApplication, useCareers, useWarehouses, useTeams,
 import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { useQuery } from '@tanstack/react-query';
-import { DEPARTMENTS } from '@/components/ui/careers/careerOptions';
+import { CAREERS_HERO, DEPARTMENTS } from '@/components/ui/careers/careerOptions';
 import { ApplicationsModal } from '@/components/ui/careers/ApplicationsModal';
 import { AddJobModal } from '@/components/ui/careers/AddJobModal';
 import { ApplyModal } from '@/components/ui/careers/ApplyModal';
@@ -15,9 +15,11 @@ import { CompanyIntro, LifeAtDelcargo, ReferralProgramNote } from '@/components/
 
 interface CareersViewProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead' | 'public';
+  /** Show the "Work with DelCargo" opening. False where the page has already shown it. */
+  hero?: boolean;
 }
 
-export function CareersView({ role }: CareersViewProps) {
+export function CareersView({ role, hero = true }: CareersViewProps) {
   const { data: allCareers, refetch: refetchCareers } = useCareers();
   const { data: allWarehouses } = useWarehouses();
   const { data: allTeams } = useTeams();
@@ -89,19 +91,18 @@ export function CareersView({ role }: CareersViewProps) {
     // Card contexts elsewhere) similar flex layouts.
     <div className="space-y-8 sm:space-y-16 mx-auto font-sans w-full min-w-0 px-1 sm:px-0 overflow-x-hidden">
       
-      {/* High-End Editorial Hero Section */}
-      <section className="text-center space-y-3 py-3 sm:py-8 px-2 sm:px-4 w-full min-w-0 overflow-hidden">
-        <h1
-          className="text-2xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full leading-snug"
-          style={{ fontFamily: 'Georgia, serif', textWrap: 'wrap' }}
-        >
-          Work with DelCargo
-        </h1>
-        <div className="h-0.5 w-10 sm:w-12 bg-orange-600 mx-auto" />
-        <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-1">
-          We are building the future of supply-chain technology. Join our collaborative logistics and product teams in creating beautiful, operational-grade software.
-        </p>
-      </section>
+      {/* The opening words. The landing page shows them in its own hero instead (hero={false}). */}
+      {hero && (
+        <section className="text-center space-y-3 py-3 sm:py-8 px-2 sm:px-4 w-full min-w-0 overflow-hidden">
+          <h1 className="font-display text-2xl sm:text-5xl font-bold text-slate-900 tracking-tight uppercase break-words max-w-full leading-snug" style={{ textWrap: 'wrap' }}>
+            {CAREERS_HERO.title}
+          </h1>
+          <div className="h-0.5 w-10 sm:w-12 bg-orange-600 mx-auto" />
+          <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-1">
+            {CAREERS_HERO.text}
+          </p>
+        </section>
+      )}
 
       {/* Categories Filter tab */}
       <div className="border-b border-slate-200 flex overflow-x-auto gap-2.5 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar pb-1.5 px-1 max-w-full">
@@ -126,7 +127,7 @@ export function CareersView({ role }: CareersViewProps) {
       {/* Grid listing */}
       <div className="space-y-6 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-base sm:text-lg font-light text-slate-900 uppercase tracking-widest" style={{ fontFamily: 'Georgia, serif' }}>
+          <h2 className="font-display text-lg sm:text-2xl font-bold text-slate-900 uppercase tracking-wide">
             Open Positions ({filteredJobs.length})
           </h2>
           {canEdit && (
