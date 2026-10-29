@@ -113,10 +113,10 @@ export default function Home() {
 
       <RoleTicker items={['Open Positions', ...DEPARTMENTS]} href="#open-positions" />
 
-      {/* Open positions and Who We Are sit on a light sheet that rises over the dark page; Life at DelCargo closes it in
-          the dark again (the careers view; its own opening words are the hero above). */}
-      <main id="open-positions" className="flex-1 scroll-mt-4 w-full min-w-0 bg-slate-50 rounded-t-[2rem] sm:rounded-t-[3rem] -mt-px">
-        <div className="py-10 sm:py-20 px-4 sm:px-12 max-w-6xl mx-auto">
+      {/* Who We Are, Life at DelCargo and the open positions, on the dark page (the careers view; its own opening words are
+          the hero above). */}
+      <main id="open-positions" className="flex-1 scroll-mt-4 w-full min-w-0 bg-black text-white">
+        <div className="py-16 sm:py-28 px-4 sm:px-8 max-w-6xl mx-auto">
           <CareersView role="public" hero={false} />
         </div>
       </main>

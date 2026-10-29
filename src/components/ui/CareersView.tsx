@@ -12,6 +12,7 @@ import { ApplicationsModal } from '@/components/ui/careers/ApplicationsModal';
 import { AddJobModal } from '@/components/ui/careers/AddJobModal';
 import { ApplyModal } from '@/components/ui/careers/ApplyModal';
 import { CompanyIntro, LifeAtDelcargo, ReferralProgramNote } from '@/components/ui/careers/CareersSections';
+import { PublicJobList } from '@/components/ui/careers/PublicJobList';
 
 interface CareersViewProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead' | 'public';
@@ -84,6 +85,20 @@ export function CareersView({ role, hero = true }: CareersViewProps) {
   const filteredJobs = selectedCategory === 'All' 
     ? positions 
     : positions.filter(j => j.department.toLowerCase() === selectedCategory.toLowerCase());
+
+  const openApply = (job: CareerPosition) => { setSelectedJob(job); setApplySession(n => n + 1); setIsApplyOpen(true); };
+
+  // Outside candidates get the dark landing-page layout: who we are, the perks, then the open positions.
+  if (role === 'public') {
+    return (
+      <div className="space-y-20 sm:space-y-32 font-sans w-full min-w-0">
+        <CompanyIntro warehouseCount={warehouseCount} teamCount={teamCount} openPositions={positions.length} />
+        <LifeAtDelcargo />
+        <PublicJobList positions={positions} onApply={openApply} />
+        <ApplyModal key={applySession} isOpen={isApplyOpen} onClose={() => setIsApplyOpen(false)} job={selectedJob} canApply={canApply} onSubmitted={refetchApplications} />
+      </div>
+    );
+  }
 
   return (
     // min-w-0 is required here: this component is rendered as a flex item
@@ -199,7 +214,7 @@ export function CareersView({ role, hero = true }: CareersViewProps) {
               <div className="pt-4 border-t border-slate-100 mt-5 flex items-center justify-between">
                 {canApply ? (
                   <button
-                    onClick={() => { setSelectedJob(job); setApplySession(n => n + 1); setIsApplyOpen(true); }}
+                    onClick={() => openApply(job)}
                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-bold bg-orange-50 sm:bg-transparent text-orange-600 hover:text-orange-700 py-2.5 sm:py-0 px-4 sm:px-0 rounded-lg sm:rounded-none tracking-wider uppercase transition-colors"
                   >
                     Apply now <ArrowRight className="h-3.5 w-3.5" />
@@ -220,13 +235,6 @@ export function CareersView({ role, hero = true }: CareersViewProps) {
           )}
         </div>
       </div>
-
-      {role === 'public' && (
-        <>
-          <CompanyIntro warehouseCount={warehouseCount} teamCount={teamCount} openPositions={positions.length} />
-          <LifeAtDelcargo />
-        </>
-      )}
 
       {role === 'employee' && <ReferralProgramNote />}
 
