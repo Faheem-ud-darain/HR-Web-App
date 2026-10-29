@@ -69,7 +69,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col font-sans">
+    <div className="landing-root min-h-screen bg-black flex flex-col font-sans">
       {/* The hero: centred words on black, then the warehouse in five crops drifting past. The nav is a white pill. pt-safe
           keeps it clear of the status bar on notched phones (layout.tsx draws the WebView under it). */}
       <section className="relative isolate overflow-hidden text-white pb-10 sm:pb-14">
@@ -92,7 +92,7 @@ export default function Home() {
 
         <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 sm:px-8 pt-10 sm:pt-16 pb-10 sm:pb-12 text-center">
           <h1 className="font-display font-black [font-size:clamp(2.5rem,5.6vw,4.75rem)] leading-[1] tracking-[-0.03em] text-balance break-words">
-            Work with <span className="landing-text-glow">DelCargo</span>
+            Work with <span className="text-brand">DelCargo</span>
           </h1>
           <p className="max-w-xl text-sm sm:text-base leading-relaxed text-white/70">{CAREERS_HERO.text}</p>
           <ButtonLink href="#open-positions" variant="ink" size="md" className="rounded-full bg-white! text-black! hover:bg-white/85!">

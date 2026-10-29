@@ -30,7 +30,7 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
               onClick={() => setCategory(cat)}
               aria-pressed={category === cat}
               className={`shrink-0 rounded-full px-4 min-h-9 text-xs font-bold uppercase tracking-wider border transition-colors ${
-                category === cat ? 'bg-brand border-transparent text-white' : 'border-white/15 text-white/65 hover:text-white hover:border-white/40'
+                category === cat ? 'bg-brand border-transparent text-black' : 'border-white/15 text-white/70 hover:text-white hover:border-white/40'
               }`}
             >
               {cat}
@@ -53,16 +53,16 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
                   className="group flex w-full items-center gap-4 px-4 sm:px-6 py-5 text-left"
                 >
                   <span className="flex-1 min-w-0 font-bold text-white text-base sm:text-lg tracking-tight group-hover:text-brand transition-colors">{job.title}</span>
-                  <span className="hidden sm:flex items-center gap-1.5 text-sm text-white/55"><MapPin className="h-4 w-4" aria-hidden="true" /> {job.location}</span>
+                  <span className="hidden sm:flex items-center gap-1.5 text-sm text-white/60"><MapPin className="h-4 w-4" aria-hidden="true" /> {job.location}</span>
                   <Plus className={`h-5 w-5 shrink-0 text-white/60 transition-transform duration-300 ${open ? 'rotate-45 text-brand' : ''}`} aria-hidden="true" />
                 </button>
                 {open && (
                   <div className="px-4 sm:px-6 pb-7 space-y-5 popover-enter">
-                    <span className="sm:hidden flex items-center gap-1.5 text-sm text-white/55"><MapPin className="h-4 w-4" aria-hidden="true" /> {job.location}</span>
-                    <p className="text-sm text-white/75 leading-relaxed max-w-3xl">{job.description}</p>
+                    <span className="sm:hidden flex items-center gap-1.5 text-sm text-white/60"><MapPin className="h-4 w-4" aria-hidden="true" /> {job.location}</span>
+                    <p className="text-sm text-white/80 leading-relaxed max-w-3xl">{job.description}</p>
                     {job.requirements.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-caption font-bold uppercase tracking-widest text-white/45">Requirements</p>
+                        <p className="text-caption font-bold uppercase tracking-widest text-white/50">Requirements</p>
                         <ul className="space-y-1.5 max-w-3xl">
                           {job.requirements.map((req, i) => (
                             <li key={i} className="text-sm text-white/70 border-l-2 border-white/15 pl-3">{req}</li>
@@ -73,7 +73,7 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
                     <button
                       type="button"
                       onClick={() => onApply(job)}
-                      className="inline-flex items-center gap-2 rounded-full bg-brand px-5 min-h-11 text-xs font-bold uppercase tracking-wider text-white hover:opacity-90 transition-opacity"
+                      className="inline-flex items-center gap-2 rounded-full bg-brand px-5 min-h-11 text-xs font-bold uppercase tracking-wider text-black hover:opacity-90 transition-opacity"
                     >
                       Apply now <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>

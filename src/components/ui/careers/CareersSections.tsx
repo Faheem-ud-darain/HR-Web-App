@@ -38,7 +38,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
           {stats.map(s => (
             <div key={s.label}>
               <p className="font-display text-4xl sm:text-6xl font-black text-brand leading-none">{s.value}</p>
-              <p className="text-caption text-white/55 font-bold uppercase tracking-wider mt-2">{s.label}</p>
+              <p className="text-caption text-white/60 font-bold uppercase tracking-wider mt-2">{s.label}</p>
             </div>
           ))}
         </div>
@@ -78,7 +78,7 @@ export function LifeAtDelcargo() {
             <div key={p.title} className="space-y-3 p-6 sm:p-8 border-white/10 not-first:border-t sm:nth-[2]:border-t-0 sm:even:border-l">
               <PerkIcon weight="duotone" className="h-7 w-7 text-brand" aria-hidden="true" />
               <h3 className="font-display font-bold text-sm uppercase tracking-wider text-white">{p.title}</h3>
-              <p className="text-sm text-white/65 leading-relaxed">{p.text}</p>
+              <p className="text-sm text-white/70 leading-relaxed">{p.text}</p>
             </div>
           );
         })}
