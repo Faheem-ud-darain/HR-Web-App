@@ -50,6 +50,7 @@
 }
 
 @theme inline {
+  --color-brand: var(--primary); /* the orange as a colour that never changes with the theme: bg-brand, text-brand/70 ... */
   --color-ink: var(--ln-ink);
   --color-brandfg: var(--ln-on-brand);
   --color-brandfg-inv: var(--ln-on-brand-inv);
@@ -159,13 +160,6 @@ body {
   line-height: 16px;
 }
 
-/* The brand orange as a surface that does not change with the theme (the landing page's hero and ticker). */
-@utility bg-brand {
-  background-color: var(--primary);
-}
-@utility text-brand {
-  color: var(--primary);
-}
 
 @utility bg-chrome {
   background-color: var(--chrome);
@@ -1248,3 +1242,60 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 @media (prefers-reduced-motion: reduce) {
   .landing-marquee-track, .landing-strip-track { animation: none; }
 }
+
+/* ── Landing page: the moving pictures in the "Life at DelCargo" cards ─────────────────────────────────────
+   A lit square hops between the cells of the salary grid and the leave calendar, the editor types its lines out, and
+   the family tile floats. Everything stands still for reduced motion. */
+@keyframes perk-hop-salary {
+  0%, 10% { transform: translate(18rem, 4.5rem); }
+  16%, 26% { transform: translate(31.5rem, 0); }
+  32%, 42% { transform: translate(36rem, 9rem); }
+  48%, 58% { transform: translate(9rem, 9rem); }
+  64%, 74% { transform: translate(4.5rem, 0); }
+  80%, 90% { transform: translate(13.5rem, 0); }
+  100% { transform: translate(18rem, 4.5rem); }
+}
+@keyframes perk-hop-calendar {
+  0%, 10% { transform: translate(15.625rem, 3.125rem); }
+  16%, 26% { transform: translate(6.25rem, 0); }
+  32%, 42% { transform: translate(18.75rem, 6.25rem); }
+  48%, 58% { transform: translate(3.125rem, 9.375rem); }
+  64%, 74% { transform: translate(12.5rem, 6.25rem); }
+  80%, 90% { transform: translate(0, 3.125rem); }
+  100% { transform: translate(15.625rem, 3.125rem); }
+}
+.perk-hop-salary { animation: perk-hop-salary 14s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.perk-hop-calendar { animation: perk-hop-calendar 14s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+
+@keyframes perk-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.perk-pulse { animation: perk-pulse 3.5s ease-in-out infinite; }
+
+/* One line of code revealed left to right, then held, on a shared loop; each line starts a little after the last. */
+@keyframes perk-type {
+  0% { clip-path: inset(0 100% 0 0); }
+  12%, 82% { clip-path: inset(0 0 0 0); }
+  94%, 100% { clip-path: inset(0 100% 0 0); }
+}
+.perk-type {
+  animation: perk-type 9s steps(28, end) infinite;
+  animation-delay: calc(var(--line) * 0.9s);
+}
+@keyframes perk-caret {
+  50% { opacity: 0; }
+}
+.perk-caret { animation: perk-caret 1s steps(1) infinite; }
+
+@keyframes perk-float {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -6px); }
+}
+.perk-float { animation: perk-float 4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .perk-hop-salary, .perk-hop-calendar, .perk-pulse, .perk-type, .perk-caret, .perk-float { animation: none; }
+}
+
+

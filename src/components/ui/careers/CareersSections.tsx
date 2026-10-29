@@ -1,6 +1,6 @@
 import React from 'react';
-import { GiftIcon as Gift, CurrencyDollarIcon as DollarSign, CalendarCheckIcon as CalendarCheck, LaptopIcon as Laptop, UsersIcon as Users } from '@/components/ui/icons';
-import type { Icon } from '@phosphor-icons/react';
+import { GiftIcon as Gift } from '@/components/ui/icons';
+import { SalaryGrid, LeaveCalendar, CodeWindow, FamilyOrbit } from '@/components/ui/careers/PerkVisuals';
 
 const PERKS = [
   { title: 'Good Salary', text: 'We offer competitive salaries calibrated for regional standards, with guaranteed annual increments.' },
@@ -8,9 +8,6 @@ const PERKS = [
   { title: 'Learning & Tech', text: 'Collaborate using modern architectures, framework toolsets, and clean design structures.' },
   { title: 'Parental Leaves', text: 'Gender-balanced opportunities including fully paid Parental Leaves.' },
 ];
-
-// One icon per perk, in the same order as PERKS.
-const PERK_ICONS: Icon[] = [DollarSign, CalendarCheck, Laptop, Users];
 
 const EYEBROW = 'text-caption font-bold uppercase tracking-widest text-brand';
 
@@ -63,23 +60,31 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
   );
 }
 
-// The perks as a ruled grid of four, like a spec sheet.
+// The perks as a bento: one wide card, one tall card down the right, two equal cards under the wide one. Each card is a
+// picture and the perk's words. (PERKS is in order: salary, leave, learning, parental.)
+const PERK_VISUALS = [SalaryGrid, LeaveCalendar, CodeWindow, FamilyOrbit];
+// Where each card sits on the large-screen grid: wide (two columns), tall (right, two rows), then the equal pair.
+const PERK_PLACE = ['lg:col-span-2', 'lg:col-start-1 lg:row-start-2', 'lg:col-start-3 lg:row-span-2 lg:row-start-1', 'lg:col-start-2 lg:row-start-2'];
+const PERK_HEIGHT = ['min-h-72', 'min-h-72', 'min-h-72 lg:min-h-0', 'min-h-72'];
+
 export function LifeAtDelcargo() {
   return (
-    <section id="life-at-delcargo" className="scroll-mt-24 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
-      <div className="lg:col-span-4 space-y-3">
+    <section id="life-at-delcargo" className="scroll-mt-24 space-y-10 sm:space-y-14">
+      <div className="space-y-3">
         <p className={EYEBROW}>Perks & Compensation</p>
         <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-ink leading-[0.95]">Life at DelCargo</h2>
       </div>
-      <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 rounded-3xl overflow-hidden bg-ink/5">
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
         {PERKS.map((p, i) => {
-          const PerkIcon = PERK_ICONS[i];
+          const Visual = PERK_VISUALS[i];
           return (
-            <div key={p.title} className="space-y-3 p-6 sm:p-8 border-ink/10 not-first:border-t sm:nth-[2]:border-t-0 sm:even:border-l">
-              <PerkIcon weight="duotone" className="h-7 w-7 text-brand" aria-hidden="true" />
-              <h3 className="font-display font-bold text-sm uppercase tracking-wider text-ink">{p.title}</h3>
-              <p className="text-sm text-ink/70 leading-relaxed">{p.text}</p>
-            </div>
+            <article key={p.title} className={`relative flex flex-col overflow-hidden rounded-3xl bg-ink/5 ${PERK_PLACE[i]}`}>
+              <div className={`relative flex-1 ${PERK_HEIGHT[i]}`}><Visual /></div>
+              <div className="relative space-y-2 p-6 sm:p-8 pt-0">
+                <h3 className="font-display font-black text-xl sm:text-2xl text-ink">{p.title}</h3>
+                <p className="text-sm text-ink/60 leading-relaxed max-w-md">{p.text}</p>
+              </div>
+            </article>
           );
         })}
       </div>
