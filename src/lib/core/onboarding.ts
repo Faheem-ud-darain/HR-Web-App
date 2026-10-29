@@ -51,15 +51,20 @@ export function overBudgetMessage(leftBytes: number): string {
 
 const digitsOnly = (s: string) => s.replace(/[\s-]/g, '');
 
-/** An error message for the bank details, or '' when they are fine. */
+/** Mobile wallets (JazzCash, Easypaisa and the like) pay to a phone-style account number and have no IBAN. */
+export const isMobileWallet = (bankName: string): boolean => /jazz\s*cash|easy\s*paisa|sada\s*pay|naya\s*pay|upaisa|wallet/i.test(bankName);
+
+/** An error message for the bank details, or '' when they are fine. A wallet (outside the USA) needs no IBAN. */
 export function validateBankDetails(bank: { bankName: string; accountNumber: string; iban: string }, region: Region): string {
   const label = bankIdLabel(region);
-  if (!bank.bankName.trim() || !bank.accountNumber.trim() || !bank.iban.trim()) {
-    return `Required: all bank details (Bank Name, Account Number, and ${label}) must be filled to proceed.`;
+  const wallet = !isUsa(region) && isMobileWallet(bank.bankName);
+  if (!bank.bankName.trim() || !bank.accountNumber.trim() || (!wallet && !bank.iban.trim())) {
+    return `Required: all bank details (Bank Name, Account Number, and ${label}) must be filled to proceed.${isUsa(region) ? '' : ' For a wallet such as JazzCash or Easypaisa, name it as the bank and leave the IBAN empty.'}`;
   }
-  if (!/^[0-9A-Za-z\- ]{6,34}$/.test(bank.accountNumber.trim())) return 'The account number should be 6 to 34 letters or digits.';
+  if (wallet && !/^(\+?92|0)3\d{9}$/.test(digitsOnly(bank.accountNumber))) return 'A wallet account number is the mobile number registered with it, for example 03001234567.';
+  if (!wallet && !/^[0-9A-Za-z\- ]{6,34}$/.test(bank.accountNumber.trim())) return 'The account number should be 6 to 34 letters or digits.';
   if (isUsa(region) && !/^\d{9}$/.test(digitsOnly(bank.iban))) return 'A routing number is exactly 9 digits.';
-  if (!isUsa(region) && !/^[A-Za-z]{2}\d{2}[A-Za-z0-9]{10,30}$/.test(digitsOnly(bank.iban))) return 'That IBAN does not look right: it starts with two letters and two digits, for example PK36SCBL0000001123456702.';
+  if (!isUsa(region) && bank.iban.trim() && !/^[A-Za-z]{2}\d{2}[A-Za-z0-9]{10,30}$/.test(digitsOnly(bank.iban))) return 'That IBAN does not look right: it starts with two letters and two digits, for example PK36SCBL0000001123456702.';
   return '';
 }
 

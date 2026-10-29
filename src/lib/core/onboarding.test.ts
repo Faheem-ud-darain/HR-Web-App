@@ -61,6 +61,14 @@ describe('validateBankDetails', () => {
     expect(validateBankDetails({ ...ok, iban: '02100002' }, 'USA')).toMatch(/9 digits/);
     expect(validateBankDetails({ ...ok, iban: '021000021' }, 'USA')).toBe('');
   });
+  it('lets a mobile wallet outside the USA use its phone number and no IBAN', () => {
+    const wallet = { bankName: 'JazzCash', accountNumber: '0300 1234567', iban: '' };
+    expect(validateBankDetails(wallet, 'Pakistan')).toBe('');
+    expect(validateBankDetails({ ...wallet, bankName: 'Easy Paisa', accountNumber: '+923001234567' }, 'Pakistan')).toBe('');
+    expect(validateBankDetails({ ...wallet, accountNumber: '12345' }, 'Pakistan')).toMatch(/mobile number/);
+    expect(validateBankDetails({ ...wallet, iban: '1234' }, 'Pakistan')).toMatch(/IBAN/);
+    expect(validateBankDetails({ ...wallet, bankName: 'Habib Bank' }, 'Pakistan')).toMatch(/Required/);
+  });
 });
 
 describe('validateSignature', () => {

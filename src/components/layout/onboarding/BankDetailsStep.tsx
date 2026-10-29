@@ -5,7 +5,7 @@ import { UserIcon as User } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import type { Profile } from '@/lib/hrData';
-import { bankIdLabel } from '@/lib/core/onboarding';
+import { bankIdLabel, isMobileWallet } from '@/lib/core/onboarding';
 import { StepActions, StepHeader } from './StepParts';
 
 type Bank = { bankName: string; accountNumber: string; iban: string };
@@ -14,6 +14,7 @@ type Bank = { bankName: string; accountNumber: string; iban: string };
 export function BankDetailsStep({ profile, bank, setBank, onNext }: { profile: Profile; bank: Bank; setBank: (b: Bank) => void; onNext: () => void }) {
   const field = (key: keyof Bank) => (e: React.ChangeEvent<HTMLInputElement>) => setBank({ ...bank, [key]: e.target.value });
   const usa = profile.region === 'USA';
+  const wallet = !usa && isMobileWallet(bank.bankName);
   return (
     <div className="space-y-6">
       <StepHeader icon={User} title="Profile & bank details" text="Check that your details are right, then tell us where to pay your salary." />
@@ -25,10 +26,10 @@ export function BankDetailsStep({ profile, bank, setBank, onNext }: { profile: P
 
       <div className="space-y-4">
         <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest">Bank details (for salaries)</h3>
-        <FormField label="Bank Name *"><Input value={bank.bankName} onChange={field('bankName')} placeholder="e.g. Chase Bank / Habib Bank" autoComplete="off" fieldSize="lg" /></FormField>
+        <FormField label="Bank Name *"><Input value={bank.bankName} onChange={field('bankName')} placeholder={usa ? 'e.g. Chase Bank' : 'e.g. Habib Bank, JazzCash, Easypaisa'} autoComplete="off" fieldSize="lg" /></FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField label="Account Number *"><Input value={bank.accountNumber} onChange={field('accountNumber')} placeholder="Your account number" inputMode="numeric" autoComplete="off" fieldSize="lg" /></FormField>
-          <FormField label={`${bankIdLabel(profile.region)} *`}><Input value={bank.iban} onChange={field('iban')} placeholder={usa ? 'e.g. 021000021 (9 digits)' : 'e.g. PK36SCBL0000001123456702'} autoComplete="off" fieldSize="lg" /></FormField>
+          <FormField label="Account Number *"><Input value={bank.accountNumber} onChange={field('accountNumber')} placeholder={wallet ? 'Mobile number, e.g. 03001234567' : 'Your account number'} inputMode={wallet ? 'tel' : 'text'} autoComplete="off" fieldSize="lg" /></FormField>
+          <FormField label={wallet ? `${bankIdLabel(profile.region)} (not needed for a wallet)` : `${bankIdLabel(profile.region)} *`}><Input value={bank.iban} onChange={field('iban')} placeholder={usa ? 'e.g. 021000021 (9 digits)' : 'e.g. PK36SCBL0000001123456702'} autoComplete="off" fieldSize="lg" /></FormField>
         </div>
       </div>
 
