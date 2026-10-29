@@ -1,6 +1,6 @@
 import React from 'react';
 import { GiftIcon as Gift } from '@/components/ui/icons';
-import { SalaryGrid, LeaveCalendar, CodeWindow, FamilyOrbit } from '@/components/ui/careers/PerkVisuals';
+import { SalaryGrid, LeaveCalendar, LearningVisual, FamilyOrbit } from '@/components/ui/careers/PerkVisuals';
 
 const PERKS = [
   { title: 'Good Salary', text: 'We offer competitive salaries calibrated for regional standards, with guaranteed annual increments.' },
@@ -62,7 +62,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
 
 // The perks as a bento: one wide card, one tall card down the right, two equal cards under the wide one. Each card is a
 // picture and the perk's words. (PERKS is in order: salary, leave, learning, parental.)
-const PERK_VISUALS = [SalaryGrid, LeaveCalendar, CodeWindow, FamilyOrbit];
+const PERK_VISUALS = [SalaryGrid, LeaveCalendar, LearningVisual, FamilyOrbit];
 // Where each card sits on the large-screen grid: wide (two columns), tall (right, two rows), then the equal pair.
 const PERK_PLACE = ['lg:col-span-2', 'lg:col-start-1 lg:row-start-2', 'lg:col-start-3 lg:row-span-2 lg:row-start-1', 'lg:col-start-2 lg:row-start-2'];
 const PERK_HEIGHT = ['min-h-72', 'min-h-72', 'min-h-72 lg:min-h-0', 'min-h-72'];

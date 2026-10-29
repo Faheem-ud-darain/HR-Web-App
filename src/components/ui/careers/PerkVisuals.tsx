@@ -1,5 +1,5 @@
 import React from 'react';
-import { CurrencyDollarIcon as DollarSign, CalendarCheckIcon as CalendarCheck, UsersIcon as Users, SparkleIcon as Sparkle } from '@/components/ui/icons';
+import { CurrencyDollarIcon as DollarSign, CalendarCheckIcon as CalendarCheck, UsersIcon as Users, SparkleIcon as Sparkle, CodeIcon as Code, DatabaseIcon as Database, TruckIcon as Truck, PackageIcon as Package, CpuIcon as Cpu, TerminalIcon as Terminal } from '@/components/ui/icons';
 
 // The four pictures for the "Life at DelCargo" cards, one per perk. All decorative (the words next to them say it).
 // Colours are the landing page's: ink (text, lines), brand (the orange), so they follow light and dark.
@@ -48,11 +48,11 @@ const CODE: React.ReactNode[] = [
   <>{'  '}<span className="text-brand">return</span> {'<Route status="on-time" />'}</>,
   <>{'}'}</>,
 ];
-export function CodeWindow() {
+function CodeWindow() {
   return (
     <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
-      <div className="absolute inset-x-8 top-[30%] h-40 rounded-3xl bg-brand/20 blur-3xl" />
-      <div className="absolute left-6 right-[-3rem] top-[28%] overflow-hidden rounded-2xl bg-paper shadow-[0_-8px_40px_color-mix(in_srgb,var(--ln-ink)_12%,transparent)]">
+      <div className="absolute inset-x-8 top-[48%] h-40 rounded-3xl bg-brand/20 blur-3xl" />
+      <div className="absolute left-6 right-[-3rem] top-[46%] overflow-hidden rounded-2xl bg-paper shadow-[0_-8px_40px_color-mix(in_srgb,var(--ln-ink)_12%,transparent)]">
         <div className="flex items-center gap-4 px-5 py-3">
           <div className="flex gap-1.5">{[0, 1, 2].map(i => <span key={i} className="h-2.5 w-2.5 rounded-full bg-ink/20" />)}</div>
           <span className="text-xs text-ink/50">Warehouse.tsx</span>
@@ -67,6 +67,47 @@ export function CodeWindow() {
         </pre>
       </div>
     </div>
+  );
+}
+
+// The tools of the trade as tiles riding a curve across the top of the card (a row of them standing still for reduced
+// motion). Tiles alternate orange and ink so the belt reads in both themes.
+const BELT_PATH = 'M-40 120C20 120 55 60 185.5 60C316 60 351 120 411 120';
+const BELT_ICONS = [Code, Database, Truck, Package, Cpu, Terminal];
+const BELT_SECONDS = 24;
+
+function TechBelt() {
+  const step = BELT_SECONDS / BELT_ICONS.length;
+  return (
+    <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[44%]">
+      <svg viewBox="0 0 371 150" fill="none" preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full motion-reduce:hidden">
+        {BELT_ICONS.map((Icon, i) => (
+          <g key={i}>
+            <animateMotion dur={`${BELT_SECONDS}s`} begin={`${-i * step}s`} repeatCount="indefinite" calcMode="linear" rotate="auto" path={BELT_PATH} />
+            <foreignObject x="-28" y="-28" width="56" height="56" className="overflow-visible">
+              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg ${i % 2 ? 'bg-ink text-paper' : 'bg-brand text-brandfg-inv'}`}>
+                <Icon weight="duotone" className="h-7 w-7" />
+              </div>
+            </foreignObject>
+          </g>
+        ))}
+      </svg>
+      <div className="absolute inset-0 hidden items-center justify-center gap-2 motion-reduce:flex">
+        {BELT_ICONS.map((Icon, i) => (
+          <div key={i} className={`flex h-11 w-11 items-center justify-center rounded-xl ${i % 2 ? 'bg-ink text-paper' : 'bg-brand text-brandfg-inv'}`}><Icon weight="duotone" className="h-6 w-6" /></div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Learning & Tech: the tool belt above, the editor typing below.
+export function LearningVisual() {
+  return (
+    <>
+      <TechBelt />
+      <CodeWindow />
+    </>
   );
 }
 
