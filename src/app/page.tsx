@@ -6,9 +6,9 @@ import { CareersView } from '@/components/ui/CareersView';
 import { ButtonLink } from '@/components/ui/Button';
 import { ArrowDownIcon as ArrowDown, ArrowRightIcon as ArrowRight } from '@/components/ui/icons';
 import { CAREERS_HERO, DEPARTMENTS } from '@/components/ui/careers/careerOptions';
+import { LandingFooter } from './_landing/LandingFooter';
 import { PhotoStrip } from './_landing/PhotoStrip';
 import { RoleTicker } from './_landing/RoleTicker';
-import Link from 'next/link';
 import {
   getSessionEmail,
   getSessionRole,
@@ -130,14 +130,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="min-h-14 py-3 px-4 border-t border-ink/10 bg-paper flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-caption font-semibold text-ink/50">
-        <span>© {new Date().getFullYear()} DelCargo Operations Team. All rights reserved.</span>
-        <span className="text-ink/25">•</span>
-        <Link href="/privacy" className="hover:text-brand transition-colors">Privacy Policy</Link>
-        <span className="text-ink/25">•</span>
-        <Link href="/support" className="hover:text-brand transition-colors">Support</Link>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

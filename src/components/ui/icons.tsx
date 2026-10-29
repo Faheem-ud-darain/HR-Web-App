@@ -15,6 +15,7 @@ export const ArrowBendUpRightIcon = named('arrow-bend-up-right', Ph.ArrowBendUpR
 export const ArrowClockwiseIcon = named('arrow-clockwise', Ph.ArrowClockwiseIcon);
 export const ArrowCounterClockwiseIcon = named('arrow-counter-clockwise', Ph.ArrowCounterClockwiseIcon);
 export const ArrowDownIcon = named('arrow-down', Ph.ArrowDownIcon);
+export const ArrowDownRightIcon = named('arrow-down-right', Ph.ArrowDownRightIcon);
 export const ArrowLeftIcon = named('arrow-left', Ph.ArrowLeftIcon);
 export const ArrowRightIcon = named('arrow-right', Ph.ArrowRightIcon);
 export const ArrowSquareOutIcon = named('arrow-square-out', Ph.ArrowSquareOutIcon);
