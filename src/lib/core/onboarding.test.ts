@@ -79,7 +79,7 @@ describe('documents', () => {
   });
   it('adds up the stored size and says how much room is left', () => {
     expect(docsBytes('abc', null, undefined, 'de')).toBe(5);
-    expect(overBudgetMessage(DOCS_BUDGET_BYTES)).toMatch(/1\.4 MB/);
+    expect(overBudgetMessage(DOCS_BUDGET_BYTES)).toMatch(/about 5 MB/);
     expect(overBudgetMessage(-5)).toMatch(/about 0 KB/);
   });
 });

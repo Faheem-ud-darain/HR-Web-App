@@ -38,15 +38,15 @@ export const identityScansNeeded = (region: Region): number => (isUsa(region) ? 
 /** The documents step is split into pages: photo and CV, identity, and (USA only) an optional passport. */
 export const documentPages = (region: Region): number => (isUsa(region) ? 3 : 2);
 
-/** All of one person's documents are stored together in a single row whose JSON field holds 2,000,000 bytes, so the files
+/** All of one person's documents are stored together in a single row whose JSON field holds 8,000,000 bytes, so the files
  *  added in the wizard share this much (the base64 text of the CV, the identity scans and the passport together). */
-export const DOCS_BUDGET_BYTES = 1_900_000;
+export const DOCS_BUDGET_BYTES = 7_900_000;
 /** The size of some base64 documents added together. */
 export const docsBytes = (...parts: (string | null | undefined)[]): number => parts.reduce((sum, p) => sum + (p ? p.length : 0), 0);
 /** The message for a file that does not fit what is left of the budget. */
 export function overBudgetMessage(leftBytes: number): string {
   const kb = Math.max(0, Math.floor(leftBytes / 1.37 / 1024)); // base64 is about a third bigger than the file
-  return `That file is too large: all your documents together can be about 1.4 MB, and about ${kb} KB of that is left. Please use a smaller file or a lower-resolution scan.`;
+  return `That file is too large: all your documents together can be about ${Math.round(DOCS_BUDGET_BYTES / 1.37 / 1048576)} MB, and about ${kb} KB of that is left. Please use a smaller file or a lower-resolution scan.`;
 }
 
 const digitsOnly = (s: string) => s.replace(/[\s-]/g, '');

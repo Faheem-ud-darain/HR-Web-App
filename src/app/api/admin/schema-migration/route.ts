@@ -87,7 +87,7 @@ function phase2SchemaFor(extraField: string, extraType: 'json' | 'text', keyFiel
   return [
     { name: keyField, type: 'text', required: true, unique: true, options: { min: null, max: null, pattern: '' } },
     extraType === 'json'
-      ? { name: extraField, type: 'json', required: false, unique: false, options: { maxSize: 2000000 } }
+      ? { name: extraField, type: 'json', required: false, unique: false, options: { maxSize: 8000000 } }
       : { name: extraField, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } },
   ];
 }
