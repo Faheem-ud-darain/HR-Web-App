@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { TimesheetEntry, useProfiles, useTrackingSettings, useAllTrackerHeartbeats, useTimesheets, TrackerHeartbeat } from '@/lib/hrData';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Monitor, ShieldAlert } from 'lucide-react';
+import { MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert } from '@/components/ui/icons';
 import { MouseActivityModal } from '@/components/ui/tracking/MouseActivityModal';
 import { ScreenshotsModal } from '@/components/ui/tracking/ScreenshotsModal';
 import { TrackerSetupModal } from '@/components/ui/tracking/TrackerSetupModal';
@@ -82,7 +82,7 @@ export function TrackingView({ role }: TrackingViewProps) {
           <details className="text-xs text-amber-800 font-semibold leading-relaxed w-full [&_summary::-webkit-details-marker]:hidden">
             <summary className="cursor-pointer font-bold flex justify-between items-center outline-none">
               <span className="truncate pr-2">About Tracker</span>
-              <span className="text-[10px] bg-amber-200/50 px-2 py-1 rounded text-amber-900 shrink-0 whitespace-nowrap">Read More</span>
+              <span className="text-caption bg-amber-200/50 px-2 py-1 rounded text-amber-900 shrink-0 whitespace-nowrap">Read More</span>
             </summary>
             <div className="mt-2 space-y-2 text-amber-800/90 font-medium">
               <p>

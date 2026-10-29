@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Calendar, DollarSign, Landmark, Mail, MapPin, Phone, Shield } from 'lucide-react';
+import { CalendarBlankIcon as Calendar, CurrencyDollarIcon as DollarSign, BankIcon as Landmark, EnvelopeIcon as Mail, MapPinIcon as MapPin, PhoneIcon as Phone, ShieldIcon as Shield } from '@/components/ui/icons';
 import { formatMoney, updateProfileAdmin, type Profile, type Warehouse } from '@/lib/hrData';
 import type { ViewerRole } from '@/lib/core/userProfile';
 import { Badge } from '../Badge';
@@ -50,34 +50,34 @@ export function ProfileDetails({ profile, viewerRole, warehouses, canManage, onC
       </div>
 
       <div>
-        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Departments / Teams</p>
+        <p className="text-caption font-bold text-slate-400 uppercase mb-1">Departments / Teams</p>
         <div className="flex flex-wrap gap-1">
           {profile.teams.length === 0 ? <span className="text-xs text-slate-400 italic">No assigned teams</span> : profile.teams.map(t => <Badge key={t} variant="default">{t}</Badge>)}
         </div>
       </div>
 
       <div>
-        <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Assigned Warehouses</p>
+        <p className="text-caption font-bold text-slate-400 uppercase mb-1">Assigned Warehouses</p>
         <div className="flex flex-wrap gap-1">
           {links.length === 0
             ? <span className="text-xs text-slate-400 italic">No warehouses assigned</span>
             : links.map(id => <Badge key={id} variant="success">{warehouses.find(w => w.id === id)?.name ?? 'Unrecognized warehouse (re-assign needed)'}</Badge>)}
         </div>
         {links.some(id => !known(id)) && canManage && (
-          <button type="button" onClick={removeUnrecognized} className="mt-1.5 text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:underline">Remove unrecognized warehouse links</button>
+          <button type="button" onClick={removeUnrecognized} className="mt-1.5 text-caption font-bold text-rose-600 hover:text-rose-700 hover:underline">Remove unrecognized warehouse links</button>
         )}
       </div>
 
       <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
         <p className="font-bold text-slate-800 flex items-center gap-1"><Landmark className="h-3.5 w-3.5" /> Bank Information</p>
         {profile.bankName ? (
-          <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-slate-600">
-            <div><span className="block text-[9px] text-slate-400 font-bold">BANK</span>{profile.bankName}</div>
-            <div><span className="block text-[9px] text-slate-400 font-bold">ACCOUNT</span>{profile.accountNumber}</div>
-            <div className="col-span-2"><span className="block text-[9px] text-slate-400 font-bold">IBAN / ROUTING</span><span className="font-mono">{profile.iban}</span></div>
+          <div className="grid grid-cols-2 gap-2 text-caption font-medium text-slate-600">
+            <div><span className="block text-caption text-slate-400 font-bold">BANK</span>{profile.bankName}</div>
+            <div><span className="block text-caption text-slate-400 font-bold">ACCOUNT</span>{profile.accountNumber}</div>
+            <div className="col-span-2"><span className="block text-caption text-slate-400 font-bold">IBAN / ROUTING</span><span className="font-mono">{profile.iban}</span></div>
           </div>
         ) : (
-          <span className="text-slate-400 italic text-[11px]">Bank details are not shared yet.</span>
+          <span className="text-slate-400 italic text-caption">Bank details are not shared yet.</span>
         )}
       </div>
 

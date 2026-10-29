@@ -21,7 +21,7 @@ export function ProfileHeader({ profile, viewerRole }: { profile: Profile; viewe
           {displayName(profile, viewerRole)}
           {profile.offboarded && <Badge variant="danger">Offboarded</Badge>}
         </h3>
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{profile.jobTitle || profile.role}</p>
+        <p className="text-caption text-slate-400 font-bold uppercase tracking-wider mt-0.5">{profile.jobTitle || profile.role}</p>
       </div>
       <ImageLightbox src={lightbox ? profile.profilePicture ?? null : null} alt={`${profile.fullName}.jpg`} downloadName={`${profile.fullName}.jpg`} onClose={() => setLightbox(false)} />
     </div>

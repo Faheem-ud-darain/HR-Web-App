@@ -50,16 +50,16 @@ export function DraftWithDel({ ticket, onDraft }: { ticket: Ticket; onDraft: (te
         type="button"
         onClick={draft}
         disabled={loading}
-        className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 py-1 pl-1.5 pr-3 text-[11px] font-semibold text-orange-800 hover:bg-orange-100 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 py-1 pl-1.5 pr-3 text-caption font-semibold text-orange-800 hover:bg-orange-100 disabled:opacity-60"
       >
         <span className="flex h-5 w-5 items-center justify-center" aria-hidden="true">
           <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={20} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} aria-hidden="true" />
         </span>
         {loading ? 'Del is drafting…' : 'Draft a reply with Del'}
       </button>
-      {note && <p className="mt-1 text-[11px] text-amber-700">Check before sending: {note}</p>}
-      {error && <p className="mt-1 text-[11px] text-rose-600" role="alert">{error}</p>}
-      {!note && !error && <p className="mt-1 text-[10px] text-slate-400">Del reads this ticket (names, e-mails and phone numbers hidden) and writes a draft. You edit and send it.</p>}
+      {note && <p className="mt-1 text-caption text-amber-700">Check before sending: {note}</p>}
+      {error && <p className="mt-1 text-caption text-rose-600" role="alert">{error}</p>}
+      {!note && !error && <p className="mt-1 text-caption text-slate-400">Del reads this ticket (names, e-mails and phone numbers hidden) and writes a draft. You edit and send it.</p>}
     </div>
   );
 }

@@ -10,10 +10,10 @@ import React from 'react';
 export type FieldLabelSize = 'sm' | 'md' | 'muted' | 'tiny' | 'plain';
 
 export const FIELD_LABEL_STYLES: Record<FieldLabelSize, string> = {
-  sm: 'text-[10px] font-bold text-slate-500 uppercase tracking-wider',
+  sm: 'text-caption font-bold text-slate-500 uppercase tracking-wider',
   md: 'text-xs font-bold text-slate-600 uppercase tracking-wider',
-  muted: 'text-[10px] font-bold text-slate-400 uppercase tracking-wider',
-  tiny: 'text-[9px] font-bold text-slate-400 uppercase tracking-wider',
+  muted: 'text-caption font-bold text-slate-400 uppercase tracking-wider',
+  tiny: 'text-caption font-bold text-slate-400 uppercase tracking-wider',
   plain: 'text-xs font-bold text-slate-700 mb-1 block',
 };
 

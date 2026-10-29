@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useProfiles, useTickets, hrActions, Ticket, Profile, displayName, isTechnicalSupportMember } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { Plus } from 'lucide-react';
+import { useStickToBottom } from '@/lib/useStickToBottom';
+import { PlusIcon as Plus } from '@/components/ui/icons';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { pushModal, popModal } from '@/lib/modalStack';
@@ -18,7 +19,6 @@ import { NewTicketModal } from '@/components/ui/tickets/NewTicketModal';
 import { InspectEmployeeModal } from '@/components/ui/tickets/InspectEmployeeModal';
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import { useTicketLiveState } from '@/components/ui/tickets/useTicketLiveState';
-import { useTicketReply } from '@/components/ui/tickets/useTicketReply';
 
 interface TicketsViewProps {
   role: TicketRole;
@@ -109,7 +109,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- nameFor is a stable lookup over `employees`, which is already a dependency
   }, [tickets, statusFilter, deptFilter, viewTab, searchQuery, employees, isPrivileged, isTechnicalTeam, currentEmail, role]);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const appliedDeepLinkRef = useRef(false);
 
   // Scope the fetched tickets to what this role may see, keep the open conversation live, and apply the
@@ -164,12 +164,9 @@ export function TicketsView({ role }: TicketsViewProps) {
   }, []);
 
   const { isTicketLiveWithHR, ticketSeenState, typingNames } = useTicketLiveState({ role, currentEmail, selectedTicket, tickets, isPrivileged, isTechnicalTeam });
-  const reply = useTicketReply({ selectedTicket, role, currentEmail, userProfile, onSent: refetchTickets });
 
-  // Scroll the chat to the bottom when replies or the typing line change.
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedTicket?.replies, typingNames.length]);
+  // Stay at the newest reply when replies or the typing line change, unless the reader has scrolled up.
+  useStickToBottom(threadRef, `${selectedTicket?.replies?.length ?? 0}:${typingNames.length}`, selectedTicket?.id);
 
   // Close / re-open, confirmed first.
   const [updatingTicketStatusId, setUpdatingTicketStatusId] = useState<string | null>(null);
@@ -204,7 +201,7 @@ export function TicketsView({ role }: TicketsViewProps) {
   const canCloseOwnTicket = isEmp && isOwnTicket && !isPrivileged;
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Support Help Desk</h1>
@@ -212,7 +209,7 @@ export function TicketsView({ role }: TicketsViewProps) {
         </div>
         {isEmp && (
           <Button variant="primary" size="md" onClick={() => setIsNewOpen(true)}>
-            <Plus className="h-4.5 w-4.5" /> File a Ticket
+            <Plus className="h-5 w-5" /> File a Ticket
           </Button>
         )}
       </div>
@@ -234,20 +231,20 @@ export function TicketsView({ role }: TicketsViewProps) {
             dept={deptFilter}
             onDept={setDeptFilter}
           />
-          <TicketListPanel visibleTickets={visibleTickets} selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket} isEmp={isEmp} isTicketLiveWithHR={isTicketLiveWithHR} canForwardToHrAdmin={canForwardToHrAdmin} openForward={setForwardingTicket} nameFor={nameFor} currentEmail={currentEmail} ticketsLoading={ticketsLoading} tickets={tickets} setStatusFilter={setStatusFilter} setSearchQuery={setSearchQuery} allTickets={allTickets} ticketLimit={ticketLimit} setTicketLimit={setTicketLimit} isFetchingTickets={isFetchingTickets} />
+          <TicketListPanel visibleTickets={visibleTickets} selectedTicket={selectedTicket} setSelectedTicket={setSelectedTicket} isEmp={isEmp} isTicketLiveWithHR={isTicketLiveWithHR} nameFor={nameFor} currentEmail={currentEmail} ticketsLoading={ticketsLoading} tickets={tickets} setStatusFilter={setStatusFilter} setSearchQuery={setSearchQuery} allTickets={allTickets} ticketLimit={ticketLimit} setTicketLimit={setTicketLimit} isFetchingTickets={isFetchingTickets} onNewTicket={isEmp ? () => setIsNewOpen(true) : undefined} />
         </div>
 
         {/* Conversation panel: a fixed full-screen overlay on mobile. `keyboardHeight` lifts its content above the
             native keyboard (the chat log shrinks, the header and reply bar keep their size); layout.tsx switches
             <main> to overflow-hidden while it is open so the page behind does not scroll under it. */}
         <TicketConversationPanel
-          {...reply}
           selectedTicket={selectedTicket}
           keyboardHeight={keyboardHeight}
           setSelectedTicket={setSelectedTicket}
           isEmp={isEmp}
           isTicketLiveWithHR={isTicketLiveWithHR}
           isPrivileged={isPrivileged}
+          onReplySent={refetchTickets}
           canCloseOwnTicket={canCloseOwnTicket}
           isClosed={isClosed}
           handleCloseTicket={handleCloseTicket}
@@ -264,7 +261,7 @@ export function TicketsView({ role }: TicketsViewProps) {
           ticketSeenState={ticketSeenState}
           onOpenImage={(src, name) => setLightbox({ src, name })}
           typingNames={typingNames}
-          chatEndRef={chatEndRef}
+          scrollRef={threadRef}
           isAdmin={isAdmin}
         />
       </div>

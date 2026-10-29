@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, Screenshot, InactivityLog } from '@/lib/hrData';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Download, MousePointerClick, ZoomIn } from 'lucide-react';
+import { DownloadSimpleIcon as Download, CursorClickIcon as MousePointerClick, MagnifyingGlassPlusIcon as ZoomIn } from '@/components/ui/icons';
 import { formatShortDateNY, formatTimeNY, formatDateTimeNY } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OptimizedImage } from '@/components/ui/OptimizedImage';
@@ -93,7 +93,7 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
           {!viewerLoading && (
             <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-caption font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
                   <MousePointerClick className="h-3.5 w-3.5" /> Mouse Inactivity (3+ min stretches)
                 </span>
                 <span className="text-xs font-bold text-amber-800">
@@ -103,7 +103,7 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
               {viewerInactivity.length > 0 && (
                 <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
                   {viewerInactivity.map(log => (
-                    <div key={log.id} className="flex items-center justify-between text-[10px] text-amber-700 font-semibold">
+                    <div key={log.id} className="flex items-center justify-between text-caption text-amber-700 font-semibold">
                       <span>
                         {formatShortDateNY(log.startAt)}, {formatTimeNY(log.startAt)}
                         {' – '}
@@ -145,14 +145,14 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
                       <ZoomIn className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </div>
-                  <p className="text-[9px] text-slate-400 font-semibold text-center">{formatDateTimeNY(shot.timestamp)}</p>
+                  <p className="text-caption text-slate-400 font-semibold text-center">{formatDateTimeNY(shot.timestamp)}</p>
                 </button>
               ))}
             </div>
           )}
           {viewerShots.length > 0 && (
             <div className="flex items-center justify-between gap-3 pt-1">
-              <p className="text-[11px] font-semibold text-slate-500">
+              <p className="text-caption font-semibold text-slate-500">
                 Showing {viewerShots.length} of {viewerTotal}
               </p>
               {hasMoreShots && (

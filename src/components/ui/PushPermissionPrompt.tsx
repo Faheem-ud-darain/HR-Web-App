@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BellRing, BellOff } from 'lucide-react';
+import { BellRingingIcon as BellRing, BellSlashIcon as BellOff } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { isPushEnabled, requestPushPermissionAgain, isPushConfigured } from '@/lib/push';
@@ -55,7 +55,7 @@ export function PushPermissionPrompt() {
     <Modal isOpen={show} onClose={() => setShow(false)} title="Turn on Notifications">
       <div className="space-y-4 text-center py-2">
         <div className="h-14 w-14 rounded-full bg-orange-50 flex items-center justify-center mx-auto">
-          <BellOff className="h-7 w-7 text-orange-600" />
+          <BellOff weight="duotone" className="h-6 w-6 text-orange-600" />
         </div>
         <div>
           <p className="text-sm text-slate-700 font-medium leading-relaxed">
@@ -82,7 +82,7 @@ export function PushPermissionPrompt() {
             Not Now
           </Button>
         </div>
-        <p className="text-[10px] text-slate-400 leading-relaxed">
+        <p className="text-caption text-slate-400 leading-relaxed">
           If nothing happens when you tap Enable, notifications were likely blocked before — open your phone&apos;s Settings → Apps → DelCargo Internal → Notifications and turn them on there.
         </p>
       </div>

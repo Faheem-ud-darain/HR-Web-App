@@ -3,17 +3,6 @@
 import { Ticket } from '@/lib/hrData';
 import { formatDateTimeNY } from '@/lib/timezone';
 
-export function isImageAttachment(name?: string): boolean {
-  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name || '');
-}
-
-export function formatBytes(bytes?: number): string {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 // Shared formatter for every timestamp shown on this screen: Ticket.
 // createdAt (PocketBase's raw `created` system field, e.g. "2026-07-24
 // 16:18:33.852Z") and TicketReply.timestamp (an ISO string as of the

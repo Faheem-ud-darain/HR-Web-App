@@ -2,9 +2,10 @@
 
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { StatCard } from '@/components/ui/StatCard';
+import { Card } from '@/components/ui/Card';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
-import { DollarSign, Users, Clock, ClipboardList, PlusCircle, Loader2, Video } from 'lucide-react';
+import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, CircleNotchIcon as Loader2, VideoCameraIcon as Video } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
@@ -152,58 +153,9 @@ export default function AdminDashboard() {
         <StatCardSkeletonGrid count={4} className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" />
       ) : (
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <Card>
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Monthly Payroll</p>
-                <p className="text-sm md:text-lg font-bold text-slate-900 mt-1">{formatMoney(totalPayrollUSD, 'USA')}</p>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">{formatMoney(totalPayrollPKR, 'Pakistan')}</p>
-              </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                <DollarSign className="h-5 w-5" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          onClick={() => router.push('/hr/teams')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push('/hr/teams'); } }}
-          className="cursor-pointer"
-        >
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Total Employees</p>
-                <p className="text-base md:text-2xl font-bold text-slate-900 mt-1">{employees.length}</p>
-              </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                <Users className="h-5 w-5" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          onClick={() => router.push('/admin/leaves')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push('/admin/leaves'); } }}
-          className="cursor-pointer"
-        >
-          <CardContent className="pt-4 md:pt-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] md:text-xs font-semibold text-slate-500">Awaiting CEO Approval</p>
-                <p className="text-base md:text-2xl font-bold text-slate-900 mt-1">{hrApprovedLeaves.length}</p>
-              </div>
-              <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-                <Clock className="h-5 w-5" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard label="Monthly Payroll" value={formatMoney(totalPayrollUSD, 'USA')} size="md" sub={formatMoney(totalPayrollPKR, 'Pakistan')} chip={{ icon: DollarSign, tone: 'emerald' }} />
+        <StatCard label="Total Employees" value={employees.length} size="xl" chip={{ icon: Users, tone: 'indigo' }} onClick={() => router.push('/hr/teams')} />
+        <StatCard label="Awaiting CEO Approval" value={hrApprovedLeaves.length} size="xl" chip={{ icon: Clock, tone: 'amber' }} onClick={() => router.push('/admin/leaves')} />
         <AvgHoursWorkedCard employees={employees} timesheets={timesheets} viewerRole="admin" />
       </div>
       )}
@@ -219,7 +171,7 @@ export default function AdminDashboard() {
         <h2 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
           Pending CEO Approval
           {hrApprovedLeaves.length > 0 && (
-            <span className="bg-amber-100 text-amber-800 font-bold text-[10px] px-2 py-0.5 rounded-full">{hrApprovedLeaves.length} pending</span>
+            <span className="bg-amber-100 text-amber-800 font-bold text-caption px-2 py-0.5 rounded-full">{hrApprovedLeaves.length} pending</span>
           )}
         </h2>
 
@@ -250,10 +202,10 @@ export default function AdminDashboard() {
                     <Td align="center">
                       <div className="flex justify-center gap-2">
                         <button onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />} CEO Approve
+                          {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} CEO Approve
                         </button>
                         <button onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />} Reject
+                          {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Reject
                         </button>
                       </div>
                     </Td>
@@ -288,20 +240,20 @@ export default function AdminDashboard() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>
+                        <p className="text-caption text-slate-400 font-semibold uppercase">Dates</p>
                         <p className="text-xs font-bold text-slate-800">{l.duration}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
+                        <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
                         <p className="text-xs font-bold text-slate-800 truncate">{l.reason}</p>
                       </div>
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} className="flex-1 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 py-2.5 rounded-lg transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1">
-                        {processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />} CEO Approve
+                        {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} CEO Approve
                       </button>
                       <button onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} className="flex-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 py-2.5 rounded-lg transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1">
-                        {processingLeaveId === l.id && <Loader2 className="h-3 w-3 animate-spin" />} Reject
+                        {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Reject
                       </button>
                     </div>
                   </div>

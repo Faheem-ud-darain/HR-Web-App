@@ -33,3 +33,17 @@ export function ownerHasSeenMessage(ownerSeenAt: string | null | undefined, mess
   const seen = new Date(ownerSeenAt).getTime();
   return !isNaN(seen) && seen >= new Date(messageTimestamp).getTime();
 }
+
+/**
+ * What to show under a ticket's title in the list: the newest real reply ("who: what"), or null while there is
+ * none (then the list shows the ticket's own description). Close/reopen events are skipped.
+ */
+export function lastReplyPreview(replies: TicketReply[]): { who: string; text: string } | null {
+  for (let i = replies.length - 1; i >= 0; i--) {
+    const r = replies[i];
+    if (r.event) continue;
+    const text = r.message.trim() || (r.attachmentName ? `Sent ${r.attachmentName}` : '');
+    return text ? { who: r.senderName, text } : null;
+  }
+  return null;
+}

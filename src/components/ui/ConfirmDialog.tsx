@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from './Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';

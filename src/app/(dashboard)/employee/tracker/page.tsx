@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
-import { Timer, Monitor, ShieldAlert, MapPin, Download, Copy, RefreshCw, Wifi, WifiOff, AlertTriangle, Settings2, Activity } from 'lucide-react';
+import { TimerIcon as Timer, MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert, MapPinIcon as MapPin, DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle, SlidersHorizontalIcon as Settings2, PulseIcon as Activity } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmployeeActivityInsights } from '@/components/ui/lazy';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -201,21 +201,21 @@ export default function TrackerPage() {
             <CardContent className="p-6 space-y-6">
               {openShift ? (
                 <div className="text-center space-y-2">
-                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit mx-auto flex items-center gap-1.5 animate-pulse">
+                  <span className="text-caption font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full w-fit mx-auto flex items-center gap-1.5 animate-pulse">
                     <StatusDot tone="emerald" /> On Shift
                   </span>
                   <div className="text-3xl md:text-4xl font-bold text-slate-900 font-mono pt-2 flex items-center justify-center gap-2">
-                    <Timer className="h-8 w-8 text-emerald-500" />
+                    <Timer weight="duotone" className="h-8 w-8 text-emerald-500" />
                     {elapsedLabel}
                   </div>
-                  <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                  <p className="text-caption text-slate-400 font-semibold leading-relaxed">
                     Clocked in at {formatTimeNY(openShift.clockIn)}
                     {profile?.region === 'USA' ? ' via GPS warehouse geofencing.' : ' (manual shift start).'}
                   </p>
                 </div>
               ) : (
                 <div className="text-center py-8 space-y-3 font-sans">
-                  <ShieldAlert className="h-10 w-10 text-slate-300 mx-auto" />
+                  <ShieldAlert weight="duotone" className="h-10 w-10 text-slate-300 mx-auto" />
                   <div>
                     <h3 className="text-sm font-bold text-slate-800">Off Shift</h3>
                     <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed font-semibold">
@@ -253,10 +253,10 @@ export default function TrackerPage() {
               </Badge>
             </div>
             <CardContent className="p-5 space-y-3 font-sans">
-              <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+              <p className="text-caption text-slate-400 leading-relaxed font-semibold">
                 Install the free DelCargo Tracker app once — it runs quietly in the background (system tray) and only tracks activity while HR/Admin has tracking enabled for you and you&apos;re on a manually-started shift.
               </p>
-              <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed font-bold">
+              <p className="text-caption text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed font-bold">
                 While tracking is active please avoid personal browsing, messages, or accounts on this device while on shift.
               </p>
 
@@ -272,13 +272,13 @@ export default function TrackerPage() {
                     <WifiOff className="h-3.5 w-3.5 text-slate-400" />
                   )}
                   <div>
-                    <p className={`text-[10px] font-bold ${hrActions.isHeartbeatLive(heartbeat) ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    <p className={`text-caption font-bold ${hrActions.isHeartbeatLive(heartbeat) ? 'text-emerald-700' : 'text-slate-500'}`}>
                       {hrActions.isHeartbeatLive(heartbeat)
                         ? `App Connected${heartbeat?.deviceLabel ? ` — ${heartbeat.deviceLabel}` : ''}${heartbeat?.agentVersion ? ` (v${heartbeat.agentVersion})` : ''}`
                         : heartbeatCheckedOnce ? 'App Not Connected' : 'Checking connection…'}
                     </p>
                     {heartbeat?.lastSeenAt && (
-                      <p className="text-[9px] text-slate-400 font-semibold">Last check-in: {formatTimeNY(heartbeat.lastSeenAt)}</p>
+                      <p className="text-caption text-slate-400 font-semibold">Last check-in: {formatTimeNY(heartbeat.lastSeenAt)}</p>
                     )}
                   </div>
                 </div>
@@ -287,17 +287,17 @@ export default function TrackerPage() {
                   size="sm"
                   onClick={handleReconnectCheck}
                   disabled={heartbeatChecking}
-                  className="!text-[9px] !px-2 active:scale-97 transition-transform shrink-0"
+                  className="!text-caption !px-2 active:scale-97 transition-transform shrink-0"
                 >
                   <RefreshCw className={`h-3 w-3 ${heartbeatChecking ? 'animate-spin' : ''}`} /> Reconnect
                 </Button>
               </div>
               {heartbeatCheckedOnce && !hrActions.isHeartbeatLive(heartbeat) && (
                 <>
-                  <p className="text-[9px] text-slate-400 leading-relaxed -mt-1">
+                  <p className="text-caption text-slate-400 leading-relaxed -mt-1">
                     If you&apos;ve installed the app, make sure it&apos;s running (check your system tray / menu bar), then click Reconnect. If you haven&apos;t installed it yet, use the button below.
                   </p>
-                  <p className="text-[9px] text-slate-400 leading-relaxed -mt-1">
+                  <p className="text-caption text-slate-400 leading-relaxed -mt-1">
                     Switching to a new computer and blocked by a &quot;device already connected&quot; error?{' '}
                     <button
                       onClick={handleForceDisconnectAll}
@@ -321,8 +321,8 @@ export default function TrackerPage() {
                     <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 rounded-xl px-3.5 py-3">
                       <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                       <div className="space-y-1">
-                        <p className="text-[11px] font-bold text-amber-900">Tracker Update Required — v{TRACKER_MIN_VERSION}</p>
-                        <p className="text-[10px] text-amber-700 leading-relaxed">
+                        <p className="text-caption font-bold text-amber-900">Tracker Update Required — v{TRACKER_MIN_VERSION}</p>
+                        <p className="text-caption text-amber-700 leading-relaxed">
                           You&apos;re running v{heartbeat?.agentVersion ?? 'unknown'}. Download the latest installer below, run it, and your tracker will reconnect automatically.
                         </p>
                       </div>
@@ -341,8 +341,8 @@ export default function TrackerPage() {
                     <div className="flex items-start gap-2.5 bg-orange-50 border border-orange-300 rounded-xl px-3.5 py-3">
                       <RefreshCw className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
                       <div className="space-y-1">
-                        <p className="text-[11px] font-bold text-orange-900">Reconnect Required — Setup Code Changed</p>
-                        <p className="text-[10px] text-orange-700 leading-relaxed">
+                        <p className="text-caption font-bold text-orange-900">Reconnect Required — Setup Code Changed</p>
+                        <p className="text-caption text-orange-700 leading-relaxed">
                           Your setup code was regenerated by HR/Admin. Copy the new code below and paste it into the DelCargo Tracker app on your computer to reconnect — your shift can&apos;t start with screen tracking until you do.
                         </p>
                       </div>
@@ -377,8 +377,8 @@ export default function TrackerPage() {
                   </div>
 
                   <div>
-                    <p className="text-[10px] text-slate-500 font-semibold mb-1">Paste this code into the app when it first opens:</p>
-                    <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-[10px] leading-relaxed overflow-x-auto break-all">
+                    <p className="text-caption text-slate-500 font-semibold mb-1">Paste this code into the app when it first opens:</p>
+                    <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-caption leading-relaxed overflow-x-auto break-all">
                       {encodeSetupCode(getPocketBaseConfig().url, trackingSettings.agentToken)}
                     </div>
                   </div>
@@ -386,24 +386,24 @@ export default function TrackerPage() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={handleCopySetupCode}
-                      className="text-[10px] font-bold text-white bg-slate-800 hover:bg-slate-900 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                      className="text-caption font-bold text-white bg-slate-800 hover:bg-slate-900 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
                     >
                       <Copy className="h-3.5 w-3.5" /> {codeCopied ? 'Copied!' : 'Copy My Setup Code'}
                     </button>
                     <button
                       onClick={handleRegenerateOwnCode}
-                      className="text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
+                      className="text-caption font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
                     >
                       <RefreshCw className="h-3.5 w-3.5" /> Regenerate My Code
                     </button>
                   </div>
 
-                  <p className="text-[9px] text-slate-400 leading-relaxed border-t border-slate-200 pt-2">
+                  <p className="text-caption text-slate-400 leading-relaxed border-t border-slate-200 pt-2">
                     This code is unique to your account only — don&apos;t share it with a coworker, and don&apos;t paste someone else&apos;s code into your own tracker app. The app will show you which email address it connected as before it starts — always double-check that&apos;s you.
                   </p>
                 </>
               ) : (
-                <p className="text-[10px] text-slate-400 italic">Preparing your setup code…</p>
+                <p className="text-caption text-slate-400 italic">Preparing your setup code…</p>
               )}
             </CardContent>
           </Card>
@@ -463,7 +463,7 @@ export default function TrackerPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Clock In / Out</p>
+                        <p className="text-caption text-slate-400 font-semibold uppercase">Clock In / Out</p>
                         <p className="text-xs font-semibold text-slate-700 font-mono">
                           {formatTimeNY(entry.clockIn)}
                           {' → '}
@@ -471,7 +471,7 @@ export default function TrackerPage() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
+                        <p className="text-caption text-slate-400 font-semibold uppercase">Duration</p>
                         <p className="text-xs font-bold text-slate-900">{entry.duration || '—'}</p>
                       </div>
                     </div>

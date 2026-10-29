@@ -41,14 +41,14 @@ export function InspectEmployeeModal({ employee, isPrivileged, role, onClose, on
           </button>
           <div>
             <h4 className="font-bold text-slate-900 text-sm">{isPrivileged ? displayName(employee, role as 'hr' | 'admin') : employee.fullName}</h4>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{employee.jobTitle || employee.role}</p>
+            <p className="text-caption text-slate-500 font-bold uppercase tracking-wider">{employee.jobTitle || employee.role}</p>
           </div>
         </div>
 
         <div className="space-y-2.5 divide-y divide-slate-100 text-xs font-semibold">
           {rows.map(([label, value]) => (
             <div key={label} className="flex items-center justify-between py-2">
-              <span className="text-slate-400 uppercase text-[9px] tracking-wider">{label}</span>
+              <span className="text-slate-500 uppercase text-caption tracking-wider">{label}</span>
               <span className={`text-slate-800 ${label === 'Gender' ? 'capitalize' : ''}`}>{value}</span>
             </div>
           ))}

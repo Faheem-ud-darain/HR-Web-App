@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { hrActions } from '@/lib/hrData';
 import { setAdaptiveInterval } from '@/lib/idle';
+import { sameList } from '@/lib/core/lists';
 
 // Typing-indicator pace: warm channel / quiet channel, and how long without a message or typing counts as quiet.
 const TYPING_POLL_MS = 5000;
@@ -26,7 +27,8 @@ export function useChatTyping({ activeTeamId, currentUserEmail, messageCount }: 
       hrActions.getTypingUsers('chat', activeTeamId, currentUserEmail).then(rows => {
         if (cancelled) return;
         if (rows.length > 0) quietSinceRef.current = Date.now();
-        setTypingNames(rows.map(r => r.displayName));
+        const names = rows.map(r => r.displayName);
+        setTypingNames(prev => (sameList(prev, names) ? prev : names)); // unchanged: no re-render of the thread
       }).catch(() => {});
     };
     poll();

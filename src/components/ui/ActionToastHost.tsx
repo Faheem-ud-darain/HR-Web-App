@@ -31,7 +31,7 @@
 // get more time to read) rather than forcing one universal number.
 
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import { CheckCircle2, XCircle, X } from 'lucide-react';
+import { CheckCircleIcon as CheckCircle2, XCircleIcon as XCircle, XIcon as X } from '@/components/ui/icons';
 
 type ActionToastType = 'success' | 'error';
 

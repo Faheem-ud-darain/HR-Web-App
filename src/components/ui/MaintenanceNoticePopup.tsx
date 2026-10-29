@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Wrench, CheckCircle2 } from 'lucide-react';
+import { WrenchIcon as Wrench, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { formatInViewerLocalTime } from '@/lib/timezone';
@@ -75,7 +75,7 @@ export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
             <Wrench className="h-5 w-5 text-sky-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">
+            <p className="text-caption font-bold text-sky-700 uppercase tracking-wider">
               {alreadyStarted ? 'Maintenance In Progress' : 'Scheduled System Maintenance'}
             </p>
             <h2 id="maintenance-popup-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
@@ -87,7 +87,7 @@ export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
         <div className="px-5 py-4 max-h-[45vh] overflow-y-auto">
           <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{current.message}</p>
           <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Maintenance Window (your local time)</p>
+            <p className="text-caption font-bold text-slate-400 uppercase tracking-wider mb-1">Maintenance Window (your local time)</p>
             <p className="text-xs font-bold text-slate-800">
               {formatInViewerLocalTime(current.startAt)} — {formatInViewerLocalTime(current.endAt)}
             </p>
@@ -95,7 +95,7 @@ export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
         </div>
 
         <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <p className="text-[10px] text-slate-400 font-semibold">
+          <p className="text-caption text-slate-400 font-semibold">
             This will keep appearing until you acknowledge it
           </p>
           <Button

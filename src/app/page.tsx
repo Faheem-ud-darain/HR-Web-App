@@ -3,7 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CareersView } from '@/components/ui/CareersView';
-import Link from 'next/link';
+import { ButtonLink } from '@/components/ui/Button';
+import { ArrowDownIcon as ArrowDown } from '@/components/ui/icons';
+import { CAREERS_HERO, DEPARTMENTS } from '@/components/ui/careers/careerOptions';
+import { LandingNav } from '@/components/landing/LandingNav';
+import { LandingFooter } from '@/components/landing/LandingFooter';
+import { PhotoStrip } from './_landing/PhotoStrip';
+import { RoleTicker } from './_landing/RoleTicker';
 import {
   getSessionEmail,
   getSessionRole,
@@ -13,9 +19,18 @@ import {
   clearSession,
 } from '@/lib/session';
 import { PageLoader } from '@/components/ui/Spinner';
+import { useResolvedTheme } from '@/lib/theme';
+
+// The hero video for each theme: the same ribbon on black, or on pale grey.
+const HERO_MEDIA = {
+  dark: { video: '/delcargo_hero.mp4', poster: '/delcargo_hero_poster.jpg' },
+  light: { video: '/delcargo_hero_light.mp4', poster: '/delcargo_hero_light_poster.jpg' },
+};
+
 
 export default function Home() {
   const router = useRouter();
+  const hero = HERO_MEDIA[useResolvedTheme()];
   // On a Capacitor cold start (app fully killed, not just backgrounded),
   // the WebView always reloads at "/" first — this page — regardless of
   // where the user was before closing the app. Previously this page never
@@ -58,40 +73,43 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
-      {/* Premium Public Landing Header. min-h-16 + pt-safe (not h-16) is
-          deliberate — on notched/Dynamic-Island iPhones the WebView draws
-          full-screen under the status bar (see layout.tsx's
-          viewportFit: 'cover'), so a fixed h-16 with no top padding put
-          "DelCargo" and "Sign In" right under/behind the status bar,
-          unreadable and untappable. pt-safe (globals.css) adds
-          env(safe-area-inset-top) of padding above the content instead. */}
-      <header className="min-h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-12 sticky top-0 z-50 shadow-sm min-w-0 pt-safe">
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="font-bold text-base sm:text-lg text-orange-600 tracking-tight leading-none truncate">DelCargo <span className="hidden sm:inline">Logistics</span></div>
-          <span className="hidden sm:inline-block text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">Careers Portal</span>
+    <div className="landing-root min-h-screen bg-paper flex flex-col font-sans">
+      {/* The hero: centred words over a looping video, then the warehouse in five crops drifting past. The nav is a white pill. pt-safe
+          keeps it clear of the status bar on notched phones (layout.tsx draws the WebView under it). */}
+      <section className="relative isolate overflow-hidden text-ink pb-12 sm:pb-24">
+        {/* The video is the hero's backdrop; people who ask for less motion get its first frame instead. */}
+        <div aria-hidden="true" className="absolute inset-0 -z-20 bg-cover bg-center" style={{ backgroundImage: `url(${hero.poster})` }}>
+          <video key={hero.video} src={hero.video} poster={hero.poster} autoPlay muted loop playsInline preload="auto" className="h-full w-full object-cover motion-reduce:hidden" />
         </div>
-        <Link 
-          href="/auth"
-          className="shrink-0 text-[10px] sm:text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-colors transition-transform shadow-sm shadow-orange-600/10 active:scale-97 whitespace-nowrap"
-        >
-          <span className="hidden sm:inline">Sign In to Employee Portal</span><span className="sm:inline md:hidden">Sign In</span> →
-        </Link>
-      </header>
+        <div aria-hidden="true" className="landing-blur -z-10"><i /><i /><i /></div>
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-paper/40 via-paper/5 via-60% to-paper" />
 
-      {/* Main Landing Content */}
-      <main className="flex-1 py-8 sm:py-16 px-4 sm:px-12 max-w-5xl mx-auto w-full min-w-0">
-        <CareersView role="public" />
+        <LandingNav />
+
+        <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 sm:px-8 pt-10 sm:pt-16 pb-12 sm:pb-20 text-center">
+          <h1 className="font-display font-black [font-size:clamp(2.5rem,5.6vw,4.75rem)] leading-[1] tracking-[-0.03em] text-balance break-words">
+            Work with <span className="text-brand">DelCargo</span>
+          </h1>
+          <p className="max-w-xl text-sm sm:text-base leading-relaxed text-ink/70">{CAREERS_HERO.text}</p>
+          <ButtonLink href="#open-positions" variant="ink" size="md" className="rounded-full bg-ink! text-paper! hover:bg-ink/85!">
+            Open Positions <ArrowDown className="ml-2 h-4 w-4" aria-hidden="true" />
+          </ButtonLink>
+        </div>
+
+        <PhotoStrip src="/delcargo_warehouse_hightech.webp" />
+      </section>
+
+      <RoleTicker items={['Open Positions', ...DEPARTMENTS]} href="#open-positions" />
+
+      {/* Who We Are, Life at DelCargo and the open positions, on the dark page (the careers view; its own opening words are
+          the hero above). */}
+      <main className="flex-1 w-full min-w-0 bg-paper text-ink">
+        <div className="py-16 sm:py-28 px-4 sm:px-8 max-w-6xl mx-auto">
+          <CareersView role="public" hero={false} />
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="h-14 border-t border-slate-200 bg-white flex items-center justify-center gap-3 text-[10px] font-semibold text-slate-400">
-        <span>© {new Date().getFullYear()} DelCargo Operations Team. All rights reserved.</span>
-        <span className="text-slate-300">•</span>
-        <Link href="/privacy" className="hover:text-orange-600 transition-colors">Privacy Policy</Link>
-        <span className="text-slate-300">•</span>
-        <Link href="/support" className="hover:text-orange-600 transition-colors">Support</Link>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

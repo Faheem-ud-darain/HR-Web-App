@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useTimesheets, displayName } from '@/lib/hrData';
-import { FileText, Download, Clock, TrendingUp, Calendar, Landmark } from 'lucide-react';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download, ClockIcon as Clock, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar, BankIcon as Landmark } from '@/components/ui/icons';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
@@ -131,9 +131,9 @@ export default function ReportsPage() {
                   <Td>
                     {emp.bankName ? (
                       <div className="text-xs text-slate-600 leading-relaxed font-semibold">
-                        <div className="flex items-center gap-1"><Landmark className="h-3 w-3 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
+                        <div className="flex items-center gap-1"><Landmark className="h-3.5 w-3.5 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
                         <div>Acc: <span className="text-slate-500 font-medium">{emp.accountNumber}</span></div>
-                        <div>IBAN: <span className="text-slate-600 font-mono text-[10px]">{emp.iban}</span></div>
+                        <div>IBAN: <span className="text-slate-600 font-mono text-caption">{emp.iban}</span></div>
                       </div>
                     ) : (
                       <span className="text-xs text-slate-400 font-semibold italic">Details pending</span>
@@ -143,13 +143,13 @@ export default function ReportsPage() {
                     <div className="flex flex-col sm:flex-row justify-center gap-2">
                       <button
                         onClick={() => handleOpenReviewModal(emp)}
-                        className="text-[10px] font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
+                        className="text-caption font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
                       >
                         <FileText className="h-3.5 w-3.5" /> View Shift Logs
                       </button>
                       <button
                         onClick={() => setSelectedDocsEmp(emp)}
-                        className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
+                        className="text-caption font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
                       >
                         <Download className="h-3.5 w-3.5" /> Documents
                       </button>
@@ -179,7 +179,7 @@ export default function ReportsPage() {
                   <Avatar src={emp.profilePicture} name={emp.fullName} size={40} />
                   <div>
                     <div className="font-semibold text-slate-900 text-sm">{displayName(emp, 'hr')}</div>
-                    <div className="text-[10px] text-slate-400">{emp.email}</div>
+                    <div className="text-caption text-slate-400">{emp.email}</div>
                   </div>
                 </div>
                 <Badge variant={emp.onboardingCompleted ? 'success' : 'warning'} className="shrink-0">
@@ -188,36 +188,36 @@ export default function ReportsPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Role & Region</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Role & Region</p>
                   <p className="text-xs font-semibold text-slate-800"><span className="text-orange-600">{emp.jobTitle || 'Staff'}</span> · {emp.region || 'Pakistan'}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Base Salary</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Base Salary</p>
                   <p className="text-xs font-bold text-slate-900">{formatMoney(emp.baseSalary, emp.region)}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Bank Details</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Bank Details</p>
                   {emp.bankName ? (
-                    <div className="text-[10px] text-slate-600 leading-relaxed font-semibold">
-                      <div className="flex items-center gap-1"><Landmark className="h-3 w-3 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
+                    <div className="text-caption text-slate-600 leading-relaxed font-semibold">
+                      <div className="flex items-center gap-1"><Landmark className="h-3.5 w-3.5 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
                       <div>Acc: <span className="text-slate-500 font-medium">{emp.accountNumber}</span></div>
                       <div>IBAN: <span className="text-slate-600 font-mono">{emp.iban}</span></div>
                     </div>
                   ) : (
-                    <span className="text-[10px] text-slate-400 font-semibold italic">Details pending</span>
+                    <span className="text-caption text-slate-400 font-semibold italic">Details pending</span>
                   )}
                 </div>
               </div>
               <div className="flex justify-between gap-2 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => handleOpenReviewModal(emp)}
-                  className="flex-1 text-[10px] font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
+                  className="flex-1 text-caption font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
                 >
                   <FileText className="h-3.5 w-3.5" /> View Shift Logs
                 </button>
                 <button
                   onClick={() => setSelectedDocsEmp(emp)}
-                  className="flex-1 text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
+                  className="flex-1 text-caption font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
                 >
                   <Download className="h-3.5 w-3.5" /> Documents
                 </button>
@@ -244,7 +244,7 @@ export default function ReportsPage() {
                 <Avatar src={selectedReviewEmp.profilePicture} name={selectedReviewEmp.fullName} size={40} />
                 <div>
                   <p className="text-sm font-bold text-slate-900">{displayName(selectedReviewEmp, 'hr')}</p>
-                  <p className="text-[10px] text-slate-400 font-bold">{selectedReviewEmp.email} · {selectedReviewEmp.jobTitle || 'Staff'}</p>
+                  <p className="text-caption text-slate-400 font-bold">{selectedReviewEmp.email} · {selectedReviewEmp.jobTitle || 'Staff'}</p>
                 </div>
               </div>
               <Badge variant={selectedReviewEmp.region === 'USA' ? 'default' : 'success'}>
@@ -257,17 +257,17 @@ export default function ReportsPage() {
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
                 <Clock className="h-4 w-4 text-indigo-500 mx-auto mb-1" />
                 <p className="text-lg font-bold text-indigo-900">{Math.floor(totalHours / 60)}h {totalHours % 60}m</p>
-                <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Total Time {dateFilter ? '(Filtered)' : `(All ${filteredReviewEntries.length} Shifts)`}</p>
+                <p className="text-caption font-bold text-indigo-600 uppercase tracking-wider">Total Time {dateFilter ? '(Filtered)' : `(All ${filteredReviewEntries.length} Shifts)`}</p>
               </div>
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
                 <TrendingUp className="h-4 w-4 text-emerald-500 mx-auto mb-1" />
                 <p className="text-lg font-bold text-emerald-900">{completedShifts}{openShifts > 0 ? ` (+${openShifts} live)` : ''}</p>
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Completed Shifts</p>
+                <p className="text-caption font-bold text-emerald-600 uppercase tracking-wider">Completed Shifts</p>
               </div>
               <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 text-center">
                 <Calendar className="h-4 w-4 text-orange-500 mx-auto mb-1" />
                 <p className="text-lg font-bold text-orange-900">{filteredReviewEntries.length}</p>
-                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">Total Shifts</p>
+                <p className="text-caption font-bold text-orange-600 uppercase tracking-wider">Total Shifts</p>
               </div>
             </div>
 
@@ -296,7 +296,7 @@ export default function ReportsPage() {
             <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
               <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                 <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Session History</h4>
-                <span className="text-[10px] font-bold text-slate-400">{filteredReviewEntries.length} record{filteredReviewEntries.length !== 1 ? 's' : ''}</span>
+                <span className="text-caption font-bold text-slate-400">{filteredReviewEntries.length} record{filteredReviewEntries.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
                 <Table density="compact" size="xs" minWidth={500}>
@@ -317,8 +317,8 @@ export default function ReportsPage() {
                     {filteredReviewEntries.map((entry) => (
                       <Tr key={entry.id}>
                         <Td className="font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</Td>
-                        <Td className="font-mono text-slate-500 text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
-                        <Td className="font-mono text-slate-500 text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
+                        <Td className="font-mono text-slate-500 text-caption">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
+                        <Td className="font-mono text-slate-500 text-caption">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                         <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                         <Td align="right">
                           <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>

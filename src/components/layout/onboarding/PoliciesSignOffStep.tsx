@@ -1,142 +1,62 @@
 'use client';
 
-import React from 'react';
-import { ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { FieldLabel } from '@/components/ui/FieldLabel';
-import { Input } from '@/components/ui/Input';
+import React, { useState } from 'react';
+import { CheckCircleIcon as CheckCircle, ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
-import { Profile } from '@/lib/hrData';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { FormField } from '@/components/ui/FormField';
+import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
+import { PolicyView } from '@/components/ui/PolicyView';
+import type { Profile } from '@/lib/hrData';
+import { StepActions, StepHeader } from './StepParts';
+import type { PolicyKey, useOnboardingForm } from './useOnboardingForm';
 
-interface PoliciesSignOffStepProps {
-  setActivePolicy: React.Dispatch<React.SetStateAction<"conduct" | "handbook" | "privacy" | null>>;
-  acceptedDocs: { conduct: boolean; handbook: boolean; privacy: boolean; };
-  setAcceptedDocs: React.Dispatch<React.SetStateAction<{ conduct: boolean; handbook: boolean; privacy: boolean; }>>;
-  profile: Profile;
-  signName: string;
-  setSignName: React.Dispatch<React.SetStateAction<string>>;
-  setOnboardStep: React.Dispatch<React.SetStateAction<number>>;
-  handleCompleteOnboarding: () => Promise<void>;
-  isCompletingOnboarding: boolean;
-}
+type Form = ReturnType<typeof useOnboardingForm>;
 
-export function PoliciesSignOffStep({ setActivePolicy, acceptedDocs, setAcceptedDocs, profile, signName, setSignName, setOnboardStep, handleCompleteOnboarding, isCompletingOnboarding }: PoliciesSignOffStepProps) {
+// The three documents to acknowledge. The handbook is the real one (the same page employees find under Policy) and the
+// privacy policy is the public page; only the code of conduct is a short summary shown here.
+const POLICIES: { key: PolicyKey; title: string; text: string; read: 'modal' | { href: string } }[] = [
+  { key: 'conduct', title: 'Code of Conduct', text: 'Professional interaction guidelines and conflict resolution.', read: 'modal' },
+  { key: 'handbook', title: 'Employee Handbook', text: 'Leave policies, accrual rules and settlements.', read: 'modal' },
+  { key: 'privacy', title: 'Privacy & Data Policy', text: 'What data the app collects and how it is used.', read: { href: '/privacy' } },
+];
+
+// Step 4: read and tick each policy, sign with your full name, and submit for HR's review.
+export function PoliciesSignOffStep({ profile, form, onSubmit }: { profile: Profile; form: Form; onSubmit: () => void }) {
+  const [open, setOpen] = useState<PolicyKey | null>(null);
+  const view = (p: (typeof POLICIES)[number]) => {
+    form.markRead(p.key);
+    if (p.read === 'modal') setOpen(p.key);
+  };
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-        <ShieldCheck className="h-5 w-5 text-orange-600" /> Step 4: Policies & Sign Off
-      </h2>
-      <p className="text-sm text-slate-600 font-medium">Please read and acknowledge the shared corporate guidelines:</p>
-    
-      <div className="space-y-4 max-h-[200px] overflow-y-auto pr-2">
-        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/20">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-              <span className="text-sm font-semibold text-slate-900">Code of Conduct</span>
-              <button 
-                type="button" 
-                onClick={() => setActivePolicy('conduct')} 
-                className="text-[10px] font-bold text-orange-600 hover:underline text-left"
-              >
-                (Read Agreement)
-              </button>
-            </div>
-            <input 
-              type="checkbox" 
-              checked={acceptedDocs.conduct}
-              onChange={(e) => setAcceptedDocs(prev => ({ ...prev, conduct: e.target.checked }))}
-              className="h-4 w-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
-            />
-          </div>
-          <p className="text-xs text-slate-500">Professional interaction guidelines and conflict resolution frameworks.</p>
-        </div>
-    
-        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/20">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-              <span className="text-sm font-semibold text-slate-900">Employee Handbook</span>
-              <button 
-                type="button" 
-                onClick={() => setActivePolicy('handbook')} 
-                className="text-[10px] font-bold text-orange-600 hover:underline text-left"
-              >
-                (Read Agreement)
-              </button>
-            </div>
-            <input 
-              type="checkbox" 
-              checked={acceptedDocs.handbook}
-              onChange={(e) => setAcceptedDocs(prev => ({ ...prev, handbook: e.target.checked }))}
-              className="h-4 w-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
-            />
-          </div>
-          <p className="text-xs text-slate-500">Detailed guidelines on leave policies, salary increment cycles, and tools usage.</p>
-        </div>
-    
-        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50/20">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-              <span className="text-sm font-semibold text-slate-900">Privacy & Data Policy</span>
-              <button 
-                type="button" 
-                onClick={() => setActivePolicy('privacy')} 
-                className="text-[10px] font-bold text-orange-600 hover:underline text-left"
-              >
-                (Read Agreement)
-              </button>
-            </div>
-            <input 
-              type="checkbox" 
-              checked={acceptedDocs.privacy}
-              onChange={(e) => setAcceptedDocs(prev => ({ ...prev, privacy: e.target.checked }))}
-              className="h-4 w-4 text-orange-600 rounded border-slate-300 focus:ring-orange-500"
-            />
-          </div>
-          <p className="text-xs text-slate-500">Privacy guarantees and guidelines for processing corporate and customer data.</p>
-        </div>
-      </div>
-    
-      <div className="space-y-3">
-        <FieldLabel size="md">
-          Digital Signature <span className="text-slate-400 font-semibold text-[10px] lowercase">(Case-insensitive: must match your full name &quot;{profile.fullName}&quot; exactly)</span>
-        </FieldLabel>
-        <Input 
-          type="text" 
-          value={signName}
-          onChange={(e) => setSignName(e.target.value)}
-          fieldSize="md"
-          placeholder={profile.fullName}
-        />
-      </div>
-    
-      <div className="flex gap-3 pt-4 border-t border-slate-200">
-        <Button
-          variant="outline"
-          size="md"
-          onClick={() => setOnboardStep(3)}
-          className="flex-1 md:flex-none"
-        >
-          Back
-        </Button>
-        <button
-          onClick={handleCompleteOnboarding}
-          disabled={isCompletingOnboarding}
-          className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white font-semibold px-4 py-3 md:py-2 rounded-xl md:rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5 shadow-sm"
-        >
-          {isCompletingOnboarding ? (
-            <>
-              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Finishing Up…
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-4 w-4" /> Complete Onboarding
-            </>
-          )}
-        </button>
-      </div>
+      <StepHeader icon={ShieldCheck} title="Policies & sign-off" text="Read each document, then tick it to accept." />
+
+      <ul className="space-y-3">
+        {POLICIES.map(p => (
+          <li key={p.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <Checkbox checked={form.accepted[p.key]} onChange={v => form.setAccepted(p.key, v)} disabled={!form.read[p.key]} hint={form.read[p.key] ? p.text : `${p.text} Read it first to accept.`}>{p.title}</Checkbox>
+            {p.read === 'modal'
+              ? <Button type="button" variant="outline" size="sm" onClick={() => view(p)}>Read</Button>
+              : <a href={p.read.href} target="_blank" rel="noopener noreferrer" onClick={() => form.markRead(p.key)} className="inline-flex min-h-[36px] items-center rounded-xl border border-slate-200 bg-white px-2.5 text-caption font-bold text-slate-700 hover:bg-slate-50">Read</a>}
+          </li>
+        ))}
+      </ul>
+
+      <FormField label="Digital signature" hint={`Type your full name exactly as it appears here: ${profile.fullName}`}>
+        <Input value={form.signature} onChange={e => form.setSignature(e.target.value)} placeholder={profile.fullName} autoComplete="off" fieldSize="lg" />
+      </FormField>
+
+      <StepActions onBack={form.back} onNext={onSubmit} loading={form.saving} nextVariant="success" nextLabel={<><CheckCircle weight="fill" className="h-4 w-4" aria-hidden="true" /> Complete onboarding</>} />
+
+      {open && (
+        <Modal isOpen onClose={() => setOpen(null)} title={POLICIES.find(p => p.key === open)?.title || ''} className="md:max-w-3xl">
+          {open === 'handbook'
+            ? <PolicyView />
+            : <p className="text-sm text-slate-700 leading-relaxed font-medium">DelCargo is committed to a workplace that is respectful, inclusive and professional. Everyone is expected to act with integrity, communicate openly across remote teams, and take conflicts to HR. Performance is reviewed periodically.</p>}
+        </Modal>
+      )}
     </div>
   );
 }

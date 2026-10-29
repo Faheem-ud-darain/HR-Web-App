@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { hrActions, TICKET_PRESENCE_STALE_MS, type Ticket, type TicketPresence, type TicketSeenState } from '@/lib/hrData';
 import { setAdaptiveInterval } from '@/lib/idle';
+import { sameList } from '@/lib/core/lists';
 import type { TicketRole } from './ticketHelpers';
 
 // Typing indicator poll pace, and how fresh the ticket owner's "seen" marker must be (they refresh it every 8s
@@ -138,7 +139,9 @@ export function useTicketLiveState({ role, currentEmail, selectedTicket, tickets
     let cancelled = false;
     const poll = () => {
       hrActions.getTypingUsers('ticket', ticketId, currentEmail).then(rows => {
-        if (!cancelled) setTypingEntry({ ticketId, names: rows.map(r => r.displayName) });
+        if (cancelled) return;
+        const names = rows.map(r => r.displayName);
+        setTypingEntry(prev => (prev && prev.ticketId === ticketId && sameList(prev.names, names) ? prev : { ticketId, names }));
       }).catch(() => {});
     };
     poll();

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin, hrActions } from '@/lib/hrData';
-import { FileText, Download, MapPin, Monitor, Landmark, Loader2 } from 'lucide-react';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download, MapPinIcon as MapPin, MonitorIcon as Monitor, BankIcon as Landmark, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
@@ -165,9 +165,9 @@ export default function ReportsPage() {
                   <Td>
                     {emp.bankName ? (
                       <div className="text-xs text-slate-600 leading-relaxed font-semibold">
-                        <div className="flex items-center gap-1"><Landmark className="h-3 w-3 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
+                        <div className="flex items-center gap-1"><Landmark className="h-3.5 w-3.5 text-slate-400" /> <span className="text-slate-900">{emp.bankName}</span></div>
                         <div>Acc: <span className="text-slate-500 font-medium">{emp.accountNumber}</span></div>
-                        <div>IBAN: <span className="text-slate-600 font-mono text-[10px]">{emp.iban}</span></div>
+                        <div>IBAN: <span className="text-slate-600 font-mono text-caption">{emp.iban}</span></div>
                       </div>
                     ) : (
                       <span className="text-xs text-slate-400 font-semibold italic">Details pending</span>
@@ -177,19 +177,19 @@ export default function ReportsPage() {
                     <div className="flex flex-col sm:flex-row justify-center gap-2">
                       <button
                         onClick={() => handleOpenAssignModal(emp)}
-                        className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                        className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
                       >
                         <MapPin className="h-3.5 w-3.5" /> Assignment
                       </button>
                       <button
                         onClick={() => handleOpenReviewModal(emp)}
-                        className="text-[10px] font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                        className="text-caption font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
                       >
                         <FileText className="h-3.5 w-3.5" /> Review Tracker
                       </button>
                       <button
                         onClick={() => setSelectedDocsEmp(emp)}
-                        className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
+                        className="text-caption font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
                       >
                         <Download className="h-3.5 w-3.5" /> Documents
                       </button>
@@ -217,7 +217,7 @@ export default function ReportsPage() {
                 <Avatar src={emp.profilePicture} name={emp.fullName} size={36} />
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-slate-900 text-sm truncate">{displayName(emp, 'admin')}</div>
-                  <div className="text-[10px] text-slate-500 truncate">{emp.email}</div>
+                  <div className="text-caption text-slate-500 truncate">{emp.email}</div>
                 </div>
                 <Badge variant={emp.onboardingCompleted ? 'success' : 'warning'} className="shrink-0">
                   {emp.onboardingCompleted ? 'Completed' : 'Pending'}
@@ -225,15 +225,15 @@ export default function ReportsPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Role & Region</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Role & Region</p>
                   <p className="text-xs font-bold text-slate-800">{emp.jobTitle || 'Staff'} · {emp.region || 'Pakistan'}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Base Salary</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Base Salary</p>
                   <p className="text-xs font-bold text-slate-800">{formatMoney(emp.baseSalary, emp.region)}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Bank Details</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Bank Details</p>
                   {emp.bankName ? (
                     <p className="text-xs font-medium text-slate-600 truncate">{emp.bankName} - {emp.accountNumber}</p>
                   ) : (
@@ -242,13 +242,13 @@ export default function ReportsPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-                <button onClick={() => handleOpenAssignModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-[10px] font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
+                <button onClick={() => handleOpenAssignModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-caption font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
                   <MapPin className="h-3.5 w-3.5" /> Assign
                 </button>
-                <button onClick={() => handleOpenReviewModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
+                <button onClick={() => handleOpenReviewModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-caption font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
                   <FileText className="h-3.5 w-3.5" /> Tracker
                 </button>
-                <button onClick={() => setSelectedDocsEmp(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
+                <button onClick={() => setSelectedDocsEmp(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-caption font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
                   <Download className="h-3.5 w-3.5" /> Docs
                 </button>
               </div>
@@ -331,8 +331,8 @@ export default function ReportsPage() {
                   className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 h-4 w-4"
                 />
                 <div>
-                  <span className="text-slate-900 block font-bold text-[11px] uppercase tracking-wide">Enable Workstation Monitoring</span>
-                  <span className="text-[10px] text-slate-400 font-medium leading-tight block mt-0.5">Activate screenshot captures, activity timeline logs, and active application checks.</span>
+                  <span className="text-slate-900 block font-bold text-caption uppercase tracking-wide">Enable Workstation Monitoring</span>
+                  <span className="text-caption text-slate-400 font-medium leading-tight block mt-0.5">Activate screenshot captures, activity timeline logs, and active application checks.</span>
                 </div>
               </label>
             </div>
@@ -347,8 +347,8 @@ export default function ReportsPage() {
                   className="rounded border-slate-300 text-amber-500 focus:ring-amber-400 h-4 w-4"
                 />
                 <div>
-                  <span className="text-slate-900 block font-bold text-[11px] uppercase tracking-wide">Exempt from Absence Check</span>
-                  <span className="text-[10px] text-slate-400 font-medium leading-tight block mt-0.5">Part-time or flexible-schedule employees will never be auto-marked absent. Existing false records must still be removed manually.</span>
+                  <span className="text-slate-900 block font-bold text-caption uppercase tracking-wide">Exempt from Absence Check</span>
+                  <span className="text-caption text-slate-400 font-medium leading-tight block mt-0.5">Part-time or flexible-schedule employees will never be auto-marked absent. Existing false records must still be removed manually.</span>
                 </div>
               </label>
             </div>
@@ -384,7 +384,7 @@ export default function ReportsPage() {
               <div>
                 <p className="text-xs text-slate-500 font-semibold">Reviewing Employee</p>
                 <p className="text-sm font-bold text-slate-900">{displayName(selectedReviewEmp, 'admin')}</p>
-                <p className="text-[10px] text-slate-400 font-bold">{selectedReviewEmp.email} · {selectedReviewEmp.jobTitle || 'Staff'}</p>
+                <p className="text-caption text-slate-400 font-bold">{selectedReviewEmp.email} · {selectedReviewEmp.jobTitle || 'Staff'}</p>
               </div>
               <Badge variant={selectedReviewEmp.region === 'USA' ? 'default' : 'success'}>
                 {selectedReviewEmp.region === 'USA' ? 'USA Operations' : 'Pakistan Remote'}
@@ -397,7 +397,7 @@ export default function ReportsPage() {
                 <button
                   onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, reviewEntries)}
                   disabled={reviewEntries.length === 0}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-3 py-1.5 rounded-lg text-[10px] active:scale-97 transition-colors transition-transform shadow-sm"
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-3 py-1.5 rounded-lg text-caption active:scale-97 transition-colors transition-transform shadow-sm"
                 >
                   <Download className="h-3.5 w-3.5" /> Export CSV
                 </button>
@@ -422,8 +422,8 @@ export default function ReportsPage() {
                       {reviewEntries.map((entry) => (
                         <Tr key={entry.id}>
                           <Td className="font-bold text-slate-700">{localShiftDate(entry.clockIn, entry.date)}</Td>
-                          <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
-                          <Td className="text-slate-600 font-medium font-mono text-[10px]">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
+                          <Td className="text-slate-600 font-medium font-mono text-caption">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</Td>
+                          <Td className="text-slate-600 font-medium font-mono text-caption">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                           <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                           <Td align="right">
                             <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
@@ -448,11 +448,11 @@ export default function ReportsPage() {
                     <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col gap-2">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-slate-700 text-xs">{localShiftDate(entry.clockIn, entry.date)}</span>
-                        <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'} className="text-[9px]">
+                        <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'} className="text-caption">
                           {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div className="grid grid-cols-2 gap-2 text-caption">
                         <div>
                           <span className="text-slate-400 font-semibold block uppercase">Clock In</span>
                           <span className="font-mono text-slate-800 font-medium">{entry.clockIn ? formatTimeNY(entry.clockIn) : '—'}</span>
@@ -478,15 +478,15 @@ export default function ReportsPage() {
             <div className="space-y-3">
               <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Workspace Screenshots</h4>
               <div className="border border-slate-200 p-6 rounded-xl bg-slate-50/50 text-center space-y-2 font-sans">
-                <Monitor className="h-6 w-6 text-slate-300 mx-auto" />
+                <Monitor weight="duotone" className="h-6 w-6 text-slate-300 mx-auto" />
                 <div>
                   <h5 className="text-xs font-bold text-slate-700">Managed from Screen Tracking</h5>
-                  <p className="text-[10px] text-slate-400 leading-relaxed font-semibold mt-1">
+                  <p className="text-caption text-slate-400 leading-relaxed font-semibold mt-1">
                     Enable tracking, set the capture interval, and browse/export this employee&apos;s screenshots from the Screen Tracking page in the sidebar.
                   </p>
                   <a
                     href="/admin/tracking"
-                    className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-600 hover:text-orange-700 mt-2"
+                    className="inline-flex items-center gap-1 text-caption font-bold text-orange-600 hover:text-orange-700 mt-2"
                   >
                     Go to Screen Tracking →
                   </a>

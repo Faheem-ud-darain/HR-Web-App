@@ -32,11 +32,11 @@ export function TaskDetailModal({ task, busy, onStatus, onClose }: TaskDetailMod
 
         <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs">
           <div>
-            <p className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Due Date</p>
+            <p className="font-semibold text-slate-400 uppercase tracking-wider text-caption">Due Date</p>
             <p className="font-semibold text-slate-800 mt-0.5">{formatDateNY(task.dueDate)}</p>
           </div>
           <div>
-            <p className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Department</p>
+            <p className="font-semibold text-slate-400 uppercase tracking-wider text-caption">Department</p>
             <p className="font-semibold text-slate-800 mt-0.5">{task.team}</p>
           </div>
         </div>

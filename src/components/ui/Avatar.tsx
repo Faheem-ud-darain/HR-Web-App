@@ -51,7 +51,7 @@ export function Avatar({ src, name, size = 40, className = '' }: AvatarProps) {
           style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
         />
       ) : (
-        <span className="font-bold text-orange-600" style={{ fontSize: Math.max(10, size * 0.36) }}>{initials}</span>
+        <span className="font-bold text-orange-600" style={{ fontSize: Math.max(11, size * 0.36) }}>{initials}</span>
       )}
     </div>
   );

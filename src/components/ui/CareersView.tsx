@@ -4,20 +4,23 @@ import React, { useState } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CareerPosition, CareerApplication, useCareers, useWarehouses, useTeams, hrActions, getCareerApplicationsAdmin } from '@/lib/hrData';
-import { MapPin, Plus, Trash2, ArrowRight, Users, Loader2 } from 'lucide-react';
+import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { useQuery } from '@tanstack/react-query';
-import { DEPARTMENTS } from '@/components/ui/careers/careerOptions';
+import { CAREERS_HERO, DEPARTMENTS } from '@/components/ui/careers/careerOptions';
 import { ApplicationsModal } from '@/components/ui/careers/ApplicationsModal';
 import { AddJobModal } from '@/components/ui/careers/AddJobModal';
 import { ApplyModal } from '@/components/ui/careers/ApplyModal';
 import { CompanyIntro, LifeAtDelcargo, ReferralProgramNote } from '@/components/ui/careers/CareersSections';
+import { PublicJobList } from '@/components/ui/careers/PublicJobList';
 
 interface CareersViewProps {
   role: 'admin' | 'hr' | 'employee' | 'team_lead' | 'public';
+  /** Show the "Work with DelCargo" opening. False where the page has already shown it. */
+  hero?: boolean;
 }
 
-export function CareersView({ role }: CareersViewProps) {
+export function CareersView({ role, hero = true }: CareersViewProps) {
   const { data: allCareers, refetch: refetchCareers } = useCareers();
   const { data: allWarehouses } = useWarehouses();
   const { data: allTeams } = useTeams();
@@ -83,25 +86,38 @@ export function CareersView({ role }: CareersViewProps) {
     ? positions 
     : positions.filter(j => j.department.toLowerCase() === selectedCategory.toLowerCase());
 
+  const openApply = (job: CareerPosition) => { setSelectedJob(job); setApplySession(n => n + 1); setIsApplyOpen(true); };
+
+  // Outside candidates get the dark landing-page layout: who we are, the perks, then the open positions.
+  if (role === 'public') {
+    return (
+      <div className="space-y-20 sm:space-y-32 font-sans w-full min-w-0">
+        <CompanyIntro warehouseCount={warehouseCount} teamCount={teamCount} openPositions={positions.length} />
+        <LifeAtDelcargo />
+        <PublicJobList positions={positions} onApply={openApply} />
+        <ApplyModal key={applySession} isOpen={isApplyOpen} onClose={() => setIsApplyOpen(false)} job={selectedJob} canApply={canApply} onSubmitted={refetchApplications} />
+      </div>
+    );
+  }
+
   return (
     // min-w-0 is required here: this component is rendered as a flex item
     // inside both the dashboard's flex-col main content wrapper and (via
     // Card contexts elsewhere) similar flex layouts.
-    <div className="space-y-8 sm:space-y-16 max-w-6xl mx-auto font-sans w-full min-w-0 px-1 sm:px-0 overflow-x-hidden">
+    <div className="space-y-8 sm:space-y-16 mx-auto font-sans w-full min-w-0 px-1 sm:px-0 overflow-x-hidden">
       
-      {/* High-End Editorial Hero Section */}
-      <section className="text-center space-y-3 py-3 sm:py-8 px-2 sm:px-4 w-full min-w-0 overflow-hidden">
-        <h1
-          className="text-2xl sm:text-5xl font-light text-slate-900 tracking-tight uppercase break-words max-w-full leading-snug"
-          style={{ fontFamily: 'Georgia, serif', textWrap: 'wrap' }}
-        >
-          Work with DelCargo
-        </h1>
-        <div className="h-0.5 w-10 sm:w-12 bg-orange-600 mx-auto" />
-        <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-1">
-          We are building the future of supply-chain technology. Join our collaborative logistics and product teams in creating beautiful, operational-grade software.
-        </p>
-      </section>
+      {/* The opening words. The landing page shows them in its own hero instead (hero={false}). */}
+      {hero && (
+        <section className="text-center space-y-3 py-3 sm:py-8 px-2 sm:px-4 w-full min-w-0 overflow-hidden">
+          <h1 className="font-display text-2xl sm:text-5xl font-bold text-slate-900 tracking-tight uppercase break-words max-w-full leading-snug" style={{ textWrap: 'wrap' }}>
+            {CAREERS_HERO.title}
+          </h1>
+          <div className="h-0.5 w-10 sm:w-12 bg-orange-600 mx-auto" />
+          <p className="max-w-2xl mx-auto text-slate-500 text-xs sm:text-base font-light leading-relaxed break-words px-1">
+            {CAREERS_HERO.text}
+          </p>
+        </section>
+      )}
 
       {/* Categories Filter tab */}
       <div className="border-b border-slate-200 flex overflow-x-auto gap-2.5 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar pb-1.5 px-1 max-w-full">
@@ -126,7 +142,7 @@ export function CareersView({ role }: CareersViewProps) {
       {/* Grid listing */}
       <div className="space-y-6 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-base sm:text-lg font-light text-slate-900 uppercase tracking-widest" style={{ fontFamily: 'Georgia, serif' }}>
+          <h2 className="font-display text-lg sm:text-2xl font-bold text-slate-900 uppercase tracking-wide">
             Open Positions ({filteredJobs.length})
           </h2>
           {canEdit && (
@@ -163,7 +179,7 @@ export function CareersView({ role }: CareersViewProps) {
                   <div>
                     <h3 className="font-bold text-slate-900 text-base sm:text-lg tracking-tight leading-snug">{job.title}</h3>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-semibold mt-1.5">
-                      <span className="text-orange-700 font-bold uppercase tracking-wider text-[10px] bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{job.department}</span>
+                      <span className="text-orange-700 font-bold uppercase tracking-wider text-caption bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{job.department}</span>
                       <span className="flex items-center gap-1 text-slate-500"><MapPin className="h-3.5 w-3.5 text-slate-400" /> {job.location}</span>
                     </div>
                   </div>
@@ -182,7 +198,7 @@ export function CareersView({ role }: CareersViewProps) {
 
                 {job.requirements.length > 0 && (
                   <div className="space-y-2 pt-1">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Requirements</p>
+                    <p className="text-caption font-bold text-slate-400 uppercase tracking-widest">Requirements</p>
                     <ul className="space-y-1.5">
                       {job.requirements.map((req, idx: number) => (
                         <li key={idx} className="text-xs text-slate-600 font-medium flex items-start gap-2">
@@ -198,13 +214,13 @@ export function CareersView({ role }: CareersViewProps) {
               <div className="pt-4 border-t border-slate-100 mt-5 flex items-center justify-between">
                 {canApply ? (
                   <button
-                    onClick={() => { setSelectedJob(job); setApplySession(n => n + 1); setIsApplyOpen(true); }}
+                    onClick={() => openApply(job)}
                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-bold bg-orange-50 sm:bg-transparent text-orange-600 hover:text-orange-700 py-2.5 sm:py-0 px-4 sm:px-0 rounded-lg sm:rounded-none tracking-wider uppercase transition-colors"
                   >
                     Apply now <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 ) : (
-                  <span className="text-[10px] font-semibold text-slate-400 italic">
+                  <span className="text-caption font-semibold text-slate-400 italic">
                     External applicants only — see HR for internal transfers
                   </span>
                 )}
@@ -219,13 +235,6 @@ export function CareersView({ role }: CareersViewProps) {
           )}
         </div>
       </div>
-
-      {role === 'public' && (
-        <>
-          <CompanyIntro warehouseCount={warehouseCount} teamCount={teamCount} openPositions={positions.length} />
-          <LifeAtDelcargo />
-        </>
-      )}
 
       {role === 'employee' && <ReferralProgramNote />}
 

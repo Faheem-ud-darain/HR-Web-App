@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, useLeaves, isApprovedLeaveOnDate, getApprovedLeaveOnDate, LeaveApplication, formatMoney, localShiftDate, displayName, isWeekday } from '@/lib/hrData';
-import { UserX, Clock, CalendarX2, CheckCircle2, Trash2, Calendar, Filter, UserCheck, ShieldX, CalendarCheck2, ChevronRight } from 'lucide-react';
+import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -329,7 +329,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     row.isLeave ? (
       <span className="inline-flex items-center gap-1.5 flex-wrap">
         <Badge variant="info">
-          <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3 w-3" /> On Leave ({row.leaveType})</span>
+          <span className="inline-flex items-center gap-1"><CalendarCheck2 className="h-3.5 w-3.5" /> On Leave ({row.leaveType})</span>
         </Badge>
         {row.leaveType === 'Urgent' ? (
           <Badge variant="danger">2-day deduction</Badge>
@@ -451,7 +451,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
               {selectedDate && (
                 <button
                   onClick={() => setSelectedDate('')}
-                  className="text-[10px] font-bold text-rose-600 hover:underline ml-1"
+                  className="text-caption font-bold text-rose-600 hover:underline ml-1"
                 >
                   Clear
                 </button>
@@ -482,7 +482,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
           ) : role === 'employee' ? (
             cumulativeAttendanceRows.length === 0 ? (
               <div className="py-16 text-center space-y-2">
-                <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
+                <UserCheck weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
                 <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
                 <p className="text-xs text-slate-400">
                   {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
@@ -513,11 +513,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           <Td align="center"><AttendanceStatusBadges row={row} /></Td>
                           <Td align="center">
                             {row.isLeave ? (
-                              <span className="text-[11px] text-slate-400 font-semibold">Approved leave — no shift</span>
+                              <span className="text-caption text-slate-400 font-semibold">Approved leave — no shift</span>
                             ) : (
                               <button
                                 onClick={() => setSelectedAttendanceRow(row)}
-                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors inline-flex items-center gap-1"
                               >
                                 View Breakdown
                               </button>
@@ -538,11 +538,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         <AttendanceStatusBadges row={row} />
                       </div>
                       {row.isLeave ? (
-                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Approved leave — no shift</p>
+                        <p className="text-caption text-slate-400 font-semibold uppercase">Approved leave — no shift</p>
                       ) : (
                         <div className="flex items-center justify-between pt-1 text-xs">
                           <div>
-                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
+                            <p className="text-caption text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
                             <p className="font-bold text-slate-900">{formatDuration(row.totalMinutes)}</p>
                           </div>
                           <button
@@ -560,7 +560,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             )
           ) : employeeAttendanceSummaries.length === 0 ? (
             <div className="py-16 text-center space-y-2">
-              <UserCheck className="h-8 w-8 text-slate-300 mx-auto" />
+              <UserCheck weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
               <p className="text-sm font-bold text-slate-700">No shift attendance records found</p>
               <p className="text-xs text-slate-400">
                 {selectedDate ? `No attendance recorded for ${selectedDate}.` : 'No shifts have been clocked in yet.'}
@@ -592,7 +592,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         <Tr key={emp.employeeEmail}>
                           <Td>
                             <p className="font-bold text-slate-900">{emp.employeeName}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                            <p className="text-caption text-slate-400 font-mono">{emp.employeeEmail}</p>
                           </Td>
                           <Td align="center" className="font-semibold text-slate-700">{emp.days.length}</Td>
                           <Td align="center"><Badge variant="success">{presentDays}</Badge></Td>
@@ -602,9 +602,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           <Td align="center">
                             <button
                               onClick={() => setSelectedEmployeeAttendanceEmail(emp.employeeEmail)}
-                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
+                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors inline-flex items-center gap-1"
                             >
-                              View Details <ChevronRight className="h-3 w-3" />
+                              View Details <ChevronRight className="h-3.5 w-3.5" />
                             </button>
                           </Td>
                         </Tr>
@@ -630,11 +630,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-bold text-slate-900">{emp.employeeName}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                          <p className="text-caption text-slate-400 font-mono">{emp.employeeEmail}</p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                      <div className="flex items-center gap-2 flex-wrap text-caption">
                         <span className="text-slate-500">{emp.days.length} days logged</span>
                         <Badge variant="success">{presentDays} present</Badge>
                         {leaveDays > 0 && <Badge variant="info">{leaveDays} leave</Badge>}
@@ -672,7 +672,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 <div key={row.date} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <p className="text-xs font-mono font-bold text-slate-700">{row.date}</p>
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-caption text-slate-400">
                       {row.isLeave ? 'Approved leave — no shift' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''} • ${formatDuration(row.totalMinutes)}`}
                     </p>
                   </div>
@@ -681,7 +681,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     {!row.isLeave && (
                       <button
                         onClick={() => setSelectedAttendanceRow(row)}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] rounded-lg transition-colors"
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors"
                       >
                         Breakdown
                       </button>
@@ -751,13 +751,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
                 <div>
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Total Worked Time</p>
+                  <p className="text-caption font-bold uppercase text-slate-400">Total Worked Time</p>
                   <p className="text-sm font-bold text-slate-900">
                     {Math.floor(selectedAttendanceRow.totalMinutes / 60)}h {selectedAttendanceRow.totalMinutes % 60}m
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase text-slate-400">Shift Count</p>
+                  <p className="text-caption font-bold uppercase text-slate-400">Shift Count</p>
                   <p className="text-sm font-bold text-slate-900">{selectedAttendanceRow.shifts.length} shift(s)</p>
                 </div>
               </div>
@@ -774,11 +774,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs pt-1 font-mono text-slate-600">
                       <div>
-                        <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold">Clock In</span>
+                        <span className="text-caption text-slate-400 block font-sans uppercase font-bold">Clock In</span>
                         {s.clockIn ? formatTimeNY(s.clockIn) : '—'}
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block font-sans uppercase font-bold">Clock Out</span>
+                        <span className="text-caption text-slate-400 block font-sans uppercase font-bold">Clock Out</span>
                         {s.clockOut ? formatTimeNY(s.clockOut) : '—'}
                       </div>
                     </div>
@@ -818,7 +818,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             ) : role === 'employee' ? (
               filteredAbsences.length === 0 ? (
                 <div className="py-16 text-center space-y-2">
-                  <UserX className="h-8 w-8 text-slate-300 mx-auto" />
+                  <UserX weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
                   <p className="text-sm font-bold text-slate-700">No absence records found</p>
                   <p className="text-xs text-slate-400">
                     {selectedDate ? `No absence records for ${selectedDate}.` : 'No employees have been marked absent.'}
@@ -845,7 +845,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             <Td align="right" className="font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</Td>
                             <Td align="center">
                               {r.acknowledged
-                                ? <Badge variant="success"><span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Seen</span></Badge>
+                                ? <Badge variant="success"><span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Seen</span></Badge>
                                 : <Badge variant="warning">Pending</Badge>}
                             </Td>
                           </Tr>
@@ -874,7 +874,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
               )
             ) : employeeAbsenceSummaries.length === 0 ? (
               <div className="py-16 text-center space-y-2">
-                <UserX className="h-8 w-8 text-slate-300 mx-auto" />
+                <UserX weight="duotone" className="h-8 w-8 text-slate-300 mx-auto" />
                 <p className="text-sm font-bold text-slate-700">No absence records found</p>
                 <p className="text-xs text-slate-400">
                   {selectedDate ? `No absence records for ${selectedDate}.` : 'No employees have been marked absent.'}
@@ -902,7 +902,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           <Tr key={emp.employeeEmail}>
                             <Td>
                               <p className="font-bold text-slate-900">{emp.employeeName}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                              <p className="text-caption text-slate-400 font-mono">{emp.employeeEmail}</p>
                             </Td>
                             <Td align="center"><Badge variant="danger">{emp.records.length}</Badge></Td>
                             <Td align="right" className="font-bold text-rose-600">{formatMoney(deducted, 'Pakistan')}</Td>
@@ -910,9 +910,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             <Td align="center">
                               <button
                                 onClick={() => setSelectedEmployeeAbsencesEmail(emp.employeeEmail)}
-                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition-colors inline-flex items-center gap-1"
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors inline-flex items-center gap-1"
                               >
-                                Manage <ChevronRight className="h-3 w-3" />
+                                Manage <ChevronRight className="h-3.5 w-3.5" />
                               </button>
                             </Td>
                           </Tr>
@@ -936,11 +936,11 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-bold text-slate-900">{emp.employeeName}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">{emp.employeeEmail}</p>
+                            <p className="text-caption text-slate-400 font-mono">{emp.employeeEmail}</p>
                           </div>
                           <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                        <div className="flex items-center gap-2 flex-wrap text-caption">
                           <Badge variant="danger">{emp.records.length} absences</Badge>
                           {pending > 0 && <Badge variant="warning">{pending} pending</Badge>}
                         </div>
@@ -1023,7 +1023,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 onChange={() => handleToggleAllIn(selectedEmployeeAbsences.records)}
                 className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
               />
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Select all</span>
+              <span className="text-caption font-bold text-slate-500 uppercase">Select all</span>
             </div>
 
             <div className="space-y-2">

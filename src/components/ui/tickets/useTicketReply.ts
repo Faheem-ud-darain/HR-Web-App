@@ -25,9 +25,7 @@ export function useTicketReply({ selectedTicket, role, currentEmail, userProfile
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const lastTypingTouchRef = useRef<number>(0);
 
-  const handleReplyFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  const handleReplyFilePick = (file: File | undefined) => {
     if (!file) return;
     setReplyFileError('');
     setReplyFile(file);
@@ -101,6 +99,6 @@ export function useTicketReply({ selectedTicket, role, currentEmail, userProfile
   return {
     replyMsg, replyFile, setReplyFile, replyFileError, sendingReply,
     replyFileInputRef, replyTextareaRef,
-    handleReplyFileChange, handleReplyMsgChange, sendReply, handleSendReply,
+    handleReplyFilePick, handleReplyMsgChange, sendReply, handleSendReply,
   };
 }

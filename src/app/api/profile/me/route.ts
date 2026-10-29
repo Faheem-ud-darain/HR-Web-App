@@ -8,6 +8,7 @@ import {
   adminFindByField,
   adminUpsertByField,
   adminUploadProfilePicture,
+  adminGetProfileDocs,
 } from '@/lib/pbAdmin';
 
 export const runtime = 'edge';
@@ -54,12 +55,8 @@ async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
   const existing = await getExtras(profileId);
   await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
 }
-async function getDocs(profileId: string): Promise<PbRow> {
-  const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
-  return row?.data || {};
-}
 async function mergeDocs(profileId: string, patch: PbRow): Promise<void> {
-  const existing = await getDocs(profileId);
+  const existing = await adminGetProfileDocs(profileId);
   await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
 }
 
@@ -73,7 +70,7 @@ export async function GET(request: Request) {
 
     const [extras, docs] = await Promise.all([
       getExtras(profile.id),
-      getDocs(profile.id),
+      adminGetProfileDocs(profile.id),
     ]);
 
     return NextResponse.json({

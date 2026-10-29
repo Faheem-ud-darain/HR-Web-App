@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Team, Profile, Message, useMessages, useTeamDocuments, displayName, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { ImageLightbox } from './ImageLightbox';
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import { normEmail } from '@/components/ui/chat/chatHelpers';
@@ -16,7 +16,7 @@ import { ChannelMembersModal, MessageViewersModal } from '@/components/ui/chat/C
 import { useChatFilters } from '@/components/ui/chat/useChatFilters';
 import { useChatReceipts } from '@/components/ui/chat/useChatReceipts';
 import { useChatTyping } from '@/components/ui/chat/useChatTyping';
-import { useChatComposer } from '@/components/ui/chat/useChatComposer';
+import { useStickToBottom } from '@/lib/useStickToBottom';
 
 interface TeamChatViewProps {
   teams: Team[];
@@ -107,11 +107,6 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
   const filters = useChatFilters(messages, emailToProfile);
   const receipts = useChatReceipts({ activeTeamId, teamName: activeTeam?.name, messages, currentUserEmail, allProfiles });
   const typing = useChatTyping({ activeTeamId, currentUserEmail, messageCount: messages.length });
-  const composer = useChatComposer({
-    activeTeamId, activeTeam, currentUserEmail, currentUserRole, emailToProfile, teamDocuments,
-    // The dropdown leaves yourself out: mentioning yourself is not useful.
-    mentionDropdownCandidates: mentionCandidates.filter(p => p.email.toLowerCase() !== currentUserEmail.toLowerCase()),
-  });
 
   const [activePanel, setActivePanel] = useState<ChatPanel>('chat');
   const [showAnnouncements, setShowAnnouncements] = useState(false);
@@ -137,19 +132,16 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
     setResetForTeamId(activeTeamId);
     setMessageLimit(50);
     filters.reset();
-    composer.resetForChannel();
     typing.resetTyping();
   }
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages.length, activeTeamId, typing.typingNames.length]);
+  useStickToBottom(scrollRef, `${messages.length}:${typing.typingNames.length}`, activeTeamId);
 
   if (teams.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
-        <ShieldCheck className="h-10 w-10 opacity-30" />
+      <div className="flex flex-col items-center justify-center py-24 text-slate-500 gap-3">
+        <ShieldCheck weight="duotone" className="h-10 w-10 opacity-30" />
         <p className="font-semibold text-sm">{oversight ? 'No teams exist yet.' : "You're not assigned to a team yet."}</p>
       </div>
     );
@@ -219,7 +211,18 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               isHrAdminLine={isHrAdminLine}
               typingNames={typing.typingNames}
             />
-            <ChatComposer {...composer} oversight={oversight} activeTeam={activeTeam} currentUserRole={currentUserRole} teamDocuments={teamDocuments} />
+            <ChatComposer
+              key={activeTeamId}
+              oversight={oversight}
+              activeTeamId={activeTeamId}
+              activeTeam={activeTeam}
+              currentUserEmail={currentUserEmail}
+              currentUserRole={currentUserRole}
+              emailToProfile={emailToProfile}
+              // The dropdown leaves yourself out: mentioning yourself is not useful.
+              mentionDropdownCandidates={mentionCandidates.filter(p => p.email.toLowerCase() !== currentUserEmail.toLowerCase())}
+              teamDocuments={teamDocuments}
+            />
           </>
         )}
       </div>

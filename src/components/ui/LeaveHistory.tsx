@@ -110,15 +110,15 @@ export function LeaveHistory({ filters, loading, nameFor, actions }: LeaveHistor
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Type</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Type</p>
                   <LeaveTypeBadge type={l.type} className="inline-block" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Duration</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Duration</p>
                   <p className="text-xs font-semibold text-slate-700">{l.duration}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
                   <p className="text-xs font-medium text-slate-600 line-clamp-2">{l.reason}</p>
                 </div>
               </div>
@@ -149,7 +149,7 @@ export function LeaveStatTiles({ tiles }: { tiles: { label: string; value: numbe
         <Card key={t.label} className={`border ${TILE_TONE[t.tone].box}`}>
           <CardContent className="p-3 text-center">
             <p className={`text-2xl font-bold ${TILE_TONE[t.tone].text}`}>{t.value}</p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{t.label}</p>
+            <p className="text-caption font-bold text-slate-500 uppercase tracking-wider mt-0.5">{t.label}</p>
           </CardContent>
         </Card>
       ))}

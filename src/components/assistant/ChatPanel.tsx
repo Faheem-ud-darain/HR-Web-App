@@ -2,12 +2,13 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ThinkingOrb } from 'thinking-orbs';
-import { ArrowUp, Check, Copy, ExternalLink, History, Maximize2, Minimize2, MessageCircle, Plus, SquarePen, Trash2, X } from 'lucide-react';
+import { AssistantOrb } from './AssistantOrb';
+import { ArrowUpIcon as ArrowUp, CaretLeftIcon as ChevronLeft, CheckIcon as Check, CopyIcon as Copy, ArrowSquareOutIcon as ExternalLink, ClockCounterClockwiseIcon as History, ArrowsOutIcon as Maximize2, ArrowsInIcon as Minimize2, ChatCircleIcon as MessageCircle, PlusIcon as Plus, NotePencilIcon as SquarePen, TrashIcon as Trash2, XIcon as X } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { Markdown } from './Markdown';
 import { personaFor } from '@/lib/assistant/persona';
-import { clearAssistantChat, deleteSavedChat, listSavedChats, openSavedChat, type SavedChatRow, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
+import { clearAssistantChat, deleteSavedChat, listSavedChats, openSavedChat, type SavedChatRow, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
 
 function useReducedMotion(): boolean {
   return useSyncExternalStore(
@@ -47,16 +48,16 @@ function CopyButton({ text }: { text: string }) {
         try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
       }}
       aria-label="Copy this answer"
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-caption font-medium text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
     >
-      {done ? <Check className="h-3 w-3" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
+      {done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
       {done ? 'Copied' : 'Copy'}
     </button>
   );
 }
 
 /** The signed-in user's own saved chats: reopen one to carry on, or delete it. */
-function HistoryList({ onPicked, activeId, refreshKey }: { onPicked?: () => void; activeId?: string; refreshKey?: string }) {
+function HistoryList({ onPicked, onBack, activeId, refreshKey }: { onPicked?: () => void; onBack?: () => void; activeId?: string; refreshKey?: string }) {
   const [rows, setRows] = useState<SavedChatRow[] | null>(null);
   const [available, setAvailable] = useState(true);
   useEffect(() => {
@@ -70,16 +71,21 @@ function HistoryList({ onPicked, activeId, refreshKey }: { onPicked?: () => void
   };
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-      <p className="px-1 pb-2 text-[11px] text-slate-500">Your past chats. Only you can see these, and they are removed after 30 days. Bank numbers are saved masked.</p>
+      {onBack && (
+        <button type="button" onClick={onBack} className="mb-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Back to chat
+        </button>
+      )}
+      <p className="px-1 pb-2 text-caption text-slate-500">Your past chats. Only you can see these, and they are removed after 30 days. Bank numbers are saved masked.</p>
       {rows === null && <p className="px-1 text-sm text-slate-500" role="status">Loading…</p>}
       {rows !== null && !available && <p className="px-1 text-sm text-slate-600">Saved chats are not switched on yet.</p>}
       {rows !== null && available && rows.length === 0 && <p className="px-1 text-sm text-slate-600">No saved chats yet. Your next conversation will appear here.</p>}
       <ul className="space-y-1">
         {(rows ?? []).map(r => (
-          <li key={r.id} className={`group flex items-center gap-1 rounded-lg hover:bg-slate-100 ${r.id === activeId ? 'bg-slate-100' : ''}`}>
-            <button type="button" onClick={async () => { if (await openSavedChat(r.id)) onPicked?.(); }} className="min-w-0 flex-1 rounded-lg px-2 py-2 text-left">
-              <span className="block truncate text-sm font-medium text-slate-800">{r.title}</span>
-              <span className="block text-[11px] text-slate-400">{when(r.updated)}</span>
+          <li key={r.id} className={`group flex items-center gap-1 rounded-lg ${r.id === activeId ? 'bg-orange-50' : 'hover:bg-slate-100'}`}>
+            <button type="button" aria-current={r.id === activeId ? 'true' : undefined} onClick={async () => { if (await openSavedChat(r.id)) onPicked?.(); }} className="min-w-0 flex-1 rounded-lg px-2 py-2 text-left">
+              <span className={`block truncate text-sm ${r.id === activeId ? 'font-semibold text-orange-700' : 'font-medium text-slate-800'}`}>{r.title}</span>
+              <span className="block text-caption text-slate-400">{when(r.updated)}</span>
             </button>
             <button
               type="button"
@@ -131,11 +137,11 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white">
       <div className="flex items-center gap-2.5 border-b border-slate-200 px-4 py-3">
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center ${variant === 'window' ? 'del-header-orb' : ''}`} aria-hidden="true">
-          <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={32} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
+          <AssistantOrb size={32} />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold leading-tight text-slate-900">Del</h2>
-          <p className="truncate text-[11px] text-slate-500">{persona.tagline}</p>
+          <p className="truncate text-caption text-slate-500">{persona.tagline}</p>
         </div>
         {(variant === 'page' || messages.length > 0) && (
           // Full page: a plus on phones only (from tablet up the left column has its own "New chat").
@@ -143,7 +149,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
             {variant === 'page' ? <Plus className="h-4 w-4" aria-hidden="true" /> : <SquarePen className="h-4 w-4" aria-hidden="true" />}
           </button>
         )}
-        <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${variant === 'page' ? 'md:hidden' : ''} ${showHistory ? 'bg-slate-100 text-slate-800' : 'text-slate-500'}`}>
+        <button type="button" onClick={() => setShowHistory(v => !v)} aria-label="Past chats" aria-pressed={showHistory} title="Past chats" className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${variant === 'page' ? 'md:hidden' : ''} ${showHistory ? 'bg-orange-100 text-orange-700' : 'text-slate-500'}`}>
           <History className="h-4 w-4" aria-hidden="true" />
         </button>
         {variant === 'window' && onExpand && (
@@ -163,7 +169,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
         )}
       </div>
 
-      {showHistory && <HistoryList onPicked={() => setShowHistory(false)} />}
+      {showHistory && <HistoryList activeId={chatId} onBack={() => setShowHistory(false)} onPicked={() => setShowHistory(false)} />}
       <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ${showHistory ? 'hidden' : ''}`} aria-live="polite">
         {messages.length === 0 && (
           <div>
@@ -194,7 +200,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
                         disabled={loading && a.type === 'ask_followup'}
                         className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:border-orange-300 hover:bg-orange-100 disabled:opacity-50"
                       >
-                        {a.type === 'open_page' ? <ExternalLink className="h-3 w-3" aria-hidden="true" /> : <MessageCircle className="h-3 w-3" aria-hidden="true" />}
+                        {a.type === 'open_page' ? <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /> : <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />}
                         {a.label}
                       </button>
                     ))}
@@ -202,7 +208,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
                 )}
                 {!m.error && (
                   <div className="mt-1.5 flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-slate-400">{m.toolsUsed && m.toolsUsed.length > 0 ? `Checked: ${[...new Set(m.toolsUsed.map(t => TOOL_LABEL[t] ?? t))].join(', ')}` : ''}</p>
+                    <p className="text-caption text-slate-400">{m.toolsUsed && m.toolsUsed.length > 0 ? `Checked: ${[...new Set(m.toolsUsed.map(t => TOOL_LABEL[t] ?? t))].join(', ')}` : ''}</p>
                     <CopyButton text={m.content} />
                   </div>
                 )}
@@ -239,7 +245,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
             <ArrowUp className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <p className="mt-1.5 text-center text-[10px] text-slate-400">Del is an AI assistant and may make errors. Please verify the details before acting.</p>
+        <p className="mt-1.5 text-center text-caption text-slate-400">Del is an AI assistant and may make errors. Please verify the details before acting.</p>
       </form>
     </div>
   );

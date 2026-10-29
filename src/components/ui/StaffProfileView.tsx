@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { InfoRow, ProfileCard } from '@/components/ui/profile/ProfileCard';
 import { ChangePasswordModal } from '@/components/ui/profile/ChangePasswordModal';
 import { useProfilePhoto } from '@/components/ui/profile/useProfilePhoto';
-import { User, Mail, Briefcase, Calendar, ShieldCheck, KeyRound, Camera } from 'lucide-react';
+import { UserIcon as User, EnvelopeIcon as Mail, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, ShieldCheckIcon as ShieldCheck, KeyIcon as KeyRound, CameraIcon as Camera } from '@/components/ui/icons';
 import { useSessionEmail } from '@/lib/useSession';
 
 type StaffProfileViewProps = {
@@ -58,7 +58,7 @@ export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, def
 
   return (
     // Two columns from lg up; phone-sized viewports (including the native apps) never reach lg, so they stay single-column.
-    <div className="space-y-6 md:space-y-8 max-w-5xl font-sans">
+    <div className="space-y-6 md:space-y-8 font-sans">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-lg md:text-2xl font-bold text-slate-900">{title}</h1>
@@ -85,7 +85,7 @@ export function StaffProfileView({ logTag, title, subtitle, defaultJobTitle, def
                 aria-label="Change profile picture"
                 className="absolute bottom-0 right-0 h-5 w-5 md:h-7 md:w-7 rounded-full bg-orange-600 hover:bg-orange-700 text-white flex items-center justify-center shadow-md border-2 border-white transition-colors transition-transform active:scale-90"
               >
-                <Camera className="h-2.5 w-2.5 md:h-3.5 md:w-3.5" />
+                <Camera className="h-3.5 w-3.5 md:h-3.5 md:w-3.5" />
               </button>
               <input ref={photoInputRef} type="file" accept="image/*" onChange={photo.handleInputChange} className="hidden" />
             </div>

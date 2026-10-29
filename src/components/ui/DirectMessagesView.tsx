@@ -38,7 +38,7 @@ export function DirectMessagesView({ allProfiles, currentUserEmail, currentUserR
 
   if (teams.length === 0 && !searchQuery.trim()) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-400">
+      <div className="flex flex-col items-center justify-center h-full text-slate-500">
         <p>No employees found to message.</p>
       </div>
     );
@@ -67,7 +67,7 @@ export function DirectMessagesView({ allProfiles, currentUserEmail, currentUserR
           mobileSelectorStyle="dropdown"
         />
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-400">
+        <div className="flex-1 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500">
           No employees match your search.
         </div>
       )}

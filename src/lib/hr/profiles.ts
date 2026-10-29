@@ -14,7 +14,7 @@ import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import { pbFilter } from '../pbFilter';
 import {
-  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys,
+  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys, pbGetKV,
   looksLikeRealId,
 } from './shared';
 import {
@@ -22,6 +22,7 @@ import {
   getCareerApplicationsForEmailAdmin, deleteCareerApplicationsForEmailAdmin,
 } from '../hrData';
 import { mapProfileRecord } from '../core/profiles';
+import { hasDocs, legacyDocsKey, parseLegacyDocs } from '../core/profileDocs';
 import type { PbRow } from '@/lib/pbTypes';
 
 export function isTechnicalSupportMember(teams?: string[] | null): boolean {
@@ -93,7 +94,10 @@ const PROFILE_DOC_KEYS: (keyof Profile)[] = ['cvFileName', 'cvFileData', 'identi
 export async function getProfileDocuments(profileId: string): Promise<Partial<Profile>> {
   if (!profileId) return {};
   const row = await pbFindByField(PROFILE_DOCS_COLLECTION, 'profile_id', profileId);
-  return (row?.data as Partial<Profile>) || {};
+  const docs = (row?.data as Partial<Profile>) || {};
+  if (hasDocs(docs)) return docs;
+  // Documents uploaded before the move to their own collection are still in the old key-value row (see core/profileDocs).
+  return parseLegacyDocs(await pbGetKV(legacyDocsKey(profileId))) as Partial<Profile>;
 }
 
 export async function saveProfileDocuments(profileId: string, docs: Partial<Profile>): Promise<void> {

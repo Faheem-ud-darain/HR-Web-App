@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { StatCard } from '@/components/ui/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { Clock } from 'lucide-react';
+import { ClockIcon as Clock } from '@/components/ui/icons';
 import { Profile, TimesheetEntry, displayName, localShiftDate } from '@/lib/hrData';
 import { Sparkline } from '@/components/ui/Sparkline';
 import { APP_TIMEZONE } from '@/lib/timezone';
@@ -125,35 +125,21 @@ export function AvgHoursWorkedCard({ employees, timesheets, viewerRole }: AvgHou
 
   return (
     <>
-      <Card
+      <StatCard
+        label="Avg Hours Worked"
+        value={completedLast7.length === 0 ? '—' : formatHoursShort(overallAvgMinutes)}
+        size="xl"
+        chip={{ icon: Clock, tone: 'sky' }}
         onClick={() => setIsOpen(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(true); } }}
-        className="cursor-pointer"
+        sub="Avg shift length per day, last 7 days"
       >
-        <CardContent className="pt-4 md:pt-5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[10px] md:text-xs font-semibold text-slate-500">Avg Hours Worked</p>
-              <p className="text-2xl md:text-3xl font-bold text-slate-900 mt-1">
-                {completedLast7.length === 0 ? '—' : formatHoursShort(overallAvgMinutes)}
-              </p>
-            </div>
-            <div className="h-10 w-10 md:h-11 md:w-11 rounded-xl bg-sky-50 flex items-center justify-center text-sky-600 shrink-0">
-              <Clock className="h-4 w-4 md:h-5 md:w-5" />
-            </div>
-          </div>
-
-          <Sparkline
+        <Sparkline
             values={dailyAvgMinutes}
             label={i => dayInfos[i].label}
             detail={i => dailyShiftCounts[i] === 0 ? 'No completed shifts' : `${formatHoursShort(dailyAvgMinutes[i])} avg · ${dailyShiftCounts[i]} shift${dailyShiftCounts[i] === 1 ? '' : 's'}`}
             colorClass="text-sky-500"
           />
-          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Avg shift length per day, last 7 days</p>
-        </CardContent>
-      </Card>
+      </StatCard>
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Hours Worked (Last 7 Days)">
         {perEmployee.length === 0 ? (
@@ -167,7 +153,7 @@ export function AvgHoursWorkedCard({ employees, timesheets, viewerRole }: AvgHou
                   <p className="text-sm font-bold text-slate-900 truncate">
                     {profile ? displayName(profile, viewerRole) : email}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">
+                  <p className="text-caption text-slate-400 truncate">
                     {shifts} shift{shifts === 1 ? '' : 's'} &middot; avg {formatHoursShort(avgMinutes)}/shift
                   </p>
                   <div className="hbar-track mt-1.5">
@@ -182,7 +168,7 @@ export function AvgHoursWorkedCard({ employees, timesheets, viewerRole }: AvgHou
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs font-bold text-sky-700">{formatHoursShort(minutes)}</p>
-                  <p className="text-[9px] text-slate-400 font-semibold">total</p>
+                  <p className="text-caption text-slate-400 font-semibold">total</p>
                 </div>
               </div>
             ))}

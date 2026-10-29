@@ -1,5 +1,6 @@
 import React from 'react';
-import { Gift } from 'lucide-react';
+import { GiftIcon as Gift } from '@/components/ui/icons';
+import { SalaryGrid, LeaveCalendar, LearningVisual, FamilyOrbit } from '@/components/ui/careers/PerkVisuals';
 
 const PERKS = [
   { title: 'Good Salary', text: 'We offer competitive salaries calibrated for regional standards, with guaranteed annual increments.' },
@@ -8,9 +9,9 @@ const PERKS = [
   { title: 'Parental Leaves', text: 'Gender-balanced opportunities including fully paid Parental Leaves.' },
 ];
 
-const serif = { fontFamily: 'Georgia, serif' };
+const EYEBROW = 'text-caption font-bold uppercase tracking-widest text-brand';
 
-// "Who We Are": company blurb, three live counts and a photo. Shown to outside candidates only.
+// "Who We Are": company blurb, three live counts and a photo. Shown to outside candidates, on the dark landing page.
 export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { warehouseCount: number; teamCount: number; openPositions: number }) {
   const stats = [
     { value: warehouseCount, label: 'Active Warehouses' },
@@ -18,67 +19,74 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
     { value: openPositions, label: 'Open Positions' },
   ];
   return (
-    <section className="bg-white border border-slate-200 rounded-xl p-5 sm:p-12 mb-8 shadow-sm overflow-hidden font-sans">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
-        <div className="lg:col-span-7 space-y-5 sm:space-y-6">
-          <div className="space-y-2">
-            <span className="inline-block text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 border border-orange-100 px-3 py-1 rounded-full">
-              Global Freight & Software
-            </span>
-            <h3 className="text-xl sm:text-2xl font-light text-slate-900 uppercase tracking-wider mt-2" style={serif}>Who We Are</h3>
-          </div>
-
-          <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-            DelCargo is a leading-edge global logistics and software engineering provider. We combine digital shipping architectures with physical distribution hubs to enable intelligent supply chain management. By fusing freight yards with automated tracking platforms, we help scale global commerce.
-          </p>
-          <p className="text-xs text-slate-600 leading-relaxed font-medium">
-            We maintain strategic warehousing facilities in major transit centers across North America and remote design cells in South Asia, operating with around-the-clock synchrony to keep supply lines operating optimally.
-          </p>
-
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 border-t border-slate-100">
-            {stats.map(s => (
-              <div key={s.label} className="text-center sm:text-left">
-                <p className="text-base sm:text-lg font-bold text-slate-900">{s.value}</p>
-                <p className="text-[8px] sm:text-[9px] text-slate-400 font-bold uppercase tracking-wider">{s.label}</p>
-              </div>
-            ))}
-          </div>
+    <section id="who-we-are" className="scroll-mt-24 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
+      <div className="lg:col-span-6 space-y-6">
+        <div className="space-y-3">
+          <span className={EYEBROW}>Global Freight & Software</span>
+          <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-ink leading-[0.95]">Who We Are</h2>
         </div>
+        <p className="text-sm sm:text-base text-ink/80 leading-relaxed">
+          DelCargo is a leading-edge global logistics and software engineering provider. We combine digital shipping architectures with physical distribution hubs to enable intelligent supply chain management. By fusing freight yards with automated tracking platforms, we help scale global commerce.
+        </p>
+        <p className="text-sm sm:text-base text-ink/60 leading-relaxed">
+          We maintain strategic warehousing facilities in major transit centers across North America and remote design cells in South Asia, operating with around-the-clock synchrony to keep supply lines operating optimally.
+        </p>
+        <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-6 border-t border-ink/10">
+          {stats.map(s => (
+            <div key={s.label}>
+              <p className="font-display text-4xl sm:text-6xl font-black text-brand leading-none">{s.value}</p>
+              <p className="text-caption text-ink/60 font-bold uppercase tracking-wider mt-2">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        <div className="lg:col-span-5 relative group overflow-hidden rounded-xl border border-slate-200 shadow">
-          <img
-            src="/delcargo_warehouse_hightech.webp"
-            alt="High Tech Warehouse"
-            width={900}
-            height={900}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-48 sm:h-64 object-cover object-center group-hover:scale-103 transition-transform duration-500"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex flex-col justify-end p-4">
-            <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Operations Hub</p>
-            <p className="text-white text-xs font-bold mt-0.5">Automated Warehouse JFK Center</p>
-          </div>
+      <div className="lg:col-span-6 relative overflow-hidden rounded-3xl">
+        <img
+          src="/delcargo_warehouse_hightech.webp"
+          alt="High Tech Warehouse"
+          width={900}
+          height={900}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-72 sm:h-[28rem] object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-5 sm:p-7">
+          <p className={EYEBROW}>Operations Hub</p>
+          <p className="text-white text-sm font-bold mt-0.5">Automated Warehouse JFK Center</p>
         </div>
       </div>
     </section>
   );
 }
 
+// The perks as a bento: one wide card, one tall card down the right, two equal cards under the wide one. Each card is a
+// picture and the perk's words. (PERKS is in order: salary, leave, learning, parental.)
+const PERK_VISUALS = [SalaryGrid, LeaveCalendar, LearningVisual, FamilyOrbit];
+// Where each card sits on the large-screen grid: wide (two columns), tall (right, two rows), then the equal pair.
+const PERK_PLACE = ['lg:col-span-2', 'lg:col-start-1 lg:row-start-2', 'lg:col-start-3 lg:row-span-2 lg:row-start-1', 'lg:col-start-2 lg:row-start-2'];
+const PERK_HEIGHT = ['min-h-72', 'min-h-72', 'min-h-72 lg:min-h-0', 'min-h-72'];
+
 export function LifeAtDelcargo() {
   return (
-    <section className="bg-slate-50/50 py-8 sm:py-12 px-5 sm:px-12 border border-slate-200 rounded-xl space-y-6 sm:space-y-8">
-      <div className="text-center space-y-1.5">
-        <h3 className="text-lg sm:text-xl font-light text-slate-900 uppercase tracking-widest" style={serif}>Life at DelCargo</h3>
-        <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Perks & Compensation</p>
+    <section id="life-at-delcargo" className="scroll-mt-24 space-y-10 sm:space-y-14">
+      <div className="space-y-3">
+        <p className={EYEBROW}>Perks & Compensation</p>
+        <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-ink leading-[0.95]">Life at DelCargo</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 text-left">
-        {PERKS.map(p => (
-          <div key={p.title} className="space-y-1.5 bg-white sm:bg-transparent p-4 sm:p-0 rounded-xl border sm:border-0 border-slate-100">
-            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">{p.title}</h4>
-            <p className="text-xs text-slate-500 leading-relaxed font-light">{p.text}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
+        {PERKS.map((p, i) => {
+          const Visual = PERK_VISUALS[i];
+          return (
+            <article key={p.title} className={`relative flex flex-col overflow-hidden rounded-3xl bg-ink/5 ${PERK_PLACE[i]}`}>
+              <div className={`relative flex-1 ${PERK_HEIGHT[i]}`}><Visual /></div>
+              <div className="relative space-y-2 p-6 sm:p-8 pt-0">
+                <h3 className="font-display font-black text-xl sm:text-2xl text-ink">{p.title}</h3>
+                <p className="text-sm text-ink/60 leading-relaxed max-w-md">{p.text}</p>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

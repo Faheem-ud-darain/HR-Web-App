@@ -27,12 +27,12 @@ export function PendingIncrement({ profile, onChanged }: { profile: Profile; onC
   const years = getMissedIncrementEvents(profile);
   return (
     <div className="mt-1.5">
-      <p className="text-[10px] text-amber-600 font-bold">+{formatMoney(pending, profile.region)} pending ({years} yr{years > 1 ? 's' : ''})</p>
+      <p className="text-caption text-amber-600 font-bold">+{formatMoney(pending, profile.region)} pending ({years} yr{years > 1 ? 's' : ''})</p>
       <button
         type="button"
         onClick={() => setConfirming(true)}
         disabled={applying}
-        className="mt-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 disabled:opacity-50 px-2 py-1 rounded-md active:scale-97 transition-colors transition-transform"
+        className="mt-1 text-caption font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 disabled:opacity-50 px-2 py-1 rounded-md active:scale-97 transition-colors transition-transform"
       >
         {applying ? 'Applying…' : 'Apply Increment Now'}
       </button>

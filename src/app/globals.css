@@ -16,6 +16,10 @@
 :root {
   /* Blueprint Canvas Theme: Strict light mode colors */
   --background: #f8fafc; /* Slate 50 background */
+  /* The app frame (sidebar and top bar) and the page tucked into it: two clearly different tones, so the bars need no outline. */
+  --chrome: #ffffff;
+  --app-bg: #f1f5f9; /* Slate 100: cards stay white on it */
+  --card-bg: #ffffff;
   --foreground: #0f172a; /* Slate 900 text */
   --surface: #ffffff;    /* Card and sidebar background */
   --border: #e2e8f0;     /* Slate 200 border */
@@ -46,6 +50,11 @@
 }
 
 @theme inline {
+  --color-brand: var(--primary); /* the orange as a colour that never changes with the theme: bg-brand, text-brand/70 ... */
+  --color-ink: var(--ln-ink);
+  --color-brandfg: var(--ln-on-brand);
+  --color-brandfg-inv: var(--ln-on-brand-inv);
+  --color-paper: var(--ln-paper);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
@@ -56,7 +65,7 @@
   --color-emerald: var(--emerald);
   --color-amber: var(--amber);
   --color-rose: var(--rose);
-  /* Space Grotesk (display) + Plus Jakarta Sans (body) — see layout.tsx.
+  /* Xmind (display) + Questrial (body) — see layout.tsx.
      `font-display` is an opt-in Tailwind utility for headings/stat numbers;
      everything else defaults to `font-sans` (the body face). No third font
      loaded for mono — a system monospace stack covers the handful of
@@ -77,6 +86,55 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Pinch-zoom stays allowed (accessibility), but a double tap no longer zooms the page in and leaves it zoomed. */
+  touch-action: manipulation;
+}
+
+/* Phones: scale the whole interface (text, spacing, icons: everything sized in rem) down one notch. Questrial is a wider,
+   rounder face than the one it replaced and Phosphor icons fill their box more than the old ones did, so at the same
+   nominal size the app read bigger on a small screen. This is the one knob for it: 14px is 88% of the normal 16px. */
+@media (max-width: 767px) {
+  html {
+    font-size: 14px;
+  }
+  /* The two smallest steps are set in px: left in rem, the scale-down above would put the 12px label (text-xs) at
+     10.5px, smaller than the 11px caption, and turn the order upside down. Phone order: caption 11 < label 12 < body
+     13 < base 14 (the larger steps keep following the root size). */
+  :root {
+    --text-xs: 12px;
+    --text-xs--line-height: 16px;
+    --text-sm: 13px;
+    --text-sm--line-height: 18px;
+  }
+}
+
+/* Phone corner radii, following Apple's guidance (continuous, concentric corners; smaller on small things, larger on
+   containers, so a corner inside a corner always has the smaller radius). One scale for every rounded element:
+     6  tags and small chips         8  small controls and menu rows      12  buttons, inputs, list rows
+     16 cards and tiles              22 big panels, message bubbles, the page panel      28 large sheets
+   Full circles and pills (rounded-full) are untouched. Set in px so the phone scale-down above does not shrink them. */
+@media (max-width: 767px) {
+  :root {
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 22px;
+    --radius-3xl: 28px;
+  }
+  .rounded {
+    border-radius: 6px;
+  }
+}
+
+/* Apple's corners are "continuous" (a squircle, not a circle's arc). Browsers that support it draw them that way. */
+@supports (corner-shape: squircle) {
+  @media (max-width: 767px) {
+    [class*='rounded']:not([class*='rounded-full']):not([class*='rounded-none']) {
+      corner-shape: squircle;
+    }
+  }
 }
 
 body {
@@ -88,6 +146,31 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none; /* Native app feel, no pull-to-refresh bounce */
+}
+
+/* Your own message bubble: orange-700, so white text on it reads at 5.2:1 (on the brand orange-600 it was 3.6:1).
+   The dark theme already uses this shade for filled orange, so one value serves both. */
+@utility bg-bubble-own {
+  background-color: #c2410c;
+}
+
+/* The smallest text in the app: badges, timestamps, hints. One named step instead of 8px, 9px, 10px and 11px. */
+@utility text-caption {
+  font-size: 11px; /* in px, not rem, so the phone scale-down below never takes it under the 11px floor */
+  line-height: 16px;
+}
+
+
+@utility bg-chrome {
+  background-color: var(--chrome);
+}
+
+@utility bg-card {
+  background-color: var(--card-bg);
+}
+
+@utility bg-app {
+  background-color: var(--app-bg);
 }
 
 @layer utilities {
@@ -152,7 +235,7 @@ body {
    per-button (e.g. `min-h-[44px] md:min-h-0` on several form CTAs) — that's
    the correct, non-global way to do it. */
 
-/* Headings default to the display face (Space Grotesk) automatically —
+/* Headings default to the display face (Xmind) automatically —
    means every page's <h1>/<h2>/<h3> picks up the new pairing without a
    className change per instance. Anywhere that specifically wants the body
    face on a heading-level element can override with `font-sans`. */
@@ -633,15 +716,9 @@ input[type='radio']:focus-visible {
 /* ── Apple Human Interface Guidelines, for phones and tablets ──────────────────────────────────────────
    These apply on touch screens and on any window narrower than a laptop, so a tablet is treated like a
    phone. Desktop keeps its compact look.
-   1. Text: Apple's smallest recommended size is 11pt, and grey text must reach 4.5:1 contrast. The app uses
-      8–10px labels and light grey (slate-400) in hundreds of places, so they are raised here once instead
-      of editing every screen. */
+   1. Text: grey text must reach 4.5:1 contrast, and light grey (slate-400) is used in hundreds of places, so it is
+      darkened here once instead of editing every screen. (The smallest text size is the text-caption step.) */
 @media (pointer: coarse), (max-width: 1023px) {
-  .text-\[8px\],
-  .text-\[9px\],
-  .text-\[10px\] {
-    font-size: 11px;
-  }
   .text-slate-400:not(:hover),
   .placeholder\:text-slate-400::placeholder {
     color: #64748b; /* slate-500, 4.8:1 on white */
@@ -701,6 +778,9 @@ input[type='radio']:focus-visible {
   color-scheme: light;
 }
 :root[data-theme='dark'] {
+  --chrome: #000000;
+  --app-bg: #171717;
+  --card-bg: #050505; /* Near-black cards (a touch lighter than the AMOLED frame) on the charcoal page */
   color-scheme: dark;
   --background: #000000;
   --foreground: #f2f2f7;
@@ -1003,3 +1083,223 @@ input[type='radio']:focus-visible {
 @keyframes del-header-orb { from { opacity: 0; transform: scale(0.3); } to { opacity: 1; transform: none; } }
 .del-header-orb { animation: del-header-orb 0.3s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 @media (prefers-reduced-motion: reduce) { .del-header-orb { animation: none; } }
+
+/* ── Icon motion ─────────────────────────────────────────────────────────────────────────────────────────
+   Every icon inside a control (button, link, tab, menu row, in the top bars, the sidebars, the tab bar and every button)
+   moves with it, and each icon has its own motion: the bell rings, the gear turns, the paper plane flies off and back, the
+   eye blinks, an arrow nudges the way it points. Each icon carries its own name (data-icon, see components/ui/icons.tsx),
+   and these rules give it one of the moves below through three variables:
+     --icon-anim    a keyframe move that plays when the control is hovered (and when it becomes selected)
+     --icon-pose    a resting pose it springs to on hover and settles back from when the pointer leaves (the exit)
+     --icon-origin  the point it turns around
+   Any icon not listed gets the plain spring (a small grow and tilt). A press dips the icon; becoming the current page, the
+   chosen tab or a pressed/checked toggle plays the icon's move (or a pop). Transforms only; hover only on devices with a
+   pointer; switched off for reduced motion; icons that already animate themselves (spinners, pulsing dots) are left alone. */
+:is(a, button, summary, label, [role='button'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='option'], [role='radio']) svg[data-icon]:not([class*='animate-']) {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: var(--icon-origin, 50% 50%);
+}
+@media (hover: hover) {
+  :is(a, button, summary, label, [role='button'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='option'], [role='radio']):not(:disabled, [aria-disabled='true']):hover svg[data-icon]:not([class*='animate-']) {
+    transform: var(--icon-pose, scale(1.14) rotate(-6deg));
+    animation: var(--icon-anim, none) 0.7s ease-in-out;
+  }
+}
+:is(a, button, summary, label, [role='button'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='option'], [role='radio']):not(:disabled, [aria-disabled='true']):active svg[data-icon]:not([class*='animate-']) {
+  transform: scale(0.88);
+  transition-duration: 0.1s;
+}
+:is([aria-current='page'], [aria-selected='true'], [aria-pressed='true'], [aria-checked='true']) svg[data-icon]:not([class*='animate-']) {
+  animation: var(--icon-anim, icon-select) 0.7s ease-in-out;
+}
+
+/* The moves */
+@keyframes icon-select { 0% { transform: scale(0.7) rotate(-14deg); } 55% { transform: scale(1.2) rotate(7deg); } 100% { transform: none; } }
+@keyframes icon-ring { 0%, 100% { transform: none; } 12% { transform: rotate(22deg); } 28% { transform: rotate(-18deg); } 44% { transform: rotate(13deg); } 60% { transform: rotate(-8deg); } 76% { transform: rotate(4deg); } }
+@keyframes icon-spin { to { transform: rotate(360deg); } }
+@keyframes icon-spin-back { to { transform: rotate(-360deg); } }
+@keyframes icon-wobble { 0%, 100% { transform: none; } 25% { transform: rotate(-12deg) scale(1.1); } 50% { transform: rotate(10deg) scale(1.1); } 75% { transform: rotate(-5deg); } }
+@keyframes icon-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-2.5px) rotate(-6deg); } 40% { transform: translateX(2.5px) rotate(6deg); } 60% { transform: translateX(-2px) rotate(-4deg); } 80% { transform: translateX(1.5px); } }
+@keyframes icon-bounce { 0%, 100% { transform: none; } 30% { transform: translateY(-4px) scale(1.08); } 55% { transform: translateY(0) scale(0.96); } 75% { transform: translateY(-1.5px); } }
+@keyframes icon-fly { 0%, 100% { transform: none; } 40% { transform: translate(7px, -7px) scale(1.1); opacity: 0; } 41% { transform: translate(-7px, 7px); opacity: 0; } 70% { transform: translate(1px, -1px); opacity: 1; } }
+@keyframes icon-pulse { 0%, 100% { transform: none; } 40% { transform: scale(1.3); } 65% { transform: scale(0.92); } }
+@keyframes icon-flash { 0%, 100% { transform: none; } 25% { transform: scale(1.3) rotate(-14deg); } 50% { transform: scale(0.9) rotate(10deg); } 75% { transform: scale(1.15) rotate(-4deg); } }
+@keyframes icon-blink { 0%, 100% { transform: none; } 40%, 60% { transform: scaleY(0.12); } }
+@keyframes icon-write { 0%, 100% { transform: none; } 25% { transform: translate(2px, -2px) rotate(10deg); } 50% { transform: translate(-1.5px, 1.5px) rotate(-6deg); } 75% { transform: translate(1.5px, -1px) rotate(6deg); } }
+
+/* Who moves how */
+svg[data-icon='bell'], svg[data-icon='bell-ringing'], svg[data-icon='bell-slash'] { --icon-anim: icon-ring; --icon-pose: none; --icon-origin: 50% 8%; }
+svg[data-icon='gear'], svg[data-icon='arrows-clockwise'], svg[data-icon='arrow-clockwise'], svg[data-icon='sun'], svg[data-icon='crosshair'], svg[data-icon='clock'], svg[data-icon='timer'] { --icon-anim: icon-spin; --icon-pose: none; }
+svg[data-icon='arrow-counter-clockwise'], svg[data-icon='clock-counter-clockwise'] { --icon-anim: icon-spin-back; --icon-pose: none; }
+svg[data-icon='magnifying-glass'], svg[data-icon='magnifying-glass-plus'], svg[data-icon='magnifying-glass-minus'], svg[data-icon='question'], svg[data-icon='smiley'], svg[data-icon='envelope'], svg[data-icon='key'], svg[data-icon='wrench'], svg[data-icon='funnel'], svg[data-icon='moon'], svg[data-icon='headset'], svg[data-icon='device-mobile'], svg[data-icon='laptop'], svg[data-icon='globe'], svg[data-icon='phone'], svg[data-icon='sliders-horizontal'], svg[data-icon='at'], svg[data-icon='cursor-click'] { --icon-anim: icon-wobble; --icon-pose: none; }
+svg[data-icon='trash'], svg[data-icon='warning'], svg[data-icon='warning-circle'], svg[data-icon='warning-octagon'], svg[data-icon='lock'], svg[data-icon='megaphone'], svg[data-icon='shield-warning'], svg[data-icon='shield-slash'], svg[data-icon='wifi-slash'], svg[data-icon='push-pin-slash'] { --icon-anim: icon-shake; --icon-pose: none; }
+svg[data-icon='chat-text'], svg[data-icon='chat-circle'], svg[data-icon='users'], svg[data-icon='user'], svg[data-icon='user-check'], svg[data-icon='user-circle'], svg[data-icon='user-plus'], svg[data-icon='user-minus'], svg[data-icon='user-gear'], svg[data-icon='map-pin'], svg[data-icon='squares-four'], svg[data-icon='buildings'], svg[data-icon='bank'], svg[data-icon='briefcase'], svg[data-icon='tree-palm'], svg[data-icon='book-open'], svg[data-icon='broadcast'], svg[data-icon='table'], svg[data-icon='calendar-blank'], svg[data-icon='calendar-check'], svg[data-icon='calendar-dots'], svg[data-icon='calendar-x'], svg[data-icon='receipt'], svg[data-icon='wallet'], svg[data-icon='piggy-bank'], svg[data-icon='currency-dollar'], svg[data-icon='printer'], svg[data-icon='folder-open'], svg[data-icon='file'], svg[data-icon='file-text'], svg[data-icon='file-image'], svg[data-icon='file-video'], svg[data-icon='clipboard-text'], svg[data-icon='list-checks'], svg[data-icon='list-bullets'], svg[data-icon='list'], svg[data-icon='image'], svg[data-icon='monitor'], svg[data-icon='video-camera'], svg[data-icon='wifi-high'] { --icon-anim: icon-bounce; --icon-pose: none; }
+svg[data-icon='paper-plane-right'], svg[data-icon='arrow-bend-up-right'] { --icon-anim: icon-fly; --icon-pose: none; }
+svg[data-icon='star'], svg[data-icon='shield'], svg[data-icon='shield-check'], svg[data-icon='check'], svg[data-icon='check-circle'], svg[data-icon='check-square'], svg[data-icon='seal-check'], svg[data-icon='medal'], svg[data-icon='crown'], svg[data-icon='gift'], svg[data-icon='trend-up'], svg[data-icon='chart-bar'], svg[data-icon='pulse'], svg[data-icon='info'], svg[data-icon='flag'], svg[data-icon='apple-logo'] { --icon-anim: icon-pulse; --icon-pose: none; }
+svg[data-icon='lightning'], svg[data-icon='sparkle'], svg[data-icon='camera'] { --icon-anim: icon-flash; --icon-pose: none; }
+svg[data-icon='eye'], svg[data-icon='eye-slash'], svg[data-icon='image-broken'] { --icon-anim: icon-blink; --icon-pose: none; }
+svg[data-icon='pencil-simple'], svg[data-icon='pencil-simple-line'], svg[data-icon='note-pencil'] { --icon-anim: icon-write; --icon-pose: none; }
+/* Poses: they lean the way they point */
+svg[data-icon='caret-right'], svg[data-icon='sign-out'] { --icon-pose: translateX(3px); }
+svg[data-icon='arrow-right'] { --icon-pose: translateX(4px); }
+svg[data-icon='caret-left'] { --icon-pose: translateX(-3px); }
+svg[data-icon='arrow-left'] { --icon-pose: translateX(-4px); }
+svg[data-icon='caret-down'], svg[data-icon='download-simple'], svg[data-icon='arrow-down'] { --icon-pose: translateY(3px); }
+svg[data-icon='arrow-up'], svg[data-icon='upload-simple'] { --icon-pose: translateY(-3px); }
+svg[data-icon='arrow-square-out'] { --icon-pose: translate(2px, -2px); }
+svg[data-icon='plus'], svg[data-icon='plus-circle'], svg[data-icon='x'], svg[data-icon='x-circle'] { --icon-pose: rotate(90deg) scale(1.1); }
+svg[data-icon='copy'] { --icon-pose: translate(-1.5px, -1.5px) scale(1.08); }
+svg[data-icon='paperclip'] { --icon-pose: rotate(-20deg) scale(1.08); }
+svg[data-icon='push-pin'] { --icon-pose: rotate(25deg); }
+svg[data-icon='arrows-out'] { --icon-pose: scale(1.25); }
+svg[data-icon='arrows-in'] { --icon-pose: scale(0.8); }
+svg[data-icon='dots-six-vertical'] { --icon-pose: scaleY(1.2); }
+svg[data-icon='square'] { --icon-pose: scale(1.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  svg[data-icon] {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* ── Landing page ────────────────────────────────────────────────────────────────────────────────────────
+   A dark hero: centred words over a looping video, a strip of warehouse crops drifting past, the nav a pill, and the
+   ticker scrolling the departments hiring. Every moving piece stands still for reduced motion. */
+/* The landing page follows the app's theme through two colours: ink (text, lines) and paper (the page). Dark: white on
+   black. Light: black on the pale grey of the light hero video. Utilities: text-ink, bg-paper, border-ink/10 and so on. */
+.landing-root {
+  color-scheme: light;
+  --ln-ink: #000000;
+  --ln-paper: #ededed;
+  --ln-on-brand: #ffffff; /* what sits on the brand orange: white in light mode, black in dark (and its opposite for buttons) */
+  --ln-on-brand-inv: #000000;
+}
+:root[data-theme='dark'] .landing-root {
+  color-scheme: dark;
+  --ln-ink: #ffffff;
+  --ln-paper: #000000;
+  --ln-on-brand: #000000;
+  --ln-on-brand-inv: #ffffff;
+}
+/* A blur that grows down the hero and is back to nothing at its bottom edge (so the ticker below is never blurred): three
+   stacked layers, each fading in over the last, so what is in the video seems to sink into it. It sits over the video
+   and under the cards. */
+.landing-blur {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 60%;
+  pointer-events: none;
+}
+.landing-blur > i {
+  position: absolute;
+  inset: 0;
+}
+.landing-blur > i:nth-child(1) {
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 40%, transparent 60%);
+}
+.landing-blur > i:nth-child(2) {
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  mask-image: linear-gradient(to bottom, transparent 20%, #000 40%, #000 60%, transparent 80%);
+}
+.landing-blur > i:nth-child(3) {
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  mask-image: linear-gradient(to bottom, transparent 40%, #000 62%, #000 78%, transparent 100%);
+}
+@keyframes marquee-scroll {
+  to { transform: translateX(-50%); }
+}
+.landing-marquee-track {
+  animation: marquee-scroll 36s linear infinite;
+}
+.landing-marquee:hover .landing-marquee-track {
+  animation-play-state: paused;
+}
+/* The hero photo strip: edge to edge, five cards across at any screen size (so the cards grow with the screen), moving
+   steadily. The track holds the cards twice, so sliding it by half loops without a seam. */
+.landing-strip {
+  container-type: inline-size;
+  --strip-gap: clamp(0.75rem, 2cqw, 2.5rem);
+  --strip-card: calc((100cqw - 4 * var(--strip-gap)) / 5);
+}
+.landing-strip-track {
+  gap: var(--strip-gap);
+  padding-right: var(--strip-gap);
+  animation: strip-scroll 40s linear infinite;
+}
+.landing-strip-card {
+  width: var(--strip-card);
+}
+.landing-strip-card[data-low] {
+  margin-top: calc(var(--strip-card) * 0.18);
+}
+@keyframes strip-scroll {
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee-track, .landing-strip-track { animation: none; }
+}
+
+/* ── Landing page: the moving pictures in the "Life at DelCargo" cards ─────────────────────────────────────
+   A lit square hops between the cells of the salary grid and the leave calendar, the editor types its lines out, and
+   the family tile floats. Everything stands still for reduced motion. */
+@keyframes perk-hop-salary {
+  0%, 10% { transform: translate(18rem, 4.5rem); }
+  16%, 26% { transform: translate(31.5rem, 0); }
+  32%, 42% { transform: translate(36rem, 9rem); }
+  48%, 58% { transform: translate(9rem, 9rem); }
+  64%, 74% { transform: translate(4.5rem, 0); }
+  80%, 90% { transform: translate(13.5rem, 0); }
+  100% { transform: translate(18rem, 4.5rem); }
+}
+@keyframes perk-hop-calendar {
+  0%, 10% { transform: translate(15.625rem, 3.125rem); }
+  16%, 26% { transform: translate(6.25rem, 0); }
+  32%, 42% { transform: translate(18.75rem, 6.25rem); }
+  48%, 58% { transform: translate(3.125rem, 9.375rem); }
+  64%, 74% { transform: translate(12.5rem, 6.25rem); }
+  80%, 90% { transform: translate(0, 3.125rem); }
+  100% { transform: translate(15.625rem, 3.125rem); }
+}
+.perk-hop-salary { animation: perk-hop-salary 14s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.perk-hop-calendar { animation: perk-hop-calendar 14s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+
+@keyframes perk-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.perk-pulse { animation: perk-pulse 3.5s ease-in-out infinite; }
+
+/* One line of code revealed left to right, then held, on a shared loop; each line starts a little after the last. */
+@keyframes perk-type {
+  0% { clip-path: inset(0 100% 0 0); }
+  12%, 82% { clip-path: inset(0 0 0 0); }
+  94%, 100% { clip-path: inset(0 100% 0 0); }
+}
+.perk-type {
+  animation: perk-type 9s steps(28, end) infinite;
+  animation-delay: calc(var(--line) * 0.9s);
+}
+@keyframes perk-caret {
+  50% { opacity: 0; }
+}
+.perk-caret { animation: perk-caret 1s steps(1) infinite; }
+
+@keyframes perk-float {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -6px); }
+}
+.perk-float { animation: perk-float 4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .perk-hop-salary, .perk-hop-calendar, .perk-pulse, .perk-type, .perk-caret, .perk-float { animation: none; }
+}
+
+
+
+
+
+

@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, Profile, hrActions, displayName } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 

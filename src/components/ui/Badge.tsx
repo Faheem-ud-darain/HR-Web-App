@@ -21,7 +21,7 @@ const VARIANT_STYLES: Record<BadgeVariant, string> = {
 
 const SIZE_STYLES = {
   md: 'px-2.5 py-0.5 text-xs font-semibold',
-  sm: 'px-2 py-0.5 text-[10px] font-bold',
+  sm: 'px-2 py-0.5 text-caption font-bold',
 };
 
 export function Badge({ children, variant = 'default', size = 'md', className = '', ...props }: BadgeProps) {

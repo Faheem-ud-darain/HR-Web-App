@@ -26,6 +26,7 @@ import { formatDateNY, formatTimeNY } from '@/lib/timezone';
 import { pbFilter } from '@/lib/pbFilter';
 import { sanitizeForWrite } from './sanitize';
 import type { PbRow, PbJson } from '@/lib/pbTypes';
+import { hasDocs, legacyDocsKey, parseLegacyDocs, type ProfileDocs } from '@/lib/core/profileDocs';
 
 const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
@@ -131,6 +132,16 @@ export async function adminGetKV(key: string): Promise<{ id: string; value: PbJs
   const list = await pbAdminFetch(`/api/collections/hr_delcargo_store/records?filter=${encoded}&perPage=1`);
   const item = list?.items?.[0];
   return item ? { id: item.id, value: item.value } : null;
+}
+
+// One employee's onboarding documents: the row in hr_profile_docs, or, for anyone whose documents pre-date that
+// collection, the old key-value row (see core/profileDocs). Used wherever the server reads or merges documents, so an
+// old upload is never lost when a new file is saved next to it.
+export async function adminGetProfileDocs(profileId: string): Promise<PbRow> {
+  const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
+  if (hasDocs(row?.data as ProfileDocs)) return row!.data as PbRow;
+  const legacy = await adminGetKV(legacyDocsKey(profileId));
+  return parseLegacyDocs(legacy?.value) as PbRow;
 }
 
 export async function adminUpdateProfile(profileId: string, fields: PbRow): Promise<void> {

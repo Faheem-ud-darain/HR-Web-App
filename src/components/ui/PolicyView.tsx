@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
-import { BookOpen, Calendar, HelpCircle, AlertCircle, Award, Info } from 'lucide-react';
+import { BookOpenIcon as BookOpen, CalendarBlankIcon as Calendar, QuestionIcon as HelpCircle, WarningCircleIcon as AlertCircle, MedalIcon as Award, InfoIcon as Info } from '@/components/ui/icons';
 import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
 export function PolicyView() {
@@ -65,7 +65,7 @@ export function PolicyView() {
                   <span className={`font-bold ${row.isCap ? 'text-orange-950' : 'text-slate-700'}`}>{row.year}</span>
                   <span className={`font-mono text-xs ${row.isCap ? 'text-orange-950' : 'text-slate-700'}`}>{row.rate}</span>
                 </div>
-                <div className={`text-[10px] ${row.isCap ? 'text-orange-900 font-bold' : 'text-slate-500 font-medium'}`}>
+                <div className={`text-caption ${row.isCap ? 'text-orange-900 font-bold' : 'text-slate-500 font-medium'}`}>
                   {row.days}
                 </div>
               </div>

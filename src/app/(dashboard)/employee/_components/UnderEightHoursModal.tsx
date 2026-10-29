@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 
@@ -36,7 +36,7 @@ export function UnderEightHoursModal({ workedMinutes, remainingMinutes, onClose 
           </div>
         </div>
 
-        <p className="text-slate-500 text-[11px] leading-relaxed">
+        <p className="text-slate-500 text-caption leading-relaxed">
           If your shift was split into multiple parts due to internet/app disconnections, your total worked time today is combined. If this looks wrong, contact HR.
         </p>
 

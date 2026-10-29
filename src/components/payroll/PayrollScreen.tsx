@@ -13,7 +13,7 @@
 // except through an explicit button (Save bonus, Mark as paid).
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw, Search } from 'lucide-react';
+import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, CircleNotchIcon as Loader2, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -220,7 +220,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     if (r.reservedThisMonth > 0) chips.push(<Badge key="held" variant="indigo" size="sm">First month held</Badge>);
     if (!r.processed) payrollFlags(r, profileById.get(r.employeeId)).forEach(f => chips.push(
       <Badge key={f.kind} variant="warning" size="sm" className="gap-1" title={f.detail}>
-        <AlertTriangle className="h-3 w-3" />{f.label}
+        <AlertTriangle className="h-3.5 w-3.5" />{f.label}
       </Badge>,
     ));
     return chips.length ? <div className="mt-1 flex flex-wrap gap-1">{chips}</div> : null;

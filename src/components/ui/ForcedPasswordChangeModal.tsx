@@ -2,7 +2,7 @@
 
 import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState } from 'react';
-import { KeyRound, ShieldCheck } from 'lucide-react';
+import { KeyIcon as KeyRound, ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Profile, changeOwnPassword } from '@/lib/hrData';
 import { Input } from '@/components/ui/Input';
@@ -88,7 +88,7 @@ export function ForcedPasswordChangeModal({ profile, onChanged }: ForcedPassword
             <KeyRound className="h-5 w-5 text-orange-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-orange-700 uppercase tracking-wider">Action Required</p>
+            <p className="text-caption font-bold text-orange-700 uppercase tracking-wider">Action Required</p>
             <h2 id="forced-password-change-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
               Set a new password to continue
             </h2>

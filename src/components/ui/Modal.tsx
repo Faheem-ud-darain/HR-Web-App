@@ -2,10 +2,11 @@
 
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { XIcon as X } from '@/components/ui/icons';
 import { pushModal, popModal } from '@/lib/modalStack';
 import { triggerHaptic } from '@/lib/haptics';
 import { useIsClient } from '@/lib/useIsClient';
+import { useDialogFocus } from '@/lib/useDialogFocus';
 
 interface ModalProps {
   isOpen: boolean;
@@ -30,8 +31,6 @@ function usePrefersReducedMotion() {
     () => false,
   );
 }
-
-const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
   const titleId = useId();
@@ -111,37 +110,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
     };
   }, [isOpen, onClose]);
 
-  // Keyboard users: move focus into the dialog when it opens, keep Tab inside it while it is open, and
-  // give focus back to whatever opened it when it closes.
-  useEffect(() => {
-    if (!isOpen || !mounted) return;
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.contains(document.activeElement)) {
-      const first = dialog.querySelector<HTMLElement>(FOCUSABLE);
-      (first || dialog).focus();
-    }
-    const trap = (e: KeyboardEvent) => {
-      const dlg = dialogRef.current;
-      if (e.key !== 'Tab' || !dlg) return;
-      // Only the topmost dialog traps (dialogs are appended to <body> in the order they open).
-      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
-      if (dialogs[dialogs.length - 1] !== dlg) return;
-      const active = document.activeElement;
-      // Focus is inside some other overlay (a lightbox, a popup): leave it alone.
-      if (active && active !== document.body && !dlg.contains(active)) return;
-      const items = Array.from(dlg.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => el.offsetParent !== null);
-      if (items.length === 0) { e.preventDefault(); return; }
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && (active === first || !dlg.contains(active))) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && (active === last || !dlg.contains(active))) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', trap);
-    return () => {
-      document.removeEventListener('keydown', trap);
-      if (opener && document.contains(opener)) opener.focus();
-    };
-  }, [isOpen, mounted, opener]);
+  useDialogFocus(dialogRef, isOpen && mounted, opener);
 
   // Registers with the shared modal-stack tracker so the mobile floating
   // bottom nav (Sidebar.tsx) knows to hide itself — see lib/modalStack.ts

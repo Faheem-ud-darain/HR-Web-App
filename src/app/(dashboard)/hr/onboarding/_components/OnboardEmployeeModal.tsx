@@ -148,7 +148,7 @@ export function OnboardEmployeeModal({ teams, onRegistered, onClose }: { teams: 
           <div className="space-y-1.5">
             <FieldLabel size="sm" title="PTO accrual is calculated from this date, not the joining date">Account Creation Date *</FieldLabel>
             <Input type="date" required value={accountCreationDate} onChange={e => setAccountCreationDate(e.target.value)} fieldSize="soft" className="cursor-pointer" />
-            <p className="text-[9px] text-slate-400 font-semibold">PTO accrual is calculated from this date.</p>
+            <p className="text-caption text-slate-400 font-semibold">PTO accrual is calculated from this date.</p>
           </div>
         </div>
 

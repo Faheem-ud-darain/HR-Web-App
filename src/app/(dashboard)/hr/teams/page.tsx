@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Building2, UserCog, Users, Star } from 'lucide-react';
+import { BuildingsIcon as Building2, UserGearIcon as UserCog, UsersIcon as Users, StarIcon as Star } from '@/components/ui/icons';
 import { displayName, hrActions, useProfiles, useTeams, useWarehouses } from '@/lib/hrData';
 import { isTeamLead, isWarehouseManager } from '@/lib/core/teams';
 import { useSessionEmail } from '@/lib/useSession';
@@ -127,7 +127,7 @@ export default function HRTeamsPage() {
         hint="Deselecting all teams removes the Team Lead designation."
         currentHeading="Current Team Leads"
         current={leaders.map(e => leadRow(e, e.leadTeams?.join(', ') ?? ''))}
-        currentIcon={<Star className="h-3 w-3 text-purple-600" />}
+        currentIcon={<Star className="h-3.5 w-3.5 text-purple-600" />}
         emptyText="No team leads assigned yet."
         onSave={team.saveLeads}
       />
@@ -145,7 +145,7 @@ export default function HRTeamsPage() {
         hint="Deselecting all warehouses removes the Warehouse Manager designation."
         currentHeading="Current Warehouse Managers"
         current={managers.map(e => leadRow(e, (e.managedWarehouses || []).map(warehouseName).join(', ')))}
-        currentIcon={<Building2 className="h-3 w-3 text-purple-600" />}
+        currentIcon={<Building2 className="h-3.5 w-3.5 text-purple-600" />}
         emptyText="No warehouse managers assigned yet."
         onSave={wh.saveManager}
       />

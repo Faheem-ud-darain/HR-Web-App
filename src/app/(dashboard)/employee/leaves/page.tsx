@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { PlusCircle, AlertCircle, BadgeCheck, Loader2, Trash2 } from 'lucide-react';
+import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, CircleNotchIcon as Loader2, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -258,7 +258,7 @@ export default function EmployeeLeavesPage() {
           size="md"
           onClick={() => setIsLeaveOpen(true)}
         >
-          <PlusCircle className="h-4.5 w-4.5" /> Apply for Leave
+          <PlusCircle className="h-5 w-5" /> Apply for Leave
         </Button>
       </div>
 
@@ -310,7 +310,7 @@ export default function EmployeeLeavesPage() {
               </p>
             </div>
           </div>
-          <p className="text-[10px] text-slate-400 font-semibold">
+          <p className="text-caption text-slate-400 font-semibold">
             Based on: Daily rate ({formatMoney(ptoDailyRate, userProfile?.region)}) = Monthly Salary ({formatMoney(currentBaseSalary, userProfile?.region)}) ÷ 22 days.
           </p>
         </CardContent>
@@ -391,11 +391,11 @@ export default function EmployeeLeavesPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Dates</p>
                   <p className="text-xs font-semibold text-slate-700">{leave.duration}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
                   <p className="text-xs font-semibold text-slate-700">{leave.reason}</p>
                 </div>
               </div>

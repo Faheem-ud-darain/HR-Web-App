@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Bell, Trash2 } from 'lucide-react';
+import { BellIcon as Bell, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import type { Notification } from '@/lib/hrData';
 import { formatRelativeDateNY } from '@/lib/timezone';
 import { DismissibleArea } from '@/components/ui/DismissibleArea';
+import { IconButton } from '@/components/ui/IconButton';
 import { useBellNotifications } from './useBellNotifications';
 
 // "Today" / "Yesterday" / a short date for the bell. `notification.timestamp` is only a time of day ("3:02 AM"),
@@ -30,7 +31,7 @@ export function NotificationBell({ role, email, open, onOpenChange }: { role: st
     const content = (
       <>
         <div className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap break-words">{n.message}</div>
-        <div className="text-[9px] text-slate-400 font-medium text-right">{when}{when && n.timestamp ? ' • ' : ''}{n.timestamp}</div>
+        <div className="text-caption text-slate-500 font-medium text-right">{when}{when && n.timestamp ? ' • ' : ''}{n.timestamp}</div>
       </>
     );
     // Only notifications with a `link` (ticket / leave / chat mention: see buildNotificationLink) are clickable;
@@ -48,7 +49,7 @@ export function NotificationBell({ role, email, open, onOpenChange }: { role: st
           disabled={bell.deletingId === n.id}
           aria-label="Delete notification"
           title="Delete notification"
-          className="shrink-0 mt-2.5 mr-2 p-1.5 rounded-md text-slate-300 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+          className="shrink-0 mt-2.5 mr-2 p-1.5 rounded-md text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 transition-colors"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -58,14 +59,9 @@ export function NotificationBell({ role, email, open, onOpenChange }: { role: st
 
   return (
     <DismissibleArea open={open} onClose={() => onOpenChange(false)} className="relative">
-      <button onClick={toggle} aria-label="Notifications" className="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors relative min-h-[40px] min-w-[40px] flex items-center justify-center">
+      <IconButton label="Notifications" badge={bell.unreadCount} onClick={toggle} aria-haspopup="true" aria-expanded={open}>
         <Bell className="h-5 w-5" />
-        {bell.unreadCount > 0 && (
-          <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center border border-white">
-            {bell.unreadCount > 9 ? '9+' : bell.unreadCount}
-          </span>
-        )}
-      </button>
+      </IconButton>
 
       {open && (
         <div className="fixed top-16 left-4 right-4 sm:absolute sm:top-12 sm:right-0 sm:left-auto sm:w-[320px] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden popover-enter">
@@ -73,18 +69,18 @@ export function NotificationBell({ role, email, open, onOpenChange }: { role: st
             <span className="font-bold text-xs text-slate-800">Notifications</span>
             <div className="flex items-center gap-2">
               {bell.notifications.length > 0 && (
-                <button onClick={bell.clearAll} disabled={bell.clearing} className="text-[9px] font-bold text-slate-500 hover:text-rose-600 disabled:opacity-50 flex items-center gap-1 transition-colors">
-                  <Trash2 className="h-3 w-3" /> {bell.clearing ? 'Clearing…' : 'Clear All'}
+                <button onClick={bell.clearAll} disabled={bell.clearing} className="text-caption font-bold text-slate-500 hover:text-rose-600 disabled:opacity-50 flex items-center gap-1 transition-colors">
+                  <Trash2 className="h-3.5 w-3.5" /> {bell.clearing ? 'Clearing…' : 'Clear All'}
                 </button>
               )}
-              <span className="text-[9px] text-slate-500 font-semibold capitalize">Scope: {role}</span>
+              <span className="text-caption text-slate-500 font-semibold capitalize">Scope: {role}</span>
             </div>
           </div>
           <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
             {bell.notifications.map(row)}
-            {bell.notifications.length === 0 && <div className="p-8 text-center text-slate-400 font-medium text-xs">No alerts active</div>}
+            {bell.notifications.length === 0 && <div className="p-8 text-center text-slate-500 font-medium text-xs">No alerts active</div>}
             {bell.canLoadMore && (
-              <button onClick={bell.loadMore} disabled={bell.loadingMore} className="w-full p-3 text-[11px] font-bold text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-60">
+              <button onClick={bell.loadMore} disabled={bell.loadingMore} className="w-full p-3 text-caption font-bold text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-60">
                 {bell.loadingMore ? 'Loading…' : 'Load older alerts'}
               </button>
             )}

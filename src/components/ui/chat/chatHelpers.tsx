@@ -3,9 +3,10 @@
 import React, { useEffect } from 'react';
 import { Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
-import { Crown, Headset, Star } from 'lucide-react';
+import { CrownIcon as Crown, HeadsetIcon as Headset, StarIcon as Star } from '@/components/ui/icons';
 import { formatTimeNY, formatShortDateNY, getNYDateString } from '@/lib/timezone';
 import { safeHref } from '@/lib/sanitize';
+import { isImageAttachment } from '@/lib/core/attachments';
 
 // Curated, no-dependency emoji set for the composer's emoji picker — avoids
 // pulling in an emoji-picker package (and its bundle size / build-tool
@@ -38,7 +39,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => vo
     >
       {EMOJI_GROUPS.map(group => (
         <div key={group.label}>
-          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-0.5 mb-1">{group.label}</p>
+          <p className="text-caption font-bold text-slate-500 uppercase tracking-wider px-0.5 mb-1">{group.label}</p>
           <div className="grid grid-cols-8 gap-0.5">
             {group.emojis.map(emoji => (
               <button
@@ -76,7 +77,7 @@ export function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; o
           <Avatar key={v.id} src={v.profilePicture} name={v.fullName} size={13} className="ring-1 ring-white" />
         ))}
       </div>
-      <span className="text-[8px] font-bold text-slate-400 group-hover:text-orange-600 transition-colors">
+      <span className="text-caption font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
         Seen{viewers.length > 3 ? ` by ${viewers.length}` : ''}
       </span>
     </button>
@@ -105,7 +106,7 @@ export function RoleBadge({ role, className = '' }: { role?: string; className?:
   if (!info) return null;
   const Icon = info.icon;
   return (
-    <span className={`flex items-center gap-0.5 ${info.bg} ${info.text} text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${className}`}>
+    <span className={`flex items-center gap-0.5 ${info.bg} ${info.text} text-caption font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${className}`}>
       <Icon className="h-2.5 w-2.5" /> {info.label}
     </span>
   );
@@ -129,11 +130,6 @@ export function formatTimestamp(iso: string): string {
   }
 }
 
-export function isImageAttachment(name?: string): boolean {
-  if (!name) return false;
-  return /\.(png|jpe?g|gif|webp)$/i.test(name);
-}
-
 export type FileTypeFilter = 'all' | 'image' | 'document' | 'other' | 'none' | 'announcement';
 
 export type SizeFilter = 'all' | 'small' | 'medium' | 'large';
@@ -143,13 +139,6 @@ export function attachmentKind(name?: string): 'image' | 'document' | 'other' | 
   if (isImageAttachment(name)) return 'image';
   if (/\.(pdf|docx?|xlsx?|txt)$/i.test(name)) return 'document';
   return 'other';
-}
-
-export function formatBytes(bytes?: number): string {
-  if (!bytes && bytes !== 0) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // Small (<1MB) / Medium (1-5MB) / Large (>5MB) — coarse buckets, matches

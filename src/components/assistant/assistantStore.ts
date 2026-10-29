@@ -151,6 +151,7 @@ export function useAssistantOpen(): boolean {
 
 // The orb is drawn directly on the page with no background: brand orange ink (use a near-black such as #0f172a for a black orb).
 export const ORB_COLOR = '#c2410c';
+export const ORB_COLOR_ON_ACCENT = '#ffffff'; // the orb on an orange tile (the phone tab bar's current-page tile)
 
 // Dot size multiplier for the orb (1 = the library's tuned look, 1.5 = bolder).
 export const ORB_DOT_SIZE = 1.8; // idle (listening) only: bold

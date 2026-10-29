@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, ImageOff, Lock, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { WarningIcon as AlertTriangle, ImageBrokenIcon as ImageOff, LockIcon as Lock, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff } from '@/components/ui/icons';
 import { getCaptureGap, getCaptureHealth, hrActions, type TimesheetEntry, type TrackerHeartbeat, type TrackingSettings } from '@/lib/hrData';
 import { needsTrackerUpdate, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { Badge } from '@/components/ui/Badge';
@@ -12,16 +12,16 @@ import { Badge } from '@/components/ui/Badge';
 export function CaptureHealthBadge({ hb }: { hb: TrackerHeartbeat | null }) {
   const health = getCaptureHealth(hb);
   if (health.status === 'locked') {
-    return <Badge variant="warning" size="sm" className="gap-1" title={health.detail}><Lock className="h-3 w-3" /> Screen Locked</Badge>;
+    return <Badge variant="warning" size="sm" className="gap-1" title={health.detail}><Lock className="h-3.5 w-3.5" /> Screen Locked</Badge>;
   }
   if (health.status === 'failing') {
-    return <Badge variant="danger" size="sm" className="gap-1" title={health.detail}><ImageOff className="h-3 w-3" /> No Screenshots</Badge>;
+    return <Badge variant="danger" size="sm" className="gap-1" title={health.detail}><ImageOff className="h-3.5 w-3.5" /> No Screenshots</Badge>;
   }
   if (health.status === 'stale_token') {
     // The setup code was regenerated but this running agent still uses the OLD token, so it cannot find its own
     // settings row. That is not the same as "not on shift", and without its own badge it looked identical to a
     // connected-but-idle tracker.
-    return <Badge variant="warning" size="sm" className="gap-1" title={health.detail}><RefreshCw className="h-3 w-3" /> Reconnect Required</Badge>;
+    return <Badge variant="warning" size="sm" className="gap-1" title={health.detail}><RefreshCw className="h-3.5 w-3.5" /> Reconnect Required</Badge>;
   }
   return null;
 }
@@ -45,11 +45,11 @@ export function TrackerStatusBadge({ hb, settings, openShift, align }: TrackerSt
   });
   const gapBadge = gap.status === 'tracking_off' ? (
     <Badge variant="danger" size="sm" className="gap-1" title="This employee is on shift but tracking is turned off, so no screenshots are being taken.">
-      <AlertTriangle className="h-3 w-3" /> On shift, tracking OFF
+      <AlertTriangle className="h-3.5 w-3.5" /> On shift, tracking OFF
     </Badge>
   ) : gap.status === 'no_captures' ? (
     <Badge variant="warning" size="sm" className="gap-1" title="The tracker is connected but has not captured a screenshot for longer than two intervals.">
-      <AlertTriangle className="h-3 w-3" /> No screenshots for {gap.minutes} min
+      <AlertTriangle className="h-3.5 w-3.5" /> No screenshots for {gap.minutes} min
     </Badge>
   ) : null;
 
@@ -59,7 +59,7 @@ export function TrackerStatusBadge({ hb, settings, openShift, align }: TrackerSt
     return (
       <div className={layout}>
         <Badge size="sm" className={`gap-1 ${align === 'end' ? 'shrink-0' : ''}`}>
-          <WifiOff className="h-3 w-3" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
+          <WifiOff className="h-3.5 w-3.5" /> {hb ? 'Offline' : (settings.enabled ? 'Disconnected' : 'Not installed')}
         </Badge>
         {gapBadge}
       </div>
@@ -68,11 +68,11 @@ export function TrackerStatusBadge({ hb, settings, openShift, align }: TrackerSt
   return (
     <div className={layout}>
       <Badge variant="success" size="sm" className="gap-1" title={hb?.deviceLabel || ''}>
-        <Wifi className="h-3 w-3" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
+        <Wifi className="h-3.5 w-3.5" /> Connected{hb?.agentVersion ? ` · v${hb.agentVersion}` : ''}
       </Badge>
       {needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel) && (
         <Badge variant="warning" size="sm" className="gap-1" title={`Must update to v${TRACKER_MIN_VERSION}`}>
-          <AlertTriangle className="h-3 w-3" /> Update Required
+          <AlertTriangle className="h-3.5 w-3.5" /> Update Required
         </Badge>
       )}
       <CaptureHealthBadge hb={hb} />

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { WarningOctagonIcon as AlertOctagon, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate } from '@/lib/hrData';
 
@@ -91,7 +91,7 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
             <AlertOctagon className="h-5 w-5 text-rose-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Marked Absent</p>
+            <p className="text-caption font-bold text-rose-700 uppercase tracking-wider">Marked Absent</p>
             <h2 id="absent-popup-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
               {current.date}
             </h2>
@@ -102,22 +102,22 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
           <p className="text-sm text-slate-700 leading-relaxed">{reasonText}</p>
           {coveringLeave ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
-              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">No Absence Deduction</p>
+              <p className="text-caption font-bold text-emerald-600 uppercase tracking-wider">No Absence Deduction</p>
               <p className="text-sm font-bold text-emerald-700 mt-0.5">Charged as {coveringLeave.type} Leave instead — see your Payroll page for that amount.</p>
             </div>
           ) : (
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deduction Applied</p>
+              <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Deduction Applied</p>
               <p className="text-sm font-bold text-rose-600 mt-0.5">{formatMoney(current.deductionAmount, 'Pakistan')} (2 days&apos; pay)</p>
             </div>
           )}
-          <p className="text-[10px] text-slate-400 leading-relaxed">
+          <p className="text-caption text-slate-400 leading-relaxed">
             If you believe this is a mistake, contact HR — this deduction shows up on your Payroll and Absent Details pages.
           </p>
         </div>
 
         <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <p className="text-[10px] text-slate-400 font-semibold">
+          <p className="text-caption text-slate-400 font-semibold">
             {pending.length > 1 ? `${pending.length} absences need your acknowledgment` : ' '}
           </p>
           <Button

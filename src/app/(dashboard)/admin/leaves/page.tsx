@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { ShieldCheck, List, Loader2 } from 'lucide-react';
+import { ShieldCheckIcon as ShieldCheck, ListBulletsIcon as List, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { useLeaves, useProfiles, hrActions, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
@@ -144,10 +144,10 @@ export default function AdminLeavesPage() {
                     <Td align="center">
                       <div className="flex justify-center gap-2">
                         <button onClick={() => handleCEOAction(leave.id, 'approve')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === leave.id && <Loader2 className="h-3 w-3 animate-spin" />} CEO Approve
+                          {processingLeaveId === leave.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} CEO Approve
                         </button>
                         <button onClick={() => handleCEOAction(leave.id, 'reject')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === leave.id && <Loader2 className="h-3 w-3 animate-spin" />} Reject
+                          {processingLeaveId === leave.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Reject
                         </button>
                       </div>
                     </Td>
@@ -174,11 +174,11 @@ export default function AdminLeavesPage() {
                   <LeaveTypeBadge type={leave.type} />
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Dates</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Dates</p>
                   <p className="text-xs font-semibold text-slate-800">{leave.duration}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-semibold uppercase">Reason</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
                   <p className="text-xs text-slate-600 line-clamp-2">{leave.reason}</p>
                 </div>
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">

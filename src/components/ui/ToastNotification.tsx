@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Bell, X } from 'lucide-react';
+import { BellIcon as Bell, XIcon as X } from '@/components/ui/icons';
 import { pb } from '@/lib/pocketbase';
 import { getSessionEmail, getSessionRole } from '@/lib/session';
 
@@ -105,9 +105,9 @@ export function ToastNotification() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Push Alert</p>
+            <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">New Push Alert</p>
             <p className="text-xs font-semibold text-slate-800 mt-1 leading-relaxed whitespace-pre-wrap break-words">{toast.message}</p>
-            <span className="text-[9px] text-slate-400 block mt-1.5 font-medium">{toast.timestamp}</span>
+            <span className="text-caption text-slate-400 block mt-1.5 font-medium">{toast.timestamp}</span>
           </div>
 
           <button

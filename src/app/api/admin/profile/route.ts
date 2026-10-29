@@ -6,6 +6,7 @@ import {
   adminFindByField,
   adminUpsertByField,
   adminDeleteByField,
+  adminGetProfileDocs,
   pbAdminFetch,
 } from '@/lib/pbAdmin';
 import { splitProfileUpdate, fromProfileFields } from '@/lib/profileFields';
@@ -48,8 +49,7 @@ async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
   await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
 }
 async function mergeDocs(profileId: string, patch: PbRow): Promise<void> {
-  const row = await adminFindByField('hr_profile_docs', 'profile_id', profileId);
-  const existing = row?.data || {};
+  const existing = await adminGetProfileDocs(profileId);
   await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
 }
 

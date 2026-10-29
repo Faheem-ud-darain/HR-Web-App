@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { EyeIcon as Eye, EyeSlashIcon as EyeOff } from '@/components/ui/icons';
 
 interface PasswordInputProps {
   value: string;

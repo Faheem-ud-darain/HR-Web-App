@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Eye, EyeOff, Mail } from 'lucide-react';
+import { EyeIcon as Eye, EyeSlashIcon as EyeOff, EnvelopeIcon as Mail } from '@/components/ui/icons';
 import { API_BASE } from '@/lib/apiBase';
 import { Button } from '@/components/ui/Button';
 import { FieldLabel } from '@/components/ui/FieldLabel';
@@ -123,7 +123,7 @@ export function ForgotPasswordModal({ initialEmail, onClose, onFinished }: { ini
               <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@delcargo.us" fieldSize="md" />
             </div>
             {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
-            <Footer left={<p className="text-[11px] text-slate-400 font-semibold">Still stuck? Email hr@delcargo.us</p>}>
+            <Footer left={<p className="text-caption text-slate-400 font-semibold">Still stuck? Email hr@delcargo.us</p>}>
               <Button variant="primary" size="md" onClick={() => sendCode(false)} disabled={loading}>{loading ? 'Sending…' : 'Send Code'}</Button>
             </Footer>
           </>
@@ -136,7 +136,7 @@ export function ForgotPasswordModal({ initialEmail, onClose, onFinished }: { ini
               <label className="text-xs font-bold text-slate-700 mb-1 block text-center">6-digit security code</label>
               <OtpInput length={6} value={otp} onChange={setOtp} disabled={loading || resendLoading} />
               <div className="flex items-center justify-between mt-2 px-1">
-                <span className="text-[11px] text-slate-400 font-medium">Didn&apos;t receive the code?</span>
+                <span className="text-caption text-slate-400 font-medium">Didn&apos;t receive the code?</span>
                 <button
                   type="button"
                   onClick={() => sendCode(true)}

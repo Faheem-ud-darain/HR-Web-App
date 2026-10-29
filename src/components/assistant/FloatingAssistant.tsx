@@ -2,10 +2,11 @@
 
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ThinkingOrb } from 'thinking-orbs';
+import { AssistantOrb } from './AssistantOrb';
+import { isChatScreen } from '@/lib/core/nav';
 import { ChatPanel } from './ChatPanel';
 import { nudgePool, type Nudge } from './nudges';
-import { ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED, sendAssistantMessage, setAssistantOpen, useAssistantChat, useAssistantOpen } from './assistantStore';
+import { sendAssistantMessage, setAssistantOpen, useAssistantChat, useAssistantOpen } from './assistantStore';
 
 function useReducedMotion(): boolean {
   return useSyncExternalStore(
@@ -29,6 +30,8 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
   const reduced = useReducedMotion();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const onAssistantPage = pathname.endsWith('/assistant');
+  // On phones Del lives in the bottom tab bar, except on the chat screens where that bar is hidden.
+  const phoneBarHasDel = !isChatScreen(pathname);
   const [nudge, setNudge] = useState<Nudge | null>(null);
   const [nudgesOff, setNudgesOff] = useState(false);
   // Closing keeps the window mounted until its shrink-into-the-orb animation has played (see globals.css).
@@ -104,7 +107,7 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
         </div>
       )}
       {nudge && !open && !loading && !onAssistantPage && (
-        <div className="fixed bottom-[7.5rem] right-24 z-[45] flex max-w-[15rem] items-center gap-1 rounded-2xl rounded-br-sm border border-orange-200 bg-white py-1 pl-3 pr-1 text-sm text-slate-800 shadow-lg md:bottom-9 md:right-28">
+        <div className={`fixed bottom-[7.5rem] right-24 z-[45] flex max-w-[15rem] items-center gap-1 rounded-2xl rounded-br-sm border border-orange-200 bg-white py-1 pl-3 pr-1 text-sm text-slate-800 shadow-lg md:bottom-9 md:right-28 ${phoneBarHasDel ? 'max-md:hidden' : ''}`}>
           <button
             type="button"
             onClick={() => { const q = nudge.question; setNudge(null); setAssistantOpen(true); void sendAssistantMessage(q); }}
@@ -118,16 +121,20 @@ export function FloatingAssistant({ role }: { role: 'hr' | 'admin' }) {
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setAssistantOpen(!open)}
+        onClick={() => {
+          // A phone is too narrow for the small window, so Del opens as its own page there.
+          if (window.matchMedia('(max-width: 767px)').matches) router.push(`/${role}/assistant`);
+          else setAssistantOpen(!open);
+        }}
         aria-label={open ? 'Close assistant' : 'Open assistant'}
         aria-expanded={open}
         tabIndex={open ? -1 : 0}
         className={`fixed bottom-[6.5rem] right-4 z-[45] flex h-16 w-16 items-center justify-center rounded-full transition-[transform,opacity] motion-reduce:transition-none md:bottom-6 md:right-6 ${
           // The orb flies into the window while it's open, and comes back as the window shrinks into it.
           open ? 'pointer-events-none scale-0 opacity-0 duration-200' : 'opacity-100 delay-150 duration-300 hover:scale-110'
-        }`}
+        } ${phoneBarHasDel ? 'max-md:hidden' : ''}`}
       >
-        <ThinkingOrb state={loading ? 'solving' : 'listening'} speed={loading ? ORB_BUSY_SPEED : ORB_IDLE_SPEED} size={64} theme="light" color={ORB_COLOR} dotSize={loading ? ORB_BUSY_DOT_SIZE : ORB_DOT_SIZE} paused={reduced} aria-hidden="true" />
+        <AssistantOrb size={64} />
       </button>
     </>
   );

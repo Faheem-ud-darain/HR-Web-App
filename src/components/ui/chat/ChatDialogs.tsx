@@ -16,9 +16,9 @@ function PersonRow({ person, viewerRole, isYou }: { person: Profile; viewerRole:
       <div className="min-w-0 flex-1">
         <p className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
           {displayName(person, viewerRole)}
-          {isYou && <span className="text-[9px] text-slate-400 font-semibold">(You)</span>}
+          {isYou && <span className="text-caption text-slate-500 font-semibold">(You)</span>}
         </p>
-        <p className="text-xs text-slate-400 truncate">{person.email}</p>
+        <p className="text-xs text-slate-500 truncate">{person.email}</p>
       </div>
       {isYou !== undefined && <RoleBadge role={person.role} />}
     </div>

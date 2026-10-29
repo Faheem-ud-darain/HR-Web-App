@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { LucideIcon } from 'lucide-react';
+import type { Icon } from '@phosphor-icons/react';
 import { Button, type ButtonVariant } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 
@@ -16,11 +16,11 @@ const TONE: Record<Tone, { box: string; icon: string }> = {
 interface NoticeModalProps {
   title: string;
   tone: Tone;
-  icon: LucideIcon;
+  icon: Icon;
   // The explanation, shown in a tinted box with the icon.
   children: React.ReactNode;
   // Further tinted notices under the first (e.g. a warning that applies only sometimes).
-  extra?: { tone: Tone; icon: LucideIcon; text: React.ReactNode }[];
+  extra?: { tone: Tone; icon: Icon; text: React.ReactNode }[];
   // The main action. Left out for a plain "got it" notice.
   action?: { label: string; onClick: () => void; variant?: ButtonVariant; disabled?: boolean };
   // The Close button's text; null hides it (the action is then the only way on).
@@ -38,12 +38,12 @@ export function NoticeModal({ title, tone, icon: Icon, children, extra = [], act
     <Modal isOpen onClose={onClose} title={title}>
       <div className="space-y-4">
         <div className={`flex items-start gap-3 border p-4 rounded-xl ${TONE[tone].box}`}>
-          <Icon className={`h-5 w-5 shrink-0 mt-0.5 ${TONE[tone].icon}`} />
+          <Icon weight="duotone" className={`h-5 w-5 shrink-0 mt-0.5 ${TONE[tone].icon}`} />
           <p className="text-xs text-slate-700 font-semibold leading-relaxed">{children}</p>
         </div>
         {extra.map((n, i) => (
           <div key={i} className={`flex items-start gap-3 border p-4 rounded-xl ${TONE[n.tone].box}`}>
-            <n.icon className={`h-5 w-5 shrink-0 mt-0.5 ${TONE[n.tone].icon}`} />
+            <n.icon weight="duotone" className={`h-5 w-5 shrink-0 mt-0.5 ${TONE[n.tone].icon}`} />
             <p className="text-xs text-slate-700 font-semibold leading-relaxed">{n.text}</p>
           </div>
         ))}
