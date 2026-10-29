@@ -14,8 +14,8 @@ const NAV_LINKS = [
 ];
 
 // The floating pill at the top of every public page (the landing page, Privacy Policy, Support, Careers). `badge` names
-// the page; pt-safe keeps it clear of the status bar on notched phones (layout.tsx draws the WebView under it).
-export function LandingNav({ badge = 'Careers Portal' }: { badge?: string }) {
+// the page, `signIn` shows the Sign In button (off on the sign-in page itself); pt-safe keeps it clear of the status bar on notched phones (layout.tsx draws the WebView under it).
+export function LandingNav({ badge = 'Careers Portal', signIn = true }: { badge?: string; signIn?: boolean }) {
   return (
     <header className="pt-safe px-3 sm:px-8 pt-3 sm:pt-5">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full bg-ink py-2 pl-5 pr-2 text-paper">
@@ -28,9 +28,9 @@ export function LandingNav({ badge = 'Careers Portal' }: { badge?: string }) {
         </nav>
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <ThemeIconButton className="text-paper/70! hover:bg-paper/15! hover:text-paper!" />
-          <ButtonLink href="/auth" variant="ink" size="md" className="shrink-0 rounded-full bg-paper! text-ink! hover:bg-paper/80!">
+          {signIn && <ButtonLink href="/auth" variant="ink" size="md" className="shrink-0 rounded-full bg-paper! text-ink! hover:bg-paper/80!">
             <span className="hidden sm:inline">Sign In to Employee Portal</span><span className="sm:hidden">Sign In</span> <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden="true" />
-          </ButtonLink>
+          </ButtonLink>}
         </div>
       </div>
     </header>

@@ -4,10 +4,10 @@ import { LandingFooter } from '@/components/landing/LandingFooter';
 
 // The frame every public page sits in: the landing page's nav and footer on its paper-and-ink colours (dark or light
 // with the app's theme). The landing page itself uses the same nav and footer around its hero.
-export function PublicPage({ badge, children }: { badge: string; children: React.ReactNode }) {
+export function PublicPage({ badge, signIn = true, children }: { badge: string; signIn?: boolean; children: React.ReactNode }) {
   return (
     <div className="landing-root min-h-screen bg-paper text-ink flex flex-col font-sans">
-      <LandingNav badge={badge} />
+      <LandingNav badge={badge} signIn={signIn} />
       <main className="flex-1 w-full min-w-0">{children}</main>
       <LandingFooter />
     </div>
