@@ -18,7 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { StatCardSkeletonGrid, TableSkeletonRows } from '@/components/ui/Skeleton';
 import { AnnouncementsSection } from '@/components/ui/AnnouncementsSection';
-import { INACTIVITY_THRESHOLD_SECONDS } from '@/lib/core/absences';
+import { useAttendanceSweep } from '@/hooks/useAttendanceSweep';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -42,28 +42,8 @@ export default function AdminDashboard() {
   useEffect(() => {
   }, []);
 
-  // Same no-call-no-show / inactivity auto-absence check as hr/page.tsx —
-  // safe to run from both HR's and Admin's dashboards (whichever loads with
-  // real data first "wins"; runAbsenceCheck only ever creates NEW records
-  // for employee+date combinations not already decided, so calling it from
-  // both pages is a no-op the second time).
-  useEffect(() => {
-    if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
-    const fiveDaysAgo = new Date();
-    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-    // Orphan-shift cleanup runs first — see the matching comment in
-    // hr/page.tsx and autoCloseOrphanTrackedShifts in hrData.ts.
-    // autoCloseStaleOpenShifts is the catch-all hard cap that runs right
-    // after (see its comment in hrData.ts) — fixes the 3000+ minute shifts.
-    hrActions.autoCloseOrphanTrackedShifts(timesheets)
-      .catch(() => { /* best-effort */ })
-      .then(() => hrActions.autoCloseStaleOpenShifts(timesheets, employees))
-      .catch(() => { /* best-effort */ })
-      .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString(), minDurationSeconds: INACTIVITY_THRESHOLD_SECONDS }))
-      .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
-      .catch(() => { /* best-effort */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- sweep runs when the data finishes loading or its size changes, not on every refetch of identical rows
-  }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
+  // The no-call-no-show / inactivity absence sweep (closes stuck shifts, then records new absences, which feed payroll deductions).
+  useAttendanceSweep({ employees, timesheets, leaves, loading: isEmployeesLoading || isTimesheetsLoading || isLeavesLoading });
 
 
   const handleCEOAction = async (id: string, action: 'approve' | 'reject') => {

@@ -9,13 +9,13 @@ import { Badge } from '@/components/ui/Badge';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { UsersIcon as Users, ClockIcon as Clock } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
-import { hrActions, Profile, useProfiles, useLeaves, useTasks, useTimesheets, displayName } from '@/lib/hrData';
+import { Profile, useProfiles, useLeaves, useTasks, useTimesheets, displayName } from '@/lib/hrData';
 import { ActiveEmployeesCard } from '@/components/ui/ActiveEmployeesCard';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { ButtonLink } from '@/components/ui/Button';
 import { ListSkeleton, StatCardSkeletonGrid } from '@/components/ui/Skeleton';
 import { AnnouncementsSection } from '@/components/ui/AnnouncementsSection';
-import { INACTIVITY_THRESHOLD_SECONDS } from '@/lib/core/absences';
+import { useAttendanceSweep } from '@/hooks/useAttendanceSweep';
 
 export default function HRDashboard() {
   const router = useRouter();
@@ -49,36 +49,8 @@ export default function HRDashboard() {
     return () => window.removeEventListener('globalSearch', handleSearch);
   }, []);
 
-  // No-call-no-show / inactivity auto-absence check — Pakistan-region
-  // employees who haven't started a shift on a weekday (with no approved
-  // leave), or who were inactive 35+ minutes during a shift, get marked
-  // absent + a 2-days'-pay deduction that automatically shows up in payroll
-  // (see AbsenceRecord/runAbsenceCheck/computePayrollView in hrData.ts).
-  // This fires new notifications + creates the persisted AbsenceRecord the
-  // moment HR's dashboard loads with real data — no-ops on every subsequent
-  // load unless a new absence has actually occurred since the last check.
-  useEffect(() => {
-    if (isEmployeesLoading || isTimesheetsLoading || isLeavesLoading || employees.length === 0) return;
-    const fiveDaysAgo = new Date();
-    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-    // Orphan-shift cleanup runs first — closing any tracked shift whose
-    // desktop agent stopped reporting in (PC shutdown, killed process,
-    // etc.) before runAbsenceCheck sees it, so a still-open overnight shift
-    // never gets misread as either "still worked" or a multi-hour false
-    // inactivity absence (see autoCloseOrphanTrackedShifts in hrData.ts).
-    // autoCloseStaleOpenShifts runs right after as a catch-all for anything
-    // still open past a hard 16h cap regardless of category (GPS, manual,
-    // or untracked) — this is what was behind employees showing 3000+
-    // minutes of shift time in a day.
-    hrActions.autoCloseOrphanTrackedShifts(timesheets)
-      .catch(() => { /* best-effort */ })
-      .then(() => hrActions.autoCloseStaleOpenShifts(timesheets, employees))
-      .catch(() => { /* best-effort */ })
-      .then(() => hrActions.getInactivityLogs({ sinceISO: fiveDaysAgo.toISOString(), minDurationSeconds: INACTIVITY_THRESHOLD_SECONDS }))
-      .then(inactivityLogs => hrActions.runAbsenceCheck(employees, timesheets, leaves, inactivityLogs))
-      .catch(() => { /* best-effort */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- sweep runs when the data finishes loading or its size changes, not on every refetch of identical rows
-  }, [employees.length, timesheets.length, leaves.length, isEmployeesLoading, isTimesheetsLoading, isLeavesLoading]);
+  // The no-call-no-show / inactivity absence sweep (closes stuck shifts, then records new absences, which feed payroll deductions).
+  useAttendanceSweep({ employees, timesheets, leaves, loading: isEmployeesLoading || isTimesheetsLoading || isLeavesLoading });
   // Stats
   const pendingLeaves = leaves.filter(l => l.status === 'pending').length;
 
