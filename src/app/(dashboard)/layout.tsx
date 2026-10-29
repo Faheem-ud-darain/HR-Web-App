@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
-import { Profile, hrActions, useProfiles, useMyProfile, updateProfileSelf } from '@/lib/hrData';
+import { Profile, useProfiles, useMyProfile } from '@/lib/hrData';
 import { getSessionEmail, getSessionRole, clearSession, hydrateSessionFromNativeStorage, isValidRole, dashboardSectionForRole, SessionRole } from '@/lib/session';
 import { initPush } from '@/lib/push';
 import { Modal } from '@/components/ui/Modal';
@@ -16,10 +16,10 @@ import { ForcedPasswordChangeModal } from '@/components/ui/ForcedPasswordChangeM
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
 import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHandler';
 import { useAnyModalOpen } from '@/lib/modalStack';
-import { ShieldWarningIcon as ShieldAlert } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import { OnboardingFlow } from '@/components/layout/OnboardingFlow';
+import { ApprovalGate } from '@/components/layout/onboarding/ApprovalGate';
 import { ConsentOverlay } from '@/components/layout/ConsentOverlay';
 import { FloatingAssistant } from '@/components/assistant/FloatingAssistant';
 
@@ -259,70 +259,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // 'rejected' — undefined (employees onboarded before this feature
   // existed) is left alone so nobody already using the app gets locked out.
   if ((role === 'employee' || role === 'team_lead') && profile && profile.onboardingCompleted && (profile.approvalStatus === 'pending' || profile.approvalStatus === 'rejected')) {
-    const isRejected = profile.approvalStatus === 'rejected';
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm text-center space-y-4">
-          <div className={`h-14 w-14 rounded-full flex items-center justify-center mx-auto ${isRejected ? 'bg-rose-50' : 'bg-amber-50'}`}>
-            {isRejected ? (
-              <ShieldAlert weight="duotone" className="h-6 w-6 text-rose-500" />
-            ) : (
-              <svg className="animate-spin h-7 w-7 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            )}
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">
-              {isRejected ? 'Documents Need Another Look' : 'Almost There — Awaiting HR Approval'}
-            </h1>
-            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-              {isRejected
-                ? 'HR/Admin reviewed your onboarding documents and flagged an issue. Please reach out to HR to sort it out before your dashboard is unlocked.'
-                : "You've completed onboarding — thanks! HR/Admin is verifying your documents now. Your dashboard will unlock automatically once you're approved."}
-            </p>
-          </div>
-          {isRejected && profile.approvalRejectionReason && (
-            <div className="bg-rose-50 border border-rose-100 text-rose-700 text-xs font-semibold p-3 rounded-lg text-left">
-              <span className="font-bold">HR note:</span> {profile.approvalRejectionReason}
-            </div>
-          )}
-          {isRejected && (
-            <div className="pt-2 space-y-2">
-              <Button
-                variant="primary"
-                size="md"
-                fullWidth
-                onClick={async () => {
-                  if (profile?.id) {
-                    await updateProfileSelf({
-                      onboardingCompleted: false,
-                    });
-                    window.location.reload();
-                  }
-                }}
-                className="shadow-md shadow-orange-600/10"
-              >
-                Re-submit Documents
-              </Button>
-            </div>
-          )}
-          <Button
-            variant="secondary"
-            size="md"
-            fullWidth
-            onClick={async () => {
-              await hrActions.performLogout(email || '', role);
-              clearSession();
-              router.push('/auth');
-            }}
-          >
-            Log Out
-          </Button>
-        </div>
-      </div>
-    );
+    return <ApprovalGate profile={profile} email={email} role={role} />;
   }
 
   return (

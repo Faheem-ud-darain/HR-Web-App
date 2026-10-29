@@ -75,6 +75,7 @@ export const GearIcon = named('gear', Ph.GearIcon);
 export const GiftIcon = named('gift', Ph.GiftIcon);
 export const GlobeIcon = named('globe', Ph.GlobeIcon);
 export const HeadsetIcon = named('headset', Ph.HeadsetIcon);
+export const HourglassHighIcon = named('hourglass-high', Ph.HourglassHighIcon);
 export const ImageBrokenIcon = named('image-broken', Ph.ImageBrokenIcon);
 export const ImageIcon = named('image', Ph.ImageIcon);
 export const InfoIcon = named('info', Ph.InfoIcon);

@@ -41,7 +41,7 @@ export function OnboardingList({ employees, loading, onReview }: { employees: Pr
                       <Td className="capitalize font-medium text-slate-800">
                         {emp.jobTitle || 'Employee'} <span className="text-caption text-slate-400 font-bold uppercase">({emp.role})</span>
                       </Td>
-                      <Td align="center" className="capitalize font-semibold text-slate-500">{emp.gender || 'male'}</Td>
+                      <Td align="center" className="capitalize font-semibold text-slate-500">{emp.gender || '—'}</Td>
                       <Td><Badge variant={status.variant}>{status.label}</Badge></Td>
                       <Td align="center">{canReviewDocuments(emp) && <Button variant="ghost" size="sm" className="!text-orange-600 !bg-orange-50 hover:!bg-orange-100" onClick={() => onReview(emp)}>Review Docs</Button>}</Td>
                     </Tr>
@@ -74,10 +74,10 @@ export function OnboardingList({ employees, loading, onReview }: { employees: Pr
                 </div>
                 <div>
                   <p className="text-caption text-slate-400 font-semibold uppercase">Gender</p>
-                  <p className="text-xs font-semibold text-slate-700 capitalize">{emp.gender || 'male'}</p>
+                  <p className="text-xs font-semibold text-slate-700 capitalize">{emp.gender || '—'}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-caption text-slate-400 font-semibold uppercase">Invited Date</p>
+                  <p className="text-caption text-slate-400 font-semibold uppercase">Joining Date</p>
                   <p className="text-xs font-medium text-slate-600">{emp.joinedDate}</p>
                 </div>
               </div>

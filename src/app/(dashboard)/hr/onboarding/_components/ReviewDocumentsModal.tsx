@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { DownloadSimpleIcon as Download, EyeIcon as Eye, FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, XCircleIcon as XCircle } from '@/components/ui/icons';
 import { approveOnboardingServer, displayName, rejectOnboardingServer, useProfileDocuments, type Profile } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
-import { onboardingStatus } from '@/lib/core/onboarding';
+import { bankIdLabel, onboardingStatus } from '@/lib/core/onboarding';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FieldLabel } from '@/components/ui/FieldLabel';
@@ -97,7 +97,7 @@ export function ReviewDocumentsModal({ employee, onDone, onClose }: { employee: 
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Field label="Bank" value={employee.bankName || '—'} />
-              <Field label="Account / IBAN" value={`${employee.accountNumber || '—'} · ${employee.iban || '—'}`} />
+              <Field label={`Account / ${bankIdLabel(employee.region)}`} value={`${employee.accountNumber || '—'} · ${employee.iban || '—'}`} />
             </div>
           </div>
 
