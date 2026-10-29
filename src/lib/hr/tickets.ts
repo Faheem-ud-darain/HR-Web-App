@@ -14,6 +14,7 @@ import {
 import { hrActions, buildNotificationLink, isTechnicalSupportMember, useProfiles } from '../hrData';
 import { getSessionEmail, getSessionRole } from '../session';
 import { isStaffRole } from '../core/profiles';
+import { canSeeTicket, fetchesEveryTicket, ticketQuery } from '../core/ticketVisibility';
 import { pbFilter } from '../pbFilter';
 import { POLL_MS, POLL_OPTIONS } from './polling';
 import { every } from '../idle';
@@ -136,9 +137,11 @@ function toTicket(t: PbRow): Ticket {
 // the whole company and hiding the rest client-side.
 export function useTickets(limit: number = 50, status?: 'open' | 'closed', options: { enabled?: boolean } = {}) {
   const email = (getSessionEmail() || '').toLowerCase();
-  const staff = isStaffRole(getSessionRole());
+  const role = getSessionRole() || '';
+  const staff = isStaffRole(role);
   const { data: roster } = useProfiles();
   const technical = !staff && isTechnicalSupportMember(roster?.find(p => p.email?.toLowerCase() === email)?.teams);
+  const viewer = { role, email, technical };
   return useQuery({
     queryKey: ['hr_tickets', limit, status || 'all', staff ? 'staff' : email, technical],
     enabled: (staff || !!email) && (options.enabled ?? true),
@@ -146,14 +149,15 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed', optio
       try {
         const parts: string[] = [];
         if (status) parts.push(pbFilter('status = {:status}', { status }));
-        if (!staff) {
-          parts.push(technical
-            ? `(${pbFilter('employee_email ~ {:email}', { email })} || department = "technical")`
-            : pbFilter('employee_email ~ {:email}', { email }));
+        const query = ticketQuery(viewer);
+        if (query) {
+          parts.push(query.includeTechnical
+            ? `(${pbFilter('employee_email ~ {:email}', { email: query.ownEmail })} || department = "technical")`
+            : pbFilter('employee_email ~ {:email}', { email: query.ownEmail }));
         }
         const tickets = await loadTicketsLight(limit, parts.length ? parts.join(' && ') : undefined);
-        // `~` is a "contains" match — drop another person's address that merely contains this one.
-        return staff ? tickets : tickets.filter(t => t.employeeEmail.toLowerCase() === email || (technical && t.department === 'technical'));
+        // `~` is a "contains" match, so drop another person's address that merely contains this one.
+        return fetchesEveryTicket(viewer) ? tickets : tickets.filter(t => canSeeTicket(viewer, t));
       } catch (err) {
         console.error('[hrData] getList error in hr_tickets:', err);
         return [];

@@ -19,6 +19,7 @@ import { NewTicketModal } from '@/components/ui/tickets/NewTicketModal';
 import { InspectEmployeeModal } from '@/components/ui/tickets/InspectEmployeeModal';
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import { useTicketLiveState } from '@/components/ui/tickets/useTicketLiveState';
+import { canSeeTicket } from '@/lib/core/ticketVisibility';
 
 interface TicketsViewProps {
   role: TicketRole;
@@ -115,10 +116,8 @@ export function TicketsView({ role }: TicketsViewProps) {
   // Scope the fetched tickets to what this role may see, keep the open conversation live, and apply the
   // one-shot ?ticketId= deep link from a notification click.
   const applyTickets = (all: Ticket[], email: string, profile: Profile | null) => {
-    if (role === 'admin') setTickets(all);
-    else if (role === 'hr') setTickets(all.filter(t => t.department === 'hr'));
-    else if (isTechnicalSupportMember(profile?.teams)) setTickets(all.filter(t => t.department === 'technical' || t.employeeEmail.toLowerCase() === email.toLowerCase()));
-    else setTickets(all.filter(t => t.employeeEmail.toLowerCase() === email.toLowerCase()));
+    const viewer = { role, email, technical: isTechnicalSupportMember(profile?.teams) };
+    setTickets(all.filter(t => canSeeTicket(viewer, t)));
 
     // Incoming replies from other users/devices show up without the viewer reselecting the ticket.
     setSelectedTicket(prev => (prev ? all.find(t => t.id === prev.id) || prev : prev));
