@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { WrenchIcon as Wrench, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
-import { Button } from '@/components/ui/Button';
+import { WrenchIcon as Wrench } from '@/components/ui/icons';
+import { AcknowledgeModal } from '@/components/ui/AcknowledgeModal';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { formatInViewerLocalTime } from '@/lib/timezone';
 import { useNow } from '@/lib/useNow';
@@ -63,51 +63,18 @@ export function MaintenanceNoticePopup({ email }: MaintenanceNoticePopupProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-toast)] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-enter"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="maintenance-popup-title"
+    <AcknowledgeModal
+      tone="sky" icon={Wrench} eyebrow={alreadyStarted ? 'Maintenance In Progress' : 'Scheduled System Maintenance'} title={current.title}
+      note="This will keep appearing until you acknowledge it"
+      actionLabel="Got It" busyLabel="Marking…" busy={marking} onAction={handleMarkRead}
     >
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden dialog-enter">
-        <div className="px-5 pt-5 pb-4 bg-sky-50 border-b border-sky-200 flex items-start gap-3">
-          <div className="h-9 w-9 rounded-full bg-sky-100 border border-sky-200 flex items-center justify-center shrink-0">
-            <Wrench className="h-5 w-5 text-sky-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-caption font-bold text-sky-700 uppercase tracking-wider">
-              {alreadyStarted ? 'Maintenance In Progress' : 'Scheduled System Maintenance'}
-            </p>
-            <h2 id="maintenance-popup-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
-              {current.title}
-            </h2>
-          </div>
-        </div>
-
-        <div className="px-5 py-4 max-h-[45vh] overflow-y-auto">
-          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{current.message}</p>
-          <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <p className="text-caption font-bold text-slate-400 uppercase tracking-wider mb-1">Maintenance Window (your local time)</p>
-            <p className="text-xs font-bold text-slate-800">
-              {formatInViewerLocalTime(current.startAt)} — {formatInViewerLocalTime(current.endAt)}
-            </p>
-          </div>
-        </div>
-
-        <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <p className="text-caption text-slate-400 font-semibold">
-            This will keep appearing until you acknowledge it
-          </p>
-          <Button
-            variant="primary"
-            onClick={handleMarkRead}
-            disabled={marking}
-            className="shrink-0 shadow-sm active:scale-97 transition-transform"
-          >
-            <CheckCircle2 className="h-4 w-4" /> {marking ? 'Marking…' : 'Got It'}
-          </Button>
-        </div>
+      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{current.message}</p>
+      <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+        <p className="text-caption font-bold text-slate-400 uppercase tracking-wider mb-1">Maintenance Window (your local time)</p>
+        <p className="text-xs font-bold text-slate-800">
+          {formatInViewerLocalTime(current.startAt)} — {formatInViewerLocalTime(current.endAt)}
+        </p>
       </div>
-    </div>
+    </AcknowledgeModal>
   );
 }

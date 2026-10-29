@@ -19,7 +19,7 @@ interface ProfileCardBodyProps {
   onClose: () => void;
 }
 
-// The scrolling body of the card for one employee: the view, the edit form or the offboarding checklist, and the final
+// The body of the card for one employee: the view, the edit form or the offboarding checklist, and the final
 // offboarding confirmation. Mounted per employee, so switching person starts from a clean state.
 export function ProfileCardBody({ profile, viewerRole, canManage, onChanged, onClose }: ProfileCardBodyProps) {
   const [mode, setMode] = useState<'view' | 'edit' | 'offboard'>('view');
@@ -64,7 +64,7 @@ export function ProfileCardBody({ profile, viewerRole, canManage, onChanged, onC
 
   return (
     <>
-      <div className="px-5 py-5 overflow-y-auto flex-1 space-y-5">
+      <div className="space-y-5">
         <ProfileHeader profile={profile} viewerRole={viewerRole} />
 
         {mode === 'view' && (

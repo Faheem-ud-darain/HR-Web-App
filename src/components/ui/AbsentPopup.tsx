@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { WarningOctagonIcon as AlertOctagon, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
-import { Button } from '@/components/ui/Button';
+import { WarningOctagonIcon as AlertOctagon } from '@/components/ui/icons';
+import { AcknowledgeModal } from '@/components/ui/AcknowledgeModal';
 import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate } from '@/lib/hrData';
 
 interface AbsentPopupProps {
@@ -16,8 +16,7 @@ interface AbsentPopupProps {
 // marked absent is never a silent surprise they only discover on payday.
 //
 // Same non-dismissible-except-its-own-button shape as AnnouncementPopup
-// (not built on the shared <Modal>, which closes on backdrop/Escape/X) —
-// the only way out is "I Understand", which calls
+// (both use AcknowledgeModal) — the only way out is "I Understand", which calls
 // hrActions.acknowledgeAbsence (a real server write). Shown one record at a
 // time; acknowledging one immediately reveals the next pending one, if any.
 //
@@ -79,57 +78,28 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
     : `You did not start a shift on this day and there was no approved leave covering it.`;
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-toast)] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-enter"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="absent-popup-title"
+    <AcknowledgeModal
+      tone="rose" icon={AlertOctagon} eyebrow="Marked Absent" title={current.date}
+      note={pending.length > 1 ? `${pending.length} absences need your acknowledgment` : undefined}
+      actionLabel="I Understand" busy={acking} onAction={handleAcknowledge}
     >
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden dialog-enter">
-        <div className="px-5 pt-5 pb-4 bg-rose-50 border-b border-rose-200 flex items-start gap-3">
-          <div className="h-9 w-9 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center shrink-0">
-            <AlertOctagon className="h-5 w-5 text-rose-600" />
+      <div className="space-y-3">
+        <p className="text-sm text-slate-700 leading-relaxed">{reasonText}</p>
+        {coveringLeave ? (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+            <p className="text-caption font-bold text-emerald-600 uppercase tracking-wider">No Absence Deduction</p>
+            <p className="text-sm font-bold text-emerald-700 mt-0.5">Charged as {coveringLeave.type} Leave instead — see your Payroll page for that amount.</p>
           </div>
-          <div className="min-w-0">
-            <p className="text-caption font-bold text-rose-700 uppercase tracking-wider">Marked Absent</p>
-            <h2 id="absent-popup-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
-              {current.date}
-            </h2>
+        ) : (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+            <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Deduction Applied</p>
+            <p className="text-sm font-bold text-rose-600 mt-0.5">{formatMoney(current.deductionAmount, 'Pakistan')} (2 days&apos; pay)</p>
           </div>
-        </div>
-
-        <div className="px-5 py-4 max-h-[45vh] overflow-y-auto space-y-3">
-          <p className="text-sm text-slate-700 leading-relaxed">{reasonText}</p>
-          {coveringLeave ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
-              <p className="text-caption font-bold text-emerald-600 uppercase tracking-wider">No Absence Deduction</p>
-              <p className="text-sm font-bold text-emerald-700 mt-0.5">Charged as {coveringLeave.type} Leave instead — see your Payroll page for that amount.</p>
-            </div>
-          ) : (
-            <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-              <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Deduction Applied</p>
-              <p className="text-sm font-bold text-rose-600 mt-0.5">{formatMoney(current.deductionAmount, 'Pakistan')} (2 days&apos; pay)</p>
-            </div>
-          )}
-          <p className="text-caption text-slate-400 leading-relaxed">
-            If you believe this is a mistake, contact HR — this deduction shows up on your Payroll and Absent Details pages.
-          </p>
-        </div>
-
-        <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <p className="text-caption text-slate-400 font-semibold">
-            {pending.length > 1 ? `${pending.length} absences need your acknowledgment` : ' '}
-          </p>
-          <Button
-            variant="primary"
-            onClick={handleAcknowledge}
-            disabled={acking}
-            className="shrink-0 shadow-sm active:scale-97 transition-transform"
-          >
-            <CheckCircle2 className="h-4 w-4" /> {acking ? 'Saving…' : 'I Understand'}
-          </Button>
-        </div>
+        )}
+        <p className="text-caption text-slate-400 leading-relaxed">
+          If you believe this is a mistake, contact HR — this deduction shows up on your Payroll and Absent Details pages.
+        </p>
       </div>
-    </div>
+    </AcknowledgeModal>
   );
 }
