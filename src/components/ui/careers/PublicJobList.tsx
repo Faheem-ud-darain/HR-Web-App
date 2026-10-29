@@ -20,7 +20,7 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
   const groups = Array.from(new Set(shown.map(j => j.department)));
 
   return (
-    <section className="space-y-8">
+    <section id="open-positions" className="scroll-mt-24 space-y-8">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-white leading-[0.95]">Open Positions ({shown.length})</h2>
         <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">

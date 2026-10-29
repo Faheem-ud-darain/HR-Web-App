@@ -22,7 +22,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
     { value: openPositions, label: 'Open Positions' },
   ];
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
+    <section id="who-we-are" className="scroll-mt-24 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
       <div className="lg:col-span-6 space-y-6">
         <div className="space-y-3">
           <span className={EYEBROW}>Global Freight & Software</span>
@@ -66,7 +66,7 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
 // The perks as a ruled grid of four, like a spec sheet.
 export function LifeAtDelcargo() {
   return (
-    <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
+    <section id="life-at-delcargo" className="scroll-mt-24 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
       <div className="lg:col-span-4 space-y-3">
         <p className={EYEBROW}>Perks & Compensation</p>
         <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-white leading-[0.95]">Life at DelCargo</h2>
