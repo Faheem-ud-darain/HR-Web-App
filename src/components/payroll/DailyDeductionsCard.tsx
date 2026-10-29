@@ -18,17 +18,18 @@ const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateStr
 // Pay taken off for missed days, day by day: a switch between the months that have any (this month first), the month's
 // total and number of days, and one line per day with what happened and what was charged. A day an approved leave now
 // covers stays on the list but is not charged.
-export function DailyDeductionsCard({ records, leaves, fullName, region }: { records: MyAbsenceRecord[]; leaves: LeaveApplication[]; fullName?: string; region?: Profile['region'] }) {
+export function DailyDeductionsCard({ records, leaves, fullName, region, monthlyPay }: { records: MyAbsenceRecord[]; leaves: LeaveApplication[]; fullName?: string; region?: Profile['region']; monthlyPay: number }) {
   const currentMonth = getNYDateString(new Date()).slice(0, 7);
   const months = useMemo(() => deductionMonths(records, currentMonth), [records, currentMonth]);
   const [picked, setPicked] = useState<string | null>(null);
   const month = picked && months.includes(picked) ? picked : currentMonth;
 
   const lines = useMemo(
-    () => deductionLines(records.filter(r => r.date.startsWith(month)), date => (fullName ? getApprovedLeaveOnDate(leaves, fullName, date) : null)),
-    [records, leaves, fullName, month],
+    () => deductionLines(records.filter(r => r.date.startsWith(month)), date => (fullName ? getApprovedLeaveOnDate(leaves, fullName, date) : null), monthlyPay),
+    [records, leaves, fullName, month, monthlyPay],
   );
-  const charged = lines.filter(l => !l.covered);
+  const charged = lines.filter(l => !l.covered && l.amount > 0);
+  const capped = lines.some(l => l.shortBy > 0);
   const total = charged.reduce((sum, l) => sum + l.amount, 0);
 
   return (
@@ -39,7 +40,7 @@ export function DailyDeductionsCard({ records, leaves, fullName, region }: { rec
         {months.length > 1 && <Tabs variant="chips" aria-label="Choose a month" value={month} onChange={setPicked} items={months.map(m => ({ value: m, label: m === currentMonth ? `${monthLabel(m)} (this month)` : monthLabel(m) }))} />}
 
         <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Total deducted" size="md" valueTone={total > 0 ? 'danger' : 'default'} value={total > 0 ? `-${formatMoney(total, region)}` : formatMoney(0, region)} />
+          <StatCard label="Total deducted" size="md" valueTone={total > 0 ? 'danger' : 'default'} value={total > 0 ? `-${formatMoney(total, region)}` : formatMoney(0, region)} sub={capped ? 'Pay can go down to zero, not below' : undefined} />
           <StatCard label="Days charged" size="md" value={charged.length} />
         </div>
 
@@ -54,9 +55,14 @@ export function DailyDeductionsCard({ records, leaves, fullName, region }: { rec
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-900">{dayLabel(line.date)}</p>
                     <p className="text-caption font-semibold leading-snug text-slate-500">{line.label}</p>
+                    {line.shortBy > 0 && (
+                      <p className="mt-0.5 text-caption font-semibold leading-snug text-slate-500">
+                        {line.amount === 0 ? 'Your pay was already at zero, so nothing more was taken.' : `Only part was taken (${formatMoney(line.shortBy, region)} less) because your pay ran out.`}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <span className={`shrink-0 text-sm font-bold ${line.covered ? 'text-emerald-600' : 'text-rose-600'}`}>{line.covered ? 'Not charged' : `-${formatMoney(line.amount, region)}`}</span>
+                <span className={`shrink-0 text-sm font-bold ${line.covered || line.amount === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{line.covered || line.amount === 0 ? 'Not charged' : `-${formatMoney(line.amount, region)}`}</span>
               </li>
             ))}
           </ul>

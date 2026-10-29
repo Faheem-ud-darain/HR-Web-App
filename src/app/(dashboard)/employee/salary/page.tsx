@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { APP_TIMEZONE } from '@/lib/timezone';
+import { netPay } from '@/lib/core/payrollView';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DailyDeductionsCard } from '@/components/payroll/DailyDeductionsCard';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
@@ -93,7 +94,7 @@ export default function EmployeeSalaryPage() {
     increment: pendingIncrement,
     deductions: payrollRecord.deductions || 0,
     bonus: payrollRecord.bonus || 0,
-    net: baseSalary + pendingIncrement + (payrollRecord.bonus || 0) - (payrollRecord.deductions || 0),
+    net: netPay({ baseSalary, incrementAmount: pendingIncrement, bonus: payrollRecord.bonus || 0, deductions: payrollRecord.deductions || 0 }),
     processed: !!payrollRecord.processed,
     deductionBreakdown: payrollRecord.deductionBreakdown || [],
     reservedThisMonth: payrollRecord.reservedThisMonth || 0,
@@ -166,7 +167,7 @@ export default function EmployeeSalaryPage() {
         </div>
       )}
 
-      <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} />
+      <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} monthlyPay={baseSalary} />
 
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Historical Pay slips</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">

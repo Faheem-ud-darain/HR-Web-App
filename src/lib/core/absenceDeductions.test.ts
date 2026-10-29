@@ -17,6 +17,12 @@ describe('deductionLines / deductionMonths', () => {
     expect(line).toMatchObject({ amount: 0, covered: true });
     expect(line.label).toContain('Sick leave');
   });
+  it('never takes more than the pay: the oldest days use it up first', () => {
+    const lines = deductionLines([rec('a', '2026-10-02', 'no_clock_in'), rec('b', '2026-10-09', 'no_clock_in'), rec('c', '2026-10-16', 'no_clock_in')], none, 12000);
+    expect(lines.map(l => [l.id, l.amount, l.shortBy])).toEqual([['c', 2000, 3000], ['b', 5000, 0], ['a', 5000, 0]]);
+    expect(lines.reduce((sum, l) => sum + l.amount, 0)).toBe(12000);
+    expect(deductionLines([rec('a', '2026-10-02', 'no_clock_in')], none, 0)[0]).toMatchObject({ amount: 0, shortBy: 5000 });
+  });
   it('gives the months with deductions, always including the current one, newest first', () => {
     expect(deductionMonths([{ date: '2026-08-04' }, { date: '2026-10-09' }, { date: '2026-08-20' }], '2026-10')).toEqual(['2026-10', '2026-08']);
     expect(deductionMonths([{ date: '2026-08-04' }], '2026-10')).toEqual(['2026-10', '2026-08']);

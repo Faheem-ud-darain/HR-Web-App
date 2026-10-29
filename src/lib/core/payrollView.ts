@@ -4,9 +4,9 @@
 // deduction reasons in plain groups, and which people need a look before anyone pays them.
 import type { PayrollRecord, Profile } from '../hr/types';
 
-/** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions. The ONE definition used by rows, cards, exports and the pay slip. */
+/** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions, never below zero (deductions can take pay down to nothing, not past it). The ONE definition used by rows, cards, exports and the pay slip. */
 export function netPay(r: Pick<PayrollRecord, 'baseSalary' | 'incrementAmount' | 'bonus' | 'deductions'> & { earlierPay?: number }): number {
-  return (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0);
+  return Math.max(0, (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0));
 }
 
 export type PayrollGroupKey = 'hours' | 'absence' | 'leave' | 'other' | 'held' | 'later';

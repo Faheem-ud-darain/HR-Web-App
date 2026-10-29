@@ -108,26 +108,46 @@ export function describeAbsence(reason: AbsenceCandidate['reason'], dateStr: str
 }
 
 /** One day on the employee's "Daily Deductions" list: what happened, and what was actually charged for it. */
-export interface DeductionLine { id: string; date: string; label: string; amount: number; covered: boolean }
+export interface DeductionLine {
+  id: string; date: string; label: string;
+  /** What was actually taken for the day. */
+  amount: number;
+  /** An approved leave now covers the day, so nothing is taken. */
+  covered: boolean;
+  /** How much of the day's deduction was NOT taken because the pay had already run out (0 when all of it was). */
+  shortBy: number;
+}
 
 const hoursMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${Math.round(minutes) % 60}m`;
 
 /**
  * The employee-facing line for each absence record, newest day first. A day that an approved leave now covers (approved
  * after the absence was recorded) reads as that leave and is charged nothing, matching what payroll really deducts.
- * `leaveOn` finds the approved leave covering a date, if any.
+ * `leaveOn` finds the approved leave covering a date, if any. `payAvailable` is the most that can be taken in total (the
+ * month's pay): deductions never push pay below zero.
  */
-export function deductionLines(records: MyAbsenceRecord[], leaveOn: (date: string) => LeaveApplication | null): DeductionLine[] {
-  return [...records].sort((a, b) => b.date.localeCompare(a.date)).map(r => {
+export function deductionLines(records: MyAbsenceRecord[], leaveOn: (date: string) => LeaveApplication | null, payAvailable: number = Infinity): DeductionLine[] {
+  const lines = [...records].sort((a, b) => b.date.localeCompare(a.date)).map((r): DeductionLine => {
     const leave = leaveOn(r.date);
-    if (leave) return { id: r.id, date: r.date, label: `On ${leave.type} leave (approved after this was recorded)`, amount: 0, covered: true };
+    if (leave) return { id: r.id, date: r.date, label: `On ${leave.type} leave (approved after this was recorded)`, amount: 0, covered: true, shortBy: 0 };
     const label = r.reason === 'no_clock_in'
       ? "Didn't start a shift that day"
       : r.reason === 'under_4_hours'
         ? `Only ${hoursMinutes(r.workedMinutes || 0)} worked (the minimum is ${MIN_REQUIRED_WORK_MINUTES / 60} hours)`
         : `Mouse inactive for ${Math.round(r.inactivityMinutes || INACTIVITY_THRESHOLD_SECONDS / 60)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})`;
-    return { id: r.id, date: r.date, label, amount: r.deductionAmount, covered: false };
+    return { id: r.id, date: r.date, label, amount: r.deductionAmount, covered: false, shortBy: 0 };
   });
+  // Pay can be taken down to zero but never past it: the oldest days use it up first, and a day that comes after the pay
+  // has run out is charged only what is left (possibly nothing).
+  let left = Math.max(0, payAvailable);
+  for (const line of [...lines].reverse()) {
+    if (line.covered) continue;
+    const taken = Math.min(line.amount, left);
+    left -= taken;
+    line.shortBy = line.amount - taken;
+    line.amount = taken;
+  }
+  return lines;
 }
 
 /** The pay months ("YYYY-MM") that have a deduction, plus the current one, newest first. */

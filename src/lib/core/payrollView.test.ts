@@ -8,6 +8,10 @@ function rec(over: Partial<PayrollRecord> = {}): PayrollRecord {
 const bank = { bankName: 'HBL', accountNumber: '123', iban: '' };
 
 describe('netPay', () => {
+  it('never goes below zero when deductions are more than the pay', () => {
+    expect(netPay(rec({ baseSalary: 40000, incrementAmount: 0, bonus: 0, deductions: 55000 }))).toBe(0);
+    expect(netPay(rec({ baseSalary: 40000, incrementAmount: 5000, bonus: 1000, deductions: 46000 }))).toBe(0);
+  });
   it('includes the increment (one definition for rows, cards and the pay slip)', () => {
     expect(netPay(rec({ baseSalary: 44000, incrementAmount: 10000, bonus: 500, deductions: 4000 }))).toBe(50500);
   });

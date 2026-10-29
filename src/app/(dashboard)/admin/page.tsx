@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
+import { netPay } from '@/lib/core/payrollView';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
@@ -98,10 +99,10 @@ export default function AdminDashboard() {
   const compiledPayroll = hrActions.computePayrollView(employees, payrollRecords, leaves);
   const totalPayrollUSD = compiledPayroll
     .filter(emp => emp.region === 'USA')
-    .reduce((acc, emp) => acc + (emp.baseSalary + emp.bonus - emp.deductions), 0);
+    .reduce((acc, emp) => acc + netPay(emp), 0);
   const totalPayrollPKR = compiledPayroll
     .filter(emp => emp.region !== 'USA')
-    .reduce((acc, emp) => acc + (emp.baseSalary + emp.bonus - emp.deductions), 0);
+    .reduce((acc, emp) => acc + netPay(emp), 0);
   const hrApprovedLeaves = leaves.filter(l => l.status === 'hr_approved');
 
   return (
