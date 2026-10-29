@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { PublicPage } from '@/components/landing/PublicPage';
+import { FloatingPaths } from '@/components/landing/FloatingPaths';
 import { NoticeModal } from '@/components/ui/NoticeModal';
 import { ForgotPasswordModal } from './_components/ForgotPasswordModal';
 import { useRouter } from 'next/navigation';
@@ -24,7 +24,7 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { ArrowLeftIcon as ArrowLeft, EyeIcon as Eye, EyeSlashIcon as EyeOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
+import { EyeIcon as Eye, EyeSlashIcon as EyeOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
@@ -236,21 +236,10 @@ export default function AuthPage() {
   }
 
   return (
-    // Uses arbitrary-value padding-top (below) instead of `p-4 pt-safe` —
-    // both would set padding-top at the same cascade specificity; see
-    // globals.css's .pt-safe comment for why that silently drops the fix.
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] font-sans fade-enter">
-      <div className="w-full max-w-5xl mb-4">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-orange-600 transition-colors"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to Home
-        </Link>
-      </div>
-      <Card className="w-full max-w-5xl bg-white border border-slate-200 rounded-xl overflow-hidden grid grid-cols-1 md:grid-cols-2 p-0">
-        {/* Left Side: Premium Image Cover */}
-        <div className="relative hidden md:flex flex-col justify-end p-8 bg-slate-900 overflow-hidden">
+    <PublicPage badge="Sign In" signIn={false}>
+      <div className="fade-enter mx-auto w-full max-w-6xl px-4 sm:px-8 pt-8 sm:pt-12 grid gap-6 lg:grid-cols-2 lg:gap-10">
+        {/* The panel: drifting lines over the warehouse, and what the portal is for. */}
+        <div className="relative hidden lg:flex min-h-[34rem] flex-col justify-end overflow-hidden rounded-3xl bg-ink/5 p-10">
           <img
             src="/delcargo_warehouse_hightech.webp"
             alt="Sign In Visual Cover"
@@ -258,32 +247,24 @@ export default function AuthPage() {
             height={900}
             fetchPriority="high"
             decoding="async"
-            className="absolute inset-0 w-full h-full object-cover opacity-75 object-center"
+            className="absolute inset-0 h-full w-full object-cover object-center opacity-30"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/30 to-transparent z-10" />
-          <div className="absolute right-0 top-0 bottom-0 w-36 bg-gradient-to-r from-transparent via-white/20 via-white/60 to-white z-10 pointer-events-none" />
-          <div className="relative z-20 space-y-1">
-            <span className="text-caption font-bold text-orange-400 uppercase tracking-widest bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-full w-fit">
-              DelCargo Portal
-            </span>
-            <h2 className="text-xl font-bold text-white uppercase tracking-wider mt-1" style={{ fontFamily: 'Georgia, serif' }}>
-              Streamlining Supply Chains
-            </h2>
+          <FloatingPaths />
+          <div className="absolute inset-0 bg-gradient-to-t from-paper via-paper/40 to-transparent" />
+          <div className="relative space-y-1">
+            <p className="text-caption font-bold uppercase tracking-widest text-brand">DelCargo Portal</p>
+            <p className="font-display text-2xl font-black uppercase tracking-tight text-ink">Streamlining Supply Chains</p>
           </div>
         </div>
 
-        {/* Right Side: Form Content container */}
-        <div className="p-8 sm:p-10 flex flex-col justify-center">
-          <CardHeader className="text-center pb-2 p-0 mb-6">
-            <div className="mx-auto bg-orange-600 h-11 w-11 rounded-xl flex items-center justify-center mb-4 shadow-md shadow-orange-500/20">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+        {/* The form. */}
+        <div className="flex flex-col justify-center py-6 lg:px-6">
+          <div className="mx-auto w-full max-w-md space-y-8">
+            <div className="space-y-2">
+              <h1 className="font-display font-black text-balance text-4xl sm:text-5xl leading-[0.95] tracking-[-0.03em] text-ink">Welcome back</h1>
+              <p className="text-base text-ink/70">Sign in to your HR Operations account</p>
             </div>
-            <CardTitle className="text-xl font-bold text-slate-900">Welcome back</CardTitle>
-            <p className="text-xs text-slate-500 mt-1 font-semibold">Sign in to your HR Operations account</p>
-          </CardHeader>
-          <CardContent className="p-0">
+            <div>
             {notice && !error && (
               <div className="bg-amber-50 text-amber-700 p-3 rounded-lg text-sm font-semibold mb-4 border border-amber-100">
                 {notice}
@@ -372,17 +353,10 @@ export default function AuthPage() {
                 ) : 'Sign In'}
               </button>
             </form>
-          </CardContent>
+          </div>
+          </div>
         </div>
-      </Card>
-
-
-      <Link
-        href="/privacy"
-        className="mt-4 text-caption font-semibold text-slate-400 hover:text-orange-600 transition-colors"
-      >
-        Privacy Policy
-      </Link>
+      </div>
 
       {isForgotOpen && (
         <ForgotPasswordModal
@@ -404,6 +378,6 @@ export default function AuthPage() {
           Your shift was still active when you last logged out, so it was automatically ended at that time. If you&apos;re continuing work, start a new shift from your dashboard.
         </NoticeModal>
       )}
-    </div>
+    </PublicPage>
   );
 }

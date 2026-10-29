@@ -1300,3 +1300,19 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 
 
 
+
+
+/* The sign-in panel's drifting curves: each sheet slides slowly back and forth (a transform, so it is composited). */
+@keyframes paths-drift-a {
+  0%, 100% { transform: translate3d(-3%, -2%, 0); }
+  50% { transform: translate3d(3%, 2%, 0); }
+}
+@keyframes paths-drift-b {
+  0%, 100% { transform: translate3d(3%, -2%, 0); }
+  50% { transform: translate3d(-3%, 2%, 0); }
+}
+.paths-drift-a { animation: paths-drift-a 28s ease-in-out infinite; }
+.paths-drift-b { animation: paths-drift-b 34s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .paths-drift-a, .paths-drift-b { animation: none; }
+}
