@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { adminFindProfileByEmail, adminFindByField } from '@/lib/pbAdmin';
+import { adminFindProfileByEmail, adminGetExtras } from '@/lib/pbAdmin';
 import { getPendingIncrement } from '@/lib/incrementMath';
 import { mapProfileRecord } from '@/lib/core/profiles';
 import { selfPayrollRecord, selfPayrollSince } from '@/lib/core/payrollSelf';
@@ -29,8 +29,7 @@ export async function GET(request: Request) {
 
     // lastIncrementProcessedYear and the reserved-balance amounts are not hr_profiles columns: they live in the
     // hr_profile_extras overlay (plan 027) and have to be read separately.
-    const extrasRow = await adminFindByField('hr_profile_extras', 'profile_id', row.id);
-    const profile = mapProfileRecord(row, extrasRow?.data || {});
+    const profile = mapProfileRecord(row, await adminGetExtras(row.id));
 
     const now = new Date();
     const inputs = await loadPayrollInputsFor(profile, now, selfPayrollSince(now));

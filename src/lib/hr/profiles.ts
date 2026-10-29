@@ -7,6 +7,7 @@
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
+import { OVERLAY_KEYS, PROFILE_DOC_KEYS } from '../profileFields';
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import { getOrCreateDeviceId, getAuthToken, getSessionEmail } from '../session';
@@ -89,8 +90,6 @@ export async function saveProfileExtras(profileId: string, extras: Partial<Profi
   await pbUpsertByField(PROFILE_EXTRAS_COLLECTION, 'profile_id', profileId, { data: { ...existing, ...extras } });
 }
 
-const PROFILE_DOC_KEYS: (keyof Profile)[] = ['cvFileName', 'cvFileData', 'identityDocs', 'passportFileName', 'passportFileData'];
-
 export async function getProfileDocuments(profileId: string): Promise<Partial<Profile>> {
   if (!profileId) return {};
   const row = await pbFindByField(PROFILE_DOCS_COLLECTION, 'profile_id', profileId);
@@ -153,13 +152,6 @@ function fromProfileFields(p: Partial<Profile>): PbRow {
   if (p.salaryStartDate !== undefined) fields.salary_start_date = p.salaryStartDate;
   return fields;
 }
-
-const OVERLAY_KEYS: (keyof Profile)[] = [
-  'offboarded', 'offboardDate', 'offboardingStatus', 'lastIncrementProcessedYear',
-  'accountCreationDate', 'alias', 'approvalStatus', 'approvalReviewedBy',
-  'approvalReviewedAt', 'approvalRejectionReason', 'personalPhone', 'companyPhone',
-  'exemptFromAbsenceCheck', 'reservedSalaryBalance', 'manualReservedAmount', 'manualReservedNote',
-];
 
 
 

@@ -6,8 +6,9 @@ import { DOCS_BUDGET_BYTES, overBudgetMessage, storedDocsBytes } from '@/lib/cor
 import {
   adminFindProfileByEmail,
   adminUpdateProfile,
-  adminFindByField,
-  adminUpsertByField,
+  adminGetExtras,
+  adminMergeExtras,
+  adminMergeDocs,
   adminUploadProfilePicture,
   adminGetProfileDocs,
 } from '@/lib/pbAdmin';
@@ -45,21 +46,6 @@ const REAL_FIELD_MAP: Record<string, string> = {
   onboardingCompleted: 'onboarding_completed',
 };
 
-// Plan 027 Phase 2: same hr_profile_extras/hr_profile_docs collections
-// (profile_id-keyed) admin/profile/route.ts uses — see that file's
-// getExtras/mergeExtras comment for the full rationale.
-async function getExtras(profileId: string): Promise<PbRow> {
-  const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
-  return row?.data || {};
-}
-async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
-  const existing = await getExtras(profileId);
-  await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
-}
-async function mergeDocs(profileId: string, existing: PbRow, patch: PbRow): Promise<void> {
-  await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
-}
-
 export async function GET(request: Request) {
   const session = await requireSession(request);
   if (!session) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
@@ -69,7 +55,7 @@ export async function GET(request: Request) {
     if (!profile) return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
 
     const [extras, docs] = await Promise.all([
-      getExtras(profile.id),
+      adminGetExtras(profile.id),
       adminGetProfileDocs(profile.id),
     ]);
 
@@ -142,9 +128,9 @@ export async function PATCH(request: Request) {
       // exactly the event mustChangePassword (set on onboarding approval
       // or an admin-triggered reset — see admin/profile/route.ts) exists
       // to require, so clear it here rather than leaving it forever true.
-      const existingExtras = await getExtras(profile.id);
+      const existingExtras = await adminGetExtras(profile.id);
       if (existingExtras.mustChangePassword) {
-        await mergeExtras(profile.id, { mustChangePassword: false });
+        await adminMergeExtras(profile.id, { mustChangePassword: false });
       }
       return NextResponse.json({ ok: true });
     }
@@ -179,15 +165,15 @@ export async function PATCH(request: Request) {
     if (checked.submitsOnboarding) {
       // Server decides the status: 'pending' (HR/Admin approve or reject elsewhere). An already
       // approved profile is left approved.
-      const current = await getExtras(profile.id);
+      const current = await adminGetExtras(profile.id);
       if (current.approvalStatus !== 'approved') extraUpdates.approvalStatus = 'pending';
     }
     if (Object.keys(extraUpdates).length > 0) {
-      await mergeExtras(profile.id, extraUpdates);
+      await adminMergeExtras(profile.id, extraUpdates);
     }
 
     if (Object.keys(docUpdates).length > 0) {
-      await mergeDocs(profile.id, existingDocs, docUpdates);
+      await adminMergeDocs(profile.id, docUpdates, existingDocs);
     }
 
     if (body.profilePicture !== undefined) {

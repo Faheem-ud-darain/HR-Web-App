@@ -439,6 +439,24 @@ export async function adminUpsertByField(collection: string, field: string, valu
   }
 }
 
+// A profile is part real column, part overlay: hr_profile_extras (flags, approval, phones, reserved balance) and
+// hr_profile_docs (CV, ID scans), one row per profile keyed by profile_id (plan 027 Phase 2). Every server route reads and
+// writes them through these, which merge a patch into what is there instead of replacing it, so keys one route does not know
+// about (e.g. the "months already banked" list payroll keeps) survive another route's save.
+export async function adminGetExtras(profileId: string): Promise<PbJson> {
+  const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
+  return row?.data || {};
+}
+export async function adminMergeExtras(profileId: string, patch: PbJson): Promise<void> {
+  const existing = await adminGetExtras(profileId);
+  await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
+}
+/** `existing` saves a read when the caller has just loaded the documents (adminGetProfileDocs). */
+export async function adminMergeDocs(profileId: string, patch: PbJson, existing?: PbJson): Promise<void> {
+  const current = existing ?? (await adminGetProfileDocs(profileId));
+  await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...current, ...patch });
+}
+
 export async function adminDeleteByField(collection: string, field: string, value: string): Promise<void> {
   const cacheKey = `${collection}:${field}:${value.toLowerCase()}`;
   adminUpsertIdCache.delete(cacheKey);
