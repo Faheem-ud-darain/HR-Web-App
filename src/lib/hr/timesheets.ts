@@ -611,7 +611,9 @@ export const timesheetActions = {
   // shift here, leaving clockIn/clockOut looking broken for that employee.
   getOpenShift: async (employeeEmail: string): Promise<TimesheetEntry | null> => {
     const wanted = employeeEmail.toLowerCase();
-    const matches = (await pbList('hr_timesheets', { filter: pbFilter('employee_id ~ {:email} && clock_out = ""', { email: employeeEmail }) })).map(toTimesheet);
+    // pbListStrict: clockIn creates a new shift when this finds none, so a failed read must be an error, not "no open shift"
+    // (which would start a second, duplicate shift). clockOut would likewise leave the shift open without saying so.
+    const matches = (await pbListStrict('hr_timesheets', { filter: pbFilter('employee_id ~ {:email} && clock_out = ""', { email: employeeEmail }) })).map(toTimesheet);
     return matches.find(t => (t.employeeEmail || '').toLowerCase() === wanted) || null;
   },
   // `source` 'gps' is the USA warehouse geofence (automatic, from the phone's location). Every other start is manual and
