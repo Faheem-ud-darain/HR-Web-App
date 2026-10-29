@@ -19,7 +19,11 @@ export function LandingFooter() {
     <footer className="bg-paper pt-12 sm:pt-20">
       <div className="mx-auto max-w-[96rem] px-2 sm:px-4">
         {/* A tab on the panel's top-left, like a folder. */}
-        <div aria-hidden="true" className="h-6 sm:h-10 w-1/2 sm:w-1/3 rounded-t-[1.5rem] sm:rounded-t-[2.5rem] bg-brand" />
+        <div aria-hidden="true" className="relative h-6 sm:h-10 w-1/2 sm:w-1/3 rounded-tl-[1.5rem] sm:rounded-tl-[2.5rem] rounded-tr-[0.75rem] sm:rounded-tr-[1.25rem] bg-brand [--r:0.75rem] sm:[--r:1.25rem]">
+          {/* The inside corner where the tab meets the panel, curved the way a folder's tab is: a square of the orange
+              with a quarter-circle cut out of its top-right corner. */}
+          <span className="absolute left-full bottom-0 block" style={{ width: 'var(--r)', height: 'var(--r)', background: 'radial-gradient(circle at 100% 0, transparent var(--r), var(--primary) calc(var(--r) + 0.5px))' }} />
+        </div>
         <div className="bg-brand text-brandfg rounded-b-[1.5rem] sm:rounded-b-[2.5rem] rounded-tr-[1.5rem] sm:rounded-tr-[2.5rem] px-5 sm:px-10 pt-8 sm:pt-12 pb-5 sm:pb-8">
           <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr_1fr]">
             <div className="flex items-start gap-4 lg:self-center">
