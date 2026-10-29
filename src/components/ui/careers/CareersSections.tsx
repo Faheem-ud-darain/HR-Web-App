@@ -26,25 +26,25 @@ export function CompanyIntro({ warehouseCount, teamCount, openPositions }: { war
       <div className="lg:col-span-6 space-y-6">
         <div className="space-y-3">
           <span className={EYEBROW}>Global Freight & Software</span>
-          <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-white leading-[0.95]">Who We Are</h2>
+          <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-ink leading-[0.95]">Who We Are</h2>
         </div>
-        <p className="text-sm sm:text-base text-white/80 leading-relaxed">
+        <p className="text-sm sm:text-base text-ink/80 leading-relaxed">
           DelCargo is a leading-edge global logistics and software engineering provider. We combine digital shipping architectures with physical distribution hubs to enable intelligent supply chain management. By fusing freight yards with automated tracking platforms, we help scale global commerce.
         </p>
-        <p className="text-sm sm:text-base text-white/60 leading-relaxed">
+        <p className="text-sm sm:text-base text-ink/60 leading-relaxed">
           We maintain strategic warehousing facilities in major transit centers across North America and remote design cells in South Asia, operating with around-the-clock synchrony to keep supply lines operating optimally.
         </p>
-        <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-6 border-t border-white/10">
+        <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-6 border-t border-ink/10">
           {stats.map(s => (
             <div key={s.label}>
               <p className="font-display text-4xl sm:text-6xl font-black text-brand leading-none">{s.value}</p>
-              <p className="text-caption text-white/60 font-bold uppercase tracking-wider mt-2">{s.label}</p>
+              <p className="text-caption text-ink/60 font-bold uppercase tracking-wider mt-2">{s.label}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="lg:col-span-6 relative overflow-hidden rounded-3xl border border-white/10">
+      <div className="lg:col-span-6 relative overflow-hidden rounded-3xl">
         <img
           src="/delcargo_warehouse_hightech.webp"
           alt="High Tech Warehouse"
@@ -69,16 +69,16 @@ export function LifeAtDelcargo() {
     <section id="life-at-delcargo" className="scroll-mt-24 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16">
       <div className="lg:col-span-4 space-y-3">
         <p className={EYEBROW}>Perks & Compensation</p>
-        <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-white leading-[0.95]">Life at DelCargo</h2>
+        <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-ink leading-[0.95]">Life at DelCargo</h2>
       </div>
-      <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 border border-white/10 rounded-3xl overflow-hidden">
+      <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 rounded-3xl overflow-hidden bg-ink/5">
         {PERKS.map((p, i) => {
           const PerkIcon = PERK_ICONS[i];
           return (
-            <div key={p.title} className="space-y-3 p-6 sm:p-8 border-white/10 not-first:border-t sm:nth-[2]:border-t-0 sm:even:border-l">
+            <div key={p.title} className="space-y-3 p-6 sm:p-8 border-ink/10 not-first:border-t sm:nth-[2]:border-t-0 sm:even:border-l">
               <PerkIcon weight="duotone" className="h-7 w-7 text-brand" aria-hidden="true" />
-              <h3 className="font-display font-bold text-sm uppercase tracking-wider text-white">{p.title}</h3>
-              <p className="text-sm text-white/70 leading-relaxed">{p.text}</p>
+              <h3 className="font-display font-bold text-sm uppercase tracking-wider text-ink">{p.title}</h3>
+              <p className="text-sm text-ink/70 leading-relaxed">{p.text}</p>
             </div>
           );
         })}

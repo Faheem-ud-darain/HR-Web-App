@@ -50,6 +50,8 @@
 }
 
 @theme inline {
+  --color-ink: var(--ln-ink);
+  --color-paper: var(--ln-paper);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
@@ -1169,11 +1171,17 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 /* ── Landing page ────────────────────────────────────────────────────────────────────────────────────────
    A dark hero: centred words over a looping video, a strip of warehouse crops drifting past, the nav a pill, and the
    ticker scrolling the departments hiring. Every moving piece stands still for reduced motion. */
-/* The landing page is dark whatever theme the app is in: pin the two colours the dark theme re-points. */
+/* The landing page follows the app's theme through two colours: ink (text, lines) and paper (the page). Dark: white on
+   black. Light: black on the pale grey of the light hero video. Utilities: text-ink, bg-paper, border-ink/10 and so on. */
 .landing-root {
+  color-scheme: light;
+  --ln-ink: #000000;
+  --ln-paper: #ededed;
+}
+:root[data-theme='dark'] .landing-root {
   color-scheme: dark;
-  --color-white: #ffffff;
-  --color-black: #000000;
+  --ln-ink: #ffffff;
+  --ln-paper: #000000;
 }
 /* A blur that grows down the hero and is back to nothing at its bottom edge (so the ticker below is never blurred): three
    stacked layers, each fading in over the last, so what is in the video seems to sink into it. It sits over the video

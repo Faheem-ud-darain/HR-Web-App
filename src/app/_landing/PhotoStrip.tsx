@@ -20,7 +20,7 @@ export function PhotoStrip({ src }: { src: string }) {
           <div
             key={i}
             data-low={i % 2 ? '' : undefined}
-            className="landing-strip-card aspect-5/6 shrink-0 rounded-2xl border border-white/10 bg-no-repeat"
+            className="landing-strip-card aspect-5/6 shrink-0 rounded-2xl bg-no-repeat"
             style={{ backgroundImage: `url(${src})`, backgroundSize: c.zoom, backgroundPosition: c.pos }}
           />
         ))}
