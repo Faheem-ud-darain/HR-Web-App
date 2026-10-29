@@ -5,8 +5,10 @@ import React from 'react';
 import type { RefetchOptions, QueryObserverResult } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/Card';
 import { FlagIcon as Flag, CrosshairIcon as LocateFixed, DeviceMobileIcon as Smartphone, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff } from '@/components/ui/icons';
-import { hrActions, TrackerHeartbeat, hasStaleTrackerToken, displayName, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
-import { needsTrackerUpdate } from '@/lib/trackerSetup';
+import { hrActions, TrackerHeartbeat, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
+import { isMobileDevice } from '@/lib/trackerSetup';
+import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
+import { checkTracker, notifyShift } from '@/lib/hr/shiftActions';
 import { Button } from '@/components/ui/Button';
 
 interface ShiftControlCardProps {
@@ -14,29 +16,25 @@ interface ShiftControlCardProps {
   userProfile: Profile | null;
   geoPermission: "idle" | "requesting" | "granted" | "denied" | "unsupported";
   liveDistance: { meters: number; warehouseName: string; isInside: boolean; } | null;
-  isMobileApp: boolean;
-  setShowMobileBlockedModal: React.Dispatch<React.SetStateAction<boolean>>;
   isTrackingLiveFor: (emp: Profile) => boolean;
   setPingingTracker: React.Dispatch<React.SetStateAction<boolean>>;
   setTrackerHeartbeat: React.Dispatch<React.SetStateAction<TrackerHeartbeat | null>>;
-  setShowTrackerRequiredModal: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowTrackerUpdateRequiredModal: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowTrackerReconnectRequiredModal: React.Dispatch<React.SetStateAction<boolean>>;
+  /** Starting is not allowed right now, and why (the page shows the matching prompt). */
+  onStartBlocked: (block: StartBlock) => void;
+  /** The shift ended with less than the 8-hour day worked (a heads-up, never a gate). */
+  onUnderEight: (details: { workedMinutes: number; remainingMinutes: number }) => void;
   setShiftActive: React.Dispatch<React.SetStateAction<boolean>>;
-  setGeofenceStatus: React.Dispatch<React.SetStateAction<string>>;
   openShiftRef: React.RefObject<{ id: string; clockIn: string; } | null>;
   refetchTimesheets: (options?: RefetchOptions) => Promise<QueryObserverResult<TimesheetEntry[], Error>>;
-  setCheckingTracker: React.Dispatch<React.SetStateAction<boolean>>;
-  checkingTracker: boolean;
   pingingTracker: boolean;
   allTimesheets: TimesheetEntry[] | undefined;
-  setUnder8HourDetails: React.Dispatch<React.SetStateAction<{ workedMinutes: number; remainingMinutes: number; } | null>>;
-  setShowUnder8HourModal: React.Dispatch<React.SetStateAction<boolean>>;
   geoErrorMsg: string;
   trackerHeartbeat: TrackerHeartbeat | null;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isMobileApp, setShowMobileBlockedModal, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, setShowTrackerRequiredModal, setShowTrackerUpdateRequiredModal, setShowTrackerReconnectRequiredModal, setShiftActive, setGeofenceStatus, openShiftRef, refetchTimesheets, setCheckingTracker, checkingTracker, pingingTracker, allTimesheets, setUnder8HourDetails, setShowUnder8HourModal, geoErrorMsg, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, trackerHeartbeat }: ShiftControlCardProps) {
+  // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
+  const isMobileApp = isMobileDevice();
   return (
     <Card className={`border-2 transition-colors ${shiftActive ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-white'}`}>
       <CardContent className="p-4 md:p-5">
@@ -84,156 +82,41 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   // previously an uncaught error here left the button
                   // permanently disabled until the page was reloaded.
                   try {
-                    // Mobile block — manual Start Shift is never allowed
-                    // from a mobile device, tracked account or not (see
-                    // isMobileDevice's comment in trackerSetup.ts).
-                    if (isMobileApp) {
-                      setShowMobileBlockedModal(true);
+                    // May this person start right now? (rules: shiftStartBlock in core/shiftStart.ts). A tracked employee's
+                    // desktop tracker is checked live first (checkTracker): it must answer, or have a live heartbeat.
+                    const tracked = !isMobileApp && isTrackingLiveFor(userProfile);
+                    let tracker = { trackerReplied: false, heartbeat: null as TrackerHeartbeat | null, heartbeatLive: false };
+                    if (tracked) {
+                      setPingingTracker(true);
+                      tracker = await checkTracker(userProfile.email);
+                      setTrackerHeartbeat(tracker.heartbeat);
+                    }
+                    const block = shiftStartBlock({ mobile: isMobileApp, tracked, ...tracker });
+                    if (block) {
+                      onStartBlocked(block);
                       return;
                     }
-    
-                    if (isTrackingLiveFor(userProfile)) {
-                      // ── Ping/Pong Handshake (Signals 3 + 4) ───────────────
-                      // Write a ping to PocketBase; the tracker agent detects
-                      // it via realtime SSE and writes back a pong within ~1s.
-                      // This is more reliable than reading cached heartbeat,
-                      // which can be stale due to server timeouts.
-                      setPingingTracker(true);
-                      const requestId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-                      let pongReceived = false;
-    
-                      try {
-                        // Clean up any stale pong from a previous attempt
-                        await hrActions.clearTrackerPong(userProfile.email);
-                        await hrActions.writeTrackerPing(userProfile.email, requestId);
-    
-                        // Poll for pong every 500ms, give up after 8 seconds.
-                        //
-                        // BUGFIX 2026-09-08: this used to track "elapsed"
-                        // by just adding POLL_MS every iteration, which
-                        // assumes getTrackerPong() always resolves
-                        // instantly. It doesn't have a timeout of its own
-                        // (see hrData.ts), so on a slow/stalled connection
-                        // a single attempt could take far longer than
-                        // 500ms while this loop's bookkeeping still only
-                        // counted 500ms against the 8s budget — the real
-                        // wall-clock wait could stretch on far past the
-                        // intended timeout (confirmed via analytics: up to
-                        // 11+ minutes), leaving the button stuck showing
-                        // "Connecting to tracker...". Now measured against
-                        // Date.now() directly, so 8 seconds of REAL time is
-                        // always the hard cap no matter how long any
-                        // individual attempt takes (each attempt also now
-                        // has its own 4s ceiling via withTimeout in
-                        // hrData.ts, so at most one slow attempt can be
-                        // in flight when the loop's own deadline hits).
-                        const POLL_MS = 500;
-                        const TIMEOUT_MS = 8000;
-                        const deadline = Date.now() + TIMEOUT_MS;
-                        while (Date.now() < deadline) {
-                          await new Promise(r => setTimeout(r, POLL_MS));
-                          try {
-                            const pong = await hrActions.getTrackerPong(userProfile.email);
-                            if (pong?.requestId === requestId) {
-                              pongReceived = true;
-                              break;
-                            }
-                          } catch { /* ignore poll errors, keep trying */ }
-                        }
-                      } catch {
-                        // Couldn't even write the ping (server issue) — fall
-                        // through to the heartbeat fallback below instead of
-                        // blocking outright.
-                      } finally {
-                        // Clean up ping and pong keys regardless of outcome
-                        hrActions.clearTrackerPing(userProfile.email).catch(() => {});
-                        hrActions.clearTrackerPong(userProfile.email).catch(() => {});
-                      }
-    
-                      let liveHb: TrackerHeartbeat | null = null;
-                      if (!pongReceived) {
-                        // Dual-Validation Rule: the ping/pong handshake
-                        // failed or timed out (SSE not connected — e.g. a
-                        // corporate firewall blocking it, or PocketBase
-                        // momentarily busy uploading a screenshot). Rather
-                        // than blocking Start Shift outright, fall back to
-                        // checking whether the tracker has sent a live
-                        // heartbeat recently — if so, it's plainly still
-                        // running and this employee shouldn't be stuck.
-                        const freshHb = await hrActions.getTrackerHeartbeat(userProfile.email).catch(() => null);
-                        setTrackerHeartbeat(freshHb ?? null);
-                        if (!hrActions.isHeartbeatLive(freshHb)) {
-                          setShowTrackerRequiredModal(true);
-                          return;
-                        }
-                        // Heartbeat is live — proceed even without a pong.
-                        liveHb = freshHb;
-                      } else {
-                        // Pong confirmed the tracker is live, but pong alone
-                        // doesn't carry agentVersion — fetch the heartbeat too
-                        // so the version gate right below has something to
-                        // check.
-                        liveHb = await hrActions.getTrackerHeartbeat(userProfile.email).catch(() => null);
-                        setTrackerHeartbeat(liveHb ?? null);
-                      }
-    
-                      // Version gate — same TRACKER_MIN_VERSION check that
-                      // shows HR/Admin an "Update Required" badge in
-                      // TrackingView. A live tracker isn't enough on its
-                      // own: an old-enough build can keep answering pings
-                      // and heartbeats while producing nothing usable (no
-                      // capture-health reporting, possibly no real capture
-                      // at all — see PROJECT_HISTORY.md 1d). Block Start
-                      // Shift here too so leaving that build's own update
-                      // popup open and clicking Start Shift instead can't
-                      // route around it.
-                      if (needsTrackerUpdate(liveHb?.agentVersion, liveHb?.deviceLabel)) {
-                        setShowTrackerUpdateRequiredModal(true);
-                        return;
-                      }
-    
-                      // Stale-setup-code gate — the agent is live and on a
-                      // current build, but it's still presenting an
-                      // agentToken that no longer matches any row in
-                      // hr_tracking_settings (because the setup code was
-                      // regenerated since it was last configured). Block
-                      // here too, otherwise the shift starts against a
-                      // tracker that will never actually capture anything.
-                      if (hasStaleTrackerToken(liveHb)) {
-                        setShowTrackerReconnectRequiredModal(true);
-                        return;
-                      }
-                      // Tracker confirmed live and up to date — proceed
-                    }
-    
+
                     // ── Clock In ────────────────────────────────────────────
                     setShiftActive(true);
-                    setGeofenceStatus('Shift Active');
                     const started = await hrActions.clockIn(userProfile.email);
                     openShiftRef.current = { id: started.id, clockIn: started.clockIn };
                     await hrActions.touchShiftTabHeartbeat(userProfile.email);
                     await refetchTimesheets();
-                    await hrActions.addNotification(userProfile.email, 'employee', 'Shift started manually. Screen tracking is now active for this shift.');
-                    {
-                      const shiftActorName = displayName(userProfile, 'hr');
-                      await hrActions.addNotification('all', 'hr', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
-                      await hrActions.addNotification('all', 'admin', `${shiftActorName} started shift manually.`, 'shift', shiftActorName, userProfile.email);
-                    }
+                    await notifyShift(userProfile, 'Shift started manually. Screen tracking is now active for this shift.', name => `${name} started shift manually.`);
                   } finally {
                     setPingingTracker(false);
-                    setCheckingTracker(false);
                   }
                 }}
                 disabled={
                   shiftActive ||
-                  checkingTracker ||
                   pingingTracker ||
                   isMobileApp
                   // Heartbeat-dead no longer disables the button — the ping/pong
                   // handshake in onClick is the authoritative live check now.
                 }
               >
-                {pingingTracker ? 'Connecting to tracker…' : checkingTracker ? 'Checking tracker…' : 'Start Shift'}
+                {pingingTracker ? 'Connecting to tracker…' : 'Start Shift'}
               </Button>
               <Button variant="danger" size="lg"
                 onClick={async () => {
@@ -256,16 +139,10 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   // a gate.
                   const doClockOut = async () => {
                     setShiftActive(false);
-                    setGeofenceStatus('Shift Ended');
                     openShiftRef.current = null;
                     await hrActions.clockOut(userProfile.email);
                     await refetchTimesheets();
-                    await hrActions.addNotification(userProfile.email, 'employee', 'Shift ended manually. Screen tracking has stopped.');
-                    {
-                      const shiftActorName = displayName(userProfile, 'hr');
-                      await hrActions.addNotification('all', 'hr', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
-                      await hrActions.addNotification('all', 'admin', `${shiftActorName} ended shift manually.`, 'shift', shiftActorName, userProfile.email);
-                    }
+                    await notifyShift(userProfile, 'Shift ended manually. Screen tracking has stopped.', name => `${name} ended shift manually.`);
                   };
     
                   // Calculate total worked shift minutes for today (including completed shifts and current open shift)
@@ -297,11 +174,7 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   await doClockOut();
     
                   if (totalWorkedMins < REQUIRED_SHIFT_MINUTES) {
-                    setUnder8HourDetails({
-                      workedMinutes: totalWorkedMins,
-                      remainingMinutes: REQUIRED_SHIFT_MINUTES - totalWorkedMins,
-                    });
-                    setShowUnder8HourModal(true);
+                    onUnderEight({ workedMinutes: totalWorkedMins, remainingMinutes: REQUIRED_SHIFT_MINUTES - totalWorkedMins });
                   }
                 }}
                 disabled={!shiftActive}
