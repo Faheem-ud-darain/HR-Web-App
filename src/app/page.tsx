@@ -72,7 +72,7 @@ export default function Home() {
     <div className="landing-root min-h-screen bg-black flex flex-col font-sans">
       {/* The hero: centred words over a looping video, then the warehouse in five crops drifting past. The nav is a white pill. pt-safe
           keeps it clear of the status bar on notched phones (layout.tsx draws the WebView under it). */}
-      <section className="relative isolate overflow-hidden text-white pb-10 sm:pb-14">
+      <section className="relative isolate overflow-hidden text-white pb-12 sm:pb-24">
         {/* The video is the hero's backdrop; people who ask for less motion get its first frame instead. */}
         <div aria-hidden="true" className="absolute inset-0 -z-20 bg-cover bg-center" style={{ backgroundImage: 'url(/delcargo_hero_poster.jpg)' }}>
           <video src="/delcargo_hero.mp4" poster="/delcargo_hero_poster.jpg" autoPlay muted loop playsInline preload="auto" className="h-full w-full object-cover motion-reduce:hidden" />
@@ -95,7 +95,7 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 sm:px-8 pt-10 sm:pt-16 pb-10 sm:pb-12 text-center">
+        <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 sm:px-8 pt-10 sm:pt-16 pb-12 sm:pb-20 text-center">
           <h1 className="font-display font-black [font-size:clamp(2.5rem,5.6vw,4.75rem)] leading-[1] tracking-[-0.03em] text-balance break-words">
             Work with <span className="text-brand">DelCargo</span>
           </h1>
