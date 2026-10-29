@@ -1188,7 +1188,7 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
    steadily. The track holds the cards twice, so sliding it by half loops without a seam. */
 .landing-strip {
   container-type: inline-size;
-  --strip-gap: clamp(0.5rem, 1.2cqw, 1.5rem);
+  --strip-gap: clamp(0.75rem, 2cqw, 2.5rem);
   --strip-card: calc((100cqw - 4 * var(--strip-gap)) / 5);
 }
 .landing-strip-track {
