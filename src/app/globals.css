@@ -1192,6 +1192,32 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 .landing-marquee:hover .landing-marquee-track {
   animation-play-state: paused;
 }
+/* The hero photo strip: a window that shows --strip-n cards at a time (five on large screens), sliding one card at a time
+   with a pause between. Card width is a share of the window, so the count holds at any screen size. */
+.landing-strip {
+  container-type: inline-size;
+  --strip-n: 2;
+  --strip-gap: 0.75rem;
+  --strip-card: calc((100cqw - (var(--strip-n) - 1) * var(--strip-gap)) / var(--strip-n));
+}
+@media (min-width: 640px) { .landing-strip { --strip-n: 3; --strip-gap: 1rem; } }
+@media (min-width: 1024px) { .landing-strip { --strip-n: 5; } }
+.landing-strip-track {
+  gap: var(--strip-gap);
+  animation: strip-step 18s ease-in-out infinite;
+}
+.landing-strip-card {
+  width: var(--strip-card);
+}
+@keyframes strip-step {
+  0%, 13% { transform: translateX(0); }
+  16.67%, 30% { transform: translateX(calc(-1 * (var(--strip-card) + var(--strip-gap)))); }
+  33.33%, 47% { transform: translateX(calc(-2 * (var(--strip-card) + var(--strip-gap)))); }
+  50%, 63% { transform: translateX(calc(-3 * (var(--strip-card) + var(--strip-gap)))); }
+  66.67%, 80% { transform: translateX(calc(-4 * (var(--strip-card) + var(--strip-gap)))); }
+  83.33%, 96% { transform: translateX(calc(-5 * (var(--strip-card) + var(--strip-gap)))); }
+  100% { transform: translateX(calc(-6 * (var(--strip-card) + var(--strip-gap)))); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .landing-marquee-track { animation: none; }
+  .landing-marquee-track, .landing-strip-track { animation: none; }
 }
