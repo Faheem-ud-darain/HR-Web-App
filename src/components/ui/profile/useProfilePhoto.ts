@@ -1,19 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { updateProfileSelf } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 
 // Changing your own profile picture: pick a file, crop it (AvatarCropperModal), save. Shared by the employee and
-// the HR/Admin profile pages. The page owns the hidden file input and its ref (the React compiler does not allow a
-// ref handed through a hook).
+// the HR/Admin profile pages through ProfileHero, which owns the picker button.
 export function useProfilePhoto({ profileId, logTag, onSaved }: { profileId?: string; logTag: string; onSaved: () => Promise<unknown> | void }) {
   const { showToast } = useActionToast();
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  const pick = (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       showToast({ type: 'error', message: 'Please choose an image file.' });
@@ -35,5 +32,5 @@ export function useProfilePhoto({ profileId, logTag, onSaved }: { profileId?: st
     }
   };
 
-  return { pendingFile, clearPending: () => setPendingFile(null), handleInputChange, handleSave };
+  return { pendingFile, clearPending: () => setPendingFile(null), pick, handleSave };
 }

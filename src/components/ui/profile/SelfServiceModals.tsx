@@ -3,25 +3,16 @@
 import React, { useEffect, useState } from 'react';
 import { WarningCircleIcon as AlertCircle } from '@/components/ui/icons';
 import { hrActions, updateProfileSelf, type Profile } from '@/lib/hrData';
+import { validateBankDetails, type BankDetails } from '@/lib/core/onboarding';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { Button } from '@/components/ui/Button';
-import { FormError } from '@/components/ui/FormError';
+import { BankFields } from '@/components/ui/BankFields';
 import { FormField } from '@/components/ui/FormField';
+import { FormModal } from '@/components/ui/FormModal';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { NoticeModal } from '@/components/ui/NoticeModal';
 
 // Dialogs for the things a person edits about themselves on their own profile. Each is mounted only while open, so its
 // fields start from the current values.
-
-function FormFooter({ busy, onClose, submitLabel }: { busy: boolean; onClose: () => void; submitLabel: string }) {
-  return (
-    <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
-      <Button type="button" variant="outline" size="md" disabled={busy} onClick={onClose}>Cancel</Button>
-      <Button type="submit" size="lg" disabled={busy}>{submitLabel}</Button>
-    </div>
-  );
-}
 
 // Save helper shared by the two edit forms: validate, save on the person's own record, reload, toast.
 function useSaveSelf(onSaved: () => Promise<unknown> | void, onClose: () => void) {
@@ -46,36 +37,25 @@ function useSaveSelf(onSaved: () => Promise<unknown> | void, onClose: () => void
 }
 
 export function BankDetailsModal({ initial, region, onSaved, onClose }: {
-  initial: { bankName?: string; accountNumber?: string; iban?: string };
-  region?: string;
+  initial: Partial<BankDetails>;
+  region?: Profile['region'];
   onSaved: () => Promise<unknown> | void;
   onClose: () => void;
 }) {
-  const [bankName, setBankName] = useState(initial.bankName || '');
-  const [accountNumber, setAccountNumber] = useState(initial.accountNumber || '');
-  const [iban, setIban] = useState(initial.iban || '');
+  const [bank, setBank] = useState<BankDetails>({ bankName: initial.bankName || '', accountNumber: initial.accountNumber || '', iban: initial.iban || '' });
   const { error, setError, busy, save } = useSaveSelf(onSaved, onClose);
-  const usa = region === 'USA';
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = () => {
+    const problem = validateBankDetails(bank, region);
+    if (problem) return setError(problem);
     setError('');
-    if (busy) return;
-    if (!bankName.trim() || !accountNumber.trim() || !iban.trim()) return setError('Please fill in all bank detail fields.');
-    save({ bankName: bankName.trim(), accountNumber: accountNumber.trim(), iban: iban.trim() }, 'Bank details updated successfully!', 'Failed to save bank details.');
+    save({ bankName: bank.bankName.trim(), accountNumber: bank.accountNumber.trim(), iban: bank.iban.trim() }, 'Bank details updated successfully!', 'Failed to save bank details.');
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Edit Bank Details">
-      <form onSubmit={submit} className="space-y-4">
-        <FormError>{error}</FormError>
-        <FormField label="Bank Name" size="md"><Input type="text" value={bankName} onChange={e => setBankName(e.target.value)} fieldSize="md" placeholder="e.g. Habib Bank Limited" /></FormField>
-        <FormField label="Account Number" size="md"><Input type="text" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} fieldSize="md" className="font-mono" placeholder="Enter your account number" /></FormField>
-        <FormField label={usa ? 'Routing Number' : 'IBAN'} size="md"><Input type="text" value={iban} onChange={e => setIban(e.target.value)} fieldSize="md" className="font-mono" placeholder={usa ? 'e.g. 021000021' : 'e.g. PK12ABCD0000001234567890'} /></FormField>
-        <p className="text-caption text-slate-400 leading-relaxed">Changes to your bank details are saved immediately and visible to HR/Payroll for your next salary cycle.</p>
-        <FormFooter busy={busy} onClose={onClose} submitLabel={busy ? 'Saving…' : 'Save Bank Details'} />
-      </form>
-    </Modal>
+    <FormModal title="Edit Bank Details" onClose={onClose} onSubmit={submit} busy={busy} error={error} submitLabel="Save Bank Details" note="Changes to your bank details are saved immediately and visible to HR/Payroll for your next salary cycle.">
+      <BankFields bank={bank} onChange={setBank} region={region} />
+    </FormModal>
   );
 }
 
@@ -88,24 +68,17 @@ export function ContactNumbersModal({ initial, onSaved, onClose }: {
   const [company, setCompany] = useState(initial.companyPhone || '');
   const { error, setError, busy, save } = useSaveSelf(onSaved, onClose);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (busy) return;
+  const submit = () => {
     if (!personal.trim()) return setError('Please enter your own phone number.');
+    setError('');
     save({ personalPhone: personal.trim(), companyPhone: company.trim() }, 'Contact numbers updated successfully!', 'Failed to save contact numbers.');
   };
 
   return (
-    <Modal isOpen onClose={onClose} title="Edit Contact Numbers">
-      <form onSubmit={submit} className="space-y-4">
-        <FormError>{error}</FormError>
-        <FormField label="Own Number" size="md"><Input type="tel" value={personal} onChange={e => setPersonal(e.target.value)} fieldSize="md" placeholder="e.g. +92 300 1234567" /></FormField>
-        <FormField label="Company Allocated Number (if applicable)" size="md"><Input type="tel" value={company} onChange={e => setCompany(e.target.value)} fieldSize="md" placeholder="Leave blank if none issued" /></FormField>
-        <p className="text-caption text-slate-400 leading-relaxed">Changes to your contact numbers are saved immediately and visible to HR/Admin.</p>
-        <FormFooter busy={busy} onClose={onClose} submitLabel={busy ? 'Saving…' : 'Save Contact Numbers'} />
-      </form>
-    </Modal>
+    <FormModal title="Edit Contact Numbers" onClose={onClose} onSubmit={submit} busy={busy} error={error} submitLabel="Save Contact Numbers" note="Changes to your contact numbers are saved immediately and visible to HR/Admin.">
+      <FormField label="Own Number" size="md"><Input type="tel" value={personal} onChange={e => setPersonal(e.target.value)} placeholder="e.g. +92 300 1234567" /></FormField>
+      <FormField label="Company Allocated Number (if applicable)" size="md"><Input type="tel" value={company} onChange={e => setCompany(e.target.value)} placeholder="Leave blank if none issued" /></FormField>
+    </FormModal>
   );
 }
 

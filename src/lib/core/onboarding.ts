@@ -54,8 +54,10 @@ const digitsOnly = (s: string) => s.replace(/[\s-]/g, '');
 /** Mobile wallets (JazzCash, Easypaisa and the like) pay to a phone-style account number and have no IBAN. */
 export const isMobileWallet = (bankName: string): boolean => /jazz\s*cash|easy\s*paisa|sada\s*pay|naya\s*pay|upaisa|wallet/i.test(bankName);
 
+export type BankDetails = { bankName: string; accountNumber: string; iban: string };
+
 /** An error message for the bank details, or '' when they are fine. A wallet (outside the USA) needs no IBAN. */
-export function validateBankDetails(bank: { bankName: string; accountNumber: string; iban: string }, region: Region): string {
+export function validateBankDetails(bank: BankDetails, region: Region): string {
   const label = bankIdLabel(region);
   const wallet = !isUsa(region) && isMobileWallet(bank.bankName);
   if (!bank.bankName.trim() || !bank.accountNumber.trim() || (!wallet && !bank.iban.trim())) {

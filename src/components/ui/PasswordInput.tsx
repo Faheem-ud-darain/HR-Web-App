@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { FIELD_STYLES } from '@/components/ui/Input';
 import { EyeIcon as Eye, EyeSlashIcon as EyeOff } from '@/components/ui/icons';
 
 interface PasswordInputProps {
@@ -24,7 +25,7 @@ export function PasswordInput({ value, onChange, placeholder, className, require
         onChange={e => onChange(e.target.value)}
         required={required}
         placeholder={placeholder}
-        className={`${className || ''} pr-10`}
+        className={`${className || FIELD_STYLES.md} pr-10`}
       />
       <button
         type="button"

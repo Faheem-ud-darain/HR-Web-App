@@ -10,7 +10,6 @@ export default function AdminProfilePage() {
       title="Admin Profile"
       subtitle="Manage your system credentials and preferences."
       defaultJobTitle="System Administrator"
-      defaultGender="Male"
       securityRoleLabel="System Administrator"
       headerAction={<AdminProfileEditor />}
     />
