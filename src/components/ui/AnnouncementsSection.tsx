@@ -2,7 +2,7 @@
 
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { SectionCard } from '@/components/ui/SectionCard';
 import { AnnouncementItem } from '@/components/ui/AnnouncementItem';
 import { IconButton } from '@/components/ui/IconButton';
 import { announcementWhen } from '@/lib/core/announcements';
@@ -135,14 +135,8 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   return (
     <>
       {/* Announcements Panel */}
-      <Card className="p-0">
-        <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-sm md:text-base font-bold text-slate-900">Recent Announcements</h2>
-            <p className="text-caption md:text-xs text-slate-500 mt-0.5">Corporate updates and targeted broadcast messages.</p>
-          </div>
-        </div>
-        <CardContent className="p-0 divide-y divide-slate-100">
+      <SectionCard title="Recent Announcements" subtitle="Corporate updates and targeted broadcast messages.">
+        <div className="divide-y divide-slate-100">
           {announcementsLoading && <div className="p-4"><ListSkeleton rows={3} /></div>}
           {!announcementsLoading && (showAll ? announcements : announcements.slice(0, SHOWN_AT_FIRST)).map(ann => {
             const viewers = viewersForAnnouncement(ann.id);
@@ -196,8 +190,8 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
           {!announcementsLoading && announcements.length === 0 && (
             <EmptyState py={6} size="xs">No announcements posted yet.</EmptyState>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
 
       {/* Announcement Viewers Modal — lists everyone who has seen the

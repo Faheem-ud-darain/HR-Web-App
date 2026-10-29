@@ -4,8 +4,10 @@ import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { useState, useEffect } from 'react';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card } from '@/components/ui/Card';
+import { SectionCard } from '@/components/ui/SectionCard';
+import { StaffDashboardHeader } from '@/components/dashboard/StaffDashboardHeader';
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
-import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock, ClipboardTextIcon as ClipboardList, PlusCircleIcon as PlusCircle, CircleNotchIcon as Loader2, VideoCameraIcon as Video } from '@/components/ui/icons';
+import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
@@ -104,45 +106,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6 px-4 py-4 md:px-0 md:py-0 md:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
-        <div>
-          <h1 className="text-lg md:text-2xl font-bold text-slate-900">Admin Overview</h1>
-          <p className="text-xs md:text-sm text-slate-500">High-level metrics, leave approvals, and organisation calendar.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => router.push('/admin/tasks')}
-            className="min-h-[44px] md:min-h-0"
-          >
-            View All Tasks
-          </Button>
-          <button
-            onClick={() => setIsScheduleMeetOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 md:py-2 rounded-lg text-xs md:text-sm active:scale-97 transition-colors transition-transform transition-shadow flex items-center gap-1.5 shadow-sm min-h-[44px] md:min-h-0"
-          >
-            <Video className="h-4 w-4" /> Schedule Google Meet
-          </button>
-          <Button
-            variant="outline"
-            size="md"
-            onClick={() => setIsAnnounceOpen(true)}
-            className="min-h-[44px] md:min-h-0"
-          >
-            <PlusCircle className="h-4 w-4" /> Post Announcement
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => setIsTaskOpen(true)}
-            className="min-h-[44px] md:min-h-0"
-          >
-            <ClipboardList className="h-4 w-4" /> Assign Task
-          </Button>
-        </div>
-      </div>
+      <StaffDashboardHeader
+        title="Admin Overview" subtitle="High-level metrics, leave approvals, and organisation calendar."
+        extra={<Button variant="outline" onClick={() => router.push('/admin/tasks')}>View All Tasks</Button>}
+        onMeet={() => setIsScheduleMeetOpen(true)} onAnnounce={() => setIsAnnounceOpen(true)} onTask={() => setIsTaskOpen(true)}
+      />
 
       {/* Stats — icon colors now semantically consistent: emerald=money,
           indigo=people, amber=time-sensitive, rose=risk. The "Total
@@ -201,12 +169,12 @@ export default function AdminDashboard() {
                     <Td className="text-slate-500 max-w-xs truncate">{l.reason}</Td>
                     <Td align="center">
                       <div className="flex justify-center gap-2">
-                        <button onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} CEO Approve
-                        </button>
-                        <button onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Reject
-                        </button>
+                        <Button variant="success" size="sm" onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} loading={processingLeaveId === l.id}>
+                          CEO Approve
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} loading={processingLeaveId === l.id}>
+                          Reject
+                        </Button>
                       </div>
                     </Td>
                   </Tr>
@@ -249,12 +217,12 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="flex gap-2 pt-1">
-                      <button onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} className="flex-1 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 py-2.5 rounded-lg transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1">
-                        {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} CEO Approve
-                      </button>
-                      <button onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} className="flex-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 py-2.5 rounded-lg transition-colors transition-transform transition-shadow active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1">
-                        {processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Reject
-                      </button>
+                      <Button variant="success" size="sm" onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} loading={processingLeaveId === l.id} className="flex-1">
+                        CEO Approve
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} loading={processingLeaveId === l.id} className="flex-1">
+                        Reject
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -265,15 +233,9 @@ export default function AdminDashboard() {
       </div>
 
       {/* Org Calendar */}
-      <Card className="p-0">
-        <div className="px-4 md:px-6 pt-5 pb-2 border-b border-slate-100">
-          <h2 className="text-sm md:text-base font-bold text-slate-900">Organisation Calendar</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Leave schedules, task deadlines, and conflict indicators across all departments.</p>
-        </div>
-        <div className="p-4 md:p-6">
-          <OrgCalendar leaves={leaves} tasks={tasks} employees={employees} />
-        </div>
-      </Card>
+      <SectionCard title="Organisation Calendar" subtitle="Leave schedules, task deadlines, and conflict indicators across all departments.">
+        <div className="p-4 md:p-6"><OrgCalendar leaves={leaves} tasks={tasks} employees={employees} /></div>
+      </SectionCard>
 
       <AnnouncementsSection role="admin" isCreateOpen={isAnnounceOpen} onCreateClose={() => setIsAnnounceOpen(false)} />
 

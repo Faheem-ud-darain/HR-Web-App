@@ -2,23 +2,12 @@ import React from 'react';
 import type { IconWeight } from '@phosphor-icons/react';
 import { PencilSimpleIcon as Pencil } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { SectionCard } from '@/components/ui/SectionCard';
 
 // A section of a profile page: a title (with an Edit button, or any other action, on the right) and a body.
 export function ProfileCard({ title, subtitle, action, onEdit, children }: { title: string; subtitle?: string; action?: React.ReactNode; onEdit?: () => void; children: React.ReactNode }) {
   const right = action ?? (onEdit && <Button variant="outline" size="sm" onClick={onEdit}><Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit</Button>);
-  return (
-    <Card className="border border-slate-200 p-0 overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-3.5 border-b border-slate-100">
-        <div className="min-w-0">
-          <h3 className="font-bold text-slate-900 text-sm">{title}</h3>
-          {subtitle && <p className="text-caption text-slate-500 mt-0.5">{subtitle}</p>}
-        </div>
-        {right}
-      </div>
-      {children}
-    </Card>
-  );
+  return <SectionCard title={title} subtitle={subtitle} action={right}>{children}</SectionCard>;
 }
 
 // What a section says when there is nothing in it yet.

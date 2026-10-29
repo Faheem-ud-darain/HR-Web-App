@@ -73,7 +73,7 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
             </div>
           ) : (
             <div className="flex gap-2 shrink-0">
-              <button
+              <Button variant="success" size="lg"
                 onClick={async () => {
                   if (!userProfile?.email) return;
     
@@ -232,11 +232,10 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   // Heartbeat-dead no longer disables the button — the ping/pong
                   // handshake in onClick is the authoritative live check now.
                 }
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97 shadow-sm"
               >
                 {pingingTracker ? 'Connecting to tracker…' : checkingTracker ? 'Checking tracker…' : 'Start Shift'}
-              </button>
-              <button
+              </Button>
+              <Button variant="danger" size="lg"
                 onClick={async () => {
                   if (!userProfile?.email) return;
     
@@ -306,10 +305,9 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   }
                 }}
                 disabled={!shiftActive}
-                className="bg-white hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 border border-rose-200 font-bold py-2.5 px-5 rounded-xl text-sm transition-colors transition-transform active:scale-97"
               >
                 End Shift
-              </button>
+              </Button>
             </div>
           )}
         </div>

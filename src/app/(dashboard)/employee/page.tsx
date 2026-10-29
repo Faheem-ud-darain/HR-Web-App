@@ -5,17 +5,21 @@ import { TaskDetailModal } from './_components/TaskDetailModal';
 import { UnderEightHoursModal } from './_components/UnderEightHoursModal';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
-import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Avatar } from '@/components/ui/Avatar';
-import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone, BankIcon as Landmark } from '@/components/ui/icons';
+import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone } from '@/components/ui/icons';
 import { isMobileDevice, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
 import { TimesheetReviewModal } from "@/app/(dashboard)/employee/_components/TimesheetReviewModal";
-import { EmployeeSidePanel } from "@/app/(dashboard)/employee/_components/EmployeeSidePanel";
-import { EmployeeMainColumn } from "@/app/(dashboard)/employee/_components/EmployeeMainColumn";
+import { DashboardGreeting } from './_components/DashboardGreeting';
+import { EmployeeStats } from './_components/EmployeeStats';
+import { TasksCard } from './_components/TasksCard';
+import { RecentLeavesCard } from './_components/RecentLeavesCard';
+import { AnnouncementsCard } from './_components/AnnouncementsCard';
+import { TeamCard } from './_components/TeamCard';
+import { TeamMonitorCard } from './_components/TeamMonitorCard';
+import { ReferralCard } from './_components/ReferralCard';
 import { ShiftControlCard } from "@/app/(dashboard)/employee/_components/ShiftControlCard";
 import { useNow } from '@/lib/useNow';
 import { useSessionEmail } from '@/lib/useSession';
@@ -497,7 +501,7 @@ export default function EmployeeDashboard() {
         shiftActiveRef.current = true;
         setShiftActive(true);
         setGeofenceStatus(`Inside ${nearestWarehouse.name}`);
-        await hrActions.clockIn(profile.email);
+        await hrActions.clockIn(profile.email, 'gps');
         await refetchTimesheets();
         await hrActions.addNotification(profile.email, 'employee', `Auto Shift ON: Checked-in at ${nearestWarehouse.name} via GPS geofencing.`);
         // 'shift' category + pushTitle/senderEmail so HR/Admin actually get a
@@ -567,33 +571,6 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <Badge variant="success">Approved</Badge>;
-      case 'pending':
-        return <Badge variant="warning">Pending</Badge>;
-      case 'hr_approved':
-        return <Badge variant="default">HR Approved</Badge>;
-      case 'rejected':
-        return <Badge variant="danger">Rejected</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
-    }
-  };
-
-  // Find my team details
-  const myTeams = userProfile && userProfile.teams ? userProfile.teams : [];
-  const teamMembers = (allProfiles || []).filter(emp => 
-    emp.id !== userProfile?.id && 
-    emp.teams && Array.isArray(emp.teams) &&
-    emp.teams.some(t => myTeams.includes(t))
-  );
-  const teamLead = (allProfiles || []).find(emp => 
-    emp.isTeamLead && 
-    emp.leadTeams?.some(t => myTeams.includes(t))
-  );
-
   // Overdue or due-within-3-days, not-done tasks — surfaced as a single
   // at-a-glance count in the stats row (replaces the old "Shift Status"
   // tile, which just duplicated the new Shift Control card above).
@@ -628,42 +605,28 @@ export default function EmployeeDashboard() {
   }, [myAnnouncements.length, userProfile?.email]);
 
   return (
-    <div className="space-y-4 md:space-y-6 font-sans px-0">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-slate-200 p-4 md:p-6 rounded-xl shadow-sm">
-        <div className="flex items-center gap-3 md:gap-4">
-          <Avatar src={userProfile?.profilePicture} name={userProfile?.fullName || 'Employee'} size={56} className="border-2 border-orange-500" />
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight" style={{ textWrap: 'balance' as React.CSSProperties['textWrap'] }}>{userProfile?.fullName || 'Employee'}</h1>
-            <p className="text-xs text-slate-500 font-semibold">{userProfile?.jobTitle || 'Team Member'} · <span className="text-orange-600 font-bold">{userProfile?.region === 'USA' ? 'USA Operations' : 'Pakistan (Remote)'}</span></p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 px-3.5 py-2.5 md:py-2 rounded-xl font-bold text-slate-600">
-          <Landmark className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          {userProfile?.bankName ? `${userProfile.bankName} (Verified)` : 'Bank details pending'}
-        </div>
-      </div>
+    <div className="space-y-4 md:space-y-6">
+      <DashboardGreeting profile={userProfile} now={now} />
 
-      {/* Shift Control — this used to be split across a passive "Shift
-          Status" stat tile up top AND a separate buried widget in the right
-          rail mislabeled "Geofencing Tracker" (which didn't even apply to
-          manual/Pakistan employees — there's no geofence for them, just a
-          button). Starting/ending a shift is the single most frequent,
-          highest-stakes action on this whole page, so it now gets one
-          unmissable, honestly-labeled, full-width place instead of being
-          buried under an unrelated heading in a sidebar. */}
+      {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
+          unmissable full-width place above everything else. */}
       <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geoPermission} liveDistance={liveDistance} isMobileApp={isMobileApp} setShowMobileBlockedModal={setShowMobileBlockedModal} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} setShowTrackerRequiredModal={setShowTrackerRequiredModal} setShowTrackerUpdateRequiredModal={setShowTrackerUpdateRequiredModal} setShowTrackerReconnectRequiredModal={setShowTrackerReconnectRequiredModal} setShiftActive={setShiftActive} setGeofenceStatus={setGeofenceStatus} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} setCheckingTracker={setCheckingTracker} checkingTracker={checkingTracker} pingingTracker={pingingTracker} allTimesheets={allTimesheets} setUnder8HourDetails={setUnder8HourDetails} setShowUnder8HourModal={setShowUnder8HourModal} geoErrorMsg={geoErrorMsg} trackerHeartbeat={trackerHeartbeat} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-        {/* Left Column (8 cols): Stats, Tasks, Leaves */}
-        <EmployeeMainColumn userProfile={userProfile} allLeaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payrollSelf={payrollSelf} myTasks={myTasks} setSelectedTask={setSelectedTask} leaves={leaves} searchQuery={searchQuery} getStatusBadge={getStatusBadge} />
+      <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />
 
-        {/* Right Column (4 cols): Announcements, Team, Referral — Shift
-            Control moved to its own full-width card above the stats grid;
-            see that section's comment for why. */}
-        <EmployeeSidePanel isInitialLoading={isInitialLoading} myAnnouncements={myAnnouncements} userProfile={userProfile} announcementReadMap={announcementReadMap} allEmployees={allEmployees} isTrackingLiveFor={isTrackingLiveFor} handleOpenReviewModal={handleOpenReviewModal} teamLead={teamLead} teamMembers={teamMembers} router={router} />
-
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-start">
+        {/* Announcements lead on a phone (they are what changes day to day); on a desktop they sit beside the work. */}
+        <div className="space-y-4 md:space-y-6 lg:col-span-7 lg:order-1 order-2">
+          <TasksCard tasks={myTasks} now={now} onOpen={setSelectedTask} />
+          <RecentLeavesCard leaves={leaves} query={searchQuery} />
+        </div>
+        <div className="space-y-4 md:space-y-6 lg:col-span-5 lg:order-2 order-1">
+          <AnnouncementsCard announcements={myAnnouncements} email={userProfile?.email} readMap={announcementReadMap} loading={isInitialLoading} />
+          <TeamCard me={userProfile} everyone={allEmployees} loading={isInitialLoading} />
+          {userProfile?.isTeamLead && <TeamMonitorCard lead={userProfile} everyone={allEmployees} isTrackingLiveFor={isTrackingLiveFor} onReview={handleOpenReviewModal} />}
+          <ReferralCard />
+        </div>
       </div>
 
       {/* Start Shift prompts. Each blocks the shift for a different reason; see isMobileDevice and TRACKER_MIN_VERSION in
