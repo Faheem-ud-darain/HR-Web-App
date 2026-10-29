@@ -85,24 +85,24 @@ export function usePayrollSelf() {
   });
 }
 
-// HR/Admin-gated write for a single hr_payroll record — see
-// /api/admin/payroll's comment for what this does and doesn't cover yet
-// (the "Process Payroll" / "Release Monthly Funds" write is authenticated;
-// the payroll LIST view itself is still fed by the public useProfiles()/
-// usePayroll()/useLeaves()/useTimesheets() hooks via computePayrollView,
-// pending its own larger migration pass).
-export async function upsertPayrollRecordAdmin(record: PayrollRecord): Promise<void> {
+// HR/Admin payroll writes (see /api/admin/payroll). The browser only says WHO, WHICH MONTH and WHAT HR typed (a bonus): the
+// server works out every figure itself, adds any raise and the held-back first-month pay in a safe order, and returns the
+// record it saved.
+export type PayrollAdminAction =
+  | { action: 'pay' | 'recordPaid'; employeeId: string; month: string }
+  | { action: 'setBonus'; employeeId: string; month: string; bonus: number };
+
+export async function payrollAdminAction(body: PayrollAdminAction): Promise<{ status?: 'paid' | 'already_paid'; record: PayrollRecord }> {
   const token = getAuthToken();
   if (!token) throw new Error('Not signed in.');
   const res = await fetch(`${API_BASE}/api/admin/payroll`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ record }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error || `Request failed: ${res.status}`);
-  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `Request failed: ${res.status}`);
+  return data;
 }
 
 // ── Corrections after payment (lib/core/payrollCorrections.ts; route /api/admin/payroll/corrections) ──
@@ -168,6 +168,6 @@ export { getFinalLeavePayout, getAbsenceDeductionForMonth, getShiftShortfallDedu
 export const payrollActions = {
   // computePayrollView is pure (no writes) and lives in ../core/payroll so the
   // server can share it; callers decide whether/when to persist via
-  // upsertPayrollRecordAdmin (e.g. only on "Process").
+  // payrollAdminAction (e.g. only on "Process").
   computePayrollView,
 };

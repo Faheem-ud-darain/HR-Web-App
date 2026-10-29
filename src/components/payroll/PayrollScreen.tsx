@@ -25,7 +25,7 @@ import { ListSkeleton } from '@/components/ui/Skeleton';
 import {
   hrActions, usePayroll, useProfiles, useLeaves, useTimesheets, formatMoney,
   usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection, type PayrollCorrection,
-  applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin,
+  payrollAdminAction,
   canReviewPreviousMonthPayroll, previousPayrollMonthKey, type PayrollRecord, type Profile,
 } from '@/lib/hrData';
 import { daysAgoNYDateString } from '@/lib/timezone';
@@ -123,16 +123,9 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     try { await Promise.all([refetchProfiles(), refetchPayroll()]); } finally { setRefreshing(false); }
   };
 
-  // Same side effects as the old "Complete Payout" / "Release": add the pending anniversary increment
-  // to the employee's real base salary, bank any first-month reserve, then mark the record paid.
-  const payOne = async (record: PayrollRecord) => {
-    const emp = employees.find(e => e.id === record.employeeId);
-    if (record.incrementAmount > 0 && emp) await applyIncrementServer(emp, emp.baseSalary, record.incrementAmount);
-    if (record.reservedThisMonth > 0 && emp) {
-      await updateProfileAdmin(record.employeeId, { reservedSalaryBalance: (emp.reservedSalaryBalance || 0) + record.reservedThisMonth });
-    }
-    await upsertPayrollRecordAdmin({ ...record, processed: true });
-  };
+  // The server does all of it, in a safe order and once only: it works out the figures, adds the employee's raise to the
+  // base salary, banks a new joiner's held-back first month, and marks the month paid. Pressing Pay again after an error is safe.
+  const payOne = (record: PayrollRecord) => payrollAdminAction({ action: 'pay', employeeId: record.employeeId, month: record.month });
 
   const confirmPay = async () => {
     if (!pending || !isAdmin) return;
@@ -148,7 +141,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         // An earlier month that was paid but never ticked off here. This only records that it was
         // paid — it deliberately does not touch anyone's salary, increment or held balance.
         setPayingId(action.record.employeeId);
-        await upsertPayrollRecordAdmin({ ...action.record, processed: true });
+        await payrollAdminAction({ action: 'recordPaid', employeeId: action.record.employeeId, month: action.record.month });
         setNotice(`${action.record.name} — ${monthLabel(action.record.month)} is now marked as paid.`);
       } else {
         setBulkBusy(true);
@@ -167,7 +160,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   };
 
   const saveBonus = async (record: PayrollRecord, bonus: number) => {
-    await upsertPayrollRecordAdmin({ ...record, bonus });
+    await payrollAdminAction({ action: 'setBonus', employeeId: record.employeeId, month: record.month, bonus });
     await refetchPayroll();
   };
 

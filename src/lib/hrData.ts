@@ -41,7 +41,7 @@ import {
 export {
   usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
   usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection,
-  upsertPayrollRecordAdmin, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
+  payrollAdminAction, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
   getPendingIncrementForPayrollMonth, getFinalLeavePayout, getAbsenceDeductionForMonth,
   getShiftShortfallDeduction, canReviewPreviousMonthPayroll, previousPayrollMonthKey,
 } from './hr/payroll';

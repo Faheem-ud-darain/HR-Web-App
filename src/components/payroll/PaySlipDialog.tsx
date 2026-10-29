@@ -8,6 +8,7 @@ import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { FormError } from '@/components/ui/FormError';
 import { Input } from '@/components/ui/Input';
 import { formatMoney, type PayrollRecord, type Profile, type PayrollCorrection } from '@/lib/hrData';
 import { currentAmount } from '@/lib/core/payrollCorrections';
@@ -48,6 +49,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
   const [bonusText, setBonusText] = useState('');
   const [bonusFor, setBonusFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bonusError, setBonusError] = useState('');
   const [correcting, setCorrecting] = useState(false);
   const [corrAmount, setCorrAmount] = useState('');
   const [corrReason, setCorrReason] = useState('');
@@ -158,11 +160,12 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                 variant="outline"
                 size="md"
                 disabled={!bonusChanged || saving}
-                onClick={async () => { setSaving(true); try { await onSaveBonus(record, bonusValue); } finally { setSaving(false); } }}
+                onClick={async () => { setSaving(true); setBonusError(''); try { await onSaveBonus(record, bonusValue); } catch (err) { setBonusError(err instanceof Error ? err.message : 'Could not save the bonus.'); } finally { setSaving(false); } }}
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save bonus
               </Button>
             </div>
+            <FormError>{bonusError}</FormError>
             <p className="text-slate-400">Nothing is saved until you press Save bonus.</p>
           </div>
         )}
