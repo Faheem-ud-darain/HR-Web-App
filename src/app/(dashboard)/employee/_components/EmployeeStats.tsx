@@ -11,7 +11,7 @@ import { formatMoney, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPT
 export function EmployeeStats({ profile, leaves, tasksNeedingAttention, payroll }: { profile: Profile | null; leaves: LeaveApplication[] | undefined; tasksNeedingAttention: number; payroll: PayrollSelf | null | undefined }) {
   const router = useRouter();
   const record = payroll?.payrollRecord;
-  const net = payroll && record ? netPay({ baseSalary: payroll.baseSalary, incrementAmount: payroll.pendingIncrement || 0, bonus: record.bonus || 0, deductions: record.deductions || 0 }) : 0;
+  const net = record ? netPay(record) : 0;
   const accrual = profile ? getPTOAccrualDate(profile) : null;
   return (
     <div className={`grid grid-cols-2 gap-3 md:gap-4 ${record ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
@@ -24,7 +24,7 @@ export function EmployeeStats({ profile, leaves, tasksNeedingAttention, payroll 
       {record && payroll && (
         <StatCard label="Net Payable This Month" size="md" chip={{ icon: Wallet, tone: 'emerald' }} valueTone="success" value={formatMoney(net, payroll.region)} onClick={() => router.push('/employee/salary')}
           labelExtra={<Badge variant={record.processed ? 'success' : 'warning'} size="sm">{record.processed ? 'Paid' : 'Pending'}</Badge>}
-          sub={record.deductions > 0 ? `Includes ${formatMoney(record.deductions, payroll.region)} in deductions` : undefined} />
+          sub={`${record.deductions > 0 ? `Includes ${formatMoney(record.deductions, payroll.region)} in deductions. ` : ''}${record.final ? '' : 'An estimate until HR processes the month.'}`.trim() || undefined} />
       )}
     </div>
   );

@@ -90,12 +90,12 @@ export default function EmployeeSalaryPage() {
   const currentMonthLabel = new Date().toLocaleDateString('en-US', { timeZone: APP_TIMEZONE, month: 'long', year: 'numeric' });
   const currentSlip: Payslip | null = payrollRecord ? {
     month: currentMonthLabel,
-    base: baseSalary,
-    increment: pendingIncrement,
-    deductions: payrollRecord.deductions || 0,
-    bonus: payrollRecord.bonus || 0,
-    net: netPay({ baseSalary, incrementAmount: pendingIncrement, bonus: payrollRecord.bonus || 0, deductions: payrollRecord.deductions || 0 }),
-    processed: !!payrollRecord.processed,
+    base: payrollRecord.baseSalary,
+    increment: payrollRecord.incrementAmount,
+    deductions: payrollRecord.deductions,
+    bonus: payrollRecord.bonus,
+    net: netPay(payrollRecord),
+    processed: payrollRecord.processed,
     deductionBreakdown: payrollRecord.deductionBreakdown || [],
     reservedThisMonth: payrollRecord.reservedThisMonth || 0,
   } : null;

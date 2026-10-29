@@ -455,9 +455,15 @@ export interface PayrollSelf {
   reservedSalaryBalance?: number;
   manualReservedAmount?: number;
   payrollRecord: {
+    // This month's figures from the same engine HR's payroll screen uses (net pay = netPay() of these).
+    baseSalary: number;
+    incrementAmount: number;
+    earlierPay: number;
     bonus: number;
     deductions: number;
     processed: boolean;
+    /** False while the month is still open: an estimate until HR processes (or the monthly job freezes) it. */
+    final: boolean;
     month?: string;
     // "why was I deducted" — same itemized list HR/Admin see on the Net
     // Payable modal (PayrollRecord.deductionBreakdown), plus this month's

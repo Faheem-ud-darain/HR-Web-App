@@ -77,9 +77,10 @@ export async function POST(request: Request) {
     // Persist the itemized "why was I deducted" breakdown + this month's
     // reserved amount alongside the main record, so the employee's own
     // /api/payroll/me view can show the exact same reasons HR/Admin see on
-    // the Net Payable modal — computePayrollView (client-side only, not
-    // Edge-safe) already computed both of these; this route just needs to
-    // carry them through to storage, not recompute them.
+    // the Net Payable modal. For now the browser's computePayrollView result
+    // supplies both and this route carries them through to storage as sent;
+    // the engine itself IS Edge-safe (the monthly cron route runs it here), so
+    // the plan is for this route to compute them itself (see plan notes).
     if (record.employeeId && record.month) {
       await adminUpsertByField('hr_payroll_breakdowns', 'breakdown_key', payrollBreakdownKey(record.employeeId, record.month), {
         deductionBreakdown: Array.isArray(record.deductionBreakdown) ? record.deductionBreakdown : [],

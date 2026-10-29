@@ -219,7 +219,7 @@ const monthIndex = (key: string): number => {
   const [y, m] = key.split('-').map(Number);
   return y * 12 + (m - 1);
 };
-function addMonths(key: string, n: number): string {
+export function addMonths(key: string, n: number): string {
   const idx = monthIndex(key) + n;
   return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`;
 }
