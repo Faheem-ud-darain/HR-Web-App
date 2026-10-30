@@ -1,7 +1,8 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import React from 'react';
-import { CircleNotchIcon as Loader2, StarIcon as Star, TrashIcon as Trash2 } from '@/components/ui/icons';
+import { StarIcon as Star, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { displayName, type Profile, type Team, type Warehouse } from '@/lib/hrData';
 import { Select } from '@/components/ui/Input';
 import { ListSkeleton } from '@/components/ui/Skeleton';
@@ -45,15 +46,7 @@ export function TeamZones({ teams, employees, warehouses, loading, deletingName,
                     <option value="">+ Assign Wh</option>
                     {warehouses.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
                   </Select>
-                  <button
-                    onClick={() => onDelete(team.name)}
-                    disabled={deletingName === team.name}
-                    aria-label={`Delete team ${team.name}`}
-                    title="Delete Team"
-                    className="p-2 lg:p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {deletingName === team.name ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                  </button>
+                  <IconButton size="sm" label="Delete team" loading={deletingName === team.name} onClick={() => onDelete(team.name)} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></IconButton>
                 </div>
               </div>
 

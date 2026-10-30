@@ -2,13 +2,14 @@
 
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { SectionCard } from '@/components/ui/SectionCard';
 import { AnnouncementItem } from '@/components/ui/AnnouncementItem';
+import { AnnouncementFeed } from '@/components/ui/AnnouncementFeed';
 import { IconButton } from '@/components/ui/IconButton';
 import { announcementWhen } from '@/lib/core/announcements';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { CheckCircleIcon as CheckCircle2, CircleNotchIcon as Loader2, TrashIcon as Trash2, EyeIcon as Eye, WarningIcon as AlertTriangle, ArrowBendUpRightIcon as Forward } from '@/components/ui/icons';
+import { CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, EyeIcon as Eye, WarningIcon as AlertTriangle, ArrowBendUpRightIcon as Forward } from '@/components/ui/icons';
 import { hrActions, Profile, Announcement, useProfiles, useAnnouncements, useWarehouses, displayName } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -27,7 +28,7 @@ type AnnouncementsSectionProps = {
   onCreateClose: () => void;
 };
 
-// How many announcements the panel shows before "Show all" (the list only grows).
+// How many announcements the list shows before "Show all" (the list only grows).
 const SHOWN_AT_FIRST = 4;
 
 const SENDER_LABEL = { hr: 'HR Manager', admin: 'CEO Admin' } as const;
@@ -56,7 +57,6 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
   const [pendingDeleteAnnId, setPendingDeleteAnnId] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
 
   // "Viewed by" facepile + modal — see hrActions.getAnnouncementReadMap in
   // hrData.ts (same per-announcement read-tracking store the Employee
@@ -135,69 +135,58 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
   return (
     <>
       {/* Announcements Panel */}
-      <Card className="p-0">
-        <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2 border-b border-slate-100 flex justify-between items-center">
-          <div>
-            <h2 className="text-sm md:text-base font-bold text-slate-900">Recent Announcements</h2>
-            <p className="text-caption md:text-xs text-slate-500 mt-0.5">Corporate updates and targeted broadcast messages.</p>
-          </div>
-        </div>
-        <CardContent className="p-0 divide-y divide-slate-100">
-          {announcementsLoading && <div className="p-4"><ListSkeleton rows={3} /></div>}
-          {!announcementsLoading && (showAll ? announcements : announcements.slice(0, SHOWN_AT_FIRST)).map(ann => {
-            const viewers = viewersForAnnouncement(ann.id);
-            const audience = Array.isArray(ann.target)
-              ? ann.target.map((tId: string) => warehouses.find(w => w.id === tId)?.name || tId).join(', ')
-              : ann.target === 'all' ? 'everyone' : ann.target.toUpperCase();
-            return (
-              <AnnouncementItem
-                key={ann.id}
-                title={ann.title}
-                content={ann.content}
-                important={ann.important}
-                meta={`By ${ann.createdBy} · ${announcementWhen(ann.timestamp)}`}
-                audience={audience}
-                actions={
-                  <>
-                    <IconButton size="sm" label="Forward to HR & Admin" onClick={() => setForwardingAnn(ann)}><Forward className="h-4 w-4" /></IconButton>
-                    <IconButton size="sm" label="Delete announcement" onClick={() => handleDeleteAnnouncement(ann.id)} disabled={deletingAnnId === ann.id} className="hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50">
-                      {deletingAnnId === ann.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </IconButton>
-                  </>
-                }
-              >
-                {/* "Viewed by" facepile — see hrActions.getAnnouncementReadMap in hrData.ts. Clicking opens the full viewer list. */}
-                <button onClick={() => openViewersModal(ann.id)} className="flex items-center gap-2 mt-2.5 group" title="See who has viewed this announcement">
-                  <div className="flex -space-x-2">
-                    {viewers.length === 0 ? (
-                      <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300 flex items-center justify-center">
-                        <Eye className="h-3.5 w-3.5 text-slate-500" />
-                      </span>
-                    ) : (
-                      viewers.slice(0, 5).map(v => (
-                        <Avatar key={v.id} src={v.profilePicture} name={displayName(v, 'hr')} size={22} className="ring-2 ring-white" />
-                      ))
-                    )}
-                  </div>
-                  <span className="text-caption font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
-                    {viewers.length === 0 ? 'No views yet' : `${viewers.length} viewed${viewers.length > 5 ? ` (+${viewers.length - 5} more)` : ''}`}
-                  </span>
-                </button>
-              </AnnouncementItem>
-            );
-          })}
-          {!announcementsLoading && announcements.length > SHOWN_AT_FIRST && (
-            <div className="p-2 text-center">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setShowAll(v => !v)}>
-                {showAll ? 'Show fewer' : `Show all ${announcements.length} announcements`}
-              </Button>
-            </div>
-          )}
-          {!announcementsLoading && announcements.length === 0 && (
-            <EmptyState py={6} size="xs">No announcements posted yet.</EmptyState>
-          )}
-        </CardContent>
-      </Card>
+      <SectionCard title="Recent Announcements" subtitle="Corporate updates and targeted broadcast messages.">
+        {announcementsLoading && <div className="p-4"><ListSkeleton rows={3} /></div>}
+        {!announcementsLoading && (
+          <AnnouncementFeed
+            announcements={announcements}
+            shownAtFirst={SHOWN_AT_FIRST}
+            render={ann => {
+              const viewers = viewersForAnnouncement(ann.id);
+              const audience = Array.isArray(ann.target)
+                ? ann.target.map((tId: string) => warehouses.find(w => w.id === tId)?.name || tId).join(', ')
+                : ann.target === 'all' ? 'everyone' : ann.target.toUpperCase();
+              return (
+                <AnnouncementItem
+                  key={ann.id}
+                  title={ann.title}
+                  content={ann.content}
+                  important={ann.important}
+                  meta={`By ${ann.createdBy} · ${announcementWhen(ann.timestamp)}`}
+                  audience={audience}
+                  actions={
+                    <>
+                      <IconButton size="sm" label="Forward to HR & Admin" onClick={() => setForwardingAnn(ann)}><Forward className="h-4 w-4" /></IconButton>
+                      <IconButton size="sm" label="Delete announcement" onClick={() => handleDeleteAnnouncement(ann.id)} loading={deletingAnnId === ann.id} className="hover:text-rose-600 hover:bg-rose-50">
+                        <Trash2 className="h-4 w-4" />
+                      </IconButton>
+                    </>
+                  }
+                >
+                  {/* "Viewed by" facepile — see hrActions.getAnnouncementReadMap in hrData.ts. Clicking opens the full viewer list. */}
+                  <button onClick={() => openViewersModal(ann.id)} className="flex items-center gap-2 mt-2.5 group" title="See who has viewed this announcement">
+                    <div className="flex -space-x-2">
+                      {viewers.length === 0 ? (
+                        <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300 flex items-center justify-center">
+                          <Eye className="h-3.5 w-3.5 text-slate-500" />
+                        </span>
+                      ) : (
+                        viewers.slice(0, 5).map(v => (
+                          <Avatar key={v.id} src={v.profilePicture} name={displayName(v, 'hr')} size={22} className="ring-2 ring-white" />
+                        ))
+                      )}
+                    </div>
+                    <span className="text-caption font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
+                      {viewers.length === 0 ? 'No views yet' : `${viewers.length} viewed${viewers.length > 5 ? ` (+${viewers.length - 5} more)` : ''}`}
+                    </span>
+                  </button>
+                </AnnouncementItem>
+              );
+            }}
+          />
+        )}
+        {!announcementsLoading && announcements.length === 0 && <EmptyState py={6} size="xs">No announcements posted yet.</EmptyState>}
+      </SectionCard>
 
 
       {/* Announcement Viewers Modal — lists everyone who has seen the
@@ -314,8 +303,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isPostingAnnouncement} onClick={() => onCreateClose()}>Cancel</Button>
-            <Button type="submit" disabled={isPostingAnnouncement} >
-              {isPostingAnnouncement && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Button type="submit" disabled={isPostingAnnouncement}  loading={isPostingAnnouncement}>
               {isPostingAnnouncement ? 'Posting…' : 'Post Announcement'}
             </Button>
           </div>

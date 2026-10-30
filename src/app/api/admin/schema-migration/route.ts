@@ -876,6 +876,31 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
     }
+    if (body.action === 'ensureLeaveDateChanges') {
+      // Requests to change the dates of a leave (see src/app/api/leaves/date-change/route.ts and
+      // lib/core/leaveDateChange.ts): one row per request, admin-only (rules null) because the browser never touches it,
+      // only that route does with the admin token. Additive only. Defaults to a dry run: pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_leave_date_changes';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string, required = false) => ({ name: n, type: 'text', required, unique: false, options: { min: null, max: null, pattern: '' } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: [
+              text('leave_id', true), text('employee_name', true), text('leave_type'),
+              text('old_start', true), text('old_end', true), text('new_start', true), text('new_end', true),
+              text('reason'), text('status', true), text('requested_at'), text('decided_by'), text('decided_at'),
+            ],
+            indexes: ['CREATE INDEX idx_hr_leave_date_changes_leave ON hr_leave_date_changes (leave_id, status)'],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
     if (body.action === 'deleteActivityRows') {
       // Maintenance helper for the two dot tables ONLY (their delete rule is admin-only on
       // purpose, so the browser can't wipe them): removes the rows matching `filter`.

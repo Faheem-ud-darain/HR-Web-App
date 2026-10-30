@@ -41,12 +41,16 @@ export const documentPages = (region: Region): number => (isUsa(region) ? 3 : 2)
 /** All of one person's documents are stored together in a single row whose JSON field holds 8,000,000 bytes, so the files
  *  added in the wizard share this much (the base64 text of the CV, the identity scans and the passport together). */
 export const DOCS_BUDGET_BYTES = 7_900_000;
+/** About how many MB of files fit in the budget (base64 text is about a third bigger than the file). */
+export const DOCS_BUDGET_MB = Math.round(DOCS_BUDGET_BYTES / 1.37 / 1048576);
+/** The size, in the same units as the budget, of a person's whole stored documents record (what the database measures). */
+export const storedDocsBytes = (docs: object | null | undefined): number => (docs ? JSON.stringify(docs).length : 0);
 /** The size of some base64 documents added together. */
 export const docsBytes = (...parts: (string | null | undefined)[]): number => parts.reduce((sum, p) => sum + (p ? p.length : 0), 0);
 /** The message for a file that does not fit what is left of the budget. */
 export function overBudgetMessage(leftBytes: number): string {
   const kb = Math.max(0, Math.floor(leftBytes / 1.37 / 1024)); // base64 is about a third bigger than the file
-  return `That file is too large: all your documents together can be about ${Math.round(DOCS_BUDGET_BYTES / 1.37 / 1048576)} MB, and about ${kb} KB of that is left. Please use a smaller file or a lower-resolution scan.`;
+  return `That file is too large: all your documents together can be about ${DOCS_BUDGET_MB} MB, and about ${kb} KB of that is left. Please use a smaller file or a lower-resolution scan.`;
 }
 
 const digitsOnly = (s: string) => s.replace(/[\s-]/g, '');
@@ -54,8 +58,10 @@ const digitsOnly = (s: string) => s.replace(/[\s-]/g, '');
 /** Mobile wallets (JazzCash, Easypaisa and the like) pay to a phone-style account number and have no IBAN. */
 export const isMobileWallet = (bankName: string): boolean => /jazz\s*cash|easy\s*paisa|sada\s*pay|naya\s*pay|upaisa|wallet/i.test(bankName);
 
+export type BankDetails = { bankName: string; accountNumber: string; iban: string };
+
 /** An error message for the bank details, or '' when they are fine. A wallet (outside the USA) needs no IBAN. */
-export function validateBankDetails(bank: { bankName: string; accountNumber: string; iban: string }, region: Region): string {
+export function validateBankDetails(bank: BankDetails, region: Region): string {
   const label = bankIdLabel(region);
   const wallet = !isUsa(region) && isMobileWallet(bank.bankName);
   if (!bank.bankName.trim() || !bank.accountNumber.trim() || (!wallet && !bank.iban.trim())) {

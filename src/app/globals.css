@@ -148,10 +148,9 @@ body {
   overscroll-behavior-y: none; /* Native app feel, no pull-to-refresh bounce */
 }
 
-/* Your own message bubble: orange-700, so white text on it reads at 5.2:1 (on the brand orange-600 it was 3.6:1).
-   The dark theme already uses this shade for filled orange, so one value serves both. */
+/* Your own message bubble: the app's brand orange (--primary), the same in the light and dark themes. */
 @utility bg-bubble-own {
-  background-color: #c2410c;
+  background-color: var(--primary);
 }
 
 /* The smallest text in the app: badges, timestamps, hints. One named step instead of 8px, 9px, 10px and 11px. */
@@ -1303,3 +1302,59 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 
 
 
+
+/* What's New previews (components/changelog/ChangelogPreview.tsx): small looping animations of what changed. */
+@keyframes cl-stack-top {
+  0%, 15% { transform: translateY(0); opacity: 1; }
+  45%, 100% { transform: translateY(34px); opacity: 0; }
+}
+@keyframes cl-stack-next {
+  0%, 15% { transform: translateY(-9px) scale(0.96); }
+  45%, 100% { transform: translateY(0) scale(1); }
+}
+@keyframes cl-dates-move {
+  0%, 25% { transform: translateX(0); }
+  55%, 100% { transform: translateX(calc(2 * (100% + 6px))); }
+}
+@keyframes cl-sheet-up {
+  0%, 30% { transform: translateY(105%); }
+  55%, 90% { transform: translateY(0); }
+  100% { transform: translateY(105%); }
+}
+@keyframes cl-pop {
+  0%, 10% { transform: scale(0.8); opacity: 0; }
+  30%, 85% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0; }
+}
+@keyframes cl-tab {
+  0%, 20% { transform: translateX(0); }
+  40%, 60% { transform: translateX(calc(100% + 6px)); }
+  80%, 100% { transform: translateX(calc(2 * (100% + 6px))); }
+}
+@keyframes cl-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes cl-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-26px); }
+  60% { transform: translateY(-26px); }
+}
+@keyframes cl-wipe {
+  0%, 15% { clip-path: inset(0 100% 0 0); }
+  50%, 65% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 100% 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[cl-"] { animation: none !important; }
+}
+
+/* The "What's new" badge: black with white text on light, and the inverse (white with black text) in dark mode. */
+.whats-new-badge {
+  background: black;
+  color: white;
+}
+:root[data-theme='dark'] .whats-new-badge {
+  background: white;
+  color: black;
+}

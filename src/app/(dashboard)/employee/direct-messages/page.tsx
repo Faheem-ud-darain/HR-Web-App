@@ -3,6 +3,7 @@
 import React from 'react';
 import { useProfiles, Team } from '@/lib/hrData';
 import { TeamChatView } from '@/components/ui/lazy';
+import { ChatPage } from '@/components/ui/chat/ChatPage';
 import { useSessionEmail } from '@/lib/useSession';
 import { useMemo } from 'react';
 
@@ -21,19 +22,8 @@ export default function EmployeeDirectMessagesPage() {
   }] : [];
 
   return (
-    <div className="flex flex-col h-full min-h-0 space-y-4">
-      <div className="shrink-0 hidden md:block">
-        <h1 className="text-2xl font-bold text-slate-900">Direct Messages</h1>
-        <p className="text-slate-500 text-sm">Private conversation with HR and Admin.</p>
-      </div>
-      {hrTeam.length > 0 && (
-        <TeamChatView
-          teams={hrTeam}
-          currentUserEmail={userEmail}
-          currentUserRole={userProfile?.role || 'employee'}
-          allProfiles={allProfiles}
-        />
-      )}
-    </div>
+    <ChatPage title="Direct Messages" subtitle="Private conversation with HR and Admin.">
+      {hrTeam.length > 0 && <TeamChatView teams={hrTeam} currentUserEmail={userEmail} currentUserRole={userProfile?.role || 'employee'} allProfiles={allProfiles} />}
+    </ChatPage>
   );
 }

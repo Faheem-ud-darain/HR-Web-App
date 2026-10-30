@@ -2,12 +2,10 @@
 
 import React from 'react';
 import { PaperclipIcon as Paperclip, FileTextIcon as FileText, XIcon as X, PaperPlaneRightIcon as Send, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
 import { isNativeMobileApp } from '@/lib/trackerSetup';
 
 // Pieces shared by the chat and ticket message boxes.
-
-/** Round buttons beside the text box: 40px to tap on a phone, 36px with a mouse. */
-export const ROUND_BTN = 'h-10 w-10 md:h-9 md:w-9 rounded-full shrink-0 flex items-center justify-center';
 
 /** The strip under a thread that holds the message box (keeps clear of the phone's home bar). */
 export const COMPOSER_BAR = 'border-t border-slate-200 bg-white px-3 md:px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-[calc(1rem+env(safe-area-inset-bottom))]';
@@ -32,31 +30,25 @@ export function AttachButton({ inputRef, onPick, accept, title = 'Attach a file'
 }) {
   return (
     <>
-      <button type="button" title={title} aria-label={title} onClick={() => inputRef.current?.click()} className={`${ROUND_BTN} bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors ${className}`}>
-        <Paperclip className="h-4 w-4" />
-      </button>
+      <IconButton label={title} size="composer" tone="soft" className={className} onClick={() => inputRef.current?.click()}><Paperclip className="h-4 w-4" /></IconButton>
       <input ref={inputRef} type="file" accept={accept} tabIndex={-1} className="hidden" onChange={e => { onPick(e.target.files?.[0]); e.target.value = ''; }} />
     </>
   );
 }
 
-export function SendButton({ disabled, busy, onClick, className = 'bg-orange-600 hover:bg-orange-700' }: {
+export function SendButton({ disabled, busy, onClick, className = '', tone = 'primary' }: {
   disabled: boolean;
   busy?: boolean;
   /** Leave out inside a <form>: the button then submits it. */
   onClick?: () => void;
   className?: string;
+  /** primary = orange; warning = amber, for a message sent as an announcement. */
+  tone?: 'primary' | 'warning';
 }) {
   return (
-    <button
-      type={onClick ? 'button' : 'submit'}
-      onClick={onClick}
-      disabled={disabled}
-      aria-label="Send"
-      className={`${ROUND_BTN} disabled:opacity-50 text-white shadow-sm transition-colors transition-transform active:scale-95 ${className}`}
-    >
+    <IconButton label="Send" size="composer" tone={tone} type={onClick ? 'button' : 'submit'} onClick={onClick} disabled={disabled} className={`${className}`}>
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-    </button>
+    </IconButton>
   );
 }
 

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin, hrActions } from '@/lib/hrData';
-import { FileTextIcon as FileText, DownloadSimpleIcon as Download, MapPinIcon as MapPin, MonitorIcon as Monitor, BankIcon as Landmark, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { FileTextIcon as FileText, DownloadSimpleIcon as Download, MapPinIcon as MapPin, MonitorIcon as Monitor, BankIcon as Landmark } from '@/components/ui/icons';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimeNY } from '@/lib/timezone';
@@ -367,8 +367,7 @@ export default function ReportsPage() {
                 size="md"
                 onClick={handleSaveAssignment}
                 disabled={isSavingAssignment}
-              >
-                {isSavingAssignment && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+               loading={isSavingAssignment}>
                 {isSavingAssignment ? 'Saving…' : 'Save Assignment'}
               </Button>
             </div>

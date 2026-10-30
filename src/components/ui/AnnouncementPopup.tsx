@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
-import { Button } from '@/components/ui/Button';
+import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
+import { AcknowledgeModal } from '@/components/ui/AcknowledgeModal';
 import { hrActions, useAnnouncements, isAnnouncementForProfile, Profile } from '@/lib/hrData';
 
 interface AnnouncementPopupProps {
@@ -11,11 +11,8 @@ interface AnnouncementPopupProps {
 }
 
 // Blocking popup for `important` announcements (see the Announcement.
-// important comment in hrData.ts). Deliberately NOT built on top of the
-// shared <Modal> component — that one closes on backdrop click, Escape,
-// and an X button, all three of which would let someone dismiss this
-// without ever pressing "Mark as Read". The whole point here is that it
-// *cannot* be swept away by accident: the only way out is the explicit
+// important comment in hrData.ts). Built on AcknowledgeModal, which cannot be
+// dismissed by backdrop, Escape or X: the only way out is the explicit
 // button, which calls hrActions.markAnnouncementRead (a real server write,
 // not the passive "seen because it was rendered" tracking the Announcements
 // feed widget on the dashboard Overview page uses).
@@ -73,44 +70,13 @@ export function AnnouncementPopup({ email, profile }: AnnouncementPopupProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-toast)] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-enter"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="announcement-popup-title"
+    <AcknowledgeModal
+      tone="amber" icon={AlertTriangle} eyebrow="Important Announcement" title={current.title}
+      note={pending.length > 1 ? `${pending.length} important announcements need your attention` : 'This will keep appearing until you acknowledge it'}
+      actionLabel="Mark as Read" busyLabel="Marking…" busy={marking} onAction={handleMarkRead}
     >
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden dialog-enter">
-        <div className="px-5 pt-5 pb-4 bg-amber-50 border-b border-amber-200 flex items-start gap-3">
-          <div className="h-9 w-9 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-caption font-bold text-amber-700 uppercase tracking-wider">Important Announcement</p>
-            <h2 id="announcement-popup-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
-              {current.title}
-            </h2>
-          </div>
-        </div>
-
-        <div className="px-5 py-4 max-h-[45vh] overflow-y-auto">
-          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{current.content}</p>
-          <p className="text-caption text-slate-400 font-semibold mt-3">Posted by {current.createdBy} · {current.timestamp}</p>
-        </div>
-
-        <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-          <p className="text-caption text-slate-400 font-semibold">
-            {pending.length > 1 ? `${pending.length} important announcements need your attention` : 'This will keep appearing until you acknowledge it'}
-          </p>
-          <Button
-            variant="primary"
-            onClick={handleMarkRead}
-            disabled={marking}
-            className="shrink-0 shadow-sm active:scale-97 transition-transform"
-          >
-            <CheckCircle2 className="h-4 w-4" /> {marking ? 'Marking…' : 'Mark as Read'}
-          </Button>
-        </div>
-      </div>
-    </div>
+      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">{current.content}</p>
+      <p className="text-caption text-slate-400 font-semibold mt-3">Posted by {current.createdBy} · {current.timestamp}</p>
+    </AcknowledgeModal>
   );
 }

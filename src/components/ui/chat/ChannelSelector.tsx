@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { Team } from '@/lib/hrData';
+import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Input';
 
 interface ChannelSelectorProps {
@@ -21,17 +22,18 @@ export function ChannelSelector({ teams, activeTeamId, onSelect, oversight, mobi
     <>
       <div className={`md:w-56 shrink-0 md:flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-hide px-1 md:px-0 ${mobileStyle === 'dropdown' ? 'hidden' : 'flex'}`}>
         {teams.map(t => (
-          <button
+          <Button
             key={t.id}
+            variant={activeTeamId === t.id ? 'primary' : 'secondary'}
             onClick={() => onSelect(t.id)}
             aria-current={activeTeamId === t.id ? 'true' : undefined}
-            className={`px-4 py-2 md:py-2.5 rounded-xl text-xs font-bold text-left whitespace-nowrap md:whitespace-normal transition-colors transition-shadow shrink-0 ${
-              activeTeamId === t.id ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className="shrink-0 justify-start text-left whitespace-nowrap md:whitespace-normal"
           >
-            {t.name}
-            {oversight && <span className={`hidden md:block text-caption font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-500'}`}>{t.members.length} members</span>}
-          </button>
+            <span>
+              {t.name}
+              {oversight && <span className={`hidden md:block text-caption font-semibold mt-0.5 ${activeTeamId === t.id ? 'text-orange-100' : 'text-slate-500'}`}>{t.members.length} members</span>}
+            </span>
+          </Button>
         ))}
       </div>
 

@@ -2,8 +2,16 @@
 // hrData.ts is now a thin barrel: every type/hook/action lives in one of the
 // domain modules under ./hr/*, and this file just re-exports them under
 // their original names (plus reassembles hrActions by spreading each
-// domain's own actions object) so none of the ~100 files importing from
+// domain's own actions object) so none of the ~150 files importing from
 // './hrData' anywhere in the app need to change. See plans/014.
+//
+// Two things to know before touching it:
+//  - It is a pass-through: deleting it would only change import lines (about 150 files), no behaviour. That is a
+//    mechanical job to do LAST, after the domains have been deepened (see the architecture review), not first.
+//  - It is also a cycle. Seven modules in ./hr/* import `hrActions` back from here to call another domain's actions (a
+//    clock-out sends notifications, the absence check closes shifts). It works because those calls happen at run time,
+//    never while the modules load. Do not use `hrActions` or anything from here at the top level of a ./hr module.
+//  New code should import from the domain module it needs (./hr/timesheets, ./core/payroll...), not from here.
 export * from './hr/types';
 import {
   sharedActions,
@@ -41,7 +49,7 @@ import {
 export {
   usePayroll, getPayrollForEmployeeAdmin, deletePayrollForEmployeeAdmin, usePayrollSelf,
   usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection,
-  upsertPayrollRecordAdmin, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
+  payrollAdminAction, getMissedIncrementEvents, getPendingIncrement, getIncrementHistory,
   getPendingIncrementForPayrollMonth, getFinalLeavePayout, getAbsenceDeductionForMonth,
   getShiftShortfallDeduction, canReviewPreviousMonthPayroll, previousPayrollMonthKey,
 } from './hr/payroll';

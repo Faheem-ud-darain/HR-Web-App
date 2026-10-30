@@ -1,11 +1,15 @@
 'use client';
 
+import { useLeaveNames } from '@/hooks/useLeaveNames';
+import { CardStack } from '@/components/ui/CardStack';
+import { LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
+import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
-import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
+import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { Button } from '@/components/ui/Button';
-import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { Button, type ButtonVariant } from '@/components/ui/Button';
+import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
 import { Tabs } from '@/components/ui/Tabs';
@@ -38,14 +42,7 @@ export default function HRLeavesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabView>('kanban');
 
-  // LeaveApplication only stores a fullName snapshot (employeeName), not a
-  // live Profile reference, so alias resolution needs a lookup against the
-  // current employees list — falls back to the raw snapshot if the
-  // employee can't be matched (e.g. since-deleted record).
-  const nameFor = (employeeName: string): string => {
-    const emp = employees.find((e: Profile) => e.fullName === employeeName);
-    return emp ? displayName(emp, 'hr') : employeeName;
-  };
+  const { nameFor, pictureFor } = useLeaveNames('hr');
 
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
@@ -186,31 +183,55 @@ export default function HRLeavesPage() {
 
   const mobileCol = mobileColChoice ?? (COLUMNS.find(c => leaves.some(l => l.status === c.key))?.key ?? 'pending');
 
+  // What a leave card offers on a phone or tablet, by where the request is: HR sends it on or rejects it, or takes it back. The buttons
+  // run the same moveLeaveTo() rules as the desktop drag.
+  const phoneActions = (leave: LeaveApplication, busy: boolean) => {
+    if (leave.status === 'pending') {
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="indigo" size="sm" disabled={busy} onClick={() => moveLeaveTo(leave, 'hr_approved')}>Send to CEO</Button>
+          <Button variant="danger" size="sm" disabled={busy} onClick={() => moveLeaveTo(leave, 'rejected')}>Reject</Button>
+        </div>
+      );
+    }
+    if (leave.status === 'hr_approved') {
+      return (
+        <>
+          <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">With the CEO for the final decision.</p>
+          <Button variant="outline" size="sm" fullWidth disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')}>Recall to pending</Button>
+        </>
+      );
+    }
+    if (leave.status === 'approved') return <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved by the CEO.</p>;
+    return <Button variant="outline" size="sm" fullWidth disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')}>Re-open for review</Button>;
+  };
+
   const filters = useLeaveFilters(leaves, searchQuery);
   const historyLeaves = filters.rows;
 
   // Row buttons for the History tab. A table row gets compact buttons; a phone card gets wide, tall ones.
   const historyActions = (l: LeaveApplication, variant: 'row' | 'card') => {
     const wide = variant === 'card';
-    const button = (tone: string, onClick: () => void, label: string, full = false) => (
-      <button
-        onClick={onClick}
+    const button = (variant: ButtonVariant, onClick: () => void, label: string, full = false) => (
+      <Button
+        variant={variant}
+        size="xs"
+        loading={processingLeaveId === l.id}
         disabled={processingLeaveId !== null}
-        className={`font-semibold transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 ${tone} ${
-          wide ? `min-h-11 text-caption font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded pointer-coarse:min-h-11'
-        }`}
-      >{processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{label}</button>
+        onClick={onClick}
+        className={wide ? `min-h-11 ${full ? 'w-full' : 'flex-1'}` : 'pointer-coarse:min-h-11'}
+      >{label}</Button>
     );
     if (l.status === 'pending') {
       return (
         <div className={`flex gap-2 ${wide ? 'w-full' : 'justify-center'}`}>
-          {button('text-emerald-600 bg-emerald-50 hover:bg-emerald-100', () => handleSendToCEO(l), 'Send to CEO')}
-          {button('text-rose-600 bg-rose-50 hover:bg-rose-100', () => handleHistoryReject(l), 'Reject')}
+          {button('softEmerald', () => handleSendToCEO(l), 'Send to CEO')}
+          {button('softRose', () => handleHistoryReject(l), 'Reject')}
         </div>
       );
     }
     // A request sent to the CEO by mistake can be recalled; the CEO's own decision (approved) cannot.
-    if (l.status === 'rejected' || l.status === 'hr_approved') return button('text-slate-600 bg-slate-100 hover:bg-slate-200', () => handleReopenLeave(l), 'Re-open', true);
+    if (l.status === 'rejected' || l.status === 'hr_approved') return button('secondary', () => handleReopenLeave(l), 'Re-open', true);
     return <span className="text-xs text-slate-400 font-medium">—</span>;
   };
 
@@ -252,6 +273,8 @@ export default function HRLeavesPage() {
           also tacked on a PTO/Sick/Urgent type breakdown at the same visual
           weight, which duplicated the Type column already visible on every
           kanban card and history row without adding new information. */}
+      <LeaveDateChangeRequests onAnswered={refetchLeaves} />
+
       <LeaveStatTiles
         tiles={[
           { label: 'Total', value: stats.total, tone: 'slate' },
@@ -324,38 +347,17 @@ export default function HRLeavesPage() {
           </div>
           {(() => {
             const cards = filteredInCol(mobileCol);
-            if (cards.length === 0) return <div id="leave-status-panel" role="tabpanel" aria-labelledby={`leave-tab-${mobileCol}`} className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-400">Nothing here</div>;
+            const panel = { id: 'leave-status-panel', role: 'tabpanel' as const, 'aria-labelledby': `leave-tab-${mobileCol}` };
+            if (cards.length === 0) return <div {...panel} className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-500">Nothing here</div>;
+            const busy = processingLeaveId !== null; // one change at a time, so every card waits
+            const card = (leave: LeaveApplication) => <LeaveRequestCard leave={leave} name={nameFor(leave.employeeName)} picture={pictureFor(leave.employeeName)}>{phoneActions(leave, busy)}</LeaveRequestCard>;
             return (
-              <div id="leave-status-panel" role="tabpanel" aria-labelledby={`leave-tab-${mobileCol}`} className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {cards.map(leave => {
-                  const busy = processingLeaveId !== null; // one change at a time, so every card waits
-                  return (
-                    <div key={leave.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 text-sm font-bold leading-tight text-slate-900 break-words">{nameFor(leave.employeeName)}</div>
-                        <LeaveTypeBadge type={leave.type} className="shrink-0" />
-                      </div>
-                      <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Calendar className="h-3.5 w-3.5 shrink-0" /> {leave.duration}</div>
-                      {leave.reason && <p className="mt-2 text-xs leading-relaxed text-slate-500 break-words">{leave.reason}</p>}
-                      {leave.status === 'pending' && (
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'hr_approved')} className="min-h-11 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Send to CEO</button>
-                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'rejected')} className="min-h-11 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60">Reject</button>
-                        </div>
-                      )}
-                      {leave.status === 'hr_approved' && (
-                        <>
-                          <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700">With the CEO for the final decision.</p>
-                          <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Recall to pending</button>
-                        </>
-                      )}
-                      {leave.status === 'approved' && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Approved by the CEO.</p>}
-                      {leave.status === 'rejected' && (
-                        <button type="button" disabled={busy} onClick={() => moveLeaveTo(leave, 'pending')} className="mt-3 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Re-open for review</button>
-                      )}
-                    </div>
-                  );
-                })}
+              <div {...panel}>
+                {/* A phone gets the stack to swipe through (it goes round); a tablet gets the cards side by side. */}
+                <div className="md:hidden">
+                  <CardStack items={cards} keyOf={l => l.id} label={COLUMNS.find(c => c.key === mobileCol)?.label ?? 'Leave requests'} peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`} render={card} />
+                </div>
+                <div className="hidden grid-cols-2 gap-3 md:grid">{cards.map(l => <React.Fragment key={l.id}>{card(l)}</React.Fragment>)}</div>
               </div>
             );
           })()}

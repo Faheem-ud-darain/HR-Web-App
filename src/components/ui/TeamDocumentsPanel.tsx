@@ -1,11 +1,12 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import React, { useRef, useState } from 'react';
 import { Team, TeamDocument, useTeamDocuments, hrActions } from '@/lib/hrData';
 import { formatDateNY } from '@/lib/timezone';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
-import { UploadSimpleIcon as Upload, FileTextIcon as FileText, FileImageIcon as FileImage, FileVideoIcon as FileVideo, DownloadSimpleIcon as Download, TrashIcon as Trash2, CircleNotchIcon as Loader2, XIcon as X, FolderOpenIcon as FolderOpen, FileIcon as FileIcon } from '@/components/ui/icons';
+import { UploadSimpleIcon as Upload, FileTextIcon as FileText, FileImageIcon as FileImage, FileVideoIcon as FileVideo, DownloadSimpleIcon as Download, TrashIcon as Trash2, XIcon as X, FolderOpenIcon as FolderOpen, FileIcon as FileIcon } from '@/components/ui/icons';
 import { Input, Textarea } from '@/components/ui/Input';
 import { safeHref } from '@/lib/sanitize';
 import { formatBytes } from '@/lib/core/attachments';
@@ -188,8 +189,8 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
               size="sm"
               onClick={handleUpload}
               disabled={uploading || !title.trim() || !pendingFile}
-            >
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+             loading={uploading}>
+              {!(uploading) && <Upload className="h-3.5 w-3.5" />}
               Save to team
             </Button>
           </div>
@@ -241,13 +242,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
                     <Download className="h-3.5 w-3.5" /> Open / Download
                   </a>
                   {canManage && (
-                    <button
-                      onClick={() => handleDelete(doc)}
-                      disabled={deletingId === doc.id}
-                      className="flex items-center gap-1 text-caption font-bold text-rose-500 hover:text-rose-700 ml-auto disabled:opacity-50"
-                    >
-                      {deletingId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </button>
+                    <IconButton size="sm" label="Delete document" loading={deletingId === doc.id} onClick={() => handleDelete(doc)} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></IconButton>
                   )}
                 </div>
               </div>

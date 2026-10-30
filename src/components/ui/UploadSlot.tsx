@@ -46,7 +46,8 @@ export function UploadSlot({ title, hint, required, accept, max = 1, files, busy
   pickLabel?: string;
   replaceable?: boolean;
   onPick: (file: File | undefined) => void;
-  onRemove: (index: number) => void;
+  /** Left out where a file can be replaced but not taken away (the profile page). */
+  onRemove?: (index: number) => void;
 }) {
   const full = files.length >= max;
   const showPicker = !full || (replaceable && max === 1);
@@ -71,7 +72,7 @@ export function UploadSlot({ title, hint, required, accept, max = 1, files, busy
                   : <FileText weight="duotone" className="h-4 w-4 shrink-0 text-orange-600" aria-hidden="true" />}
                 <span className="truncate">{f.name}</span>
               </span>
-              <IconButton label={`Remove ${f.name}`} size="sm" onClick={() => onRemove(i)}><X className="h-4 w-4" aria-hidden="true" /></IconButton>
+              {onRemove && <IconButton label={`Remove ${f.name}`} size="sm" onClick={() => onRemove(i)}><X className="h-4 w-4" aria-hidden="true" /></IconButton>}
             </li>
           ))}
         </ul>

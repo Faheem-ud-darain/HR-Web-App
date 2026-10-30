@@ -4,9 +4,9 @@
 // deduction reasons in plain groups, and which people need a look before anyone pays them.
 import type { PayrollRecord, Profile } from '../hr/types';
 
-/** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions. The ONE definition used by rows, cards, exports and the pay slip. */
+/** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions, never below zero (deductions can take pay down to nothing, not past it). The ONE definition used by rows, cards, exports and the pay slip. */
 export function netPay(r: Pick<PayrollRecord, 'baseSalary' | 'incrementAmount' | 'bonus' | 'deductions'> & { earlierPay?: number }): number {
-  return (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0);
+  return Math.max(0, (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0));
 }
 
 export type PayrollGroupKey = 'hours' | 'absence' | 'leave' | 'other' | 'held' | 'later';
@@ -40,6 +40,16 @@ function groupOf(label: string): PayrollGroupKey {
 }
 
 /** The itemised deduction reasons, collected into a few plain groups (empty groups are left out). */
+/**
+ * How much of the listed deduction reasons was NOT taken because deductions can only take pay down to zero (the engine keeps
+ * every owed reason in the list but never charges more than the month's pay). Shown as one line under the reasons so a slip adds up:
+ * reasons − this = what was actually deducted.
+ */
+export function deductionLimitedBy(breakdown: { amount: number }[] | undefined, deducted: number): number {
+  const owed = (breakdown || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  return Math.max(0, Math.round((owed - (Number(deducted) || 0)) * 100) / 100);
+}
+
 export function groupDeductions(breakdown: { label: string; amount: number }[]): DeductionGroup[] {
   const byKey = new Map<PayrollGroupKey, DeductionGroup>();
   for (const item of breakdown || []) {

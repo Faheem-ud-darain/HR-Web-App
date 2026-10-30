@@ -1,5 +1,7 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
+import { IconButton } from '@/components/ui/IconButton';
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -8,6 +10,8 @@ import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
+import { NoticeModal } from '@/components/ui/NoticeModal';
 import { PaginationControls } from '@/components/ui/PaginationControls';
 import { usePagination } from '@/hooks/usePagination';
 import { Button } from '@/components/ui/Button';
@@ -449,12 +453,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 fieldSize="md" className="cursor-pointer"
               />
               {selectedDate && (
-                <button
-                  onClick={() => setSelectedDate('')}
-                  className="text-caption font-bold text-rose-600 hover:underline ml-1"
-                >
-                  Clear
-                </button>
+                <Button variant="ghost" size="xs" onClick={() => setSelectedDate('')}>Clear</Button>
               )}
             </div>
 
@@ -515,12 +514,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             {row.isLeave ? (
                               <span className="text-caption text-slate-400 font-semibold">Approved leave — no shift</span>
                             ) : (
-                              <button
-                                onClick={() => setSelectedAttendanceRow(row)}
-                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors inline-flex items-center gap-1"
-                              >
-                                View Breakdown
-                              </button>
+                              <Button variant="secondary" size="xs" onClick={() => setSelectedAttendanceRow(row)}>View Breakdown</Button>
                             )}
                           </Td>
                         </Tr>
@@ -545,12 +539,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             <p className="text-caption text-slate-400 font-semibold uppercase">Total Time ({row.shifts.length} shift{row.shifts.length > 1 ? 's' : ''})</p>
                             <p className="font-bold text-slate-900">{formatDuration(row.totalMinutes)}</p>
                           </div>
-                          <button
-                            onClick={() => setSelectedAttendanceRow(row)}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors"
-                          >
-                            View Breakdown
-                          </button>
+                          <Button variant="secondary" size="xs" onClick={() => setSelectedAttendanceRow(row)}>View Breakdown</Button>
                         </div>
                       )}
                     </div>
@@ -600,12 +589,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                           <Td align="center">{flaggedDays > 0 ? <Badge variant="danger">{flaggedDays}</Badge> : <span className="text-slate-400">0</span>}</Td>
                           <Td align="right" className="font-bold text-slate-900">{formatDuration(totalMinutes)}</Td>
                           <Td align="center">
-                            <button
-                              onClick={() => setSelectedEmployeeAttendanceEmail(emp.employeeEmail)}
-                              className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors inline-flex items-center gap-1"
-                            >
-                              View Details <ChevronRight className="h-3.5 w-3.5" />
-                            </button>
+                            <Button variant="secondary" size="xs" onClick={() => setSelectedEmployeeAttendanceEmail(emp.employeeEmail)}>View Details <ChevronRight className="h-3.5 w-3.5" /></Button>
                           </Td>
                         </Tr>
                       );
@@ -652,155 +636,84 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
       {/* EMPLOYEE ATTENDANCE DETAIL MODAL (HR/Admin) */}
       {selectedEmployeeAttendance && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">{selectedEmployeeAttendance.employeeName}</h3>
-                <p className="text-xs text-slate-500 font-mono">{selectedEmployeeAttendance.employeeEmail} • {selectedEmployeeAttendance.days.length} day{selectedEmployeeAttendance.days.length > 1 ? 's' : ''} logged</p>
-              </div>
-              <button
-                onClick={() => setSelectedEmployeeAttendanceEmail(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
+        <Modal isOpen onClose={() => setSelectedEmployeeAttendanceEmail(null)} title={selectedEmployeeAttendance.employeeName} className="md:max-w-2xl">
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 font-mono">{selectedEmployeeAttendance.employeeEmail} • {selectedEmployeeAttendance.days.length} day{selectedEmployeeAttendance.days.length > 1 ? 's' : ''} logged</p>
             <div className="space-y-2">
-              {selectedEmployeeAttendance.days.map(row => (
-                <div key={row.date} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="text-xs font-mono font-bold text-slate-700">{row.date}</p>
-                    <p className="text-caption text-slate-400">
-                      {row.isLeave ? 'Approved leave — no shift' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''} • ${formatDuration(row.totalMinutes)}`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <AttendanceStatusBadges row={row} />
-                    {!row.isLeave && (
-                      <button
-                        onClick={() => setSelectedAttendanceRow(row)}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors"
-                      >
-                        Breakdown
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+        {selectedEmployeeAttendance.days.map(row => (
+          <div key={row.date} className="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-xs font-mono font-bold text-slate-700">{row.date}</p>
+              <p className="text-caption text-slate-400">
+                {row.isLeave ? 'Approved leave — no shift' : `${row.shifts.length} shift${row.shifts.length > 1 ? 's' : ''} • ${formatDuration(row.totalMinutes)}`}
+              </p>
             </div>
-
-            <div className="pt-2 flex justify-end border-t border-slate-100">
-              <button
-                onClick={() => setSelectedEmployeeAttendanceEmail(null)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
-              >
-                Close
-              </button>
+            <div className="flex items-center gap-2">
+              <AttendanceStatusBadges row={row} />
+              {!row.isLeave && (
+                <Button variant="secondary" size="sm" onClick={() => setSelectedAttendanceRow(row)}>Breakdown</Button>
+              )}
             </div>
           </div>
-        </div>
+        ))}
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* LEAVE-PROTECTED ABSENCE DELETE BLOCKED POPUP */}
       {leaveBlockedNotice && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
-                <CalendarCheck2 className="h-5 w-5 text-sky-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">This absence is due to an approved leave</h3>
-                <p className="text-xs text-slate-500 font-mono">{leaveBlockedNotice.employeeName} • {leaveBlockedNotice.date}</p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-600">
-              This record cannot be removed here because it falls on a day covered by an approved leave request. Leave-covered absence records are protected from deletion to keep the leave and attendance history consistent.
-            </p>
-            <div className="pt-1 flex justify-end">
-              <button
-                onClick={() => setLeaveBlockedNotice(null)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
+        <NoticeModal title="This absence is due to an approved leave" tone="sky" icon={CalendarCheck2} closeLabel="Got it" onClose={() => setLeaveBlockedNotice(null)}>
+          {leaveBlockedNotice.employeeName} • {leaveBlockedNotice.date}. This record cannot be removed here because it falls on a day covered by an approved leave request. Leave-covered absence records are protected from deletion to keep the leave and attendance history consistent.
+        </NoticeModal>
       )}
 
       {/* SHIFT BREAKDOWN MODAL */}
       {selectedAttendanceRow && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Shift Breakdown Details</h3>
-                <p className="text-xs text-slate-500 font-mono">{selectedAttendanceRow.date} • {selectedAttendanceRow.employeeName}</p>
-              </div>
-              <button
-                onClick={() => setSelectedAttendanceRow(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1"
-              >
-                ✕
-              </button>
+        <Modal isOpen onClose={() => setSelectedAttendanceRow(null)} title="Shift Breakdown Details">
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500 font-mono">{selectedAttendanceRow.date} • {selectedAttendanceRow.employeeName}</p>
+          <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
+            <div>
+              <p className="text-caption font-bold uppercase text-slate-400">Total Worked Time</p>
+              <p className="text-sm font-bold text-slate-900">
+                {Math.floor(selectedAttendanceRow.totalMinutes / 60)}h {selectedAttendanceRow.totalMinutes % 60}m
+              </p>
             </div>
-
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
-                <div>
-                  <p className="text-caption font-bold uppercase text-slate-400">Total Worked Time</p>
-                  <p className="text-sm font-bold text-slate-900">
-                    {Math.floor(selectedAttendanceRow.totalMinutes / 60)}h {selectedAttendanceRow.totalMinutes % 60}m
-                  </p>
-                </div>
-                <div>
-                  <p className="text-caption font-bold uppercase text-slate-400">Shift Count</p>
-                  <p className="text-sm font-bold text-slate-900">{selectedAttendanceRow.shifts.length} shift(s)</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                <p className="text-xs font-bold text-slate-700">Individual Shifts:</p>
-                {selectedAttendanceRow.shifts.map((s, idx) => (
-                  <div key={s.id || idx} className="border border-slate-200 rounded-xl p-3 space-y-1 bg-white">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">Shift #{idx + 1}</span>
-                      <Badge variant={s.clockOut ? 'success' : 'warning'}>
-                        {s.clockOut ? 'Completed' : 'On Shift'}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 font-mono text-slate-600">
-                      <div>
-                        <span className="text-caption text-slate-400 block font-sans uppercase font-bold">Clock In</span>
-                        {s.clockIn ? formatTimeNY(s.clockIn) : '—'}
-                      </div>
-                      <div>
-                        <span className="text-caption text-slate-400 block font-sans uppercase font-bold">Clock Out</span>
-                        {s.clockOut ? formatTimeNY(s.clockOut) : '—'}
-                      </div>
-                    </div>
-                    <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="text-slate-500">Duration:</span>
-                      <span className="font-bold text-slate-900">{s.duration || 'In Progress'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setSelectedAttendanceRow(null)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
-              >
-                Close
-              </button>
+            <div>
+              <p className="text-caption font-bold uppercase text-slate-400">Shift Count</p>
+              <p className="text-sm font-bold text-slate-900">{selectedAttendanceRow.shifts.length} shift(s)</p>
             </div>
           </div>
-        </div>
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-slate-700">Individual Shifts:</p>
+            {selectedAttendanceRow.shifts.map((s, idx) => (
+              <div key={s.id || idx} className="border border-slate-200 rounded-xl p-3 space-y-1 bg-white">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">Shift #{idx + 1}</span>
+                  <Badge variant={s.clockOut ? 'success' : 'warning'}>
+                    {s.clockOut ? 'Completed' : 'On Shift'}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs pt-1 font-mono text-slate-600">
+                  <div>
+                    <span className="text-caption text-slate-400 block font-sans uppercase font-bold">Clock In</span>
+                    {s.clockIn ? formatTimeNY(s.clockIn) : '—'}
+                  </div>
+                  <div>
+                    <span className="text-caption text-slate-400 block font-sans uppercase font-bold">Clock Out</span>
+                    {s.clockOut ? formatTimeNY(s.clockOut) : '—'}
+                  </div>
+                </div>
+                <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-500">Duration:</span>
+                  <span className="font-bold text-slate-900">{s.duration || 'In Progress'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          </div>
+        </Modal>
       )}
 
       {/* ABSENCES TAB */}
@@ -908,12 +821,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                             <Td align="right" className="font-bold text-rose-600">{formatMoney(deducted, 'Pakistan')}</Td>
                             <Td align="center">{pending > 0 ? <Badge variant="warning">{pending}</Badge> : <span className="text-slate-400">0</span>}</Td>
                             <Td align="center">
-                              <button
-                                onClick={() => setSelectedEmployeeAbsencesEmail(emp.employeeEmail)}
-                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-caption rounded-lg transition-colors inline-flex items-center gap-1"
-                              >
-                                Manage <ChevronRight className="h-3.5 w-3.5" />
-                              </button>
+                              <Button variant="secondary" size="xs" onClick={() => setSelectedEmployeeAbsencesEmail(emp.employeeEmail)}>Manage <ChevronRight className="h-3.5 w-3.5" /></Button>
                             </Td>
                           </Tr>
                         );
@@ -956,119 +864,65 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         </div>
       )}
 
-      {/* EMPLOYEE ABSENCE DETAIL MODAL (HR/Admin) — manage/delete lives here */}
-      {selectedEmployeeAbsences && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">{selectedEmployeeAbsences.employeeName}</h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  {selectedEmployeeAbsences.employeeEmail} • {selectedEmployeeAbsences.records.length} absence record{selectedEmployeeAbsences.records.length > 1 ? 's' : ''} •{' '}
-                  {formatMoney(selectedEmployeeAbsences.records.reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} deducted
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedEmployeeAbsencesEmail(null)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
+      {/* One employee's absence records (HR/Admin): review, select and remove false ones. */}
+      {selectedEmployeeAbsences && (() => {
+        const records = selectedEmployeeAbsences.records;
+        const empIds = records.map(r => r.id);
+        const empSelectedCount = empIds.filter(id => selectedIds.has(id)).length;
+        return (
+          <Modal
+            isOpen
+            onClose={() => setSelectedEmployeeAbsencesEmail(null)}
+            title={selectedEmployeeAbsences.employeeName}
+            className="md:max-w-2xl!"
+            footer={<div className="flex justify-end"><Button variant="outline" onClick={() => setSelectedEmployeeAbsencesEmail(null)}>Close</Button></div>}
+          >
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500 font-mono">
+                {selectedEmployeeAbsences.employeeEmail} • {records.length} absence record{records.length > 1 ? 's' : ''} •{' '}
+                {formatMoney(records.reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} deducted
+              </p>
 
-            {/* Bulk action bar — scoped to this employee's records */}
-            {(() => {
-              const empIds = selectedEmployeeAbsences.records.map(r => r.id);
-              const empSelectedCount = empIds.filter(id => selectedIds.has(id)).length;
-              return empSelectedCount > 0 ? (
-                <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+              {/* Bulk action bar — scoped to this employee's records */}
+              {empSelectedCount > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
                   <div className="flex items-center gap-2">
                     <ShieldX className="h-4 w-4 text-rose-600 shrink-0" />
                     <span className="text-xs font-bold text-rose-800">
-                      {empSelectedCount} record{empSelectedCount > 1 ? 's' : ''} selected
-                      {' '}—{' '}
-                      {formatMoney(
-                        selectedEmployeeAbsences.records.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + effectiveDeductionAmount(r), 0),
-                        'Pakistan'
-                      )}{' '}to reverse
+                      {empSelectedCount} record{empSelectedCount > 1 ? 's' : ''} selected — {formatMoney(records.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} to reverse
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedIds(prev => { const next = new Set(prev); empIds.forEach(id => next.delete(id)); return next; })}
-                      className="text-xs font-bold text-rose-500 hover:text-rose-700"
-                    >
-                      Cancel
-                    </button>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="md"
-                      onClick={handleBulkDelete}
-                      disabled={bulkDeleting}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
+                    <Button type="button" variant="ghost" size="xs" onClick={() => setSelectedIds(prev => { const next = new Set(prev); empIds.forEach(id => next.delete(id)); return next; })}>Cancel</Button>
+                    <Button type="button" variant="danger" size="md" onClick={handleBulkDelete} loading={bulkDeleting} disabled={bulkDeleting}>
+                      {!bulkDeleting && <Trash2 className="h-3.5 w-3.5" />}
                       {bulkDeleting ? 'Removing…' : `Remove ${empSelectedCount} Record${empSelectedCount > 1 ? 's' : ''}`}
                     </Button>
                   </div>
                 </div>
-              ) : null;
-            })()}
+              )}
 
-            <div className="flex items-center gap-2 pb-1">
-              <input
-                type="checkbox"
-                checked={selectedEmployeeAbsences.records.length > 0 && selectedEmployeeAbsences.records.every(r => selectedIds.has(r.id))}
-                onChange={() => handleToggleAllIn(selectedEmployeeAbsences.records)}
-                className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
-              />
-              <span className="text-caption font-bold text-slate-500 uppercase">Select all</span>
-            </div>
+              <Checkbox checked={records.length > 0 && records.every(r => selectedIds.has(r.id))} onChange={() => handleToggleAllIn(records)} className="min-h-0">Select all</Checkbox>
 
-            <div className="space-y-2">
-              {selectedEmployeeAbsences.records.map(r => (
-                <div key={r.id} className={`border rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap ${selectedIds.has(r.id) ? 'bg-rose-50/50 border-rose-200' : 'border-slate-200'}`}>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(r.id)}
-                      onChange={() => handleToggleOne(r.id)}
-                      className="accent-rose-600 h-3.5 w-3.5 cursor-pointer"
-                    />
-                    <div>
-                      <p className="text-xs font-mono font-bold text-slate-700">{r.date}</p>
+              <div className="space-y-2">
+                {records.map(r => (
+                  <div key={r.id} className={`border rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap ${selectedIds.has(r.id) ? 'bg-rose-50/50 border-rose-200' : 'border-slate-200'}`}>
+                    <Checkbox checked={selectedIds.has(r.id)} onChange={() => handleToggleOne(r.id)} className="min-h-0">
+                      <span className="block text-xs font-mono font-bold text-slate-700">{r.date}</span>
                       <AbsenceReasonLabel r={r} />
+                    </Checkbox>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</span>
+                      {r.acknowledged ? <Badge variant="success">Seen</Badge> : <Badge variant="warning">Pending</Badge>}
+                      <IconButton size="sm" label="Remove false absence record" className="text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteAbsenceRecord(r)}><Trash2 className="h-4 w-4" /></IconButton>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-rose-600">{formatMoney(effectiveDeductionAmount(r), 'Pakistan')}</span>
-                    {r.acknowledged
-                      ? <Badge variant="success">Seen</Badge>
-                      : <Badge variant="warning">Pending</Badge>}
-                    <button
-                      onClick={() => handleDeleteAbsenceRecord(r)}
-                      title="Remove false absence record"
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-
-            <div className="pt-2 flex justify-end border-t border-slate-100">
-              <button
-                onClick={() => setSelectedEmployeeAbsencesEmail(null)}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </Modal>
+        );
+      })()}
 
       <ConfirmDialog
         isOpen={pendingDeleteRecord !== null}

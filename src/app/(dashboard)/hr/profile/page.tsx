@@ -9,7 +9,6 @@ export default function HRProfilePage() {
       title="HR Profile"
       subtitle="Manage your HR credentials and account details."
       defaultJobTitle="HR Manager"
-      defaultGender="Female"
       securityRoleLabel="HR Director"
     />
   );

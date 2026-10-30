@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod } from './payrollView';
+import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod } from './payrollView';
 import type { PayrollRecord } from '../hr/types';
 
 function rec(over: Partial<PayrollRecord> = {}): PayrollRecord {
@@ -7,7 +7,23 @@ function rec(over: Partial<PayrollRecord> = {}): PayrollRecord {
 }
 const bank = { bankName: 'HBL', accountNumber: '123', iban: '' };
 
+describe('deductionLimitedBy', () => {
+  it('is how much of the listed reasons was not taken because pay cannot go below zero', () => {
+    expect(deductionLimitedBy([{ amount: 145455 }], 80000)).toBe(65455);
+    expect(deductionLimitedBy([{ amount: 3000 }, { amount: 2000 }], 5000)).toBe(0);
+  });
+  it('is 0 for nothing listed or when more was taken than listed', () => {
+    expect(deductionLimitedBy([], 0)).toBe(0);
+    expect(deductionLimitedBy(undefined, 100)).toBe(0);
+    expect(deductionLimitedBy([{ amount: 100 }], 500)).toBe(0);
+  });
+});
+
 describe('netPay', () => {
+  it('never goes below zero when deductions are more than the pay', () => {
+    expect(netPay(rec({ baseSalary: 40000, incrementAmount: 0, bonus: 0, deductions: 55000 }))).toBe(0);
+    expect(netPay(rec({ baseSalary: 40000, incrementAmount: 5000, bonus: 1000, deductions: 46000 }))).toBe(0);
+  });
   it('includes the increment (one definition for rows, cards and the pay slip)', () => {
     expect(netPay(rec({ baseSalary: 44000, incrementAmount: 10000, bonus: 500, deductions: 4000 }))).toBe(50500);
   });

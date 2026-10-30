@@ -1,5 +1,6 @@
 'use client';
 
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import React, { useState } from 'react';
 import { updateProfileAdmin, type Profile, type Warehouse } from '@/lib/hrData';
 import { editFormFrom, type EditForm, type ViewerRole } from '@/lib/core/userProfile';
@@ -58,7 +59,7 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
       <FormField label="Email Address *"><Input type="email" required {...bind('email')} fieldSize="sm" /></FormField>
 
       <FormField label="Account Password">
-        <Input type="text" {...bind('password')} placeholder="Leave blank to keep the current password" minLength={6} fieldSize="sm" />
+        <PasswordInput {...bind('password')} placeholder="Leave blank to keep the current password" minLength={6} fieldSize="sm" autoComplete="new-password" />
         <p className="text-caption text-slate-400 font-medium">Their current password is never shown here for security. Only fill this in to set a new one (at least 6 characters) — otherwise leave it blank.</p>
       </FormField>
 

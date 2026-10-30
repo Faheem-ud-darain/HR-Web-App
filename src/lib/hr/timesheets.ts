@@ -25,6 +25,7 @@ import { getSessionEmail, getSessionRole, getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import { isStaffRole } from '../core/profiles';
 import { isTrackingOn } from '../core/trackingSettings';
+import { isMobileDevice } from '../trackerSetup';
 import {
   hasStaleTrackerToken, getCaptureHealth, getCaptureGap, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
   TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
@@ -610,12 +611,18 @@ export const timesheetActions = {
   // shift here, leaving clockIn/clockOut looking broken for that employee.
   getOpenShift: async (employeeEmail: string): Promise<TimesheetEntry | null> => {
     const wanted = employeeEmail.toLowerCase();
-    const matches = (await pbList('hr_timesheets', { filter: pbFilter('employee_id ~ {:email} && clock_out = ""', { email: employeeEmail }) })).map(toTimesheet);
+    // pbListStrict: clockIn creates a new shift when this finds none, so a failed read must be an error, not "no open shift"
+    // (which would start a second, duplicate shift). clockOut would likewise leave the shift open without saying so.
+    const matches = (await pbListStrict('hr_timesheets', { filter: pbFilter('employee_id ~ {:email} && clock_out = ""', { email: employeeEmail }) })).map(toTimesheet);
     return matches.find(t => (t.employeeEmail || '').toLowerCase() === wanted) || null;
   },
-  clockIn: async (employeeEmail: string): Promise<TimesheetEntry> => {
+  // `source` 'gps' is the USA warehouse geofence (automatic, from the phone's location). Every other start is manual and
+  // only allowed from a desktop or laptop: this check lives here, not just in the button, so no screen can start a manual
+  // shift from a phone or tablet (see isMobileDevice).
+  clockIn: async (employeeEmail: string, source: 'manual' | 'gps' = 'manual'): Promise<TimesheetEntry> => {
     const existingOpen = await hrActions.getOpenShift(employeeEmail);
     if (existingOpen) return existingOpen;
+    if (source === 'manual' && isMobileDevice()) throw new Error('Shifts can only be started from a desktop or laptop computer.');
     const now = new Date();
     // Calendar date is bucketed by America/New_York wall-clock time, not UTC
     // and not the device's local timezone — see src/lib/timezone.ts. Without

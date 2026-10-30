@@ -12,8 +12,7 @@
 // the result more plainly, keeps one "amount to pay" figure everywhere, and nothing is saved
 // except through an explicit button (Save bonus, Mark as paid).
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, CircleNotchIcon as Loader2, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
+import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -23,17 +22,17 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import {
-  hrActions, usePayroll, useProfiles, useLeaves, useTimesheets, formatMoney,
+  formatMoney,
   usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection, type PayrollCorrection,
-  applyIncrementServer, upsertPayrollRecordAdmin, updateProfileAdmin,
-  canReviewPreviousMonthPayroll, previousPayrollMonthKey, type PayrollRecord, type Profile,
+  payrollAdminAction,
+  canReviewPreviousMonthPayroll, previousPayrollMonthKey, type PayrollRecord,
 } from '@/lib/hrData';
-import { daysAgoNYDateString } from '@/lib/timezone';
 import {
   netPay, payrollFlags, summarizePayroll, monthLabel, payPeriod, groupOfRegion, type PayrollGroup,
 } from '@/lib/core/payrollView';
 import { correctionsFor, outstandingTotals } from '@/lib/core/payrollCorrections';
 import { PaySlipDialog } from './PaySlipDialog';
+import { usePayrollView } from '@/hooks/usePayrollView';
 import { downloadCsv } from '@/lib/csv';
 
 type TabKey = 'salaries' | 'settlements' | 'held' | 'past';
@@ -42,24 +41,12 @@ type Pending = { kind: 'one'; record: PayrollRecord } | { kind: 'past'; record: 
 
 const GROUP_REGION: Record<PayrollGroup, 'Pakistan' | 'USA'> = { pakistan: 'Pakistan', usa: 'USA' };
 const GROUP_LABEL: Record<PayrollGroup, string> = { pakistan: 'Pakistan (PKR)', usa: 'USA (USD)' };
-const NO_EMPLOYEES: Profile[] = [];
-const NO_RECORDS: PayrollRecord[] = [];
 
 /** "YYYY-MM" of the calendar month we are in right now (New York time), to tell "this month so far" from a finished month. */
 const monthKeyNow = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 7);
 
 export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   const isAdmin = role === 'admin';
-  const { data: rawPayroll = NO_RECORDS, isLoading: payrollLoading, refetch: refetchPayroll } = usePayroll();
-  const { data: employees = NO_EMPLOYEES, isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
-  const { data: leaves = [] } = useLeaves();
-  const { data: timesheets = [] } = useTimesheets({ days: 45 });
-  const { data: absenceRecords = [] } = useQuery({
-    queryKey: ['hr_absence_records', 'payroll'],
-    queryFn: () => hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(120) }),
-    staleTime: 60_000,
-  });
-
   const { data: correctionData, refetch: refetchCorrections } = usePayrollCorrections();
   const corrections: PayrollCorrection[] = correctionData?.corrections ?? [];
   const correctionsConfigured = correctionData?.configured !== false;
@@ -88,12 +75,8 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     return () => window.removeEventListener('globalSearch', onSearch);
   }, []);
 
-  const records = useMemo(
-    () => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords, new Date(), showPrevious),
-    [employees, rawPayroll, leaves, timesheets, absenceRecords, showPrevious],
-  );
+  const { records, employees, rawPayroll, loading, refetchPayroll, refetchProfiles } = usePayrollView({ previous: showPrevious });
   const profileById = useMemo(() => new Map(employees.map(e => [e.id, e])), [employees]);
-  const loading = payrollLoading || profilesLoading;
   const currentMonth = records[0]?.month || '';
 
   const inGroup = useMemo(() => records.filter(r => groupOfRegion(r.region) === group), [records, group]);
@@ -123,16 +106,9 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     try { await Promise.all([refetchProfiles(), refetchPayroll()]); } finally { setRefreshing(false); }
   };
 
-  // Same side effects as the old "Complete Payout" / "Release": add the pending anniversary increment
-  // to the employee's real base salary, bank any first-month reserve, then mark the record paid.
-  const payOne = async (record: PayrollRecord) => {
-    const emp = employees.find(e => e.id === record.employeeId);
-    if (record.incrementAmount > 0 && emp) await applyIncrementServer(emp, emp.baseSalary, record.incrementAmount);
-    if (record.reservedThisMonth > 0 && emp) {
-      await updateProfileAdmin(record.employeeId, { reservedSalaryBalance: (emp.reservedSalaryBalance || 0) + record.reservedThisMonth });
-    }
-    await upsertPayrollRecordAdmin({ ...record, processed: true });
-  };
+  // The server does all of it, in a safe order and once only: it works out the figures, adds the employee's raise to the
+  // base salary, banks a new joiner's held-back first month, and marks the month paid. Pressing Pay again after an error is safe.
+  const payOne = (record: PayrollRecord) => payrollAdminAction({ action: 'pay', employeeId: record.employeeId, month: record.month });
 
   const confirmPay = async () => {
     if (!pending || !isAdmin) return;
@@ -148,7 +124,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
         // An earlier month that was paid but never ticked off here. This only records that it was
         // paid — it deliberately does not touch anyone's salary, increment or held balance.
         setPayingId(action.record.employeeId);
-        await upsertPayrollRecordAdmin({ ...action.record, processed: true });
+        await payrollAdminAction({ action: 'recordPaid', employeeId: action.record.employeeId, month: action.record.month });
         setNotice(`${action.record.name} — ${monthLabel(action.record.month)} is now marked as paid.`);
       } else {
         setBulkBusy(true);
@@ -167,7 +143,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   };
 
   const saveBonus = async (record: PayrollRecord, bonus: number) => {
-    await upsertPayrollRecordAdmin({ ...record, bonus });
+    await payrollAdminAction({ action: 'setBonus', employeeId: record.employeeId, month: record.month, bonus });
     await refetchPayroll();
   };
 
@@ -349,8 +325,8 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                     <Download className="h-3.5 w-3.5" /> Full report
                   </Button>
                   {isAdmin && (
-                    <Button variant="primary" size="md" onClick={() => setPending({ kind: 'all' })} disabled={readyToPay.length === 0 || bulkBusy}>
-                      {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Mark all ready as paid ({readyToPay.length})
+                    <Button variant="primary" size="md" onClick={() => setPending({ kind: 'all' })} disabled={readyToPay.length === 0 || bulkBusy} loading={bulkBusy}>
+                      {!(bulkBusy) && <CheckCircle2 className="h-3.5 w-3.5" />} Mark all ready as paid ({readyToPay.length})
                     </Button>
                   )}
                 </div>

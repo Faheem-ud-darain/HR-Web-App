@@ -7,7 +7,10 @@ import { MegaphoneIcon as Megaphone, CrownIcon as Crown, ArrowBendUpRightIcon as
 import { RoleBadge, formatTimestamp, renderMessageText, ReadReceiptFacepile, FORWARD_KIND_LABEL } from '@/components/ui/chat/chatHelpers';
 import { MessageAttachment } from '@/components/ui/MessageAttachment';
 import { buildNotificationLink, Message, Profile } from '@/lib/hrData';
-import { Avatar } from '@/components/ui/Avatar';
+import { Button, ButtonLink } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { MessageBubble, MessageRow, type BubbleTone } from '@/components/ui/chat/MessageBubble';
+import { isOwnChatMessage } from '@/lib/core/messageOwnership';
 import { TypingIndicator } from '@/components/ui/TypingIndicator';
 
 interface ChatMessageListProps {
@@ -29,21 +32,15 @@ interface ChatMessageListProps {
   viewersForMessage: (msgId: string) => Profile[];
   openMessageViewers: (msgId: string) => void;
   currentUserRole: "admin" | "hr" | "employee" | "team_lead";
-  isHrAdminLine: boolean;
   typingNames: string[];
 }
 
-export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, onOpenImage, viewersForMessage, openMessageViewers, currentUserRole, isHrAdminLine, typingNames }: ChatMessageListProps) {
+export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, onOpenImage, viewersForMessage, openMessageViewers, currentUserRole, typingNames }: ChatMessageListProps) {
   return (
     <div ref={scrollRef} role="log" aria-live="polite" aria-relevant="additions" aria-label="Messages" className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
       {messages.length >= messageLimit && (
         <div className="text-center py-2">
-          <button
-            onClick={() => setMessageLimit(prev => prev + 50)}
-            className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-colors"
-          >
-            Load earlier messages
-          </button>
+          <Button variant="softOrange" size="xs" className="rounded-full px-3" onClick={() => setMessageLimit(prev => prev + 50)}>Load earlier messages</Button>
         </div>
       )}
       {isLoading && <ChatSkeleton />}
@@ -54,173 +51,76 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
         <EmptyState py={6} size="xs">No messages match your search/filters.</EmptyState>
       )}
       {filteredMessages.map(m => {
-        const isSelf = m.senderEmail.toLowerCase() === currentUserEmail.toLowerCase();
+        const isSelf = isOwnChatMessage(m.senderEmail, { email: currentUserEmail });
         const label = senderLabel(m);
-        // Admin is auto-a-member of every team channel and can post
-        // anywhere — their messages get a distinct highlighted look
-        // (purple + crown badge) in every viewer's chat, self or not,
-        // so they're unmistakable next to regular team messages.
-        const senderRole = emailToProfile.get(normEmail(m.senderEmail))?.role;
-        const isAdminSender = senderRole === 'admin';
-    
-        // Announcements render full-width and pinned-banner styled,
-        // not as a left/right chat bubble — they're meant to stand out
-        // from the regular back-and-forth, not blend into it.
+        const sender = emailToProfile.get(normEmail(m.senderEmail));
+        // Admin is automatically in every team channel and can post anywhere, so their messages look the same (purple, with a
+        // crown) in every viewer's chat, whether or not the viewer is the admin.
+        const isAdminSender = sender?.role === 'admin';
+        const roleBadge = isAdminSender ? <Crown className="h-3.5 w-3.5 text-purple-600" /> : <RoleBadge role={sender?.role} />;
+        const receipt = isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />;
+        const forwardButton = canForward && (
+          <IconButton size="sm" label="Forward to HR & Admin" onClick={() => openForwardModal(m)} className="-my-2 -mr-1 hover:text-orange-600"><Forward className="h-3.5 w-3.5" /></IconButton>
+        );
+
+        // An announcement is a full-width pinned banner, not a left or right bubble: it is meant to stand out from the chat.
         if (m.isAnnouncement) {
           return (
-            <div key={m.id} className="border-2 border-amber-300 bg-amber-50 rounded-xl px-4 py-3">
-              <div className="flex flex-wrap items-center gap-1.5 text-caption font-black text-amber-700 uppercase tracking-wider mb-1">
-                <Megaphone className="h-3.5 w-3.5" /> Announcement · {label}
-                {isAdminSender ? <Crown className="h-3.5 w-3.5 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                <span className="text-slate-500 font-semibold normal-case ml-auto flex items-center gap-1.5">
-                  {formatTimestamp(m.timestamp)}
-                  {canForward && (
-                    <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-500 hover:text-orange-600 transition-colors p-2 -m-2">
-                      <Forward className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </span>
+            <div key={m.id} className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-caption font-black uppercase tracking-wider text-amber-700">
+                <Megaphone className="h-3.5 w-3.5" /> Announcement · {label} {roleBadge}
+                <span className="ml-auto flex items-center gap-1.5 font-semibold normal-case text-slate-500">{formatTimestamp(m.timestamp)}{forwardButton}</span>
               </div>
-              {m.text && (
-                <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap break-words">
-                  {renderMessageText(m.text, mentionLabels, docTagList, false)}
-                </p>
-              )}
-              {m.attachmentUrl && (
-                <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced={!!m.text} linkClass="text-amber-700" onOpenImage={onOpenImage} />
-              )}
-              {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
+              {m.text && <p className="whitespace-pre-wrap break-words text-xs font-semibold text-slate-800">{renderMessageText(m.text, mentionLabels, docTagList, false)}</p>}
+              {m.attachmentUrl && <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced={!!m.text} linkClass="text-amber-700" onOpenImage={onOpenImage} />}
+              {receipt}
             </div>
           );
         }
-    
-        // Forwarded messages (HR & Admin Line — see
-        // hrActions.forwardToHrAdminLine in hrData.ts) render as their
-        // own distinct card — role-colored border on a white
-        // background, not the amber full-width banner Announcements
-        // use above — but still sit left/right in the normal
-        // sender-flow like a regular bubble, sized to their content
-        // rather than stretching the full width of the thread.
+
+        // Forwarded into the HR & Admin line: the same bubble as any message, headed by what it is, with a link back to the original.
         if (m.isForward) {
-          const kindLabel = m.forwardKind ? FORWARD_KIND_LABEL[m.forwardKind] : 'Forwarded';
-          const originalHref = m.forwardKind && m.forwardLink
-            // View-original link is resolved from the raw stored id at
-            // render time using the *viewer's* own role (this channel
-            // is read by both hr and admin) — see the forwardLink
-            // comment on the Message interface in hrData.ts.
-            ? buildNotificationLink(currentUserRole === 'admin' ? 'admin' : 'hr', m.forwardKind, m.forwardLink)
-            : undefined;
-          // Forwarded messages only ever land in the HR & Admin Line
-          // (see hrActions.forwardToHrAdminLine — nothing else posts
-          // isForward: true), so the card is always role-colored: same
-          // purple/sky pairing as roleBadgeInfo(), reused here so "who
-          // forwarded this" reads at a glance the same way "who sent
-          // this" does on a regular message below — a white card with a
-          // colored border/accent, not a solid color fill, so it still
-          // reads as part of the app rather than a loud banner.
-          const c = isAdminSender
-            ? { border: 'border-purple-300', text: 'text-purple-700', tag: 'bg-purple-50', btnHover: 'hover:bg-purple-600 hover:border-purple-600' }
-            : { border: 'border-sky-300', text: 'text-sky-700', tag: 'bg-sky-50', btnHover: 'hover:bg-sky-600 hover:border-sky-600' };
-          // Sits in the same left/right-by-sender flow as a regular
-          // bubble below (own messages on your right, the other
-          // person's on your left) and only ever takes up as much
-          // width as its content needs, capped at 75% — it's a
-          // distinct card, not a full-width banner like Announcements.
+          const originalHref = m.forwardKind && m.forwardLink ? buildNotificationLink(currentUserRole === 'admin' ? 'admin' : 'hr', m.forwardKind, m.forwardLink) : undefined;
+          const tone: BubbleTone = isAdminSender ? 'admin' : isSelf ? 'own' : 'other';
+          const onFill = tone !== 'other';
           return (
-            <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
-              <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
-              <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-                <div className={`border ${c.border} bg-white rounded-xl px-4 py-3 ${isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
-                  <div className={`flex flex-wrap items-center gap-1.5 text-caption font-black ${c.text} uppercase tracking-wider mb-1`}>
-                    <Forward className="h-3.5 w-3.5" /> {kindLabel} · {label}
-                    {isAdminSender ? <Crown className="h-3.5 w-3.5 text-purple-600" /> : <RoleBadge role={senderRole} />}
-                    <span className="text-slate-500 font-semibold normal-case ml-auto">{formatTimestamp(m.timestamp)}</span>
-                  </div>
-                  {m.forwardLabel && (
-                    <p className="text-xs font-bold text-slate-800 break-words">{m.forwardLabel}</p>
-                  )}
-                  {m.forwardNote && (
-                    <p className="text-xs font-medium text-slate-600 italic mt-1 whitespace-pre-wrap break-words">&ldquo;{m.forwardNote}&rdquo;</p>
-                  )}
-                  {m.attachmentUrl && (
-                    <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced linkClass={c.text} onOpenImage={onOpenImage} />
-                  )}
-                  {originalHref && (
-                    // Styled as a small pill button (not a plain text link) —
-                    // the point of a forward card is a one-glance "here's the
-                    // thing, click to jump straight to it" affordance.
-                    <a
-                      href={originalHref}
-                      className={`inline-flex items-center gap-1.5 text-caption font-black ${c.text} bg-white border ${c.border} rounded-full px-2.5 py-1 mt-2 ${c.btnHover} hover:text-white transition-colors`}
-                    >
-                      View original <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                    </a>
-                  )}
+            <MessageRow key={m.id} own={isSelf} name={label} picture={sender?.profilePicture}>
+              <MessageBubble own={isSelf} tone={tone}>
+                <div className={`mb-1 flex flex-wrap items-center gap-1.5 text-caption font-black uppercase tracking-wider ${onFill ? 'text-white/90' : 'text-slate-600'}`}>
+                  <Forward className="h-3.5 w-3.5" /> {m.forwardKind ? FORWARD_KIND_LABEL[m.forwardKind] : 'Forwarded'} · {label} {roleBadge}
+                  <span className={`ml-auto font-semibold normal-case ${onFill ? 'text-white/80' : 'text-slate-500'}`}>{formatTimestamp(m.timestamp)}</span>
                 </div>
-                {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
-              </div>
-            </div>
+                {m.forwardLabel && <p className="break-words font-bold">{m.forwardLabel}</p>}
+                {m.forwardNote && <p className="mt-1 whitespace-pre-wrap break-words font-medium italic opacity-90">&ldquo;{m.forwardNote}&rdquo;</p>}
+                {m.attachmentUrl && <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced linkClass={onFill ? 'text-white' : 'text-orange-700'} onOpenImage={onOpenImage} />}
+                {originalHref && (
+                  <ButtonLink href={originalHref} variant="outline" size="xs" className="mt-2 rounded-full">View original <ExternalLink className="h-3.5 w-3.5 shrink-0" /></ButtonLink>
+                )}
+              </MessageBubble>
+              {receipt}
+            </MessageRow>
           );
         }
-    
-        // HR & Admin Line: a white card with a role-colored border/
-        // text (purple for Admin, sky for HR — same pairing as
-        // roleBadgeInfo() and the Forwarded cards above) instead of the
-        // solid self/other fill used everywhere else. The point of this
-        // channel is "who sent this, HR or Admin" being obvious to BOTH
-        // sides regardless of which one of them is reading it right
-        // now — a self-vs-other color scheme can't do that (it'd show
-        // the same message in a different color to each viewer), so it
-        // only applies here; Team Chat/DMs keep their normal bubbles.
-        const hrAdminColor = isAdminSender
-          ? { border: 'border-purple-300', text: 'text-purple-700', name: 'text-purple-700' }
-          : { border: 'border-sky-300', text: 'text-sky-700', name: 'text-sky-700' };
+
+        const tone: BubbleTone = isAdminSender ? 'admin' : isSelf ? 'own' : 'other';
+        const nameColour = isAdminSender ? 'text-purple-700' : 'text-slate-600';
+        const onFill = tone === 'own' || tone === 'admin';
         return (
-          <div key={m.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse' : ''}`}>
-            <Avatar src={emailToProfile.get(normEmail(m.senderEmail))?.profilePicture} name={label} size={28} />
-            <div className={`max-w-[75%] flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={`text-caption font-bold ${isHrAdminLine ? hrAdminColor.name : isAdminSender ? 'text-purple-700' : 'text-slate-600'}`}>{label}</span>
-                {isAdminSender ? (
-                  <span className="flex items-center gap-0.5 bg-purple-100 text-purple-700 text-caption font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
-                    <Crown className="h-3.5 w-3.5" /> Admin
-                  </span>
-                ) : (
-                  <RoleBadge role={senderRole} />
-                )}
-                <span className="text-caption text-slate-500 font-semibold">{formatTimestamp(m.timestamp)}</span>
-                {canForward && (
-                  <button type="button" onClick={() => openForwardModal(m)} title="Forward to HR & Admin" aria-label="Forward to HR & Admin" className="text-slate-500 hover:text-orange-600 transition-colors p-2 -m-2">
-                    <Forward className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-              <div className={`rounded-2xl px-3.5 py-2.5 text-xs font-medium leading-relaxed ${
-                isHrAdminLine
-                  ? `bg-white border ${hrAdminColor.border} text-slate-800 ` + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
-                  : isAdminSender
-                    ? 'bg-purple-600 text-white ring-2 ring-purple-200 ' + (isSelf ? 'rounded-tr-sm' : 'rounded-tl-sm')
-                    : isSelf ? 'bg-bubble-own text-white rounded-tr-sm' : 'bg-slate-100 text-slate-800 rounded-tl-sm'
-              }`}>
-                {m.text && (
-                  <p className="whitespace-pre-wrap break-words">
-                    {renderMessageText(m.text, mentionLabels, docTagList, !isHrAdminLine && (isAdminSender || isSelf))}
-                  </p>
-                )}
-                {m.attachmentUrl && (
-                  <MessageAttachment
-                    url={m.attachmentUrl}
-                    name={m.attachmentName}
-                    size={m.attachmentSize}
-                    spaced={!!m.text}
-                    linkClass={isHrAdminLine ? hrAdminColor.text : (isAdminSender || isSelf ? 'text-white' : 'text-orange-700')}
-                    onOpenImage={onOpenImage}
-                  />
-                )}
-              </div>
-              {isSelf && <ReadReceiptFacepile viewers={viewersForMessage(m.id)} onOpen={() => openMessageViewers(m.id)} />}
+          <MessageRow key={m.id} own={isSelf} name={label} picture={sender?.profilePicture}>
+            <div className="mb-0.5 flex items-center gap-1.5">
+              <span className={`text-caption font-bold ${nameColour}`}>{label}</span>
+              {roleBadge}
+              <span className="text-caption font-semibold text-slate-500">{formatTimestamp(m.timestamp)}</span>
+              {forwardButton}
             </div>
-          </div>
+            <MessageBubble own={isSelf} tone={tone}>
+              {m.text && <p className="whitespace-pre-wrap break-words">{renderMessageText(m.text, mentionLabels, docTagList, onFill)}</p>}
+              {m.attachmentUrl && (
+                <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced={!!m.text} linkClass={onFill ? 'text-white' : 'text-orange-700'} onOpenImage={onOpenImage} />
+              )}
+            </MessageBubble>
+            {receipt}
+          </MessageRow>
         );
       })}
       <TypingIndicator names={typingNames} />

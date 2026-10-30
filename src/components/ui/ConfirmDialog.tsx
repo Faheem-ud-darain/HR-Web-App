@@ -3,6 +3,7 @@
 import React from 'react';
 import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from './Button';
+import { Modal } from './Modal';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
 
@@ -41,63 +42,31 @@ export function ConfirmDialog({
     if (isOpen) setTypedText('');
   }
 
-  if (!isOpen) return null;
-
   const isConfirmDisabled = loading || (!!requireTextMatch && typedText.trim() !== requireTextMatch);
-
-  const colors = variant === 'danger'
-    ? { icon: 'text-rose-600', iconBg: 'bg-rose-50 border-rose-100', button: 'bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300' }
-    : { icon: 'text-amber-600', iconBg: 'bg-amber-50 border-amber-100', button: 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' };
+  const tone = variant === 'danger' ? 'text-rose-600' : 'text-amber-600';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className="relative bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full space-y-4"
-        role="alertdialog"
-        aria-modal="true"
-      >
-        <div className={`h-11 w-11 rounded-xl flex items-center justify-center border ${colors.iconBg}`}>
-          <AlertTriangle className={`h-5 w-5 ${colors.icon}`} />
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      icon={<AlertTriangle weight="duotone" className={`h-5 w-5 ${tone}`} aria-hidden="true" />}
+      className="md:max-w-sm"
+      footer={
+        <div className="flex gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading} className="flex-1">{cancelLabel}</Button>
+          <Button type="button" variant={variant} onClick={onConfirm} disabled={isConfirmDisabled} className="flex-1">{confirmLabel}</Button>
         </div>
-        <div className="space-y-1.5">
-          <h3 className="font-bold text-slate-900 text-sm">{title}</h3>
-          <p className="text-xs text-slate-500 font-semibold leading-relaxed">{message}</p>
-        </div>
-
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-xs text-slate-500 font-semibold leading-relaxed">{message}</p>
         {requireTextMatch && (
           <FormField label={<>Type <span className="font-mono text-rose-600">{requireTextMatch}</span> to confirm</>}>
-            <Input
-              type="text"
-              value={typedText}
-              onChange={e => setTypedText(e.target.value)}
-              fieldSize="sm"
-              placeholder={requireTextMatch}
-              autoFocus
-            />
+            <Input type="text" value={typedText} onChange={e => setTypedText(e.target.value)} fieldSize="sm" placeholder={requireTextMatch} autoFocus />
           </FormField>
         )}
-
-        <div className="flex gap-2 pt-1">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 transition-shadow active:scale-97 transition-transform"
-          >
-            {cancelLabel}
-          </Button>
-          <button
-            type="button"
-            disabled={isConfirmDisabled}
-            onClick={onConfirm}
-            className={`flex-1 text-white font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform transition-shadow active:scale-97 disabled:cursor-not-allowed ${colors.button}`}
-          >
-            {confirmLabel}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }

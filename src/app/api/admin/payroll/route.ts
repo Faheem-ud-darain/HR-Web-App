@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { pbAdminFetch, adminUpsertByField, adminListAllPayroll, adminListPayrollForEmployee, adminDeletePayrollForEmployee, adminFindProfileByEmail } from '@/lib/pbAdmin';
+import { pbAdminFetch, adminListAllPayroll, adminListPayrollForEmployee, adminDeletePayrollForEmployee, adminFindProfileByEmail } from '@/lib/pbAdmin';
 import type { PbRow } from '@/lib/pbTypes';
-import { toPayrollRecordFromRow, toPayrollRowFields } from '@/lib/core/payrollMappers';
+import { toPayrollRecordFromRow } from '@/lib/core/payrollMappers';
+import { PayError, payEmployee, recordPaid, setBonus } from '@/lib/core/payrollPay';
+import { pocketBasePayStore } from '@/lib/server/payrollPayStore';
 
 // Same "why was I deducted" breakdown key scheme /api/payroll/me reads back
 // (see that route's comment) — not a real hr_payroll column (the live
@@ -16,29 +18,13 @@ function payrollBreakdownKey(employeeId: string, month: string) {
 
 export const runtime = 'edge';
 
-// HR/Admin-privileged write to a single hr_payroll record — the
-// counterpart to the read-only /api/payroll/me route (self, GET-only).
-// This does NOT cover reading the full company payroll list yet: that page
-// (hr/payroll, admin/payroll) still computes its view client-side via
-// hrActions.computePayrollView, fed by the public useProfiles()/usePayroll()/
-// useLeaves()/useTimesheets() hooks — proxying that whole read path is a
-// separate, larger piece (it needs an authenticated equivalent of four
-// different public collections at once) that's intentionally being left for
-// its own pass rather than rushed in here. What IS covered: the actual
-// "Process Payroll" / "Release Monthly Funds" WRITE that marks a record
-// paid and sets its final numbers — that no longer goes through the
-// anonymous public client.
-//
-// Mirrors hrActions.upsertPayrollRecord's exact field mapping so behavior
-// is unchanged, just authenticated.
-
-function looksLikeRealId(id: string | undefined | null): boolean {
-  // Same heuristic as hrData.ts's looksLikeRealId — PocketBase record ids
-  // are exactly 15 characters; anything else (e.g. a locally-generated
-  // placeholder id for a not-yet-created record) means "create", not
-  // "update".
-  return !!id && id.length === 15;
-}
+// HR/Admin writes to payroll. The browser says WHO, WHICH MONTH and WHAT HR typed (a bonus); every figure is worked out
+// here from the stored data by the same engine as everywhere else (core/payrollPay.ts), never taken from the request:
+//   { action: 'pay',        employeeId, month }          freeze the month, add any raise, bank the held-back pay, mark paid
+//   { action: 'recordPaid', employeeId, month }          an earlier month that was paid but never ticked off: only marks it paid
+//   { action: 'setBonus',   employeeId, month, bonus }   HR's bonus on a month that is not paid yet
+// Paying is for Admin (the screen only shows the button to Admin); the bonus is for HR and Admin.
+const EMPLOYEE_ID = /^[a-z0-9]{15}$/;
 
 export async function POST(request: Request) {
   const session = await requireSession(request);
@@ -54,54 +40,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const record = body?.record;
-  if (!record || typeof record !== 'object') {
-    return NextResponse.json({ error: 'record is required.' }, { status: 400 });
+  const { action, employeeId, month } = body ?? {};
+  if (typeof employeeId !== 'string' || !EMPLOYEE_ID.test(employeeId) || typeof month !== 'string') {
+    return NextResponse.json({ error: 'employeeId and month are required.' }, { status: 400 });
+  }
+  if ((action === 'pay' || action === 'recordPaid') && session.role !== 'admin') {
+    return NextResponse.json({ error: 'Only Admin can mark a salary as paid.' }, { status: 403 });
   }
 
+  const store = pocketBasePayStore();
+  const now = new Date();
   try {
-    const fields = toPayrollRowFields(record, new Date().toISOString().split('T')[0]);
-
-    if (looksLikeRealId(record.id)) {
-      await pbAdminFetch(`/api/collections/hr_payroll/records/${record.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(fields),
-      });
-    } else {
-      await pbAdminFetch(`/api/collections/hr_payroll/records`, {
-        method: 'POST',
-        body: JSON.stringify(fields),
-      });
-    }
-
-    // Persist the itemized "why was I deducted" breakdown + this month's
-    // reserved amount alongside the main record, so the employee's own
-    // /api/payroll/me view can show the exact same reasons HR/Admin see on
-    // the Net Payable modal — computePayrollView (client-side only, not
-    // Edge-safe) already computed both of these; this route just needs to
-    // carry them through to storage, not recompute them.
-    if (record.employeeId && record.month) {
-      await adminUpsertByField('hr_payroll_breakdowns', 'breakdown_key', payrollBreakdownKey(record.employeeId, record.month), {
-        deductionBreakdown: Array.isArray(record.deductionBreakdown) ? record.deductionBreakdown : [],
-        reservedThisMonth: Number(record.reservedThisMonth) || 0,
-        // New-joiner pay timing (see core/payroll.ts): the part-month pay set aside this month, and the
-        // earlier part-month pay added to this month. Stored so a later reader sees what was paid.
-        deferredThisMonth: Number(record.deferredThisMonth) || 0,
-        earlierPay: Number(record.earlierPay) || 0,
-        earlierPayLabel: typeof record.earlierPayLabel === 'string' ? record.earlierPayLabel.slice(0, 120) : '',
-        // Once a month is frozen (or paid) its numbers are final — see core/payroll.ts.
-        frozen: record.frozen === true || record.processed === true,
-        frozenAt: new Date().toISOString(),
-      });
-    }
-
-    return NextResponse.json({ ok: true });
+    if (action === 'pay') return NextResponse.json({ ok: true, ...(await payEmployee(store, { employeeId, month, now })) });
+    if (action === 'recordPaid') return NextResponse.json({ ok: true, ...(await recordPaid(store, { employeeId, month, now })) });
+    if (action === 'setBonus') return NextResponse.json({ ok: true, ...(await setBonus(store, { employeeId, month, bonus: Number(body.bonus), now })) });
+    return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
   } catch (err) {
+    if (err instanceof PayError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error('[admin/payroll POST] error:', err);
     return NextResponse.json({ error: 'Could not save payroll record.' }, { status: 500 });
   }
 }
-
 
 // Server-side mapping from a raw hr_payroll PocketBase record to the
 // client's PayrollRecord shape — mirrors toPayroll() in hrData.ts (that

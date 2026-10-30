@@ -1,5 +1,6 @@
 'use client';
 
+import { Input } from '@/components/ui/Input';
 import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
 import { exportEmployeesCsv, exportTimesheetCsv } from '@/lib/reportExports';
 import React, { useMemo, useState } from 'react';
@@ -79,12 +80,7 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Employee Master Report</h1>
           <p className="text-slate-500">Comprehensive overview of profiles, localized salaries, and banking credentials.</p>
         </div>
-        <button
-          onClick={() => exportEmployeesCsv(filteredEmployees)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm self-start md:self-auto"
-        >
-          <Download className="h-4 w-4" /> Export Report (CSV)
-        </button>
+        <Button variant="success" onClick={() => exportEmployeesCsv(filteredEmployees)} className="self-start md:self-auto"><Download className="h-4 w-4" /> Export Report (CSV)</Button>
       </div>
 
       <LoadMoreHistory days={historyDays} maxDays={365} loading={fetchingHistory} noun="shifts" onLoadMore={() => setHistoryDays(d => d + 60)} />
@@ -141,18 +137,8 @@ export default function ReportsPage() {
                   </Td>
                   <Td align="center">
                     <div className="flex flex-col sm:flex-row justify-center gap-2">
-                      <button
-                        onClick={() => handleOpenReviewModal(emp)}
-                        className="text-caption font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
-                      >
-                        <FileText className="h-3.5 w-3.5" /> View Shift Logs
-                      </button>
-                      <button
-                        onClick={() => setSelectedDocsEmp(emp)}
-                        className="text-caption font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform inline-flex items-center gap-1.5"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Documents
-                      </button>
+                      <Button variant="secondary" size="xs" onClick={() => handleOpenReviewModal(emp)} className="gap-1.5"><FileText className="h-3.5 w-3.5" /> View Shift Logs</Button>
+                      <Button variant="softIndigo" size="xs" onClick={() => setSelectedDocsEmp(emp)} className="gap-1.5"><Download className="h-3.5 w-3.5" /> Documents</Button>
                     </div>
                   </Td>
                 </Tr>
@@ -209,18 +195,8 @@ export default function ReportsPage() {
                 </div>
               </div>
               <div className="flex justify-between gap-2 pt-2 border-t border-slate-100">
-                <button
-                  onClick={() => handleOpenReviewModal(emp)}
-                  className="flex-1 text-caption font-bold text-slate-600 hover:text-orange-700 bg-slate-100 hover:bg-orange-50 border border-slate-200 hover:border-orange-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                >
-                  <FileText className="h-3.5 w-3.5" /> View Shift Logs
-                </button>
-                <button
-                  onClick={() => setSelectedDocsEmp(emp)}
-                  className="flex-1 text-caption font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                >
-                  <Download className="h-3.5 w-3.5" /> Documents
-                </button>
+                <Button variant="secondary" size="sm" onClick={() => handleOpenReviewModal(emp)} className="flex-1 gap-1.5"><FileText className="h-3.5 w-3.5" /> View Shift Logs</Button>
+                <Button variant="softIndigo" size="sm" onClick={() => setSelectedDocsEmp(emp)} className="flex-1 gap-1.5"><Download className="h-3.5 w-3.5" /> Documents</Button>
               </div>
             </div>
           ))}
@@ -275,21 +251,9 @@ export default function ReportsPage() {
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Filter by date (e.g. 2026-07-06 or 'Today')"
-                  value={dateFilter}
-                  onChange={e => setDateFilter(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2 pl-9 pr-3 text-xs outline-none font-medium text-slate-800 focus:border-orange-500"
-                />
+                <Input type="text" placeholder="Filter by date (e.g. 2026-07-06 or 'Today')" value={dateFilter} onChange={e => setDateFilter(e.target.value)} fieldSize="sm" className="pl-9" />
               </div>
-              <button
-                onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, filteredReviewEntries)}
-                disabled={filteredReviewEntries.length === 0}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-4 py-2 rounded-lg text-xs active:scale-97 transition-colors transition-transform shadow-sm whitespace-nowrap"
-              >
-                <Download className="h-3.5 w-3.5" /> Export CSV
-              </button>
+              <Button variant="success" size="sm" onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, filteredReviewEntries)} disabled={filteredReviewEntries.length === 0} className="whitespace-nowrap"><Download className="h-3.5 w-3.5" /> Export CSV</Button>
             </div>
 
             {/* Sessions Table */}

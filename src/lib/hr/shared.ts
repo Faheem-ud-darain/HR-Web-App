@@ -48,6 +48,10 @@ export function looksLikeRealId(id: string): boolean {
 // the caller needs it. getFullList pages through the collection in
 // `batch`-sized requests, so for collections that grow without bound prefer
 // a `filter` over fetching everything.
+// WHICH ONE TO USE. pbList turns a failed read into [], which is right for a screen (it just shows nothing). Use pbListStrict
+// whenever "no rows" would be taken as a FACT that a write or a safety net then builds on: looking for an open shift before
+// creating one, the history an absence check de-duplicates against, tracking settings. Otherwise a network blip looks like
+// "nothing exists yet" and the code goes on to create a duplicate or overwrite real data.
 export async function pbList(collection: string, opts: { sort?: string; filter?: string; fields?: string } = {}): Promise<PbRow[]> {
   try {
     return await pb.collection(collection).getFullList({ requestKey: null, batch: 200, ...opts });

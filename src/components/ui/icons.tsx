@@ -40,6 +40,7 @@ export const CameraIcon = named('camera', Ph.CameraIcon);
 export const CaretDownIcon = named('caret-down', Ph.CaretDownIcon);
 export const CaretLeftIcon = named('caret-left', Ph.CaretLeftIcon);
 export const CaretRightIcon = named('caret-right', Ph.CaretRightIcon);
+export const CaretUpIcon = named('caret-up', Ph.CaretUpIcon);
 export const ChartBarIcon = named('chart-bar', Ph.ChartBarIcon);
 export const ChatCircleIcon = named('chat-circle', Ph.ChatCircleIcon);
 export const ChatTextIcon = named('chat-text', Ph.ChatTextIcon);

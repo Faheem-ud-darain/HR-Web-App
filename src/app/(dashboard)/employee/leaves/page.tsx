@@ -1,14 +1,18 @@
 'use client';
 
+import { LeaveChangeControl } from '@/components/ui/leaves/LeaveChangeControl';
+import { useLeaveDateChanges } from '@/lib/hr/leaveDateChange';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProfiles, useLeaves, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
+import { fetchLeaves } from '@/lib/hr/leaves';
+import { describeLeaveConflict, findLeaveConflict } from '@/lib/core/leaves';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, CircleNotchIcon as Loader2, TrashIcon as Trash2 } from '@/components/ui/icons';
+import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -23,6 +27,9 @@ export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
   const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
   const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
+  // Requests to move a leave to other days (the employee's own).
+  const { data: dateChanges, refetch: refetchChanges } = useLeaveDateChanges();
+  const pendingChangeFor = (leaveId: string) => dateChanges?.requests.find(r => r.leaveId === leaveId && r.status === 'pending');
 
   const [searchQuery, setSearchQuery] = useState('');
   const sessionEmail = useSessionEmail();
@@ -167,6 +174,14 @@ export default function EmployeeLeavesPage() {
 
     setIsSubmittingLeave(true);
     try {
+      // The same days cannot be requested twice. Checked against a fresh copy from the server, not just this screen's list,
+      // so a request made a moment ago on another tab or device counts too.
+      const current = await fetchLeaves({ employeeName: newLeave.employeeName }).catch(() => allLeaves ?? []);
+      const clash = findLeaveConflict(current, newLeave.employeeName, startDate, endDate);
+      if (clash) {
+        setError(describeLeaveConflict(clash));
+        return;
+      }
       const createdLeave = await hrActions.addLeave(newLeave);
       // Both HR and Admin manage leave approvals (see admin/leaves + hr/leaves
       // pages) — this previously only notified 'hr', so Admin never found
@@ -342,18 +357,19 @@ export default function EmployeeLeavesPage() {
                   <Td className="text-slate-500">{leave.reason}</Td>
                   <Td align="center">{getStatusBadge(leave.status)}</Td>
                   <Td align="center">
-                    {leave.status === 'pending' ? (
-                      <button
-                        type="button"
-                        onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
-                        title="Withdraw this leave request"
-                        className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <span className="text-slate-300 text-xs">—</span>
-                    )}
+                    <div className="flex items-center justify-center gap-2">
+                      <LeaveChangeControl leave={leave} pending={pendingChangeFor(leave.id)} configured={!!dateChanges?.configured} onChanged={() => { void refetchChanges(); void refetchLeaves(); }} />
+                      {leave.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
+                          title="Withdraw this leave request"
+                          className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </Td>
                 </Tr>
               ))}
@@ -399,6 +415,7 @@ export default function EmployeeLeavesPage() {
                   <p className="text-xs font-semibold text-slate-700">{leave.reason}</p>
                 </div>
               </div>
+              <LeaveChangeControl leave={leave} pending={pendingChangeFor(leave.id)} configured={!!dateChanges?.configured} onChanged={() => { void refetchChanges(); void refetchLeaves(); }} />
             </div>
           ))}
           {leavesLoading && <ListSkeleton rows={3} />}
@@ -459,8 +476,7 @@ export default function EmployeeLeavesPage() {
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isSubmittingLeave} onClick={() => setIsLeaveOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={isSubmittingLeave}  size="lg">
-              {isSubmittingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button type="submit" disabled={isSubmittingLeave}  size="lg" loading={isSubmittingLeave}>
               {isSubmittingLeave ? 'Submitting…' : 'Submit Request'}
             </Button>
           </div>
@@ -503,8 +519,7 @@ export default function EmployeeLeavesPage() {
               size="md"
               disabled={isDeletingLeave}
               onClick={() => deletingLeaveId && handleDeleteLeave(deletingLeaveId)}
-            >
-              {isDeletingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
+             loading={isDeletingLeave}>
               {isDeletingLeave ? 'Withdrawing…' : 'Withdraw Request'}
             </Button>
           </div>

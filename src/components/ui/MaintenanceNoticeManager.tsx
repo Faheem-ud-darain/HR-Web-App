@@ -1,10 +1,11 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import { useState } from 'react';
 import { Card, CardContent } from './Card';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { WrenchIcon as Wrench, PlusCircleIcon as PlusCircle, TrashIcon as Trash2, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { WrenchIcon as Wrench, PlusCircleIcon as PlusCircle, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { hrActions, useMaintenanceNotices } from '@/lib/hrData';
 import { pktLocalToUtcIso, formatInViewerLocalTime } from '@/lib/timezone';
 import { useActionToast } from '@/components/ui/ActionToastHost';
@@ -114,14 +115,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
                       <h4 className="font-bold text-slate-900 text-sm">{n.title}</h4>
                       <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-wrap break-words">{n.message}</p>
                     </div>
-                    <button
-                      onClick={() => handleDelete(n.id)}
-                      disabled={deletingId === n.id}
-                      title="Delete notice"
-                      className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50 shrink-0"
-                    >
-                      {deletingId === n.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </button>
+                    <IconButton size="sm" label="Delete notice" loading={deletingId === n.id} onClick={() => handleDelete(n.id)} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></IconButton>
                   </div>
                   <p className={`text-caption font-bold ${isPast ? 'text-slate-400' : 'text-sky-700'}`}>
                     {isPast ? 'Ended' : 'Window'}: {formatInViewerLocalTime(n.startAt)} — {formatInViewerLocalTime(n.endAt)} (your local time)
@@ -211,14 +205,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
             >
               Cancel
             </Button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 md:py-2 rounded-xl text-xs active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
-            >
-              {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {submitting ? 'Posting…' : 'Post Notice'}
-            </button>
+            <Button type="submit" loading={submitting}>{submitting ? 'Posting…' : 'Post Notice'}</Button>
           </div>
         </form>
       </Modal>

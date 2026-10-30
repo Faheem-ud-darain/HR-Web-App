@@ -1,5 +1,8 @@
 
-import type { PbRow } from '@/lib/pbTypes';// Shared field-routing logic for hr_profiles writes, split out of
+import type { PbRow } from '@/lib/pbTypes';
+import type { Profile } from './hr/types';
+
+// Shared field-routing logic for hr_profiles writes, split out of
 // hrData.ts so the new admin-gated server route
 // (src/app/api/admin/profile/route.ts) can classify an update payload into
 // "real hr_profiles column" / "hr_profile_extra_ KV overlay" /
@@ -12,15 +15,11 @@ import type { PbRow } from '@/lib/pbTypes';// Shared field-routing logic for hr_
 // purely field-routing plumbing, not business logic that benefits from
 // strict typing here.
 //
-// IMPORTANT: keep this in sync with hrData.ts's fromProfileFields/
-// PROFILE_DOC_KEYS/OVERLAY_KEYS if either ever changes — there's
-// deliberately no automatic way to enforce that (the alternative, hrData.ts
-// importing this file, is the right long-term fix but is a larger change
-// than this pass; flagged as a known follow-up rather than silently risking
-// drift going unnoticed).
-export const PROFILE_DOC_KEYS = ['cvFileName', 'cvFileData', 'identityDocs', 'passportFileName', 'passportFileData'];
+// The one list of which profile fields live in the documents row and which in the overlay row. The browser side
+// (lib/hr/profiles.ts) imports these too, so the two can no longer drift apart.
+export const PROFILE_DOC_KEYS: (keyof Profile)[] = ['cvFileName', 'cvFileData', 'identityDocs', 'passportFileName', 'passportFileData'];
 
-export const OVERLAY_KEYS = [
+export const OVERLAY_KEYS: (keyof Profile)[] = [
   'offboarded', 'offboardDate', 'offboardingStatus', 'lastIncrementProcessedYear',
   'accountCreationDate', 'alias', 'approvalStatus', 'approvalReviewedBy',
   'approvalReviewedAt', 'approvalRejectionReason', 'personalPhone', 'companyPhone',
@@ -83,8 +82,8 @@ export function splitProfileUpdate(updates: PbRow): SplitProfileUpdate {
   let profilePicture: string | undefined;
   for (const [key, value] of Object.entries(updates)) {
     if (key === 'profilePicture') { profilePicture = value; continue; }
-    if (PROFILE_DOC_KEYS.includes(key)) docs[key] = value;
-    else if (OVERLAY_KEYS.includes(key)) overlay[key] = value;
+    if ((PROFILE_DOC_KEYS as string[]).includes(key)) docs[key] = value;
+    else if ((OVERLAY_KEYS as string[]).includes(key)) overlay[key] = value;
     else real[key] = value;
   }
   return { real, overlay, docs, profilePicture };

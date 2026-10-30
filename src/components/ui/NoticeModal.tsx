@@ -5,12 +5,13 @@ import type { Icon } from '@phosphor-icons/react';
 import { Button, type ButtonVariant } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 
-type Tone = 'rose' | 'amber' | 'orange';
+type Tone = 'rose' | 'amber' | 'orange' | 'sky';
 
 const TONE: Record<Tone, { box: string; icon: string }> = {
   rose: { box: 'bg-rose-50 border-rose-200', icon: 'text-rose-600' },
   amber: { box: 'bg-amber-50 border-amber-200', icon: 'text-amber-600' },
   orange: { box: 'bg-orange-50 border-orange-200', icon: 'text-orange-600' },
+  sky: { box: 'bg-sky-50 border-sky-200', icon: 'text-sky-600' },
 };
 
 interface NoticeModalProps {

@@ -11,10 +11,10 @@ import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 // same radius as Card/Modal (rounded-xl, 12px — DESIGN.md's stated cap),
 // same 150ms snappy transition + scale(0.97) press feedback defined
 // globally in globals.css, same weight/size scale everywhere.
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink' | 'softOrange' | 'softAmber' | 'softRose' | 'softEmerald' | 'softIndigo';
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
@@ -36,9 +36,17 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
   // Bordered, for a secondary action that still needs to read as a real
   // button next to a primary one (e.g. "Cancel" beside "Save").
   outline: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 disabled:opacity-50',
+  // Tinted, for a small toggle or action that is "on" (the orange and amber chips) or a gentle warning (close a ticket).
+  softOrange: 'bg-orange-100 hover:bg-orange-200 text-orange-700 disabled:opacity-50',
+  softAmber: 'bg-amber-100 hover:bg-amber-200 text-amber-700 disabled:opacity-50',
+  softIndigo: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-50',
+  softEmerald: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 disabled:opacity-50',
+  softRose: 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-50',
 };
 
 const SIZE_STYLES: Record<ButtonSize, string> = {
+  // A compact chip for a toolbar or a message header (no touch-height floor: the row around it supplies the room).
+  xs: 'text-caption px-2 py-1.5 gap-1',
   // min-h-[36px] on sm — at text-caption/py-1.5 this was resolving to
   // roughly 26px tall, under any reasonable touch-target floor. 36px
   // matches the app's own existing convention for compact tappable

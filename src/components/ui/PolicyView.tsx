@@ -5,13 +5,16 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { BookOpenIcon as BookOpen, CalendarBlankIcon as Calendar, QuestionIcon as HelpCircle, WarningCircleIcon as AlertCircle, MedalIcon as Award, InfoIcon as Info } from '@/components/ui/icons';
 import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
-export function PolicyView() {
+// `embedded` leaves out the page heading when the handbook sits inside a popup that already has a title.
+export function PolicyView({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">DelCargo Company Policy Handbook</h1>
-        <p className="text-slate-500 text-sm">Official company time-off, accrual rules, settlements, and benefits guidelines.</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">DelCargo Company Policy Handbook</h1>
+          <p className="text-slate-500 text-sm">Official company time-off, accrual rules, settlements, and benefits guidelines.</p>
+        </div>
+      )}
 
       {/* Accrual Rates Table */}
       <Card className="border border-slate-200 overflow-hidden">

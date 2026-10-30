@@ -12,7 +12,7 @@ import {
   countAbsentWeekdays, detectAbsences, describeAbsence, findWeekendAbsenceRecords, findPreJoinAbsenceRecords,
 } from '../core/absences';
 import type { AbsenceRecord, MyAbsenceRecord, InactivityLog, Profile, TimesheetEntry, LeaveApplication } from './types';
-import { pbList, pbCreate, pbUpdate, formatMoney } from './shared';
+import { pbList, pbListStrict, pbCreate, pbUpdate, formatMoney } from './shared';
 import { hrActions, fetchTimesheetsFresh, displayName } from '../hrData';
 
 export { countAbsentWeekdays };
@@ -67,8 +67,10 @@ export const absenceActions = {
     const wanted = opts.email?.toLowerCase();
     return wanted ? rows.filter(r => r.employeeEmail.toLowerCase() === wanted) : rows;
   },
+  // pbListStrict: this is the history runAbsenceCheck de-duplicates against. A failed read must be an error, not "no history",
+  // or every absence in the window would be created a second time (and deducted twice).
   getAllAbsenceRecordsIncludingDeleted: async (opts: { sinceDate?: string } = {}): Promise<AbsenceRecord[]> =>
-    (await pbList('hr_absence_records', {
+    (await pbListStrict('hr_absence_records', {
       ...(opts.sinceDate ? { filter: pbFilter('date >= {:since}', { since: opts.sinceDate }) } : {}),
       fields: ABSENCE_FIELDS,
     })).map(toAbsenceRecord),

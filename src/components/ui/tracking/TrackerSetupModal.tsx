@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { Button, ButtonLink } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { displayName, Profile, TrackingSettings, TrackerDiagnostics } from '@/lib/hrData';
 import { TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL } from '@/lib/trackerSetup';
 import { DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
@@ -29,7 +31,9 @@ interface TrackerSetupModalProps {
 }
 
 export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupEmp, role, settingsFor, copySetupCode, copied, handleRegenerateToken, handleForceDisconnect, copyConfig, handleRunDiagnostics, diagnosticsStatus, handleReloadSettingsNow, handleTrackerAction, diagnosticsResult, copyDiagnosticsReport, copiedDiagnostics }: TrackerSetupModalProps) {
+  const [confirmRestart, setConfirmRestart] = useState(false);
   return (
+    <>
     <Modal
             isOpen={!!setupEmp}
             onClose={() => {
@@ -47,25 +51,9 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                       <span className="font-bold text-slate-800">Step 1.</span> Have the employee download the <span className="font-semibold">DelCargo Tracker</span> app for their computer (no Python or setup required) and install it like any other program.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <a
-                        href={TRACKER_DOWNLOAD_WINDOWS_URL}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Download for Windows
-                      </a>
-                      <a
-                        href={TRACKER_DOWNLOAD_MAC_URL}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Download for Mac
-                      </a>
-                      <a
-                        href={TRACKER_DOWNLOAD_CHROMEOS_URL}
-                        download="Delcargo_Chromebook_Tracker.zip"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Chrome OS Extension (.zip)
-                      </a>
+                      <ButtonLink variant="primary" size="sm" href={TRACKER_DOWNLOAD_WINDOWS_URL}><Download className="h-3.5 w-3.5" /> Download for Windows</ButtonLink>
+                      <ButtonLink variant="primary" size="sm" href={TRACKER_DOWNLOAD_MAC_URL}><Download className="h-3.5 w-3.5" /> Download for Mac</ButtonLink>
+                      <ButtonLink variant="softOrange" size="sm" href={TRACKER_DOWNLOAD_CHROMEOS_URL} download="Delcargo_Chromebook_Tracker.zip"><Download className="h-3.5 w-3.5" /> Chrome OS Extension (.zip)</ButtonLink>
                     </div>
                   </div>
     
@@ -77,25 +65,9 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                       {encodeSetupCode(getPocketBaseConfig().url, settings.agentToken)}
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
-                      <button
-                        onClick={() => copySetupCode(settings)}
-                        className="text-xs font-semibold text-white bg-slate-800 hover:bg-slate-900 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                      >
-                        <Copy className="h-3.5 w-3.5" /> {copied ? 'Copied!' : 'Copy Setup Code'}
-                      </button>
-                      <button
-                        onClick={() => handleRegenerateToken(setupEmp.email)}
-                        className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" /> Regenerate Token
-                      </button>
-                      <button
-                        onClick={() => handleForceDisconnect(setupEmp.email)}
-                        className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                        title="Unblock a stuck &quot;device already connected&quot; report without changing their setup code"
-                      >
-                        <WifiOff className="h-3.5 w-3.5" /> Force Disconnect All Trackers
-                      </button>
+                      <Button variant="ink" size="sm" onClick={() => copySetupCode(settings)}><Copy className="h-3.5 w-3.5" /> {copied ? 'Copied!' : 'Copy Setup Code'}</Button>
+                      <Button variant="softRose" size="sm" onClick={() => handleRegenerateToken(setupEmp.email)}><RefreshCw className="h-3.5 w-3.5" /> Regenerate Token</Button>
+                      <Button variant="softRose" size="sm" onClick={() => handleForceDisconnect(setupEmp.email)} title="Unblock a stuck &quot;device already connected&quot; report without changing their setup code"><WifiOff className="h-3.5 w-3.5" /> Force Disconnect All Trackers</Button>
                     </div>
                   </div>
     
@@ -107,19 +79,8 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
     AGENT_TOKEN=${settings.agentToken}`}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => copyConfig(settings)}
-                          className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                        >
-                          <Copy className="h-3.5 w-3.5" /> Copy Config
-                        </button>
-                        <a
-                          href={AGENT_SCRIPT_PATH}
-                          download
-                          className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                        >
-                          <Download className="h-3.5 w-3.5" /> Download .py Script
-                        </a>
+                        <Button variant="secondary" size="sm" onClick={() => copyConfig(settings)}><Copy className="h-3.5 w-3.5" /> Copy Config</Button>
+                        <ButtonLink variant="secondary" size="sm" href={AGENT_SCRIPT_PATH} download><Download className="h-3.5 w-3.5" /> Download .py Script</ButtonLink>
                       </div>
                       <p className="text-caption text-slate-400 leading-relaxed">
                         Requires Python 3 installed on the employee&apos;s machine. Run <code className="bg-slate-100 px-1 rounded">pip install pyautogui pillow requests --break-system-packages</code> then <code className="bg-slate-100 px-1 rounded">python delcargo_tracker_agent.py</code>.
@@ -132,39 +93,11 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                       <span className="font-bold text-slate-800">Live diagnostics.</span> Ask this employee&apos;s tracker directly what&apos;s happening right now, instead of guessing from the last heartbeat. Only works on tracker app v19 or newer — an older build simply won&apos;t answer.
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleRunDiagnostics(setupEmp.email)}
-                        disabled={diagnosticsStatus === 'waiting'}
-                        className="text-xs font-semibold text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-50 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${diagnosticsStatus === 'waiting' ? 'animate-spin' : ''}`} />
-                        {diagnosticsStatus === 'waiting' ? 'Asking tracker…' : 'Run Diagnostics'}
-                      </button>
-                      <button
-                        onClick={() => handleReloadSettingsNow(setupEmp.email)}
-                        className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                        title="Tell the tracker to re-check its settings and shift status right now instead of waiting for its next poll"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" /> Reload Settings Now
-                      </button>
-                      <button
-                        onClick={() => handleTrackerAction(setupEmp.email, 'reconnect')}
-                        className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                        title="Make the tracker re-claim this device and refresh its connection now (tracker v25+)"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" /> Reconnect Device
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm('Restart this employee\u2019s tracker app? It closes and reopens within a few seconds. A running shift is not ended.')) {
-                            handleTrackerAction(setupEmp.email, 'restart');
-                          }
-                        }}
-                        className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                        title="Close and reopen the tracker app on the employee's machine without ending their shift (tracker v25+)"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" /> Restart Tracker
-                      </button>
+                      <Button variant="ink" size="sm" onClick={() => handleRunDiagnostics(setupEmp.email)} disabled={diagnosticsStatus === 'waiting'}><RefreshCw className={`h-3.5 w-3.5 ${diagnosticsStatus === 'waiting' ? 'animate-spin' : ''}`} />
+                        {diagnosticsStatus === 'waiting' ? 'Asking tracker…' : 'Run Diagnostics'}</Button>
+                      <Button variant="secondary" size="sm" onClick={() => handleReloadSettingsNow(setupEmp.email)} title="Tell the tracker to re-check its settings and shift status right now instead of waiting for its next poll"><RefreshCw className="h-3.5 w-3.5" /> Reload Settings Now</Button>
+                      <Button variant="secondary" size="sm" onClick={() => handleTrackerAction(setupEmp.email, 'reconnect')} title="Make the tracker re-claim this device and refresh its connection now (tracker v25+)"><RefreshCw className="h-3.5 w-3.5" /> Reconnect Device</Button>
+                      <Button variant="secondary" size="sm" onClick={() => setConfirmRestart(true)} title="Close and reopen the tracker app on the employee's machine without ending their shift (tracker v25+)"><RefreshCw className="h-3.5 w-3.5" /> Restart Tracker</Button>
                     </div>
     
                     {diagnosticsStatus === 'timeout' && (
@@ -193,13 +126,7 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                             <span className="text-caption font-mono text-slate-400">
                               v{diagnosticsResult.appVersion} · {diagnosticsResult.platform}
                             </span>
-                            <button
-                              onClick={() => copyDiagnosticsReport(setupEmp, diagnosticsResult)}
-                              title="Copy this report as plain text — paste it into a ticket, Slack, or an AI chat for help troubleshooting"
-                              className="text-caption font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 px-2 py-1 rounded-md flex items-center gap-1 active:scale-97 transition-colors transition-transform"
-                            >
-                              <Copy className="h-3.5 w-3.5" /> {copiedDiagnostics ? 'Copied!' : 'Copy Report'}
-                            </button>
+                            <Button variant="outline" size="xs" onClick={() => copyDiagnosticsReport(setupEmp, diagnosticsResult)} title="Copy this report as plain text — paste it into a ticket, Slack, or an AI chat for help troubleshooting"><Copy className="h-3.5 w-3.5" /> {copiedDiagnostics ? 'Copied!' : 'Copy Report'}</Button>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-caption text-slate-700">
@@ -237,5 +164,14 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
               );
             })()}
           </Modal>
+    <ConfirmDialog
+      isOpen={confirmRestart}
+      onClose={() => setConfirmRestart(false)}
+      onConfirm={() => { setConfirmRestart(false); if (setupEmp) handleTrackerAction(setupEmp.email, 'restart'); }}
+      title="Restart this tracker?"
+      message="Restart this employee’s tracker app? It closes and reopens within a few seconds. A running shift is not ended."
+      confirmLabel="Restart"
+    />
+    </>
   );
 }

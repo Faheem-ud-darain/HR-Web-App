@@ -1,24 +1,20 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { adminFindProfileByEmail, adminListPayrollForEmployee, adminFindByField } from '@/lib/pbAdmin';
+import { adminFindProfileByEmail, adminGetExtras } from '@/lib/pbAdmin';
 import { getPendingIncrement } from '@/lib/incrementMath';
-import { getNYDateString } from '@/lib/timezone';
-import { getAbsenceDeductionForMonth } from '@/lib/core/payroll';
-import { toAbsenceRecord } from '@/lib/core/payrollMappers';
-import { adminListAbsenceRecordsForEmail } from '@/lib/pbAdmin';
+import { mapProfileRecord } from '@/lib/core/profiles';
+import { selfPayrollRecord, selfPayrollSince } from '@/lib/core/payrollSelf';
+import { loadPayrollInputsFor } from '@/lib/server/payrollInputs';
 
 export const runtime = 'edge';
 
-// Server-side replacement for employee/salary/page.tsx's old pattern of
-// calling usePayroll() (fetches EVERY employee's hr_payroll record) and
-// useProfiles() (fetches EVERY employee's hr_profiles record, base salary
-// included) into the browser, then filtering client-side down to just the
-// signed-in employee's own numbers. Anyone hitting those PocketBase
-// endpoints directly — not through the app at all — got the same full
-// company-wide salary list, no auth required. This route uses a real
-// PocketBase admin token server-side (src/lib/pbAdmin.ts) and only ever
-// returns the caller's own data, identified by their verified session JWT
-// (src/lib/serverAuth.ts), not anything the client can pass in and choose.
+// The signed-in employee's OWN pay, and only theirs. Server-side so the browser never downloads the whole company's
+// salaries: this route uses the PocketBase admin token (src/lib/pbAdmin.ts) and identifies the caller by their verified
+// session JWT (src/lib/serverAuth.ts), never by anything the client sends.
+//
+// It carries no pay rules. It loads this one person's rows (five small filtered reads, see loadPayrollInputsFor) and asks
+// the same engine the HR and Admin screens and the monthly job use (core/payrollSelf.ts), so the dashboard, the Salary
+// page and HR's payroll screen show the same figures. About eight outgoing requests in all, well inside the Edge limit.
 export async function GET(request: Request) {
   const session = await requireSession(request);
   if (!session) {
@@ -26,113 +22,54 @@ export async function GET(request: Request) {
   }
 
   try {
-    const profile = await adminFindProfileByEmail(session.email);
-    if (!profile) {
+    const row = await adminFindProfileByEmail(session.email);
+    if (!row) {
       return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
     }
 
-    const payrollRows = await adminListPayrollForEmployee(profile.id);
-    // Same "most recent record for this employee" selection the old
-    // client-side usePayroll().find(p => p.employeeId === profile.id) did —
-    // adminListPayrollForEmployee already sorts by -created, so [0] is it.
-    let payrollRecord = payrollRows[0] || null;
+    // lastIncrementProcessedYear and the reserved-balance amounts are not hr_profiles columns: they live in the
+    // hr_profile_extras overlay (plan 027) and have to be read separately.
+    const profile = mapProfileRecord(row, await adminGetExtras(row.id));
 
-    // BUGFIX 2026-09-08: the most recent record isn't necessarily FOR the
-    // current month — until HR/Admin runs payroll for a new month, [0]
-    // above is still last month's already-processed record. The dashboard
-    // and Salary page both label this "This Month" / "Net Payable This
-    // Month", so showing last month's leftover bonus/deductions/processed
-    // status under that label was actively misleading right after a month
-    // rolled over — it looked like this month's numbers when it wasn't.
-    // Same America/New_York month-bucketing computePayrollView itself uses.
-    const currentMonthKey = getNYDateString(new Date()).slice(0, 7); // "YYYY-MM"
-    const recordIsCurrentMonth = payrollRecord?.month === currentMonthKey;
-    if (payrollRecord && !recordIsCurrentMonth) {
-      payrollRecord = { ...payrollRecord, month: currentMonthKey, bonus: 0, deductions: 0, processed: false };
-    }
+    const now = new Date();
+    const inputs = await loadPayrollInputsFor(profile, now, selfPayrollSince(now));
+    const record = selfPayrollRecord(profile, inputs, now);
 
-    // Live running total of this month's daily deductions (hr_absence_records)
-    // — real-time and always current even before HR has run/saved a formal
-    // payroll record for this month, so "Net Payable This Month" reflects
-    // actual deductions so far rather than showing 0 all month until HR
-    // processes it. Once HR does process the month, their saved
-    // `deductions` figure (already includes leave/shift-shortfall deductions
-    // beyond just absences) takes over as the authoritative number instead.
-    let liveDeductionsThisMonth = 0;
-    if (!recordIsCurrentMonth) {
-      try {
-        const absenceRows = await adminListAbsenceRecordsForEmail(session.email);
-        // Same rule the HR/Admin Payroll screen uses (core/payroll.ts): count the distinct absent days
-        // this month at the CURRENT daily rate, never more than one month's base salary. The old sum
-        // of each row's stored amount ignored the cap and could push the net pay below zero.
-        const monthly = getAbsenceDeductionForMonth(absenceRows.map(toAbsenceRecord), session.email, Number(profile.base_salary) || 0, currentMonthKey);
-        liveDeductionsThisMonth = Math.min(monthly, Number(profile.base_salary) || 0);
-      } catch { /* best-effort — worst case the dashboard shows 0 until HR processes */ }
-    }
-
-    // Itemized "why was I deducted" breakdown + this month's reserved
-    // amount — written by /api/admin/payroll alongside the main record
-    // (see that route's comment) since computePayrollView, which computes
-    // both, isn't Edge-safe to import here directly.
-    let deductionBreakdown: { label: string; amount: number }[] = [];
-    let reservedThisMonth = 0;
-    if (payrollRecord?.month) {
-      // Plan 027 Phase 2: hr_payroll_breakdowns (breakdown_key = employeeId_month, unique) instead of a hr_delcargo_store row per employee-month.
-      const breakdownRow = await adminFindByField('hr_payroll_breakdowns', 'breakdown_key', `${profile.id}_${payrollRecord.month}`);
-      if (breakdownRow?.data) {
-        deductionBreakdown = Array.isArray(breakdownRow.data.deductionBreakdown) ? breakdownRow.data.deductionBreakdown : [];
-        reservedThisMonth = Number(breakdownRow.data.reservedThisMonth) || 0;
-      }
-    }
-
-    // lastIncrementProcessedYear isn't a real hr_profiles column — like
-    // `offboarded`, it lives in the hr_profile_extras overlay collection
-    // (plan 027; see getProfileExtras/saveProfileExtras in hrData.ts). Has
-    // to be fetched separately from the profile record itself.
-    const extrasRow = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
-    const extras = { value: extrasRow?.data };
-
-    // Only the specific fields the Salary page's math (getPendingIncrement/
-    // getIncrementHistory) and display actually need — deliberately not the
-    // full profile record (no password, no bank details, etc.), so this
-    // route can't become a second way to leak everything hr_profiles holds.
-    // fullName/teams/id are included since the payslip receipt view shows
-    // them — none of those 3 are sensitive on their own.
+    // Only the fields the Salary page's maths and display need: deliberately not the full profile (no password, no bank
+    // details), so this route cannot become a second way to leak everything hr_profiles holds.
     const profileForClient = {
       id: profile.id,
-      fullName: profile.full_name,
+      fullName: profile.fullName,
       teams: profile.teams || [],
-      baseSalary: Number(profile.base_salary) || 0,
-      salaryStartDate: profile.salary_start_date || undefined,
-      joinedDate: profile.joined_date,
-      lastIncrementProcessedYear: extras?.value?.lastIncrementProcessedYear || undefined,
+      baseSalary: profile.baseSalary,
+      salaryStartDate: row.salary_start_date || undefined,
+      joinedDate: profile.joinedDate,
+      lastIncrementProcessedYear: profile.lastIncrementProcessedYear || undefined,
       region: profile.region,
-      // Reserved-balance fields (item 3/8) — read the same way
-      // lastIncrementProcessedYear is above, straight off the overlay.
-      reservedSalaryBalance: Number(extras?.value?.reservedSalaryBalance) || 0,
-      manualReservedAmount: Number(extras?.value?.manualReservedAmount) || 0,
+      reservedSalaryBalance: Number(profile.reservedSalaryBalance) || 0,
+      manualReservedAmount: Number(profile.manualReservedAmount) || 0,
     };
-    const pendingIncrement = getPendingIncrement(profileForClient);
 
     return NextResponse.json({
       profile: profileForClient,
-      pendingIncrement,
-      payrollRecord: payrollRecord
+      // What is still waiting to be added to the base salary (the "pending increment" card). The amount that counts in THIS
+      // month's pay is payrollRecord.incrementAmount, which follows the payroll rule (from the month after the anniversary).
+      pendingIncrement: getPendingIncrement(profileForClient),
+      payrollRecord: record
         ? {
-            bonus: Number(payrollRecord.bonus) || 0,
-            deductions: recordIsCurrentMonth ? (Number(payrollRecord.deductions) || 0) : liveDeductionsThisMonth,
-            processed: !!payrollRecord.processed,
-            month: payrollRecord.month || undefined,
-            deductionBreakdown,
-            reservedThisMonth,
+            baseSalary: record.baseSalary,
+            incrementAmount: record.incrementAmount,
+            earlierPay: record.earlierPay || 0,
+            bonus: record.bonus,
+            deductions: record.deductions,
+            processed: record.processed,
+            // False while the month is still open: the figures are an estimate until HR processes (or the job freezes) it.
+            final: record.final,
+            month: record.month,
+            deductionBreakdown: record.deductionBreakdown || [],
+            reservedThisMonth: record.reservedThisMonth || 0,
           }
-        : (liveDeductionsThisMonth > 0
-            // No payroll record has EVER been created for this employee yet
-            // (brand new hire, first month) but they already have absence
-            // deductions on the books this month — still surface those
-            // rather than showing nothing at all until HR's first run.
-            ? { bonus: 0, deductions: liveDeductionsThisMonth, processed: false, month: currentMonthKey, deductionBreakdown: [], reservedThisMonth: 0 }
-            : null),
+        : null,
     });
   } catch (err) {
     console.error('[payroll/me] error:', err);

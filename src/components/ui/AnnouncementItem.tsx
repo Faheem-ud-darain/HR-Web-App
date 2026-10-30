@@ -34,7 +34,7 @@ export function AnnouncementItem({ title, content, important, unread, meta, audi
         </div>
         {actions && <div className="-my-1 -mr-1.5 flex shrink-0 items-center">{actions}</div>}
       </div>
-      <ExpandableText text={content} className="mt-1.5 text-sm leading-relaxed text-slate-600" />
+      <ExpandableText text={content} title={title} className="mt-1.5 text-sm leading-relaxed text-slate-600" />
       <p className="mt-2 text-caption font-semibold text-slate-500">
         {meta}
         {audience && <> · <span>To {audience}</span></>}

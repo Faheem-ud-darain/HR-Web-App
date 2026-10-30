@@ -14,6 +14,13 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   className?: string;
+  // false = a popup the person must answer with its own button: no X, backdrop click, Escape or swipe closes it.
+  dismissible?: boolean;
+  // Pinned under the scrolling content (the action buttons).
+  footer?: React.ReactNode;
+  // Optional decoration for the header: a tinted icon beside the title and a small label above it.
+  icon?: React.ReactNode;
+  eyebrow?: string;
 }
 
 // Closing should feel a beat quicker than opening (~10% shorter is the
@@ -32,7 +39,7 @@ function usePrefersReducedMotion() {
   );
 }
 
-export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, className, dismissible = true, footer, icon, eyebrow }: ModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   // Mount/exit state machine (plan 002) — Modal used to unmount instantly on
@@ -63,7 +70,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
   const settle = () => { setSpringing(true); setDragY(0); };
   const dragStart = useRef<{ y: number; t: number } | null>(null);
   const onSheetDown = (e: React.PointerEvent) => {
-    if (window.matchMedia('(min-width: 768px)').matches) return;
+    if (!dismissible || window.matchMedia('(min-width: 768px)').matches) return;
     if ((e.target as HTMLElement).closest('button')) return;
     dragStart.current = { y: e.clientY, t: Date.now() };
     setSpringing(false);
@@ -98,7 +105,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && dismissible) onClose();
     };
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -108,7 +115,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
       document.body.style.overflow = 'unset';
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, dismissible]);
 
   useDialogFocus(dialogRef, isOpen && mounted, opener);
 
@@ -133,7 +140,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
       {/* Backdrop */}
       <div
         className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-200 ${closing ? 'opacity-0' : 'opacity-100'}`}
-        onClick={onClose}
+        onClick={dismissible ? onClose : undefined}
       />
 
       {/* Modal Container — bottom sheet on mobile, centered card on desktop */}
@@ -149,7 +156,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         `}
         style={dragY !== null ? { animation: 'none', transform: `translateY(${dragY}px)`, transition: springing ? 'transform 200ms ease-out' : undefined } : reducedMotion ? { animation: 'none' } : undefined}
         ref={dialogRef}
-        role="dialog"
+        role={dismissible ? 'dialog' : 'alertdialog'}
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
@@ -163,21 +170,31 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
           onPointerCancel={onSheetCancel}
         >
         {/* Drag handle (mobile only) */}
-        <div className="md:hidden flex justify-center pt-3 pb-1 flex-shrink-0 touch-none cursor-grab">
-          <div className="h-1 w-10 rounded-full bg-slate-300" />
-        </div>
+        {dismissible && (
+          <div className="md:hidden flex justify-center pt-3 pb-1 flex-shrink-0 touch-none cursor-grab">
+            <div className="h-1 w-10 rounded-full bg-slate-300" />
+          </div>
+        )}
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 flex-shrink-0 max-md:touch-none">
-          <h2 id={titleId} className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title}</h2>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
+        <div className={`flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200 flex-shrink-0 max-md:touch-none ${dismissible ? '' : 'max-md:pt-5'}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            {icon && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50">{icon}</span>}
+            <div className="min-w-0">
+              {eyebrow && <p className="text-caption font-bold uppercase tracking-wider text-slate-500">{eyebrow}</p>}
+              <h2 id={titleId} className="text-base md:text-lg font-bold text-slate-900 leading-tight">{title}</h2>
+            </div>
+          </div>
+          {dismissible && (
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
         </div>
         </div>
 
@@ -192,9 +209,15 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
             scanner reads comments too and will try to generate CSS for
             the literal placeholder text, which is invalid and breaks
             the whole stylesheet build. Spell out the real value instead. */}
-        <div className="px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto flex-1">
+        <div className={`px-5 pt-4 overflow-y-auto flex-1 ${footer ? 'pb-4' : 'pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
           {children}
         </div>
+
+        {footer && (
+          <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-5 pt-3.5 pb-[calc(0.875rem+env(safe-area-inset-bottom))]">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body

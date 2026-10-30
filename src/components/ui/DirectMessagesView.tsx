@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Profile, displayName } from '@/lib/hrData';
 import { TeamChatView } from './TeamChatView';
+import { ChatPage } from '@/components/ui/chat/ChatPage';
 import { SearchInput } from '@/components/ui/SearchInput';
 
 interface DirectMessagesViewProps {
@@ -45,16 +46,12 @@ export function DirectMessagesView({ allProfiles, currentUserEmail, currentUserR
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 space-y-4">
-      <div className="shrink-0 hidden md:flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Direct Messages</h1>
-          <p className="text-slate-500 text-sm">Private conversations with individual employees.</p>
-        </div>
-        <SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employees..." wrapperClassName="w-64" />
-      </div>
-      
-      {/* Mobile search */}
+    <ChatPage
+      title="Direct Messages"
+      subtitle="Private conversations with individual employees."
+      action={<SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employees..." wrapperClassName="w-64" />}
+    >
+      {/* On a phone the title is hidden, so the search sits above the chat instead. */}
       <SearchInput fieldSize="md" value={searchQuery} onChange={setSearchQuery} placeholder="Search employees..." wrapperClassName="md:hidden shrink-0" />
 
       {teams.length > 0 ? (
@@ -71,6 +68,6 @@ export function DirectMessagesView({ allProfiles, currentUserEmail, currentUserR
           No employees match your search.
         </div>
       )}
-    </div>
+    </ChatPage>
   );
 }

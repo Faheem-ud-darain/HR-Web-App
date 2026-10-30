@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { updateProfileSelf } from '@/lib/hrData';
 import { fileToStoredData } from '@/lib/imageCompressor';
 import { useActionToast } from '@/components/ui/ActionToastHost';
@@ -19,9 +19,7 @@ export function useDocumentUploads({ enabled, identityDocs, onSaved }: { enabled
     key: DocKey,
     labels: { success: string; failure: string },
     patch: (file: File, data: string) => Parameters<typeof updateProfileSelf>[0],
-  ) => async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  ) => async (file?: File) => {
     if (!file || !enabled) return;
     setBusy(key);
     try {

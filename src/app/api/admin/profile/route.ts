@@ -3,10 +3,10 @@ import { requireSession, hashPassword, isBcryptHash } from '@/lib/serverAuth';
 import {
   adminUpdateProfile,
   adminUploadProfilePicture,
-  adminFindByField,
   adminUpsertByField,
   adminDeleteByField,
-  adminGetProfileDocs,
+  adminMergeExtras,
+  adminMergeDocs,
   pbAdminFetch,
 } from '@/lib/pbAdmin';
 import { splitProfileUpdate, fromProfileFields } from '@/lib/profileFields';
@@ -33,25 +33,6 @@ export const runtime = 'edge';
 // (a broad multi-collection export). Both are big enough, and destructive/
 // broad enough, that they deserve their own careful pass rather than being
 // rushed in alongside this batch of more contained profile-field edits.
-
-// Plan 027 Phase 2: profile overlays moved off hr_delcargo_store onto
-// their own collections (hr_profile_extras/hr_profile_docs — one row per
-// profile, keyed by profile_id, same generic find-or-create-by-field
-// shape as Phase 1's collections). getExtras/mergeExtras below replace
-// every repeated "read existing, spread in a patch, write back" call site
-// in this file with one call each.
-async function getExtras(profileId: string): Promise<PbRow> {
-  const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
-  return row?.data || {};
-}
-async function mergeExtras(profileId: string, patch: PbRow): Promise<void> {
-  const existing = await getExtras(profileId);
-  await adminUpsertByField('hr_profile_extras', 'profile_id', profileId, { ...existing, ...patch });
-}
-async function mergeDocs(profileId: string, patch: PbRow): Promise<void> {
-  const existing = await adminGetProfileDocs(profileId);
-  await adminUpsertByField('hr_profile_docs', 'profile_id', profileId, { ...existing, ...patch });
-}
 
 // Plan 013 step 1: no new account should ever be protected only by a
 // single, universal, guessable literal ('123', 'employee123', ...) shared
@@ -139,11 +120,11 @@ export async function POST(request: Request) {
     }
 
     if (Object.keys(overlay).length > 0) {
-      await mergeExtras(profileId, overlay);
+      await adminMergeExtras(profileId, overlay);
     }
 
     if (Object.keys(docs).length > 0) {
-      await mergeDocs(profileId, docs);
+      await adminMergeDocs(profileId, docs);
     }
 
     if (profilePicture !== undefined) {
@@ -181,7 +162,7 @@ export async function PUT(request: Request) {
 
   try {
     if (action === 'approveOnboarding') {
-      await mergeExtras(profileId, {
+      await adminMergeExtras(profileId, {
         approvalStatus: 'approved',
         approvalReviewedBy: session!.email,
         approvalReviewedAt: new Date().toISOString(),
@@ -195,7 +176,7 @@ export async function PUT(request: Request) {
     }
 
     if (action === 'rejectOnboarding') {
-      await mergeExtras(profileId, {
+      await adminMergeExtras(profileId, {
         approvalStatus: 'rejected',
         approvalReviewedBy: session!.email,
         approvalReviewedAt: new Date().toISOString(),
@@ -219,7 +200,7 @@ export async function PUT(request: Request) {
       // password is another temp password by definition, so force a
       // change on next login rather than leaving it as a long-lived
       // secret only HR knows.
-      await mergeExtras(profileId, { mustChangePassword: true });
+      await adminMergeExtras(profileId, { mustChangePassword: true });
       return NextResponse.json({ ok: true });
     }
 
@@ -232,7 +213,7 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'newBaseSalary and processedYear are required.' }, { status: 400 });
       }
       await adminUpdateProfile(profileId, { base_salary: newBaseSalary });
-      await mergeExtras(profileId, { lastIncrementProcessedYear: processedYear });
+      await adminMergeExtras(profileId, { lastIncrementProcessedYear: processedYear });
       return NextResponse.json({ ok: true });
     }
 

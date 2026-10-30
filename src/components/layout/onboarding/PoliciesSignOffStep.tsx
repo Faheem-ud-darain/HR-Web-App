@@ -53,7 +53,7 @@ export function PoliciesSignOffStep({ profile, form, onSubmit }: { profile: Prof
       {open && (
         <Modal isOpen onClose={() => setOpen(null)} title={POLICIES.find(p => p.key === open)?.title || ''} className="md:max-w-3xl">
           {open === 'handbook'
-            ? <PolicyView />
+            ? <PolicyView embedded />
             : <p className="text-sm text-slate-700 leading-relaxed font-medium">DelCargo is committed to a workplace that is respectful, inclusive and professional. Everyone is expected to act with integrity, communicate openly across remote teams, and take conflicts to HR. Performance is reviewed periodically.</p>}
         </Modal>
       )}

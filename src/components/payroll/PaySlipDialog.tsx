@@ -4,14 +4,15 @@
 // out, and (Admin only) a button to mark it paid. Replaces the old "Net Payable" popup and the
 // bonus/deduction boxes that used to sit in every table row and saved on every keystroke.
 import React, { useState } from 'react';
-import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, CircleNotchIcon as Loader2, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@/components/ui/icons';
+import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { FormError } from '@/components/ui/FormError';
 import { Input } from '@/components/ui/Input';
 import { formatMoney, type PayrollRecord, type Profile, type PayrollCorrection } from '@/lib/hrData';
 import { currentAmount } from '@/lib/core/payrollCorrections';
-import { netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
+import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
 
 interface PaySlipDialogProps {
   record: PayrollRecord | null;
@@ -48,6 +49,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
   const [bonusText, setBonusText] = useState('');
   const [bonusFor, setBonusFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bonusError, setBonusError] = useState('');
   const [correcting, setCorrecting] = useState(false);
   const [corrAmount, setCorrAmount] = useState('');
   const [corrReason, setCorrReason] = useState('');
@@ -65,6 +67,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
   if (!record) return null;
   const net = netPay(record);
   const groups = groupDeductions(record.deductionBreakdown);
+  const limitedBy = deductionLimitedBy(record.deductionBreakdown, record.deductions);
   const flags = payrollFlags(record, profile);
   const bonusValue = Number(bonusText.replace(/[^0-9.]/g, '')) || 0;
   const bonusChanged = bonusValue !== (Number(record.bonus) || 0);
@@ -135,6 +138,9 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
               </ul>
             </details>
           ))}
+          {limitedBy > 0 && (
+            <div className="flex justify-between text-emerald-700"><span className="font-semibold">Limited to the month&apos;s pay (it can go down to zero, not below)</span><span className="shrink-0 font-bold">+{money(limitedBy)}</span></div>
+          )}
           {groups.length === 0 && <p className="text-slate-400">Nothing was deducted this month.</p>}
           <div className="flex justify-between border-t border-slate-300 pt-2 text-slate-900"><span className="font-bold">Amount to pay</span><span className="font-black">{money(net)}</span></div>
         </div>
@@ -158,11 +164,12 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                 variant="outline"
                 size="md"
                 disabled={!bonusChanged || saving}
-                onClick={async () => { setSaving(true); try { await onSaveBonus(record, bonusValue); } finally { setSaving(false); } }}
-              >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save bonus
+                onClick={async () => { setSaving(true); setBonusError(''); try { await onSaveBonus(record, bonusValue); } catch (err) { setBonusError(err instanceof Error ? err.message : 'Could not save the bonus.'); } finally { setSaving(false); } }}
+               loading={saving}>
+                Save bonus
               </Button>
             </div>
+            <FormError>{bonusError}</FormError>
             <p className="text-slate-400">Nothing is saved until you press Save bonus.</p>
           </div>
         )}
@@ -204,8 +211,8 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                       try { await onCorrect(record, Number(corrAmount.replace(/[^0-9.]/g, '')), corrReason); setCorrecting(false); setCorrReason(''); }
                       catch (e) { setCorrError(e instanceof Error ? e.message : 'Could not save the correction.'); }
                       finally { setCorrBusy(false); }
-                    }}>
-                    {corrBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save correction
+                    }} loading={corrBusy}>
+                    Save correction
                   </Button>
                   <Button variant="outline" size="sm" disabled={corrBusy} onClick={() => { setCorrecting(false); setCorrError(''); }}>Cancel</Button>
                 </div>
@@ -219,8 +226,8 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
           {record.processed ? (
             <span className="flex items-center gap-1.5 px-2 py-2 font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Already paid</span>
           ) : isAdmin ? (
-            <Button variant="primary" size="md" disabled={busy} onClick={() => onMarkPaid(record)}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Mark as paid
+            <Button variant="primary" size="md" disabled={busy} onClick={() => onMarkPaid(record)} loading={busy}>
+              {!(busy) && <CheckCircle2 className="h-4 w-4" />} Mark as paid
             </Button>
           ) : (
             <span className="text-slate-500">Admin marks salaries as paid after sending the money.</span>

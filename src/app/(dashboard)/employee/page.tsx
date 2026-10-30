@@ -4,19 +4,25 @@ import { NoticeModal } from '@/components/ui/NoticeModal';
 import { TaskDetailModal } from './_components/TaskDetailModal';
 import { UnderEightHoursModal } from './_components/UnderEightHoursModal';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, displayName, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
-import { Badge } from '@/components/ui/Badge';
+import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
 import { Modal } from '@/components/ui/Modal';
-import { Avatar } from '@/components/ui/Avatar';
-import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone, BankIcon as Landmark } from '@/components/ui/icons';
-import { isMobileDevice, TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
+import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone } from '@/components/ui/icons';
+import { TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
 import { checkGeofence } from '@/lib/geofence';
 import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
 import { useRouter } from 'next/navigation';
 import { TimesheetReviewModal } from "@/app/(dashboard)/employee/_components/TimesheetReviewModal";
-import { EmployeeSidePanel } from "@/app/(dashboard)/employee/_components/EmployeeSidePanel";
-import { EmployeeMainColumn } from "@/app/(dashboard)/employee/_components/EmployeeMainColumn";
+import { DashboardGreeting } from './_components/DashboardGreeting';
+import { EmployeeStats } from './_components/EmployeeStats';
+import { TasksCard } from './_components/TasksCard';
+import { RecentLeavesCard } from './_components/RecentLeavesCard';
+import { AnnouncementsCard } from './_components/AnnouncementsCard';
+import { TeamCard } from './_components/TeamCard';
+import { TeamMonitorCard } from './_components/TeamMonitorCard';
+import { ReferralCard } from './_components/ReferralCard';
 import { ShiftControlCard } from "@/app/(dashboard)/employee/_components/ShiftControlCard";
+import { notifyShift } from '@/lib/hr/shiftActions';
+import type { StartBlock } from '@/lib/core/shiftStart';
 import { useNow } from '@/lib/useNow';
 import { useSessionEmail } from '@/lib/useSession';
 import { isTrackingOn } from '@/lib/core/trackingSettings';
@@ -90,7 +96,6 @@ export default function EmployeeDashboard() {
   
   // Geofencing states
   const [shiftActive, setShiftActive] = useState(false);
-  const [, setGeofenceStatus] = useState('Outside Geofence');
   // What the device reported ('requesting' = USA employee, GPS answer not in yet; 'idle' = not applicable).
   const [geoResult, setGeoPermission] = useState<'granted' | 'denied' | 'unsupported' | null>(null);
   const geoPermission: 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' =
@@ -105,8 +110,9 @@ export default function EmployeeDashboard() {
   // run un-monitored simply because the employee never opened the tracker.
   // USA employees on automatic GPS-geofence clock-in are unaffected.
   const [trackerHeartbeat, setTrackerHeartbeat] = useState<TrackerHeartbeat | null>(null);
-  const [showTrackerRequiredModal, setShowTrackerRequiredModal] = useState(false);
-  const [showMobileBlockedModal, setShowMobileBlockedModal] = useState(false);
+  // Why a manual Start Shift was refused (shiftStartBlock in core/shiftStart.ts), shown as a prompt: not on a phone or tablet,
+  // tracker not running, tracker out of date, or tracker needs its new setup code.
+  const [startBlock, setStartBlock] = useState<StartBlock | null>(null);
   // Fixed 2026-08-18 — a heartbeat-is-live check alone isn't enough to let
   // Start Shift through: an outdated tracker build can still answer pings
   // and heartbeats perfectly (that's exactly the alex@delcargo.us case —
@@ -115,7 +121,6 @@ export default function EmployeeDashboard() {
   // open and just click Start Shift from here instead, and the dashboard
   // would happily start tracked time against a tracker that isn't actually
   // capturing anything current. See showTrackerUpdateRequiredModal below.
-  const [showTrackerUpdateRequiredModal, setShowTrackerUpdateRequiredModal] = useState(false);
   // Added 2026-08-19, explicit request: block Start Shift when the connected
   // agent is answering pings/heartbeats but authenticating with a stale
   // agentToken — i.e. HR/Admin regenerated this employee's setup code, but
@@ -129,8 +134,6 @@ export default function EmployeeDashboard() {
   // tracker was silently incapable of ever recording a screenshot. This is
   // the exact zara@delcargo.us / alex@delcargo.us incident from
   // PROJECT_HISTORY.md.
-  const [showTrackerReconnectRequiredModal, setShowTrackerReconnectRequiredModal] = useState(false);
-  const [checkingTracker, setCheckingTracker] = useState(false);
   // Grace-period tracking for heartbeat-based auto-clock-out. Only clock out
   // if heartbeat has been dead > TRACKER_HEARTBEAT_GRACE_MS AND no quit intent
   // signal exists. Timestamp (ms) of when the heartbeat first went dead, or
@@ -138,18 +141,6 @@ export default function EmployeeDashboard() {
   const [heartbeatFirstDeadAt, setHeartbeatFirstDeadAt] = useState<number | null>(null);
   // True while the ping/pong pre-flight handshake for Start Shift is running.
   const [pingingTracker, setPingingTracker] = useState(false);
-  // Manual Start Shift is disallowed from ANY mobile device — phone/tablet
-  // browser or the Capacitor-wrapped native app — regardless of whether
-  // screen tracking is even enabled for this employee (explicit product
-  // decision, 2026-09-04, after an employee was able to manually start an
-  // untracked shift from a phone's mobile browser with zero warning: the
-  // old gate only checked isNativeMobileApp(), which a regular mobile
-  // browser sails straight through since it's indistinguishable from any
-  // other browser tab). isMobileDevice() covers both. Kept the name
-  // `isMobileApp` below since it's threaded through a lot of existing
-  // JSX/logic — it now means "any mobile device", not just the app.
-  const isMobileApp = isMobileDevice();
-  const [showUnder8HourModal, setShowUnder8HourModal] = useState(false);
   const [under8HourDetails, setUnder8HourDetails] = useState<{ workedMinutes: number; remainingMinutes: number } | null>(null);
 
   // Popped up the moment the desktop tracker app tells the server it just
@@ -221,7 +212,6 @@ export default function EmployeeDashboard() {
       const openShift = allTimesheets.find(t => t.employeeEmail.toLowerCase() === (profile.email).toLowerCase() && !t.clockOut);
       setShiftActive(!!openShift);
       if (openShift) {
-        setGeofenceStatus(profile.region === 'USA' ? 'Inside Warehouse' : 'Shift Active');
         openShiftRef.current = { id: openShift.id, clockIn: openShift.clockIn };
         // First time this profile's dashboard load finds an already-open
         // manual shift, check whether it was actually abandoned (tab
@@ -233,7 +223,6 @@ export default function EmployeeDashboard() {
             if (closed) {
               shiftActiveRef.current = false;
               setShiftActive(false);
-              setGeofenceStatus('Shift Ended');
               openShiftRef.current = null;
               refetchTimesheets();
               setShiftStopModal(true);
@@ -315,7 +304,6 @@ export default function EmployeeDashboard() {
 
       // Deliberate quit confirmed OR grace period expired — clock out
       setShiftActive(false);
-      setGeofenceStatus('Shift Ended');
       openShiftRef.current = null;
       await hrActions.clockOut(userEmail);
       await refetchTimesheets();
@@ -496,32 +484,16 @@ export default function EmployeeDashboard() {
       if (isInside && !shiftActiveRef.current && nearestWarehouse) {
         shiftActiveRef.current = true;
         setShiftActive(true);
-        setGeofenceStatus(`Inside ${nearestWarehouse.name}`);
-        await hrActions.clockIn(profile.email);
+        await hrActions.clockIn(profile.email, 'gps');
         await refetchTimesheets();
-        await hrActions.addNotification(profile.email, 'employee', `Auto Shift ON: Checked-in at ${nearestWarehouse.name} via GPS geofencing.`);
-        // 'shift' category + pushTitle/senderEmail so HR/Admin actually get a
-        // push (with the employee's own profile picture as the Android large
-        // icon, resolved server-side from senderEmail — see
-        // push_notifications.pb.js), not just an in-app bell entry.
-        {
-          const shiftActorName = displayName(profile, 'hr');
-          await hrActions.addNotification('all', 'hr', `${shiftActorName} checked-in at ${nearestWarehouse.name} via geofencing.`, 'shift', shiftActorName, profile.email);
-          await hrActions.addNotification('all', 'admin', `${shiftActorName} checked-in at ${nearestWarehouse.name} via geofencing.`, 'shift', shiftActorName, profile.email);
-        }
+        await notifyShift(profile, `Auto Shift ON: Checked-in at ${nearestWarehouse.name} via GPS geofencing.`, name => `${name} checked-in at ${nearestWarehouse.name} via geofencing.`);
       } else if (!isInside && shiftActiveRef.current) {
         const whName = nearestWarehouse ? nearestWarehouse.name : 'the warehouse';
         shiftActiveRef.current = false;
         setShiftActive(false);
-        setGeofenceStatus('Outside Geofence');
         await hrActions.clockOut(profile.email);
         await refetchTimesheets();
-        await hrActions.addNotification(profile.email, 'employee', `Auto Shift OFF: Left the geofence at ${whName}.`);
-        {
-          const shiftActorName = displayName(profile, 'hr');
-          await hrActions.addNotification('all', 'hr', `${shiftActorName} checked-out (left warehouse geofence at ${whName}).`, 'shift', shiftActorName, profile.email);
-          await hrActions.addNotification('all', 'admin', `${shiftActorName} checked-out (left warehouse geofence at ${whName}).`, 'shift', shiftActorName, profile.email);
-        }
+        await notifyShift(profile, `Auto Shift OFF: Left the geofence at ${whName}.`, name => `${name} checked-out (left warehouse geofence at ${whName}).`);
       }
     };
 
@@ -567,33 +539,6 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <Badge variant="success">Approved</Badge>;
-      case 'pending':
-        return <Badge variant="warning">Pending</Badge>;
-      case 'hr_approved':
-        return <Badge variant="default">HR Approved</Badge>;
-      case 'rejected':
-        return <Badge variant="danger">Rejected</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
-    }
-  };
-
-  // Find my team details
-  const myTeams = userProfile && userProfile.teams ? userProfile.teams : [];
-  const teamMembers = (allProfiles || []).filter(emp => 
-    emp.id !== userProfile?.id && 
-    emp.teams && Array.isArray(emp.teams) &&
-    emp.teams.some(t => myTeams.includes(t))
-  );
-  const teamLead = (allProfiles || []).find(emp => 
-    emp.isTeamLead && 
-    emp.leadTeams?.some(t => myTeams.includes(t))
-  );
-
   // Overdue or due-within-3-days, not-done tasks — surfaced as a single
   // at-a-glance count in the stats row (replaces the old "Shift Status"
   // tile, which just duplicated the new Shift Control card above).
@@ -628,70 +573,56 @@ export default function EmployeeDashboard() {
   }, [myAnnouncements.length, userProfile?.email]);
 
   return (
-    <div className="space-y-4 md:space-y-6 font-sans px-0">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-slate-200 p-4 md:p-6 rounded-xl shadow-sm">
-        <div className="flex items-center gap-3 md:gap-4">
-          <Avatar src={userProfile?.profilePicture} name={userProfile?.fullName || 'Employee'} size={56} className="border-2 border-orange-500" />
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight" style={{ textWrap: 'balance' as React.CSSProperties['textWrap'] }}>{userProfile?.fullName || 'Employee'}</h1>
-            <p className="text-xs text-slate-500 font-semibold">{userProfile?.jobTitle || 'Team Member'} · <span className="text-orange-600 font-bold">{userProfile?.region === 'USA' ? 'USA Operations' : 'Pakistan (Remote)'}</span></p>
-          </div>
+    <div className="space-y-4 md:space-y-6">
+      <DashboardGreeting profile={userProfile} now={now} />
+
+      {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
+          unmissable full-width place above everything else. */}
+      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geoPermission} liveDistance={liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onUnderEight={setUnder8HourDetails} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geoErrorMsg} trackerHeartbeat={trackerHeartbeat} />
+
+
+      <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 items-start">
+        {/* Announcements lead on a phone (they are what changes day to day); on a desktop they sit beside the work. */}
+        <div className="space-y-4 md:space-y-6 lg:col-span-7 lg:order-1 order-2">
+          <TasksCard tasks={myTasks} now={now} onOpen={setSelectedTask} />
+          <RecentLeavesCard leaves={leaves} query={searchQuery} />
         </div>
-        <div className="flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 px-3.5 py-2.5 md:py-2 rounded-xl font-bold text-slate-600">
-          <Landmark className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          {userProfile?.bankName ? `${userProfile.bankName} (Verified)` : 'Bank details pending'}
+        <div className="space-y-4 md:space-y-6 lg:col-span-5 lg:order-2 order-1">
+          <AnnouncementsCard announcements={myAnnouncements} email={userProfile?.email} readMap={announcementReadMap} loading={isInitialLoading} />
+          <TeamCard me={userProfile} everyone={allEmployees} loading={isInitialLoading} />
+          {userProfile?.isTeamLead && <TeamMonitorCard lead={userProfile} everyone={allEmployees} isTrackingLiveFor={isTrackingLiveFor} onReview={handleOpenReviewModal} />}
+          <ReferralCard />
         </div>
-      </div>
-
-      {/* Shift Control — this used to be split across a passive "Shift
-          Status" stat tile up top AND a separate buried widget in the right
-          rail mislabeled "Geofencing Tracker" (which didn't even apply to
-          manual/Pakistan employees — there's no geofence for them, just a
-          button). Starting/ending a shift is the single most frequent,
-          highest-stakes action on this whole page, so it now gets one
-          unmissable, honestly-labeled, full-width place instead of being
-          buried under an unrelated heading in a sidebar. */}
-      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geoPermission} liveDistance={liveDistance} isMobileApp={isMobileApp} setShowMobileBlockedModal={setShowMobileBlockedModal} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} setShowTrackerRequiredModal={setShowTrackerRequiredModal} setShowTrackerUpdateRequiredModal={setShowTrackerUpdateRequiredModal} setShowTrackerReconnectRequiredModal={setShowTrackerReconnectRequiredModal} setShiftActive={setShiftActive} setGeofenceStatus={setGeofenceStatus} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} setCheckingTracker={setCheckingTracker} checkingTracker={checkingTracker} pingingTracker={pingingTracker} allTimesheets={allTimesheets} setUnder8HourDetails={setUnder8HourDetails} setShowUnder8HourModal={setShowUnder8HourModal} geoErrorMsg={geoErrorMsg} trackerHeartbeat={trackerHeartbeat} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-        {/* Left Column (8 cols): Stats, Tasks, Leaves */}
-        <EmployeeMainColumn userProfile={userProfile} allLeaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payrollSelf={payrollSelf} myTasks={myTasks} setSelectedTask={setSelectedTask} leaves={leaves} searchQuery={searchQuery} getStatusBadge={getStatusBadge} />
-
-        {/* Right Column (4 cols): Announcements, Team, Referral — Shift
-            Control moved to its own full-width card above the stats grid;
-            see that section's comment for why. */}
-        <EmployeeSidePanel isInitialLoading={isInitialLoading} myAnnouncements={myAnnouncements} userProfile={userProfile} announcementReadMap={announcementReadMap} allEmployees={allEmployees} isTrackingLiveFor={isTrackingLiveFor} handleOpenReviewModal={handleOpenReviewModal} teamLead={teamLead} teamMembers={teamMembers} router={router} />
-
       </div>
 
       {/* Start Shift prompts. Each blocks the shift for a different reason; see isMobileDevice and TRACKER_MIN_VERSION in
           trackerSetup.ts. */}
-      {showMobileBlockedModal && (
-        <NoticeModal title="Desktop Required for This Shift" tone="rose" icon={Smartphone} onClose={() => setShowMobileBlockedModal(false)}>
+      {startBlock === 'mobile' && (
+        <NoticeModal title="Desktop Required for This Shift" tone="rose" icon={Smartphone} onClose={() => setStartBlock(null)}>
           Manual Start Shift isn&apos;t available on a phone or tablet. Please start your shift from a desktop or laptop browser instead.
         </NoticeModal>
       )}
 
       {/* Screen tracking is on for this employee but the desktop agent is not connected. */}
-      {showTrackerRequiredModal && (
-        <NoticeModal title="Tracker App Required" tone="amber" icon={WifiOff} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setShowTrackerRequiredModal(false)}>
+      {startBlock === 'tracker_missing' && (
+        <NoticeModal title="Tracker App Required" tone="amber" icon={WifiOff} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setStartBlock(null)}>
           Your account has screen tracking enabled by HR/Admin, so your shift can only be started once the DelCargo Tracker desktop app is installed and running. Open the app (check your system tray / menu bar if it&apos;s already installed) and try starting your shift again.
         </NoticeModal>
       )}
 
       {/* Connected, but running a build older than TRACKER_MIN_VERSION ("connected but too old to trust"). */}
-      {showTrackerUpdateRequiredModal && (
-        <NoticeModal title="Tracker Update Required" tone="amber" icon={AlertTriangle} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setShowTrackerUpdateRequiredModal(false)}>
+      {startBlock === 'tracker_outdated' && (
+        <NoticeModal title="Tracker Update Required" tone="amber" icon={AlertTriangle} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setStartBlock(null)}>
           Your DelCargo Tracker app{trackerHeartbeat?.agentVersion ? ` (v${trackerHeartbeat.agentVersion})` : ''} is running but out of date — v{TRACKER_MIN_VERSION} or newer is required before you can start a tracked shift. Please update the app (it should prompt you automatically), then try starting your shift again.
         </NoticeModal>
       )}
 
       {/* The agent is running and current but presents an old agentToken that no longer matches hr_tracking_settings
           (the setup code was regenerated since this device was configured), so tracking cannot work until the new code is pasted in. */}
-      {showTrackerReconnectRequiredModal && (
-        <NoticeModal title="Reconnect Tracker Required" tone="orange" icon={AlertTriangle} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setShowTrackerReconnectRequiredModal(false)}>
+      {startBlock === 'tracker_reconnect' && (
+        <NoticeModal title="Reconnect Tracker Required" tone="orange" icon={AlertTriangle} action={{ label: 'Go to Tracker Setup', onClick: () => router.push('/employee/tracker') }} onClose={() => setStartBlock(null)}>
           Your setup code was regenerated by HR/Admin, so your desktop tracker app is still using the old code and can no longer connect. Your shift can&apos;t start until you open your Tracker Setup page, copy the new setup code, and paste it into the DelCargo Tracker app on your computer.
         </NoticeModal>
       )}
@@ -720,8 +651,8 @@ export default function EmployeeDashboard() {
           <TimesheetReviewModal selectedReviewEmp={selectedReviewEmp} userProfile={userProfile} reviewEntries={reviewEntries} setSelectedReviewEmp={setSelectedReviewEmp} />
         </Modal>
       )}
-      {showUnder8HourModal && under8HourDetails && (
-        <UnderEightHoursModal workedMinutes={under8HourDetails.workedMinutes} remainingMinutes={under8HourDetails.remainingMinutes} onClose={() => setShowUnder8HourModal(false)} />
+      {under8HourDetails && (
+        <UnderEightHoursModal workedMinutes={under8HourDetails.workedMinutes} remainingMinutes={under8HourDetails.remainingMinutes} onClose={() => setUnder8HourDetails(null)} />
       )}
     </div>
   );

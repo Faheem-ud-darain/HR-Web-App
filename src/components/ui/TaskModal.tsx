@@ -5,7 +5,6 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, Profile, hrActions, displayName } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 
@@ -148,14 +147,7 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
           >
             Cancel
           </Button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-          >
-            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isSubmitting ? 'Assigning…' : 'Assign Task'}
-          </button>
+          <Button type="submit" loading={isSubmitting}>{isSubmitting ? 'Assigning…' : 'Assign Task'}</Button>
         </div>
       </form>
     </Modal>

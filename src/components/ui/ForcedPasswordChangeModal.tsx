@@ -1,11 +1,12 @@
 'use client';
 
-import { StatusDot } from '@/components/ui/StatusDot';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import React, { useState } from 'react';
 import { KeyIcon as KeyRound, ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
+import { FormError } from '@/components/ui/FormError';
+import { Modal } from '@/components/ui/Modal';
 import { Profile, changeOwnPassword } from '@/lib/hrData';
-import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { errMsg } from '@/lib/errors';
 
@@ -24,8 +25,7 @@ interface ForcedPasswordChangeModalProps {
 // rather than leaving it to the employee's discretion.
 //
 // Same non-dismissible-except-its-own-action shape as AbsentPopup/
-// AnnouncementPopup (not the shared <Modal>, which closes on backdrop/
-// Escape/X clicks) — there is deliberately no way to skip this. Reuses
+// AnnouncementPopup (the shared <Modal> with dismissible={false}) — there is deliberately no way to skip this. Reuses
 // changeOwnPassword (the same self-service call the Profile pages already
 // use), which verifies the CURRENT password server-side — the employee
 // still needs to know the temp password HR gave them to get through this,
@@ -76,73 +76,33 @@ export function ForcedPasswordChangeModal({ profile, onChanged }: ForcedPassword
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-toast)] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm fade-enter"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="forced-password-change-title"
+    <Modal
+      isOpen
+      dismissible={false}
+      onClose={() => {}}
+      title="Set a new password to continue"
+      eyebrow="Action Required"
+      icon={<KeyRound weight="duotone" className="h-5 w-5 text-orange-600" aria-hidden="true" />}
+      footer={<Button type="submit" form="forced-password-change" variant="primary" fullWidth loading={saving}><ShieldCheck className="h-4 w-4" aria-hidden="true" /> Set New Password</Button>}
     >
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden dialog-enter">
-        <div className="px-5 pt-5 pb-4 bg-orange-50 border-b border-orange-200 flex items-start gap-3">
-          <div className="h-9 w-9 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center shrink-0">
-            <KeyRound className="h-5 w-5 text-orange-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-caption font-bold text-orange-700 uppercase tracking-wider">Action Required</p>
-            <h2 id="forced-password-change-title" className="font-bold text-slate-900 text-base leading-tight mt-0.5">
-              Set a new password to continue
-            </h2>
-          </div>
-        </div>
+      <form id="forced-password-change" onSubmit={handleSubmit} className="space-y-3">
+        <p className="text-sm text-slate-700 leading-relaxed">
+          Your account was just approved (or your password was reset by HR/Admin). For security, you need to
+          replace the temporary password you were given with one only you know before continuing.
+        </p>
 
-        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">
-          <p className="text-sm text-slate-700 leading-relaxed">
-            Your account was just approved (or your password was reset by HR/Admin). For security, you need to
-            replace the temporary password you were given with one only you know before continuing.
-          </p>
+        <FormField label="Current (Temporary) Password">
+          <PasswordInput value={currentPass} onChange={e => setCurrentPass(e.target.value)} fieldSize="soft" autoComplete="current-password" />
+        </FormField>
+        <FormField label="New Password">
+          <PasswordInput value={newPass} onChange={e => setNewPass(e.target.value)} fieldSize="soft" autoComplete="new-password" />
+        </FormField>
+        <FormField label="Confirm New Password">
+          <PasswordInput value={confirmPass} onChange={e => setConfirmPass(e.target.value)} fieldSize="soft" autoComplete="new-password" />
+        </FormField>
 
-          <FormField label="Current (Temporary) Password">
-            <Input
-              type="password"
-              value={currentPass}
-              onChange={e => setCurrentPass(e.target.value)}
-              fieldSize="soft"
-              autoComplete="current-password"
-            />
-          </FormField>
-          <FormField label="New Password">
-            <Input
-              type="password"
-              value={newPass}
-              onChange={e => setNewPass(e.target.value)}
-              fieldSize="soft"
-              autoComplete="new-password"
-            />
-          </FormField>
-          <FormField label="Confirm New Password">
-            <Input
-              type="password"
-              value={confirmPass}
-              onChange={e => setConfirmPass(e.target.value)}
-              fieldSize="soft"
-              autoComplete="new-password"
-            />
-          </FormField>
-
-          {error && (
-            <div className="p-3 text-xs bg-rose-50 text-rose-700 border border-rose-100 rounded-xl font-semibold flex items-center gap-2">
-              <StatusDot tone="rose" />
-              {error}
-            </div>
-          )}
-
-          <div className="pt-2 flex justify-end">
-            <Button type="submit" variant="primary" disabled={saving} className="shrink-0 shadow-sm active:scale-97 transition-transform">
-              <ShieldCheck className="h-4 w-4" /> {saving ? 'Saving…' : 'Set New Password'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <FormError>{error}</FormError>
+      </form>
+    </Modal>
   );
 }

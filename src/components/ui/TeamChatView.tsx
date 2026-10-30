@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Team, Profile, Message, useMessages, useTeamDocuments, displayName, HR_ADMIN_LINE_TEAM_ID } from '@/lib/hrData';
+import { Team, Profile, Message, useMessages, useTeamDocuments, displayName } from '@/lib/hrData';
 import { TeamDocumentsPanel } from './TeamDocumentsPanel';
 import { ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { ImageLightbox } from './ImageLightbox';
@@ -77,9 +77,6 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
 
   const emailToProfile = new Map(allProfiles.map(p => [normEmail(p.email), p]));
   const activeTeam = teams.find(t => t.id === activeTeamId);
-  // The HR & Admin Line is a permanent two-party channel, so it gets its own card styling: "was this HR or Admin"
-  // has to be unmistakable. Everywhere else keeps the usual self / other bubbles.
-  const isHrAdminLine = activeTeamId === HR_ADMIN_LINE_TEAM_ID;
   // Who can upload/delete Team Documents: Admin and HR always, a Team Lead only for a team they actually lead.
   const canManageDocuments =
     currentUserRole === 'admin' ||
@@ -208,7 +205,6 @@ export function TeamChatView({ teams: propTeams, currentUserEmail, currentUserRo
               viewersForMessage={receipts.viewersForMessage}
               openMessageViewers={receipts.openMessageViewers}
               currentUserRole={currentUserRole}
-              isHrAdminLine={isHrAdminLine}
               typingNames={typing.typingNames}
             />
             <ChatComposer

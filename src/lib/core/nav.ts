@@ -76,8 +76,8 @@ export function isNavActive(pathname: string | null | undefined, href: string, r
   return href === navRoot(role) ? path === href : path === href || path.startsWith(`${href}/`);
 }
 
-/** The chat screens have their own full-height layout and a message box at the bottom, so the phone tab bar stays away. */
-export const isChatScreen = (pathname: string | null | undefined): boolean => /\/(chat|team-chats|direct-messages)$/.test(pathname || '');
+/** The chat screens (team chat, direct messages, the HR & Admin line) have their own full-height layout and a message box at the bottom, so the phone tab bar stays away. The layout, top bar and tab bar all ask this one function. */
+export const isChatScreen = (pathname: string | null | undefined): boolean => /\/(chat|team-chats|direct-messages|hr-admin)$/.test(pathname || '');
 
 /** Which "unseen activity" dot, if any, belongs on this link. */
 export function navDotKey(href: string): DotKey | null {

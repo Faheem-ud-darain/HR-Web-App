@@ -168,6 +168,30 @@ export function getApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: str
   return null;
 }
 
+/** Requests that still count: waiting for HR, waiting for the CEO, or approved. A rejected request does not block a new one. */
+const LIVE_STATUSES: LeaveApplication['status'][] = ['pending', 'hr_approved', 'approved'];
+
+/**
+ * An existing request of this employee that already covers any of the days from `start` to `end` ("YYYY-MM-DD", inclusive),
+ * or null. Used when a new request is submitted, so the same day cannot be asked for twice (it would reach HR and Admin as two
+ * requests and two notifications). Payroll already counts a day once however many requests cover it; this stops the duplicate
+ * before it is created.
+ */
+export function findLeaveConflict(leaves: LeaveApplication[], fullName: string, start: string, end: string): LeaveApplication | null {
+  for (const l of leaves) {
+    if (l.employeeName !== fullName || !LIVE_STATUSES.includes(l.status)) continue;
+    const range = getLeaveRange(l);
+    if (range && range.start <= end && range.end >= start) return l;
+  }
+  return null;
+}
+
+/** What to tell the employee about the request that is in the way. */
+export function describeLeaveConflict(l: LeaveApplication): string {
+  const state = l.status === 'approved' ? 'approved' : 'waiting for approval';
+  return `You already have a ${l.type} leave request for ${l.duration} (${state}) that covers these days. ${l.status === 'approved' ? 'Choose different days.' : 'Delete it first if you want to change it, or choose different days.'}`;
+}
+
 export function isApprovedLeaveOnDate(leaves: LeaveApplication[], fullName: string, dateStr: string): boolean {
   return getApprovedLeaveOnDate(leaves, fullName, dateStr) !== null;
 }

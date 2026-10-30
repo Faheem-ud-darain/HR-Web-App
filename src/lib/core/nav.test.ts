@@ -84,6 +84,7 @@ describe('isChatScreen', () => {
     expect(isChatScreen('/hr/team-chats')).toBe(true);
     expect(isChatScreen('/employee/chat')).toBe(true);
     expect(isChatScreen('/admin/direct-messages')).toBe(true);
+    expect(isChatScreen('/hr/hr-admin')).toBe(true);
     expect(isChatScreen('/hr/tickets')).toBe(false);
     expect(isChatScreen('/hr/team-chats/extra')).toBe(false);
     expect(isChatScreen(null)).toBe(false);
