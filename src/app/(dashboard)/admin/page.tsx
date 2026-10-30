@@ -1,6 +1,5 @@
 'use client';
 
-import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { useState, useEffect } from 'react';
 import { StatCard } from '@/components/ui/StatCard';
 import { Card } from '@/components/ui/Card';
@@ -12,6 +11,8 @@ import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
+import { CardStack } from '@/components/ui/CardStack';
+import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
 import { usePayrollView } from '@/hooks/usePayrollView';
 import { netPay } from '@/lib/core/payrollView';
 import { ListSkeleton } from '@/components/ui/Skeleton';
@@ -177,33 +178,12 @@ export default function AdminDashboard() {
             ) : hrApprovedLeaves.length === 0 ? (
               <EmptyState py={10} size="sm">No pending approvals — all leaves are processed.</EmptyState>
             ) : (
-              <div className="space-y-3 p-4">
-                {hrApprovedLeaves.map(l => (
-                  <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-slate-900">{nameFor(l.employeeName)}</p>
-                      <LeaveTypeBadge type={l.type} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-caption text-slate-400 font-semibold uppercase">Dates</p>
-                        <p className="text-xs font-bold text-slate-800">{l.duration}</p>
-                      </div>
-                      <div>
-                        <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
-                        <p className="text-xs font-bold text-slate-800 truncate">{l.reason}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="success" size="sm" onClick={() => handleCEOAction(l.id, 'approve')} disabled={processingLeaveId !== null} loading={processingLeaveId === l.id} className="flex-1">
-                        CEO Approve
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleCEOAction(l.id, 'reject')} disabled={processingLeaveId !== null} loading={processingLeaveId === l.id} className="flex-1">
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+              <div className="p-4">
+                <CardStack
+                  items={hrApprovedLeaves} keyOf={l => l.id} label="Leaves waiting for CEO approval"
+                  peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`}
+                  render={l => <LeaveRequestCard leave={l} name={nameFor(l.employeeName)}><CeoDecisionButtons busy={processingLeaveId === l.id} disabled={processingLeaveId !== null} onDecide={action => handleCEOAction(l.id, action)} /></LeaveRequestCard>}
+                />
               </div>
             )}
           </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { CardStack } from '@/components/ui/CardStack';
+import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
 import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
@@ -169,31 +171,14 @@ export default function AdminLeavesPage() {
             </Table>
           </TableScroll>
           
-          <div className="md:hidden space-y-3 p-4">
-            {pendingCEOLeaves.map(leave => (
-              <div key={leave.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-slate-900">{nameFor(leave.employeeName)}</p>
-                  <LeaveTypeBadge type={leave.type} />
-                </div>
-                <div>
-                  <p className="text-caption text-slate-400 font-semibold uppercase">Dates</p>
-                  <p className="text-xs font-semibold text-slate-800">{leave.duration}</p>
-                </div>
-                <div>
-                  <p className="text-caption text-slate-400 font-semibold uppercase">Reason</p>
-                  <p className="text-xs text-slate-600 line-clamp-2">{leave.reason}</p>
-                </div>
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button onClick={() => handleCEOAction(leave.id, 'approve')} className="text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97">
-                    CEO Approve
-                  </button>
-                  <button onClick={() => handleCEOAction(leave.id, 'reject')} className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97">
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="md:hidden p-4">
+            {!leavesLoading && (
+              <CardStack
+                items={pendingCEOLeaves} keyOf={l => l.id} label="Leaves waiting for CEO approval"
+                peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`}
+                render={l => <LeaveRequestCard leave={l} name={nameFor(l.employeeName)}><CeoDecisionButtons busy={processingLeaveId === l.id} disabled={processingLeaveId !== null} onDecide={action => handleCEOAction(l.id, action)} /></LeaveRequestCard>}
+              />
+            )}
             {leavesLoading && <ListSkeleton rows={3} />}
             {!leavesLoading && pendingCEOLeaves.length === 0 && (
               <EmptyState py={8} size="sm">

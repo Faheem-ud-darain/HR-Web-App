@@ -160,7 +160,7 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 text-caption font-bold">
+      <div className="hidden sm:flex flex-wrap gap-3 text-caption font-bold">
         <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-blue-100 border border-blue-300"></span><Palmtree className="h-3.5 w-3.5" /> Leave (approved)</span>
         <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-orange-50 border border-orange-300"></span><ClipboardList className="h-3.5 w-3.5" /> Task due</span>
         <span className="flex items-center gap-1 text-slate-500"><span className="h-2.5 w-2.5 rounded bg-amber-50 border border-amber-300"></span><AlertTriangle className="h-3.5 w-3.5" /> Conflict: task + leave overlap</span>
