@@ -1,6 +1,5 @@
 'use client';
 
-import { PersonPeek } from '@/components/ui/PersonPeek';
 import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
@@ -350,12 +349,12 @@ export default function HRLeavesPage() {
             const panel = { id: 'leave-status-panel', role: 'tabpanel' as const, 'aria-labelledby': `leave-tab-${mobileCol}` };
             if (cards.length === 0) return <div {...panel} className="rounded-xl border-2 border-dashed border-slate-200 py-10 text-center text-sm font-semibold text-slate-500">Nothing here</div>;
             const busy = processingLeaveId !== null; // one change at a time, so every card waits
-            const card = (leave: LeaveApplication) => <LeaveRequestCard leave={leave} name={nameFor(leave.employeeName)}>{phoneActions(leave, busy)}</LeaveRequestCard>;
+            const card = (leave: LeaveApplication) => <LeaveRequestCard leave={leave} name={nameFor(leave.employeeName)} picture={pictureFor(leave.employeeName)}>{phoneActions(leave, busy)}</LeaveRequestCard>;
             return (
               <div {...panel}>
                 {/* A phone gets the stack to swipe through (it goes round); a tablet gets the cards side by side. */}
                 <div className="md:hidden">
-                  <CardStack items={cards} keyOf={l => l.id} label={COLUMNS.find(c => c.key === mobileCol)?.label ?? 'Leave requests'} peek={l => <PersonPeek name={nameFor(l.employeeName)} picture={pictureFor(l.employeeName)}>{nameFor(l.employeeName)} · {l.type} leave · {l.duration}</PersonPeek>} render={card} />
+                  <CardStack items={cards} keyOf={l => l.id} label={COLUMNS.find(c => c.key === mobileCol)?.label ?? 'Leave requests'} peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`} render={card} />
                 </div>
                 <div className="hidden grid-cols-2 gap-3 md:grid">{cards.map(l => <React.Fragment key={l.id}>{card(l)}</React.Fragment>)}</div>
               </div>

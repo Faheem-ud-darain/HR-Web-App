@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import { useProfiles, useLeaves, useTasks, useTimesheets, hrActions, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
-import { PersonPeek } from '@/components/ui/PersonPeek';
 import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
@@ -179,8 +178,8 @@ export default function AdminDashboard() {
               <div className="p-4">
                 <CardStack
                   items={hrApprovedLeaves} keyOf={l => l.id} label="Leaves waiting for CEO approval"
-                  peek={l => <PersonPeek name={nameFor(l.employeeName)} picture={pictureFor(l.employeeName)}>{nameFor(l.employeeName)} · {l.type} leave · {l.duration}</PersonPeek>}
-                  render={l => <LeaveRequestCard leave={l} name={nameFor(l.employeeName)}><CeoDecisionButtons busy={processingLeaveId === l.id} disabled={processingLeaveId !== null} onDecide={action => handleCEOAction(l.id, action)} /></LeaveRequestCard>}
+                  peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`}
+                  render={l => <LeaveRequestCard leave={l} name={nameFor(l.employeeName)} picture={pictureFor(l.employeeName)}><CeoDecisionButtons busy={processingLeaveId === l.id} disabled={processingLeaveId !== null} onDecide={action => handleCEOAction(l.id, action)} /></LeaveRequestCard>}
                 />
               </div>
             )}

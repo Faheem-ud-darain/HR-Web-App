@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormError } from '@/components/ui/FormError';
 import { SectionCard } from '@/components/ui/SectionCard';
-import { PersonPeek } from '@/components/ui/PersonPeek';
 import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { formatLeaveDuration, type LeaveDateChange } from '@/lib/core/leaveDateChange';
@@ -38,7 +38,10 @@ export function LeaveDateChangeRequests({ onAnswered }: { onAnswered?: () => voi
   const card = (r: LeaveDateChange) => (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-card p-4">
       <div>
-        <p className="text-sm font-bold text-slate-900">{r.employeeName} <span className="font-semibold text-slate-500">· {r.leaveType} leave</span></p>
+        <div className="flex items-center gap-2">
+          <Avatar src={pictureFor(r.employeeName)} name={r.employeeName} size={28} className="shrink-0" />
+          <p className="min-w-0 text-sm font-bold text-slate-900">{r.employeeName} <span className="font-semibold text-slate-500">· {r.leaveType} leave</span></p>
+        </div>
         <p className="mt-1 text-xs font-semibold text-slate-600">From {formatLeaveDuration(r.oldStart, r.oldEnd)}</p>
         <p className="text-xs font-bold text-orange-600">To {formatLeaveDuration(r.newStart, r.newEnd)}</p>
         {r.reason && <p className="mt-1.5 text-xs text-slate-500">{r.reason}</p>}
@@ -58,7 +61,7 @@ export function LeaveDateChangeRequests({ onAnswered }: { onAnswered?: () => voi
           <>
             {/* A phone gets a stack to swipe through; a bigger screen gets the plain list. */}
             <div className="md:hidden">
-              <CardStack items={requests} keyOf={r => r.id} label="Date change requests" render={card} peek={r => <PersonPeek name={r.employeeName} picture={pictureFor(r.employeeName)}>{r.employeeName} · {r.leaveType} leave · to {formatLeaveDuration(r.newStart, r.newEnd)}</PersonPeek>} />
+              <CardStack items={requests} keyOf={r => r.id} label="Date change requests" render={card} peek={r => `${r.employeeName} · ${r.leaveType} leave · to ${formatLeaveDuration(r.newStart, r.newEnd)}`} />
             </div>
             <ul className="hidden space-y-3 md:block">{requests.map(r => <li key={r.id}>{card(r)}</li>)}</ul>
           </>
