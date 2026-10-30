@@ -60,6 +60,7 @@ export async function GET(request: Request) {
             baseSalary: record.baseSalary,
             incrementAmount: record.incrementAmount,
             earlierPay: record.earlierPay || 0,
+            earlierPayLabel: record.earlierPayLabel,
             bonus: record.bonus,
             deductions: record.deductions,
             processed: record.processed,

@@ -8,12 +8,9 @@ import { SectionCard } from '@/components/ui/SectionCard';
 import { StatCard } from '@/components/ui/StatCard';
 import { Tabs } from '@/components/ui/Tabs';
 import { deductionLines, deductionMonths } from '@/lib/core/absences';
-import { monthLabel } from '@/lib/core/payrollView';
+import { dayLabel, monthLabel } from '@/lib/core/payrollView';
 import { getApprovedLeaveOnDate, formatMoney, type LeaveApplication, type MyAbsenceRecord, type Profile } from '@/lib/hrData';
 import { getNYDateString } from '@/lib/timezone';
-
-// "Tue, Oct 14" from a plain calendar date.
-const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
 // Pay taken off for missed days, day by day: a switch between the months that have any (this month first), the month's
 // total and number of days, and one line per day with what happened and what was charged. A day an approved leave now

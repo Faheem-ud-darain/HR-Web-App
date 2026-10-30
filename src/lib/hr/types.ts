@@ -184,7 +184,7 @@ export interface PayrollRecord {
   // (HR/Admin) and the Employee dashboard. Sums to (at least) `deductions`
   // — see its own comment in computePayrollView for why it can sum to
   // MORE when the safety-net cap has kicked in.
-  deductionBreakdown: { label: string; amount: number }[];
+  deductionBreakdown: DeductionItem[];
   // NOT a persisted column (same reasoning as reservedThisMonth) — the sum
   // of this employee's OTHER hr_payroll rows that are still `!processed`
   // (any month other than this record's own `month`). Purely informational:
@@ -211,6 +211,9 @@ export interface PayrollRecord {
   // True once this month's numbers are written down and no longer follow live changes (monthly freeze, or paid).
   frozen?: boolean;
 }
+
+/** One reason pay was taken off. `date` ('YYYY-MM-DD') is set when it belongs to a single day (an absence, a short shift). */
+export interface DeductionItem { label: string; amount: number; date?: string }
 
 export interface AbsenceRecord {
   id: string; // opaque PocketBase record id
@@ -459,6 +462,7 @@ export interface PayrollSelf {
     baseSalary: number;
     incrementAmount: number;
     earlierPay: number;
+    earlierPayLabel?: string;
     bonus: number;
     deductions: number;
     processed: boolean;
@@ -468,7 +472,7 @@ export interface PayrollSelf {
     // "why was I deducted" — same itemized list HR/Admin see on the Net
     // Payable modal (PayrollRecord.deductionBreakdown), plus this month's
     // reserved-salary amount if this was the employee's first month.
-    deductionBreakdown?: { label: string; amount: number }[];
+    deductionBreakdown?: DeductionItem[];
     reservedThisMonth?: number;
   } | null;
 }

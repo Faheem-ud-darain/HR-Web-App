@@ -2,6 +2,7 @@
 // the HR and Admin views cannot drift apart. Nothing here changes how pay is calculated — that stays
 // in ./payroll.ts. These helpers only decide what the screen SHOWS: one net figure everywhere, the
 // deduction reasons in plain groups, and which people need a look before anyone pays them.
+import type { DeductionItem } from '../hr/types';
 import type { PayrollRecord, Profile } from '../hr/types';
 
 /** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions, never below zero (deductions can take pay down to nothing, not past it). The ONE definition used by rows, cards, exports and the pay slip. */
@@ -17,7 +18,7 @@ export interface DeductionGroup {
   label: string;
   total: number;
   /** The individual reasons exactly as the calculation produced them. */
-  items: { label: string; amount: number }[];
+  items: DeductionItem[];
 }
 
 const GROUP_LABELS: Record<PayrollGroupKey, string> = {
@@ -50,7 +51,7 @@ export function deductionLimitedBy(breakdown: { amount: number }[] | undefined, 
   return Math.max(0, Math.round((owed - (Number(deducted) || 0)) * 100) / 100);
 }
 
-export function groupDeductions(breakdown: { label: string; amount: number }[]): DeductionGroup[] {
+export function groupDeductions(breakdown: DeductionItem[]): DeductionGroup[] {
   const byKey = new Map<PayrollGroupKey, DeductionGroup>();
   for (const item of breakdown || []) {
     const key = groupOf(item.label);
@@ -138,3 +139,6 @@ export type PayrollGroup = 'pakistan' | 'usa';
 export function groupOfRegion(region: string | undefined): PayrollGroup {
   return region === 'USA' ? 'usa' : 'pakistan';
 }
+
+/** "Tue, Oct 14" from a plain calendar date ("YYYY-MM-DD"). */
+export const dayLabel = (date: string): string => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
