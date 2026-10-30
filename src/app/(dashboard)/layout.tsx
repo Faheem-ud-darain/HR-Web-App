@@ -1,5 +1,6 @@
 'use client';
 
+import { isChatScreen } from '@/lib/core/nav';
 import React, { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -79,14 +80,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  // Fixed 2026-08-18 — this used to only match '/chat' and '/team-chats',
-  // so the Direct/HR Messages screens (which also render TeamChatView, just
-  // with a single virtual DM channel) fell through to the default scrolling
-  // page shell below instead of the full-height, non-scrolling one. Visual
-  // symptom: the chat panel looked squeezed/pushed upward instead of filling
-  // the screen the way Team Chat does, because its wrapper got `max-w-6xl`
-  // + `overflow-y-auto` instead of `flex-1 h-full max-w-none` + `overflow-hidden`.
-  const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats') || pathname?.endsWith('/direct-messages');
+  // The chat screens fill the screen without scrolling (see isChatScreen in core/nav).
+  const chatScreen = isChatScreen(pathname);
   // Support Tickets has its own bottom-anchored reply composer, same as Team
   // Chat — the floating pill nav (Sidebar.tsx) now hides on both for the
   // same reason. Since neither screen needs to reserve space for that pill
@@ -277,7 +272,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex flex-col flex-1 w-full min-w-0 overflow-hidden overflow-x-hidden">
         <TopNav />
         <main className={`flex-1 w-full min-w-0 overflow-x-hidden bg-app rounded-t-2xl ${
-          isChatScreen
+          chatScreen
             ? 'overflow-hidden flex flex-col p-1.5 pb-2.5 md:px-6 lg:px-8 2xl:px-12 md:py-8'
             : isTicketPanelOpen
               // Ticket conversation panel is open — lock the scroll container
@@ -292,7 +287,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               nav-tab switch so its animating state (and page-enter) resets
               and re-triggers each time, not just on first load — previously
               content swapped instantly with zero motion. */}
-          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${isChatScreen ? 'flex-1 h-full max-w-none' : 'max-w-[1800px]'}`}>
+          <PageTransition key={pathname} className={`mx-auto w-full min-w-0 flex flex-col overflow-x-hidden ${chatScreen ? 'flex-1 h-full max-w-none' : 'max-w-[1800px]'}`}>
             {children}
           </PageTransition>
         </main>

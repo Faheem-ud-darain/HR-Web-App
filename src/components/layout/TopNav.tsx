@@ -1,5 +1,6 @@
 'use client';
 
+import { isChatScreen } from '@/lib/core/nav';
 import React, { useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { CaretLeftIcon as ChevronLeft, ListIcon as Menu } from '@/components/ui/icons';
@@ -24,7 +25,7 @@ export function TopNav() {
   const email = useSessionEmail();
   const title = pageTitle(pathname);
   const menuDot = useMobileNavDot();
-  const isChatScreen = pathname?.endsWith('/chat') || pathname?.endsWith('/team-chats');
+  const chatScreen = isChatScreen(pathname);
   // Only one of the bell and the account menu is open at a time.
   const [menu, setMenu] = useState<'bell' | 'profile' | null>(null);
 
@@ -59,7 +60,7 @@ export function TopNav() {
           <div className="hidden md:block"><SearchField s={search} /></div>
 
           <div className="flex items-center justify-end gap-1 md:gap-2 shrink-0">
-            {!isChatScreen && <SearchIconButton s={search} />}
+            {!chatScreen && <SearchIconButton s={search} />}
             <ThemeIconButton className="max-md:hidden" />
             <NotificationBell role={role} email={email} open={menu === 'bell'} onOpenChange={setBell} />
             <span aria-hidden="true" className="hidden md:block h-6 w-px bg-slate-200 mx-1" />
