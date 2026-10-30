@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React from 'react';
 import { BuildingsIcon as Building2, StarIcon as Star, UsersIcon as Users } from '@/components/ui/icons';
 import { displayName, type Profile, type Team } from '@/lib/hrData';
@@ -37,19 +38,17 @@ function EmployeeCard({ emp, teams, onOpenProfile, onStartDrag, onToggleLead, on
             </div>
             <div className="text-caption text-slate-600 mt-0.5 uppercase tracking-wide font-medium">{emp.jobTitle || emp.role}</div>
           </div>
-          <button
+          <Button
+            variant={lead ? 'softAmber' : 'secondary'}
+            size="xs"
+            className="shrink-0 hover:bg-amber-100!"
             onMouseDown={e => e.stopPropagation()}
             onClick={e => { e.stopPropagation(); onToggleLead(emp); }}
             title={lead ? 'Remove team lead' : 'Make team lead'}
-            className={`flex-shrink-0 flex min-h-9 items-center gap-1 text-caption font-bold px-2 py-1 rounded-lg border transition-colors transition-transform active:scale-95 lg:min-h-0 ${
-              lead
-                ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700'
-                : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700'
-            }`}
           >
             <Star className="h-3.5 w-3.5" />
             {lead ? 'Lead' : 'Set Lead'}
-          </button>
+          </Button>
         </div>
         <div className="flex flex-wrap gap-1 mt-2">
           {emp.teams.length === 0

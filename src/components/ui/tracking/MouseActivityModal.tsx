@@ -1,5 +1,6 @@
 'use client';
 
+import { Tabs } from '@/components/ui/Tabs';
 import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
@@ -35,26 +36,7 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                <button
-                  onClick={() => handleMouseRangeChange('day')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${mouseRange === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  Daily
-                </button>
-                <button
-                  onClick={() => handleMouseRangeChange('week')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${mouseRange === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  Weekly
-                </button>
-                <button
-                  onClick={() => handleMouseRangeChange('month')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${mouseRange === 'month' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  Monthly
-                </button>
-              </div>
+              <Tabs variant="segmented" compact aria-label="Time range" value={mouseRange} onChange={handleMouseRangeChange} items={[{ value: 'day', label: 'Daily' }, { value: 'week', label: 'Weekly' }, { value: 'month', label: 'Monthly' }]} />
               {mouseRange === 'day' && (
                 <Input
                   type="date"

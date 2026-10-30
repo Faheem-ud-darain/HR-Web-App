@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React, { useState } from 'react';
 import { applyIncrementServer, formatMoney, getMissedIncrementEvents, getPendingIncrement, type Profile } from '@/lib/hrData';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -28,14 +29,7 @@ export function PendingIncrement({ profile, onChanged }: { profile: Profile; onC
   return (
     <div className="mt-1.5">
       <p className="text-caption text-amber-600 font-bold">+{formatMoney(pending, profile.region)} pending ({years} yr{years > 1 ? 's' : ''})</p>
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        disabled={applying}
-        className="mt-1 text-caption font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 disabled:opacity-50 px-2 py-1 rounded-md active:scale-97 transition-colors transition-transform"
-      >
-        {applying ? 'Applying…' : 'Apply Increment Now'}
-      </button>
+      <Button type="button" variant="softEmerald" size="xs" className="mt-1" onClick={() => setConfirming(true)} loading={applying}>{applying ? 'Applying…' : 'Apply Increment Now'}</Button>
       <ConfirmDialog
         isOpen={confirming}
         onClose={() => setConfirming(false)}

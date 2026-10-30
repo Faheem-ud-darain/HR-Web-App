@@ -23,6 +23,7 @@
 // non-visual fallback, and a legend + per-bar hover tooltip are always
 // present since this chart has two series.
 
+import { Button } from '@/components/ui/Button';
 import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -192,12 +193,9 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
               <span className="flex items-center gap-1.5"><StatusDot tone="emerald" size="sm" /> Active</span>
               <span className="flex items-center gap-1.5"><StatusDot tone="amber" size="sm" /> Inactivity</span>
             </div>
-            <button
-              onClick={() => setShowTable(v => !v)}
-              className="flex items-center gap-1.5 text-caption font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
-            >
+            <Button variant="secondary" size="xs" onClick={() => setShowTable(v => !v)}>
               <Table2 className="h-3.5 w-3.5" /> {showTable ? 'Chart View' : 'Table View'}
-            </button>
+            </Button>
           </div>
         </div>
 

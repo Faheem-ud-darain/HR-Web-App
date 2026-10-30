@@ -1,5 +1,6 @@
 'use client';
 
+import { Tabs } from '@/components/ui/Tabs';
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, Screenshot, InactivityLog } from '@/lib/hrData';
@@ -40,32 +41,7 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                <button
-                  onClick={() => handleRangeChange('2days')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === '2days' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  Last 2 Days
-                </button>
-                <button
-                  onClick={() => handleRangeChange('day')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  Daily
-                </button>
-                <button
-                  onClick={() => handleRangeChange('week')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  7 Days
-                </button>
-                <button
-                  onClick={() => handleRangeChange('month')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${viewerRange === 'month' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  30 Days
-                </button>
-              </div>
+              <Tabs variant="segmented" compact aria-label="Time range" value={viewerRange} onChange={handleRangeChange} items={[{ value: '2days', label: 'Last 2 Days' }, { value: 'day', label: 'Daily' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]} />
               {viewerRange === 'day' && (
                 <Input
                   type="date"

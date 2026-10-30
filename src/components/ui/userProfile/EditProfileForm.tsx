@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import React, { useState } from 'react';
 import { updateProfileAdmin, type Profile, type Warehouse } from '@/lib/hrData';
@@ -100,15 +101,7 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
         <FieldLabel size="plain">Assigned Warehouses</FieldLabel>
         <div className="space-y-1.5 max-h-36 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50/50">
           {warehouses.map(wh => (
-            <label key={wh.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.assignedWarehouses.includes(wh.id)}
-                onChange={e => setForm(f => ({ ...f, assignedWarehouses: e.target.checked ? [...f.assignedWarehouses, wh.id] : f.assignedWarehouses.filter(id => id !== wh.id) }))}
-                className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-              />
-              {wh.name}
-            </label>
+            <Checkbox key={wh.id} className="min-h-0!" checked={form.assignedWarehouses.includes(wh.id)} onChange={checked => setForm(f => ({ ...f, assignedWarehouses: checked ? [...f.assignedWarehouses, wh.id] : f.assignedWarehouses.filter(id => id !== wh.id) }))}>{wh.name}</Checkbox>
           ))}
         </div>
       </div>

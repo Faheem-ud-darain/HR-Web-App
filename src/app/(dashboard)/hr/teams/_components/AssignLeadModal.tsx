@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
 import React, { useState } from 'react';
 import { displayName, type Profile } from '@/lib/hrData';
 import { toggleInList } from '@/lib/core/teams';
@@ -48,7 +49,6 @@ export function AssignLeadModal(p: AssignLeadModalProps) {
   }
 
   const emp = p.candidates.find(c => c.id === employeeId);
-  const checkbox = p.tone === 'purple' ? 'text-purple-600 focus:ring-purple-500' : 'text-orange-600 focus:ring-orange-500';
 
   const save = async () => {
     if (!emp || saving) return;
@@ -81,10 +81,7 @@ export function AssignLeadModal(p: AssignLeadModalProps) {
           <FormField label={p.selectionLabel} size="md">
             <div className="space-y-2 mt-1">
               {p.options.map(o => (
-                <label key={o.id} className="flex items-center gap-2.5 cursor-pointer group">
-                  <input type="checkbox" checked={selection.includes(o.id)} onChange={() => setSelection(s => toggleInList(s, o.id))} className={`h-4 w-4 rounded border-slate-300 ${checkbox}`} />
-                  <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{o.label}</span>
-                </label>
+                <Checkbox key={o.id} className="min-h-0!" checked={selection.includes(o.id)} onChange={() => setSelection(s => toggleInList(s, o.id))}>{o.label}</Checkbox>
               ))}
             </div>
             <p className="text-caption text-slate-400 mt-2">{p.hint}</p>

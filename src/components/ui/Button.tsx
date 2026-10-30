@@ -11,7 +11,7 @@ import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 // same radius as Card/Modal (rounded-xl, 12px — DESIGN.md's stated cap),
 // same 150ms snappy transition + scale(0.97) press feedback defined
 // globally in globals.css, same weight/size scale everywhere.
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink' | 'softOrange' | 'softAmber' | 'softRose' | 'softEmerald' | 'softIndigo';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink' | 'softOrange' | 'softAmber' | 'softRose' | 'softEmerald' | 'softIndigo' | 'brand';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -24,6 +24,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
   primary: 'bg-orange-600 hover:bg-orange-700 text-white disabled:bg-orange-300',
   // Black with white text, for a button that sits on the brand orange (the landing page).
+  // The brand orange with black text, for the public pages (the landing page's own colour set).
+  brand: 'bg-brand hover:opacity-90 text-black disabled:opacity-50',
   ink: 'bg-black hover:bg-black/80 text-white disabled:opacity-50',
   secondary: 'bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-50',
   danger: 'bg-rose-600 hover:bg-rose-700 text-white disabled:bg-rose-300',

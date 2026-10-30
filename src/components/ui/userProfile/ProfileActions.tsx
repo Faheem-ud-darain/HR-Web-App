@@ -78,19 +78,14 @@ export function ProfileActions({ profile, onEdit, onOffboard, onChanged, onDelet
               </div>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-caption font-medium text-slate-400">Large accounts with many screenshots can take a few minutes. Keep this window open.</p>
-                <button type="button" onClick={archive.cancel} className="shrink-0 text-caption font-bold text-rose-600 hover:underline">Cancel</button>
+                <Button type="button" variant="ghost" size="xs" onClick={archive.cancel} className="shrink-0 text-rose-600!">Cancel</Button>
               </div>
             </div>
           )}
           {!archive.exporting && archive.note && <p className="text-caption font-semibold text-slate-500 text-center" role="status">{archive.note}</p>}
-          <button
-            onClick={() => setConfirmingDelete(true)}
-            disabled={!archive.downloaded}
-            title={!archive.downloaded ? "Download this employee's data first — deletion is permanent and cannot be undone." : undefined}
-            className="w-full flex items-center justify-center gap-1.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 font-bold py-2.5 rounded-xl text-xs transition-colors transition-transform active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
-          >
+          <Button variant="softRose" fullWidth disabled={!archive.downloaded} onClick={() => setConfirmingDelete(true)} title={!archive.downloaded ? "Download this employee's data first — deletion is permanent and cannot be undone." : undefined}>
             <Trash2 className="h-3.5 w-3.5" /> Delete Account Permanently
-          </button>
+          </Button>
           {!archive.downloaded && (
             <p className="text-caption text-slate-400 font-medium text-center">Download their data first — includes documents, payroll, leave/task/ticket history, and screenshots. Deletion cannot be undone.</p>
           )}

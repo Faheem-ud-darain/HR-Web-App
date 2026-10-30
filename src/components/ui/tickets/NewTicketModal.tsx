@@ -1,7 +1,8 @@
 'use client';
 
+import { PendingFileChip } from '@/components/ui/ComposerParts';
 import React, { useRef, useState } from 'react';
-import { WarningCircleIcon as AlertCircle, FileTextIcon as FileText, PaperclipIcon as Paperclip, XIcon as X } from '@/components/ui/icons';
+import { WarningCircleIcon as AlertCircle, PaperclipIcon as Paperclip } from '@/components/ui/icons';
 import { hrActions, type Profile } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
@@ -125,20 +126,11 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
             </div>
           )}
           {file ? (
-            <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600">
-              <span className="flex items-center gap-1.5 truncate"><FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" /> {file.name}</span>
-              <button type="button" onClick={() => setFile(null)} aria-label="Remove attachment" className="text-slate-500 hover:text-rose-600 shrink-0">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <PendingFileChip name={file.name} onRemove={() => setFile(null)} />
           ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-600 px-3 py-2.5 rounded-lg transition-colors transition-transform border border-dashed border-slate-300 active:scale-97"
-            >
+            <Button type="button" variant="outline" fullWidth className="border-dashed" onClick={() => fileInputRef.current?.click()}>
               <Paperclip className="h-3.5 w-3.5" /> Attach a screenshot or document
-            </button>
+            </Button>
           )}
           <input ref={fileInputRef} type="file" accept="image/*,application/pdf" onChange={onFileChange} className="hidden" />
         </FormField>

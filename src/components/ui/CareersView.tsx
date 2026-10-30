@@ -1,5 +1,6 @@
 'use client';
 
+import { Tabs } from '@/components/ui/Tabs';
 import { IconButton } from '@/components/ui/IconButton';
 import React, { useState } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
@@ -121,24 +122,7 @@ export function CareersView({ role, hero = true }: CareersViewProps) {
       )}
 
       {/* Categories Filter tab */}
-      <div className="border-b border-slate-200 flex overflow-x-auto gap-2.5 sm:gap-6 justify-start sm:justify-center text-xs uppercase tracking-wider font-bold text-slate-400 no-scrollbar pb-1.5 px-1 max-w-full">
-        {categories.map(cat => {
-          const active = selectedCategory === cat;
-          return (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`pb-2.5 px-2 whitespace-nowrap transition-colors shrink-0 text-xs ${
-                active 
-                  ? 'border-b-2 border-orange-600 text-slate-900 font-extrabold' 
-                  : 'hover:text-slate-700 font-semibold'
-              }`}
-            >
-              {cat}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs variant="underline" aria-label="Job category" className="justify-start sm:justify-center" value={selectedCategory} onChange={setSelectedCategory} items={categories.map(cat => ({ value: cat, label: cat }))} />
 
       {/* Grid listing */}
       <div className="space-y-6 min-w-0">
@@ -208,12 +192,9 @@ export function CareersView({ role, hero = true }: CareersViewProps) {
 
               <div className="pt-4 border-t border-slate-100 mt-5 flex items-center justify-between">
                 {canApply ? (
-                  <button
-                    onClick={() => openApply(job)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs font-bold bg-orange-50 sm:bg-transparent text-orange-600 hover:text-orange-700 py-2.5 sm:py-0 px-4 sm:px-0 rounded-lg sm:rounded-none tracking-wider uppercase transition-colors"
-                  >
+                  <Button variant="softOrange" size="sm" className="w-full sm:w-auto" onClick={() => openApply(job)}>
                     Apply now <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 ) : (
                   <span className="text-caption font-semibold text-slate-400 italic">
                     External applicants only — see HR for internal transfers

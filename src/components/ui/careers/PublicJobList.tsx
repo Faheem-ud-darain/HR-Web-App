@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
+import { Tabs } from '@/components/ui/Tabs';
 import React, { useState } from 'react';
 import { MapPinIcon as MapPin, ArrowRightIcon as ArrowRight, PlusIcon as Plus } from '@/components/ui/icons';
 import type { CareerPosition } from '@/lib/hrData';
@@ -22,21 +24,7 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
     <section id="open-positions" className="scroll-mt-24 space-y-8">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <h2 className="font-display text-4xl sm:text-6xl font-black uppercase tracking-tight text-ink leading-[0.95]">Open Positions ({shown.length})</h2>
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-          {['All', ...DEPARTMENTS].map(cat => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setCategory(cat)}
-              aria-pressed={category === cat}
-              className={`shrink-0 rounded-full px-4 min-h-9 text-xs font-bold uppercase tracking-wider border transition-colors ${
-                category === cat ? 'bg-brand border-transparent text-black' : 'border-ink/15 text-ink/70 hover:text-ink hover:border-ink/40'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        <Tabs variant="pills" aria-label="Department" className="-mx-4 px-4 sm:mx-0 sm:px-0" value={category} onChange={setCategory} items={['All', ...DEPARTMENTS].map(cat => ({ value: cat, label: cat }))} />
       </div>
 
       {groups.map(dept => (
@@ -70,13 +58,9 @@ export function PublicJobList({ positions, onApply }: PublicJobListProps) {
                         </ul>
                       </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => onApply(job)}
-                      className="inline-flex items-center gap-2 rounded-full bg-brand px-5 min-h-11 text-xs font-bold uppercase tracking-wider text-black hover:opacity-90 transition-opacity"
-                    >
+                    <Button type="button" variant="brand" size="lg" className="rounded-full uppercase tracking-wider" onClick={() => onApply(job)}>
                       Apply now <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
