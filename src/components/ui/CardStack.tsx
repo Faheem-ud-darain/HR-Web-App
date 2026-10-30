@@ -96,8 +96,8 @@ export function CardStack<T>({ items, keyOf, render, peek, label }: CardStackPro
       >
         <div className="flex items-center justify-between rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 px-3 py-1.5">
           <div className="flex flex-1 cursor-grab items-center gap-3 py-1">
-            <span className="h-1 w-9 rounded-full bg-slate-300" aria-hidden="true" />
-            <span className="text-caption font-bold text-slate-600">{current + 1} of {count} · swipe down on the card for the next</span>
+            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-orange-500 px-1.5 text-caption font-bold text-white" aria-label={`${current + 1} of ${count}`}>{current + 1}</span>
+            <span className="text-caption font-bold text-slate-500" aria-hidden="true">of {count}</span>
           </div>
           <div className="flex items-center">
             <IconButton label="Previous request" size="sm" onClick={() => go(-1)}><CaretUp className="h-4 w-4" aria-hidden="true" /></IconButton>
