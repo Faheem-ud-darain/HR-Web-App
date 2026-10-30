@@ -66,6 +66,29 @@ export const CHANGELOG_UPDATES: ChangelogUpdate[] = [
         ],
       },
       {
+        id: 'dark-mode',
+        title: 'Dark mode',
+        summary: 'Switch to a true-black dark theme that is easy on the eyes at night, or let it follow your phone.',
+        preview: 'theme',
+        details: [
+          'Choose Automatic, Light or Dark in Profile, under Appearance.',
+          'Automatic follows your phone or computer setting.',
+          'Switching themes fades smoothly instead of flashing.',
+        ],
+      },
+      {
+        id: 'better-animations',
+        title: 'Smoother animations',
+        summary: 'Popups, page changes and menus now move more smoothly, and they stay still if you prefer reduced motion.',
+        preview: 'motion',
+        details: [
+          'Popups open and close with a short, smooth motion.',
+          'Pages ease in when you move between them.',
+          'New items appear with a small pop so you notice them.',
+          'If your device is set to reduce motion, the animations are turned off.',
+        ],
+      },
+      {
         id: 'new-dashboard',
         title: 'A dashboard made for your day',
         summary: 'Announcements, your team, tasks and leaves are now clear cards, and they fit your phone, tablet and desktop.',

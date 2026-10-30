@@ -1336,6 +1336,16 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
+@keyframes cl-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-26px); }
+  60% { transform: translateY(-26px); }
+}
+@keyframes cl-wipe {
+  0%, 15% { clip-path: inset(0 100% 0 0); }
+  50%, 65% { clip-path: inset(0 0 0 0); }
+  100% { clip-path: inset(0 100% 0 0); }
+}
 @media (prefers-reduced-motion: reduce) {
   [class*="animate-[cl-"] { animation: none !important; }
 }

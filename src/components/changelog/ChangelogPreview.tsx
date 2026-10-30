@@ -85,13 +85,34 @@ function Landing() {
   );
 }
 
-const PREVIEWS: Record<ChangelogPreviewKind, () => React.JSX.Element> = { stack: Stack, dates: Dates, readmore: ReadMore, layout: Layout, dashboard: Dashboard, profile: Profile, landing: Landing };
+// A light card that a dark one wipes across, as when the theme switches.
+function Theme() {
+  const lines = <><div className="h-2 w-20 rounded bg-current opacity-30" /><div className="mt-2 h-2 w-32 rounded bg-current opacity-20" /><div className="mt-2 h-5 w-12 rounded-md bg-orange-500" /></>;
+  return (
+    <div className="relative h-24 w-full max-w-56 overflow-hidden rounded-xl border border-slate-300">
+      <div className="absolute inset-0 bg-white p-3 text-black">{lines}</div>
+      <div className="absolute inset-0 bg-black p-3 text-white" style={{ animation: `cl-wipe ${LOOP}` }}>{lines}</div>
+    </div>
+  );
+}
 
-export function ChangelogPreview({ kind }: { kind: ChangelogPreviewKind }) {
+// A ball that rises and settles with an eased curve, with its shadow.
+function Motion() {
+  return (
+    <div className="flex h-24 w-full max-w-56 flex-col items-center justify-end gap-1 pb-2">
+      <div className="h-8 w-8 rounded-full bg-orange-500" style={{ animation: `cl-bounce 1.6s cubic-bezier(0.34, 1.56, 0.64, 1) infinite` }} />
+      <div className="h-1.5 w-10 rounded-full bg-slate-300" />
+    </div>
+  );
+}
+
+const PREVIEWS: Record<ChangelogPreviewKind, () => React.JSX.Element> = { stack: Stack, dates: Dates, readmore: ReadMore, layout: Layout, dashboard: Dashboard, profile: Profile, landing: Landing, theme: Theme, motion: Motion };
+
+export function ChangelogPreview({ kind, badge = true }: { kind: ChangelogPreviewKind; badge?: boolean }) {
   const Preview = PREVIEWS[kind];
   return (
     <div className="relative flex h-40 items-center justify-center overflow-hidden bg-slate-100 px-4">
-      <span className="whats-new-badge absolute left-3 top-3 rounded-lg px-2.5 py-1 text-caption font-bold uppercase tracking-wide">What&apos;s new !</span>
+      {badge && <span className="whats-new-badge absolute left-3 top-3 rounded-lg px-2.5 py-1 text-caption font-bold uppercase tracking-wide">What&apos;s new !</span>}
       <div aria-hidden="true" className="flex w-full justify-center"><Preview /></div>
     </div>
   );

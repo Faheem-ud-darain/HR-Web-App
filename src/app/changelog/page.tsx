@@ -8,11 +8,11 @@ import { ChangelogCard } from '@/components/changelog/ChangelogCard';
 import { CHANGELOG_UPDATES } from '@/lib/changelogEntries';
 import type { ChangelogEntry } from '@/lib/core/changelog';
 
-// One entry; Read More opens its full details under the summary.
+// One entry; Read More opens its full details under the summary, and the "What's new" badge goes once it has been opened.
 function PageEntry({ entry }: { entry: ChangelogEntry }) {
   const [open, setOpen] = useState(false);
   return (
-    <ChangelogCard entry={entry} label="Changelog" action={<Button size="sm" aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : <>Read More <ArrowRight className="ml-1 h-4 w-4" /></>}</Button>}>
+    <ChangelogCard entry={entry} label="Changelog" badge={!open} action={<Button size="sm" aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : <>Read More <ArrowRight className="ml-1 h-4 w-4" /></>}</Button>}>
       {open && <ul className="list-disc space-y-1 pl-5 pt-1 text-sm text-slate-600">{entry.details.map(d => <li key={d}>{d}</li>)}</ul>}
     </ChangelogCard>
   );
