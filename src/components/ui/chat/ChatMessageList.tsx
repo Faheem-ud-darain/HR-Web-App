@@ -32,11 +32,10 @@ interface ChatMessageListProps {
   viewersForMessage: (msgId: string) => Profile[];
   openMessageViewers: (msgId: string) => void;
   currentUserRole: "admin" | "hr" | "employee" | "team_lead";
-  isHrAdminLine: boolean;
   typingNames: string[];
 }
 
-export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, onOpenImage, viewersForMessage, openMessageViewers, currentUserRole, isHrAdminLine, typingNames }: ChatMessageListProps) {
+export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageLimit, isLoading, filteredMessages, currentUserEmail, senderLabel, emailToProfile, normEmail, canForward, openForwardModal, mentionLabels, docTagList, onOpenImage, viewersForMessage, openMessageViewers, currentUserRole, typingNames }: ChatMessageListProps) {
   return (
     <div ref={scrollRef} role="log" aria-live="polite" aria-relevant="additions" aria-label="Messages" className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
       {messages.length >= messageLimit && (
@@ -79,24 +78,23 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
           );
         }
 
-        // Forwarded into the HR & Admin line: a card (not a filled bubble) outlined in the sender's role colour, so who
-        // forwarded it reads at a glance, with a link back to the original.
+        // Forwarded into the HR & Admin line: the same bubble as any message, headed by what it is, with a link back to the original.
         if (m.isForward) {
           const originalHref = m.forwardKind && m.forwardLink ? buildNotificationLink(currentUserRole === 'admin' ? 'admin' : 'hr', m.forwardKind, m.forwardLink) : undefined;
-          const text = isAdminSender ? 'text-purple-700' : 'text-sky-700';
-          const linkText = isAdminSender ? 'text-purple-700!' : 'text-sky-700!';
+          const tone: BubbleTone = isAdminSender ? 'admin' : isSelf ? 'own' : 'other';
+          const onFill = tone !== 'other';
           return (
             <MessageRow key={m.id} own={isSelf} name={label} picture={sender?.profilePicture}>
-              <MessageBubble own={isSelf} tone={isAdminSender ? 'admin-card' : 'hr-card'}>
-                <div className={`mb-1 flex flex-wrap items-center gap-1.5 text-caption font-black uppercase tracking-wider ${text}`}>
+              <MessageBubble own={isSelf} tone={tone}>
+                <div className={`mb-1 flex flex-wrap items-center gap-1.5 text-caption font-black uppercase tracking-wider ${onFill ? 'text-white/90' : 'text-slate-600'}`}>
                   <Forward className="h-3.5 w-3.5" /> {m.forwardKind ? FORWARD_KIND_LABEL[m.forwardKind] : 'Forwarded'} · {label} {roleBadge}
-                  <span className="ml-auto font-semibold normal-case text-slate-500">{formatTimestamp(m.timestamp)}</span>
+                  <span className={`ml-auto font-semibold normal-case ${onFill ? 'text-white/80' : 'text-slate-500'}`}>{formatTimestamp(m.timestamp)}</span>
                 </div>
-                {m.forwardLabel && <p className="break-words font-bold text-slate-800">{m.forwardLabel}</p>}
-                {m.forwardNote && <p className="mt-1 whitespace-pre-wrap break-words font-medium italic text-slate-600">&ldquo;{m.forwardNote}&rdquo;</p>}
-                {m.attachmentUrl && <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced linkClass={text} onOpenImage={onOpenImage} />}
+                {m.forwardLabel && <p className="break-words font-bold">{m.forwardLabel}</p>}
+                {m.forwardNote && <p className="mt-1 whitespace-pre-wrap break-words font-medium italic opacity-90">&ldquo;{m.forwardNote}&rdquo;</p>}
+                {m.attachmentUrl && <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced linkClass={onFill ? 'text-white' : 'text-orange-700'} onOpenImage={onOpenImage} />}
                 {originalHref && (
-                  <ButtonLink href={originalHref} variant="outline" size="xs" className={`mt-2 rounded-full ${linkText}`}>View original <ExternalLink className="h-3.5 w-3.5 shrink-0" /></ButtonLink>
+                  <ButtonLink href={originalHref} variant="outline" size="xs" className="mt-2 rounded-full">View original <ExternalLink className="h-3.5 w-3.5 shrink-0" /></ButtonLink>
                 )}
               </MessageBubble>
               {receipt}
@@ -104,10 +102,8 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
           );
         }
 
-        // On the HR & Admin line the bubble takes the sender's ROLE colour (sky for HR, purple for Admin) instead of mine/theirs,
-        // because both sides must see who sent it, whichever of them is reading.
-        const tone: BubbleTone = isHrAdminLine ? (isAdminSender ? 'admin-card' : 'hr-card') : isAdminSender ? 'admin' : isSelf ? 'own' : 'other';
-        const nameColour = isAdminSender ? 'text-purple-700' : isHrAdminLine ? 'text-sky-700' : 'text-slate-600';
+        const tone: BubbleTone = isAdminSender ? 'admin' : isSelf ? 'own' : 'other';
+        const nameColour = isAdminSender ? 'text-purple-700' : 'text-slate-600';
         const onFill = tone === 'own' || tone === 'admin';
         return (
           <MessageRow key={m.id} own={isSelf} name={label} picture={sender?.profilePicture}>
@@ -120,7 +116,7 @@ export function ChatMessageList({ scrollRef, messages, messageLimit, setMessageL
             <MessageBubble own={isSelf} tone={tone}>
               {m.text && <p className="whitespace-pre-wrap break-words">{renderMessageText(m.text, mentionLabels, docTagList, onFill)}</p>}
               {m.attachmentUrl && (
-                <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced={!!m.text} linkClass={onFill ? 'text-white' : isHrAdminLine ? (isAdminSender ? 'text-purple-700' : 'text-sky-700') : 'text-orange-700'} onOpenImage={onOpenImage} />
+                <MessageAttachment url={m.attachmentUrl} name={m.attachmentName} size={m.attachmentSize} spaced={!!m.text} linkClass={onFill ? 'text-white' : 'text-orange-700'} onOpenImage={onOpenImage} />
               )}
             </MessageBubble>
             {receipt}

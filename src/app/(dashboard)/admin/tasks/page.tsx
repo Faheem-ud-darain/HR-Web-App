@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { ClipboardTextIcon as ClipboardList, StarIcon as Star, CheckCircleIcon as CheckCircle2, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { ClipboardTextIcon as ClipboardList, StarIcon as Star, CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { useTasks, useProfiles, useTeams, displayName, setTeamLeadAdmin } from '@/lib/hrData';
 import { Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
@@ -144,8 +144,7 @@ export default function AdminTasksPage() {
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button variant="outline" onClick={() => setIsLeadOpen(false)} disabled={isSavingLead} className="active:scale-97 transition-transform">Cancel</Button>
-            <Button variant="primary" onClick={handleSaveLead} disabled={!leadEmpId || isSavingLead} className="shadow-sm active:scale-97 transition-transform">
-              {isSavingLead && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Button variant="primary" onClick={handleSaveLead} disabled={!leadEmpId || isSavingLead} className="shadow-sm active:scale-97 transition-transform" loading={isSavingLead}>
               {isSavingLead ? 'Saving…' : 'Save'}
             </Button>
           </div>

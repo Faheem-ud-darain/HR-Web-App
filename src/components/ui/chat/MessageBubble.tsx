@@ -4,16 +4,13 @@ import { Avatar } from '@/components/ui/Avatar';
 // The one look of a message in a conversation, for team chat, direct messages, the HR & Admin line and ticket replies:
 // a row with the sender's photo, and a bubble that sits on the right when it is mine and the left when it is theirs.
 
-/** The bubble's colours: mine, theirs, an Admin's (purple, stands out in every viewer's chat), a role-coloured card (the
- *  HR & Admin line, where the sender's role matters more than who is reading), or HR's reply seen by Admin. */
-export type BubbleTone = 'own' | 'other' | 'admin' | 'hr-card' | 'admin-card' | 'hr-reply';
+/** The bubble's colours: mine, theirs, an Admin's (purple, stands out in every viewer's chat), or HR's reply seen by Admin. */
+export type BubbleTone = 'own' | 'other' | 'admin' | 'hr-reply';
 
 const TONES: Record<BubbleTone, string> = {
   own: 'bg-bubble-own text-white',
   other: 'bg-slate-100 text-slate-800',
   admin: 'bg-purple-600 text-white ring-2 ring-purple-200',
-  'hr-card': 'bg-white border border-sky-300 text-slate-800',
-  'admin-card': 'bg-white border border-purple-300 text-slate-800',
   'hr-reply': 'bg-orange-50/80 border-2 border-orange-300/80 text-slate-800',
 };
 

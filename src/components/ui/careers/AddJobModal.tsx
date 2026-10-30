@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 import { hrActions } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
@@ -79,8 +78,7 @@ export function AddJobModal({ isOpen, onClose, onPosted }: { isOpen: boolean; on
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
           <Button type="button" variant="outline" size="md" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={busy}>
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button type="submit" disabled={busy} loading={busy}>
             {busy ? 'Posting…' : 'Post Opening'}
           </Button>
         </div>

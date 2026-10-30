@@ -12,7 +12,7 @@
 // the result more plainly, keeps one "amount to pay" figure everywhere, and nothing is saved
 // except through an explicit button (Save bonus, Mark as paid).
 import React, { useEffect, useMemo, useState } from 'react';
-import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, CircleNotchIcon as Loader2, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
+import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -325,8 +325,8 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                     <Download className="h-3.5 w-3.5" /> Full report
                   </Button>
                   {isAdmin && (
-                    <Button variant="primary" size="md" onClick={() => setPending({ kind: 'all' })} disabled={readyToPay.length === 0 || bulkBusy}>
-                      {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Mark all ready as paid ({readyToPay.length})
+                    <Button variant="primary" size="md" onClick={() => setPending({ kind: 'all' })} disabled={readyToPay.length === 0 || bulkBusy} loading={bulkBusy}>
+                      {!(bulkBusy) && <CheckCircle2 className="h-3.5 w-3.5" />} Mark all ready as paid ({readyToPay.length})
                     </Button>
                   )}
                 </div>

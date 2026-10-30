@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileTextIcon as FileText, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { FileTextIcon as FileText } from '@/components/ui/icons';
 import { hrActions } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
@@ -70,8 +70,7 @@ export function ForwardToHrAdminModal({ sender, kind, sourceLabel, sourceId, hea
         {error && <p className="text-xs font-semibold text-rose-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" size="md" disabled={busy} onClick={onClose}>Cancel</Button>
-          <Button type="button" variant="primary" size="md" disabled={busy} onClick={submit}>
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button type="button" variant="primary" size="md" disabled={busy} onClick={submit} loading={busy}>
             {busy ? 'Forwarding…' : 'Forward'}
           </Button>
         </div>

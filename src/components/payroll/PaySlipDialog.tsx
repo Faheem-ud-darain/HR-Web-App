@@ -4,7 +4,7 @@
 // out, and (Admin only) a button to mark it paid. Replaces the old "Net Payable" popup and the
 // bonus/deduction boxes that used to sit in every table row and saved on every keystroke.
 import React, { useState } from 'react';
-import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, CircleNotchIcon as Loader2, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@/components/ui/icons';
+import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -165,8 +165,8 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                 size="md"
                 disabled={!bonusChanged || saving}
                 onClick={async () => { setSaving(true); setBonusError(''); try { await onSaveBonus(record, bonusValue); } catch (err) { setBonusError(err instanceof Error ? err.message : 'Could not save the bonus.'); } finally { setSaving(false); } }}
-              >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save bonus
+               loading={saving}>
+                Save bonus
               </Button>
             </div>
             <FormError>{bonusError}</FormError>
@@ -211,8 +211,8 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                       try { await onCorrect(record, Number(corrAmount.replace(/[^0-9.]/g, '')), corrReason); setCorrecting(false); setCorrReason(''); }
                       catch (e) { setCorrError(e instanceof Error ? e.message : 'Could not save the correction.'); }
                       finally { setCorrBusy(false); }
-                    }}>
-                    {corrBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save correction
+                    }} loading={corrBusy}>
+                    Save correction
                   </Button>
                   <Button variant="outline" size="sm" disabled={corrBusy} onClick={() => { setCorrecting(false); setCorrError(''); }}>Cancel</Button>
                 </div>
@@ -226,8 +226,8 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
           {record.processed ? (
             <span className="flex items-center gap-1.5 px-2 py-2 font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Already paid</span>
           ) : isAdmin ? (
-            <Button variant="primary" size="md" disabled={busy} onClick={() => onMarkPaid(record)}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Mark as paid
+            <Button variant="primary" size="md" disabled={busy} onClick={() => onMarkPaid(record)} loading={busy}>
+              {!(busy) && <CheckCircle2 className="h-4 w-4" />} Mark as paid
             </Button>
           ) : (
             <span className="text-slate-500">Admin marks salaries as paid after sending the money.</span>

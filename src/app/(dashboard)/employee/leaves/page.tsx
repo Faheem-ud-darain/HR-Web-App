@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, CircleNotchIcon as Loader2, TrashIcon as Trash2 } from '@/components/ui/icons';
+import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -476,8 +476,7 @@ export default function EmployeeLeavesPage() {
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isSubmittingLeave} onClick={() => setIsLeaveOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={isSubmittingLeave}  size="lg">
-              {isSubmittingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button type="submit" disabled={isSubmittingLeave}  size="lg" loading={isSubmittingLeave}>
               {isSubmittingLeave ? 'Submitting…' : 'Submit Request'}
             </Button>
           </div>
@@ -520,8 +519,7 @@ export default function EmployeeLeavesPage() {
               size="md"
               disabled={isDeletingLeave}
               onClick={() => deletingLeaveId && handleDeleteLeave(deletingLeaveId)}
-            >
-              {isDeletingLeave && <Loader2 className="h-4 w-4 animate-spin" />}
+             loading={isDeletingLeave}>
               {isDeletingLeave ? 'Withdrawing…' : 'Withdraw Request'}
             </Button>
           </div>

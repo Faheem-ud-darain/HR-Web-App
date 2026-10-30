@@ -303,8 +303,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isPostingAnnouncement} onClick={() => onCreateClose()}>Cancel</Button>
-            <Button type="submit" disabled={isPostingAnnouncement} >
-              {isPostingAnnouncement && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Button type="submit" disabled={isPostingAnnouncement}  loading={isPostingAnnouncement}>
               {isPostingAnnouncement ? 'Posting…' : 'Post Announcement'}
             </Button>
           </div>

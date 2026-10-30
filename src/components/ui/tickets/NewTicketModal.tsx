@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { WarningCircleIcon as AlertCircle, FileTextIcon as FileText, CircleNotchIcon as Loader2, PaperclipIcon as Paperclip, XIcon as X } from '@/components/ui/icons';
+import { WarningCircleIcon as AlertCircle, FileTextIcon as FileText, PaperclipIcon as Paperclip, XIcon as X } from '@/components/ui/icons';
 import { hrActions, type Profile } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
@@ -145,8 +145,7 @@ export function NewTicketModal({ isOpen, onClose, userProfile, role, currentEmai
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
           <Button type="button" variant="outline" size="md" disabled={busy} onClick={close}>Cancel</Button>
-          <Button type="submit" disabled={busy} size="lg">
-            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button type="submit" disabled={busy} size="lg" loading={busy}>
             {busy ? 'Filing…' : 'File Ticket'}
           </Button>
         </div>

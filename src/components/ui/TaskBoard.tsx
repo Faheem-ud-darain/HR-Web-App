@@ -136,8 +136,8 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
               onClick={cycleStatus}
               disabled={isWorking}
               className="!py-3 md:!py-2 shadow-sm active:scale-97 transition-transform min-h-[44px] md:min-h-0 w-full md:w-auto"
-            >
-              {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+             loading={isWorking}>
+              {!(isWorking) && <CheckCircle2 className="h-4 w-4" />}
               Mark as {TASK_STATUS_LABELS[STATUS_SEQUENCE[(STATUS_SEQUENCE.indexOf(task.status) + 1) % STATUS_SEQUENCE.length]]}
             </Button>
           )}
@@ -147,8 +147,8 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
               onClick={handleReset}
               disabled={isWorking}
               className="!py-3 md:!py-2 active:scale-97 transition-transform min-h-[44px] md:min-h-0 w-full md:w-auto"
-            >
-              {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset to To Do
+             loading={isWorking}>
+              {!(isWorking) && <RotateCcw className="h-4 w-4" />} Reset to To Do
             </Button>
           )}
           {canDelete && (

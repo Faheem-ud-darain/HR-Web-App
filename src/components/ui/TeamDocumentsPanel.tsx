@@ -188,8 +188,8 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
               size="sm"
               onClick={handleUpload}
               disabled={uploading || !title.trim() || !pendingFile}
-            >
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+             loading={uploading}>
+              {!(uploading) && <Upload className="h-3.5 w-3.5" />}
               Save to team
             </Button>
           </div>
