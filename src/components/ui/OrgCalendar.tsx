@@ -1,5 +1,6 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import React, { useState, useMemo } from 'react';
 import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight, WarningIcon as AlertTriangle, CalendarBlankIcon as Calendar, TreePalmIcon as Palmtree, ClipboardTextIcon as ClipboardList } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
@@ -144,18 +145,9 @@ export function OrgCalendar({ leaves, tasks, employees }: OrgCalendarProps) {
           {monthLabel}
         </h3>
         <div className="flex items-center gap-1">
-          <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setViewDate(new Date(today.getFullYear(), today.getMonth(), 1))}
-            className="text-caption sm:text-xs font-bold px-2 py-1 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
-          >
-            Today
-          </button>
-          <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors">
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <IconButton size="sm" label="Previous month" onClick={prevMonth}><ChevronLeft className="h-4 w-4" /></IconButton>
+          <Button variant="softOrange" size="xs" onClick={() => setViewDate(new Date(today.getFullYear(), today.getMonth(), 1))}>Today</Button>
+          <IconButton size="sm" label="Next month" onClick={nextMonth}><ChevronRight className="h-4 w-4" /></IconButton>
         </div>
       </div>
 

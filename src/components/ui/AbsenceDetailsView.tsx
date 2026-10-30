@@ -902,12 +902,12 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                 </div>
               )}
 
-              <Checkbox checked={records.length > 0 && records.every(r => selectedIds.has(r.id))} onChange={() => handleToggleAllIn(records)} className="min-h-0">Select all</Checkbox>
+              <Checkbox checked={records.length > 0 && records.every(r => selectedIds.has(r.id))} onChange={() => handleToggleAllIn(records)} className="min-h-0!">Select all</Checkbox>
 
               <div className="space-y-2">
                 {records.map(r => (
                   <div key={r.id} className={`border rounded-xl p-3 flex items-center justify-between gap-3 flex-wrap ${selectedIds.has(r.id) ? 'bg-rose-50/50 border-rose-200' : 'border-slate-200'}`}>
-                    <Checkbox checked={selectedIds.has(r.id)} onChange={() => handleToggleOne(r.id)} className="min-h-0">
+                    <Checkbox checked={selectedIds.has(r.id)} onChange={() => handleToggleOne(r.id)} className="min-h-0!">
                       <span className="block text-xs font-mono font-bold text-slate-700">{r.date}</span>
                       <AbsenceReasonLabel r={r} />
                     </Checkbox>

@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
 import { ForwardToHrAdminModal } from '@/components/ui/ForwardToHrAdminModal';
 import React, { useState, useEffect } from 'react';
 import { SectionCard } from '@/components/ui/SectionCard';
@@ -164,7 +165,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
                   }
                 >
                   {/* "Viewed by" facepile — see hrActions.getAnnouncementReadMap in hrData.ts. Clicking opens the full viewer list. */}
-                  <button onClick={() => openViewersModal(ann.id)} className="flex items-center gap-2 mt-2.5 group" title="See who has viewed this announcement">
+                  <Button variant="ghost" size="xs" onClick={() => openViewersModal(ann.id)} title="See who has viewed this announcement" className="-ml-1 mt-1.5 gap-2">
                     <div className="flex -space-x-2">
                       {viewers.length === 0 ? (
                         <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300 flex items-center justify-center">
@@ -176,10 +177,10 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
                         ))
                       )}
                     </div>
-                    <span className="text-caption font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
+                    <span className="font-bold text-slate-500">
                       {viewers.length === 0 ? 'No views yet' : `${viewers.length} viewed${viewers.length > 5 ? ` (+${viewers.length - 5} more)` : ''}`}
                     </span>
-                  </button>
+                  </Button>
                 </AnnouncementItem>
               );
             }}
@@ -266,40 +267,20 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
               <FieldLabel size="tiny">Select Warehouses</FieldLabel>
               <div className="space-y-1.5">
                 {warehouses.map(wh => (
-                  <label key={wh.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                    <input 
-                      type="checkbox"
-                      checked={annSelectedWarehouses.includes(wh.id)}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setAnnSelectedWarehouses(prev => [...prev, wh.id]);
-                        } else {
-                          setAnnSelectedWarehouses(prev => prev.filter(id => id !== wh.id));
-                        }
-                      }}
-                      className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                    />
-                    {wh.name}
-                  </label>
+                  <Checkbox key={wh.id} className="min-h-0! items-center" checked={annSelectedWarehouses.includes(wh.id)} onChange={checked => setAnnSelectedWarehouses(prev => checked ? [...prev, wh.id] : prev.filter(id => id !== wh.id))}>{wh.name}</Checkbox>
                 ))}
               </div>
             </div>
           )}
 
-          <label className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer">
-            <input
-              type="checkbox"
-              checked={annImportant}
-              onChange={e => setAnnImportant(e.target.checked)}
-              className="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-            />
-            <span className="text-xs">
-              <span className="font-bold text-amber-900 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Mark as Important</span>
-              <span className="block text-amber-700 font-medium mt-0.5">
-                Every targeted employee gets a popup they must explicitly mark as read — it reappears on every login or page refresh until they do.
-              </span>
-            </span>
-          </label>
+          <Checkbox
+            checked={annImportant}
+            onChange={setAnnImportant}
+            className="min-h-0! rounded-xl border border-amber-200 bg-amber-50 p-3"
+            hint="Every targeted employee gets a popup they must explicitly mark as read — it reappears on every login or page refresh until they do."
+          >
+            <span className="flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Mark as Important</span>
+          </Checkbox>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isPostingAnnouncement} onClick={() => onCreateClose()}>Cancel</Button>
