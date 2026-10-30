@@ -8,8 +8,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { APP_TIMEZONE } from '@/lib/timezone';
-import { deductionLimitedBy, netPay } from '@/lib/core/payrollView';
+import { netPay } from '@/lib/core/payrollView';
 import { EmptyState } from '@/components/ui/EmptyState';
+import type { DeductionItem } from '@/lib/hr/types';
+import { DeductionBreakdown } from '@/components/payroll/DeductionBreakdown';
 import { DailyDeductionsCard } from '@/components/payroll/DailyDeductionsCard';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 
@@ -24,8 +26,11 @@ interface Payslip {
   // "why was I deducted" — itemized reasons, same list HR/Admin see on the
   // Net Payable modal (empty until HR/Admin has actually saved this
   // month's record at least once).
-  deductionBreakdown: { label: string; amount: number }[];
+  deductionBreakdown: DeductionItem[];
   reservedThisMonth: number;
+  // The part-month pay of a late joiner, paid with this month's salary two months after they joined.
+  earlierPay: number;
+  earlierPayLabel?: string;
 }
 
 export default function EmployeeSalaryPage() {
@@ -98,6 +103,8 @@ export default function EmployeeSalaryPage() {
     processed: payrollRecord.processed,
     deductionBreakdown: payrollRecord.deductionBreakdown || [],
     reservedThisMonth: payrollRecord.reservedThisMonth || 0,
+    earlierPay: payrollRecord.earlierPay || 0,
+    earlierPayLabel: payrollRecord.earlierPayLabel,
   } : null;
 
   const filteredSlips: Payslip[] = currentSlip ? [currentSlip] : [];
@@ -387,30 +394,16 @@ export default function EmployeeSalaryPage() {
                   <span className="text-slate-500 font-semibold">Performance bonuses</span>
                   <span className="text-emerald-600 font-semibold">+{formatMoney(selectedSlip.bonus, userProfile?.region)}</span>
                 </div>
-                {selectedSlip.deductionBreakdown.length > 0 ? (
-                  <div className="py-2 space-y-1.5">
-                    <span className="text-slate-500 font-semibold block mb-1">Deductions — why</span>
-                    {selectedSlip.deductionBreakdown.map((item, i) => (
-                      <div key={i} className="flex justify-between items-start gap-3 pl-2">
-                        <span className="text-slate-500 text-caption leading-snug">{item.label}</span>
-                        <span className="text-rose-600 font-semibold shrink-0">-{formatMoney(item.amount, userProfile?.region)}</span>
-                      </div>
-                    ))}
-                    {deductionLimitedBy(selectedSlip.deductionBreakdown, selectedSlip.deductions) > 0 && (
-                      <div className="flex justify-between items-start gap-3 pl-2">
-                        <span className="text-slate-500 text-caption leading-snug">Limited to the month&apos;s pay (it can go down to zero, not below)</span>
-                        <span className="text-emerald-600 font-semibold shrink-0">+{formatMoney(deductionLimitedBy(selectedSlip.deductionBreakdown, selectedSlip.deductions), userProfile?.region)}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-slate-500 font-semibold">Leave & penalty deductions</span>
-                    <span className="text-rose-600 font-semibold">
-                      {selectedSlip.deductions > 0 ? `-${formatMoney(selectedSlip.deductions, userProfile?.region)}` : formatMoney(0, userProfile?.region)}
-                    </span>
+                {selectedSlip.earlierPay > 0 && (
+                  <div className="flex justify-between items-start gap-3 py-2">
+                    <span className="text-slate-500 font-semibold">{selectedSlip.earlierPayLabel || 'Earlier part-month pay'}</span>
+                    <span className="text-emerald-600 font-semibold shrink-0">+{formatMoney(selectedSlip.earlierPay, userProfile?.region)}</span>
                   </div>
                 )}
+                <div className="space-y-2 py-2 text-xs">
+                  <span className="text-slate-500 font-semibold block">Deductions — why</span>
+                  <DeductionBreakdown breakdown={selectedSlip.deductionBreakdown} deducted={selectedSlip.deductions} money={n => formatMoney(n, userProfile?.region)} />
+                </div>
                 <div className="flex justify-between items-center py-2 pt-3 font-bold text-sm text-slate-900 border-t border-slate-200">
                   <span>Net Payable Outflow</span>
                   <span className="text-orange-600">{formatMoney(selectedSlip.net, userProfile?.region)}</span>

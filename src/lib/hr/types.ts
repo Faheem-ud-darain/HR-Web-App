@@ -462,6 +462,7 @@ export interface PayrollSelf {
     baseSalary: number;
     incrementAmount: number;
     earlierPay: number;
+    earlierPayLabel?: string;
     bonus: number;
     deductions: number;
     processed: boolean;
