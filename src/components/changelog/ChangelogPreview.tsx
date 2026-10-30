@@ -113,7 +113,7 @@ export function ChangelogPreview({ kind, badge = true }: { kind: ChangelogPrevie
   const Preview = PREVIEWS[kind];
   return (
     <div className="relative flex h-40 items-center justify-center overflow-hidden bg-slate-100 px-4">
-      {badge && <span className="whats-new-badge absolute left-3 top-3 rounded-lg px-2.5 py-1 text-caption font-bold uppercase tracking-wide">What&apos;s new !</span>}
+      {badge && <span className="whats-new-badge absolute left-3 top-3 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight tracking-wide">What&apos;s new !</span>}
       <div aria-hidden="true" className="flex w-full justify-center"><Preview /></div>
     </div>
   );
