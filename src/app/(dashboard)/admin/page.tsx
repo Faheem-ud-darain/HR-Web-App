@@ -8,9 +8,11 @@ import { StaffDashboardHeader } from '@/components/dashboard/StaffDashboardHeade
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
-import { useProfiles, useLeaves, useTasks, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
+import { useProfiles, useLeaves, useTasks, useTimesheets, hrActions, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
+import { PersonPeek } from '@/components/ui/PersonPeek';
+import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
 import { usePayrollView } from '@/hooks/usePayrollView';
@@ -29,11 +31,7 @@ export default function AdminDashboard() {
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
   const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets({ days: 10 });
 
-  // LeaveApplication only snapshots a fullName, not a live Profile reference.
-  const nameFor = (employeeName: string): string => {
-    const emp = employees.find((e: Profile) => e.fullName === employeeName);
-    return emp ? displayName(emp, 'admin') : employeeName;
-  };
+  const { nameFor, pictureFor } = useLeaveNames('admin');
   const [isTaskOpen, setIsTaskOpen] = useState(false);
   const [isScheduleMeetOpen, setIsScheduleMeetOpen] = useState(false);
   const [isAnnounceOpen, setIsAnnounceOpen] = useState(false);
@@ -181,7 +179,7 @@ export default function AdminDashboard() {
               <div className="p-4">
                 <CardStack
                   items={hrApprovedLeaves} keyOf={l => l.id} label="Leaves waiting for CEO approval"
-                  peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`}
+                  peek={l => <PersonPeek name={nameFor(l.employeeName)} picture={pictureFor(l.employeeName)}>{nameFor(l.employeeName)} · {l.type} leave · {l.duration}</PersonPeek>}
                   render={l => <LeaveRequestCard leave={l} name={nameFor(l.employeeName)}><CeoDecisionButtons busy={processingLeaveId === l.id} disabled={processingLeaveId !== null} onDecide={action => handleCEOAction(l.id, action)} /></LeaveRequestCard>}
                 />
               </div>

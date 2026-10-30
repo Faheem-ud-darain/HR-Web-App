@@ -1,12 +1,14 @@
 'use client';
 
+import { PersonPeek } from '@/components/ui/PersonPeek';
+import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
 import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ShieldCheckIcon as ShieldCheck, ListBulletsIcon as List, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
-import { useLeaves, useProfiles, hrActions, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
+import { useLeaves, useProfiles, hrActions, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
@@ -28,12 +30,7 @@ export default function AdminLeavesPage() {
   const { showToast } = useActionToast();
   const [activeTab, setActiveTab] = useState<TabView>('queue');
 
-  // See the matching comment in hr/leaves/page.tsx — LeaveApplication only
-  // snapshots a fullName, not a live Profile reference.
-  const nameFor = (employeeName: string): string => {
-    const emp = employees.find((e: Profile) => e.fullName === employeeName);
-    return emp ? displayName(emp, 'admin') : employeeName;
-  };
+  const { nameFor, pictureFor } = useLeaveNames('admin');
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,7 +172,7 @@ export default function AdminLeavesPage() {
             {!leavesLoading && (
               <CardStack
                 items={pendingCEOLeaves} keyOf={l => l.id} label="Leaves waiting for CEO approval"
-                peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`}
+                peek={l => <PersonPeek name={nameFor(l.employeeName)} picture={pictureFor(l.employeeName)}>{nameFor(l.employeeName)} · {l.type} leave · {l.duration}</PersonPeek>}
                 render={l => <LeaveRequestCard leave={l} name={nameFor(l.employeeName)}><CeoDecisionButtons busy={processingLeaveId === l.id} disabled={processingLeaveId !== null} onDecide={action => handleCEOAction(l.id, action)} /></LeaveRequestCard>}
               />
             )}

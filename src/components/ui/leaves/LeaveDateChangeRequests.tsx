@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormError } from '@/components/ui/FormError';
 import { SectionCard } from '@/components/ui/SectionCard';
+import { PersonPeek } from '@/components/ui/PersonPeek';
+import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { formatLeaveDuration, type LeaveDateChange } from '@/lib/core/leaveDateChange';
 import { leaveDateChangeAction, useLeaveDateChanges } from '@/lib/hr/leaveDateChange';
@@ -13,6 +15,7 @@ import { leaveDateChangeAction, useLeaveDateChanges } from '@/lib/hr/leaveDateCh
 // own (it used to be a manual database edit); the server checks the rules again and says why when it cannot.
 export function LeaveDateChangeRequests({ onAnswered }: { onAnswered?: () => void }) {
   const { data, refetch } = useLeaveDateChanges();
+  const { pictureFor } = useLeaveNames('admin');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   if (!data?.configured) return null;
@@ -55,7 +58,7 @@ export function LeaveDateChangeRequests({ onAnswered }: { onAnswered?: () => voi
           <>
             {/* A phone gets a stack to swipe through; a bigger screen gets the plain list. */}
             <div className="md:hidden">
-              <CardStack items={requests} keyOf={r => r.id} label="Date change requests" render={card} peek={r => `${r.employeeName} · ${r.leaveType} leave · to ${formatLeaveDuration(r.newStart, r.newEnd)}`} />
+              <CardStack items={requests} keyOf={r => r.id} label="Date change requests" render={card} peek={r => <PersonPeek name={r.employeeName} picture={pictureFor(r.employeeName)}>{r.employeeName} · {r.leaveType} leave · to {formatLeaveDuration(r.newStart, r.newEnd)}</PersonPeek>} />
             </div>
             <ul className="hidden space-y-3 md:block">{requests.map(r => <li key={r.id}>{card(r)}</li>)}</ul>
           </>

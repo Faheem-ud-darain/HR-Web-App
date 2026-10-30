@@ -1,11 +1,13 @@
 'use client';
 
+import { PersonPeek } from '@/components/ui/PersonPeek';
+import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
 import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
-import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
+import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Button } from '@/components/ui/Button';
 import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
@@ -41,14 +43,7 @@ export default function HRLeavesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabView>('kanban');
 
-  // LeaveApplication only stores a fullName snapshot (employeeName), not a
-  // live Profile reference, so alias resolution needs a lookup against the
-  // current employees list — falls back to the raw snapshot if the
-  // employee can't be matched (e.g. since-deleted record).
-  const nameFor = (employeeName: string): string => {
-    const emp = employees.find((e: Profile) => e.fullName === employeeName);
-    return emp ? displayName(emp, 'hr') : employeeName;
-  };
+  const { nameFor, pictureFor } = useLeaveNames('hr');
 
   const [processingLeaveId, setProcessingLeaveId] = useState<string | null>(null);
 
@@ -360,7 +355,7 @@ export default function HRLeavesPage() {
               <div {...panel}>
                 {/* A phone gets the stack to swipe through (it goes round); a tablet gets the cards side by side. */}
                 <div className="md:hidden">
-                  <CardStack items={cards} keyOf={l => l.id} label={COLUMNS.find(c => c.key === mobileCol)?.label ?? 'Leave requests'} peek={l => `${nameFor(l.employeeName)} · ${l.type} leave · ${l.duration}`} render={card} />
+                  <CardStack items={cards} keyOf={l => l.id} label={COLUMNS.find(c => c.key === mobileCol)?.label ?? 'Leave requests'} peek={l => <PersonPeek name={nameFor(l.employeeName)} picture={pictureFor(l.employeeName)}>{nameFor(l.employeeName)} · {l.type} leave · {l.duration}</PersonPeek>} render={card} />
                 </div>
                 <div className="hidden grid-cols-2 gap-3 md:grid">{cards.map(l => <React.Fragment key={l.id}>{card(l)}</React.Fragment>)}</div>
               </div>
