@@ -205,12 +205,7 @@ export default function EmployeeSalaryPage() {
                     <Badge variant={slip.processed ? 'success' : 'warning'}>{slip.processed ? 'Processed' : 'Pending'}</Badge>
                   </Td>
                   <Td align="center">
-                    <button
-                      onClick={() => setSelectedSlip(slip)}
-                      className="text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 flex items-center gap-1.5 mx-auto"
-                    >
-                      <FileText className="h-3.5 w-3.5" /> View Payslip
-                    </button>
+                    <Button variant="softOrange" size="xs" onClick={() => setSelectedSlip(slip)}><FileText className="h-3.5 w-3.5" /> View Payslip</Button>
                   </Td>
                 </Tr>
               ))}
@@ -256,12 +251,7 @@ export default function EmployeeSalaryPage() {
                   <p className="text-xs font-semibold text-emerald-600">{slip.bonus > 0 ? `+${formatMoney(slip.bonus, userProfile?.region)}` : '—'}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedSlip(slip)}
-                className="w-full text-xs font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-2.5 rounded-lg transition-colors transition-transform active:scale-97 flex items-center justify-center gap-1.5"
-              >
-                <FileText className="h-3.5 w-3.5" /> View Payslip
-              </button>
+              <Button variant="softOrange" size="sm" onClick={() => setSelectedSlip(slip)} className="w-full"><FileText className="h-3.5 w-3.5" /> View Payslip</Button>
             </div>
           ))}
           {filteredSlips.length === 0 && (

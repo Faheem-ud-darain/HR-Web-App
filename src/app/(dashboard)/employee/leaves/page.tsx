@@ -1,5 +1,6 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import { LeaveChangeControl } from '@/components/ui/leaves/LeaveChangeControl';
 import { useLeaveDateChanges } from '@/lib/hr/leaveDateChange';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -360,14 +361,7 @@ export default function EmployeeLeavesPage() {
                     <div className="flex items-center justify-center gap-2">
                       <LeaveChangeControl leave={leave} pending={pendingChangeFor(leave.id)} configured={!!dateChanges?.configured} onChanged={() => { void refetchChanges(); void refetchLeaves(); }} />
                       {leave.status === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
-                          title="Withdraw this leave request"
-                          className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <IconButton size="sm" label="Withdraw this leave request" className="text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}><Trash2 className="h-4 w-4" /></IconButton>
                       )}
                     </div>
                   </Td>
@@ -394,14 +388,7 @@ export default function EmployeeLeavesPage() {
                 <div className="flex items-center gap-2">
                   {getStatusBadge(leave.status)}
                   {leave.status === 'pending' && (
-                    <button
-                      type="button"
-                      onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
-                      title="Withdraw this leave request"
-                      className="text-slate-400 hover:text-rose-600 transition-colors p-1 rounded-lg hover:bg-rose-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <IconButton size="sm" label="Withdraw this leave request" className="text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}><Trash2 className="h-4 w-4" /></IconButton>
                   )}
                 </div>
               </div>

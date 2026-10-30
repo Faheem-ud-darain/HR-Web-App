@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
 import React, { useState } from 'react';
 import { TaskBoard, TaskModal } from '@/components/ui/lazy';
 import { Modal } from '@/components/ui/Modal';
@@ -48,12 +49,7 @@ export default function AdminTasksPage() {
           <p className="text-slate-500">Assign and monitor tasks across all departments and teams.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setIsLeadOpen(true)}
-            className="bg-white hover:bg-amber-50 border border-amber-200 text-amber-700 font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
-          >
-            <Star className="h-4 w-4" /> Manage Team Leads
-          </button>
+          <Button variant="softAmber" size="md" onClick={() => setIsLeadOpen(true)}><Star className="h-4 w-4" /> Manage Team Leads</Button>
           <Button
             variant="primary"
             onClick={() => setIsTaskOpen(true)}
@@ -115,15 +111,7 @@ export default function AdminTasksPage() {
             <div className="space-y-2">
               <FieldLabel size="md">Lead of Teams</FieldLabel>
               {teams.map(t => (
-                <label key={t.id} className="flex items-center gap-2.5 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={leadTeams.includes(t.name)}
-                    onChange={() => setLeadTeams(prev => prev.includes(t.name) ? prev.filter(x => x !== t.name) : [...prev, t.name])}
-                    className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                  />
-                  <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{t.name}</span>
-                </label>
+                <Checkbox key={t.id} className="min-h-0!" checked={leadTeams.includes(t.name)} onChange={() => setLeadTeams(prev => prev.includes(t.name) ? prev.filter(x => x !== t.name) : [...prev, t.name])}>{t.name}</Checkbox>
               ))}
             </div>
           )}
