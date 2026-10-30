@@ -11,6 +11,7 @@ import { initPush } from '@/lib/push';
 import { Modal } from '@/components/ui/Modal';
 import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
 import { AbsentPopup } from '@/components/ui/AbsentPopup';
+import { WhatsNewPopup } from '@/components/changelog/WhatsNewPopup';
 import { MaintenanceNoticePopup } from '@/components/ui/MaintenanceNoticePopup';
 import { ForcedPasswordChangeModal } from '@/components/ui/ForcedPasswordChangeModal';
 import { PushPermissionPrompt } from '@/components/ui/PushPermissionPrompt';
@@ -322,6 +323,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           down as anyone else, so they see the popup too (no "you posted
           it, you're exempt" exception here). */}
       <MaintenanceNoticePopup email={email} />
+
+      {/* One-time "What's new" after an update, for every role — see WhatsNewPopup.tsx. */}
+      <WhatsNewPopup email={email} />
 
       {/* Plan 013 step 2 — hard gate after onboarding approval or an
           admin-triggered password reset (see admin/profile/route.ts's

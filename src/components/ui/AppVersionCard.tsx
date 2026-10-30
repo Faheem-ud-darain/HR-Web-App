@@ -1,7 +1,8 @@
 'use client';
+import Link from 'next/link';
 import { Card } from './Card';
 import { Capacitor } from '@capacitor/core';
-import { InfoIcon as Info, GlobeIcon as Globe, DeviceMobileIcon as Smartphone, AppleLogoIcon as Apple } from '@/components/ui/icons';
+import { InfoIcon as Info, SparkleIcon as Sparkle, ArrowRightIcon as ArrowRight, GlobeIcon as Globe, DeviceMobileIcon as Smartphone, AppleLogoIcon as Apple } from '@/components/ui/icons';
 import { APP_VERSIONS, AppPlatform } from '@/lib/appVersion';
 import { useIsClient } from '@/lib/useIsClient';
 
@@ -55,6 +56,13 @@ export function AppVersionCard() {
             </div>
           );
         })}
+        <Link href="/changelog" className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-slate-50">
+          <div className="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+            <Sparkle weight="duotone" className="h-4 w-4 text-orange-600" />
+          </div>
+          <p className="flex-1 text-sm font-semibold text-slate-900">What&apos;s New</p>
+          <ArrowRight className="h-4 w-4 text-slate-400" />
+        </Link>
       </div>
     </Card>
   );

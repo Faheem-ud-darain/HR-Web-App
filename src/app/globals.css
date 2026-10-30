@@ -1303,3 +1303,25 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 
 
 
+
+/* What's New previews (components/changelog/ChangelogPreview.tsx): small looping animations of what changed. */
+@keyframes cl-stack-top {
+  0%, 15% { transform: translateY(0); opacity: 1; }
+  45%, 100% { transform: translateY(34px); opacity: 0; }
+}
+@keyframes cl-stack-next {
+  0%, 15% { transform: translateY(-9px) scale(0.96); }
+  45%, 100% { transform: translateY(0) scale(1); }
+}
+@keyframes cl-dates-move {
+  0%, 25% { transform: translateX(0); }
+  55%, 100% { transform: translateX(calc(2 * (100% + 6px))); }
+}
+@keyframes cl-sheet-up {
+  0%, 30% { transform: translateY(105%); }
+  55%, 90% { transform: translateY(0); }
+  100% { transform: translateY(105%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[cl-"] { animation: none !important; }
+}
