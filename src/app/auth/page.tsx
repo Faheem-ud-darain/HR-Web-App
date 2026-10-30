@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
 import { PasswordInput } from '@/components/ui/PasswordInput';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { PublicPage } from '@/components/landing/PublicPage';
@@ -303,22 +304,8 @@ export default function AuthPage() {
                   placeholder="••••••••"
                 />
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 focus:ring-offset-0"
-                    />
-                    Remember me
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setIsForgotOpen(true)}
-                    className="text-xs font-bold text-orange-600 hover:text-orange-700 hover:underline"
-                  >
-                    Forgot password?
-                  </button>
+                  <Checkbox className="min-h-0!" checked={rememberMe} onChange={setRememberMe}>Remember me</Checkbox>
+                  <Button type="button" variant="ghost" size="xs" className="text-orange-600!" onClick={() => setIsForgotOpen(true)}>Forgot password?</Button>
                 </div>
               </div>
               <Button type="submit" fullWidth loading={loading} className="mt-4 py-2.5 uppercase tracking-wider shadow-md shadow-orange-600/10">Sign In</Button>

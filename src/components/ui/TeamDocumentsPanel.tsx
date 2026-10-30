@@ -171,9 +171,7 @@ export function TeamDocumentsPanel({ team, currentUserEmail, currentUserRole, cu
               <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFilePick(e.target.files?.[0])} />
             </label>
             {pendingFile && (
-              <button onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-slate-400 hover:text-rose-600 shrink-0">
-                <X className="h-4 w-4" />
-              </button>
+              <IconButton size="sm" label="Remove file" className="shrink-0 hover:text-rose-600" onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}><X className="h-4 w-4" /></IconButton>
             )}
           </div>
           <div className="flex items-center gap-2 justify-end">

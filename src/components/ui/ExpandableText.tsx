@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { isLongText, previewText } from '@/lib/core/announcements';
@@ -13,7 +14,7 @@ export function ExpandableText({ text, title, className = '' }: { text: string; 
     <>
       <p className={`whitespace-pre-wrap break-words ${className}`}>
         {previewText(text)}
-        {long && <button type="button" onClick={() => setOpen(true)} className="ml-1 text-xs font-semibold text-orange-600 hover:text-orange-700">Read more</button>}
+        {long && <Button type="button" variant="ghost" size="xs" onClick={() => setOpen(true)} className="ml-1 px-1 py-0 text-orange-600!">Read more</Button>}
       </p>
       {long && (
         <Modal isOpen={open} onClose={() => setOpen(false)} title={title}>

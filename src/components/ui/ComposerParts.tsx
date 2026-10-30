@@ -57,9 +57,7 @@ export function PendingFileChip({ name, onRemove }: { name: string; onRemove: ()
   return (
     <div className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-caption font-semibold text-slate-600">
       <span className="flex items-center gap-1.5 truncate"><FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" /> {name}</span>
-      <button type="button" onClick={onRemove} aria-label="Remove attachment" className="text-slate-500 hover:text-rose-600 shrink-0">
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <IconButton size="sm" label="Remove attachment" className="shrink-0 hover:text-rose-600" onClick={onRemove}><X className="h-3.5 w-3.5" /></IconButton>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { Tabs } from '@/components/ui/Tabs';
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { TimesheetEntry, useProfiles, useTrackingSettings, useAllTrackerHeartbeats, useTimesheets, TrackerHeartbeat } from '@/lib/hrData';
@@ -63,17 +64,7 @@ export function TrackingView({ role }: TrackingViewProps) {
               : "View mouse-activity for your team — screenshots and tracking settings (on/off, interval, retention) are managed by HR/Admin only."}
           </p>
         </div>
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg self-start">
-          {(['All', 'USA', 'Pakistan'] as const).map(r => (
-            <button
-              key={r}
-              onClick={() => setRegionFilter(r)}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors transition-shadow ${regionFilter === r ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+        <Tabs variant="segmented" compact aria-label="Region" className="self-start" value={regionFilter} onChange={setRegionFilter} items={(['All', 'USA', 'Pakistan'] as const).map(r => ({ value: r, label: r }))} />
       </div>
 
       <Card className="border border-amber-200 bg-amber-50/60">

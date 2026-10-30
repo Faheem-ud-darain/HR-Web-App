@@ -1,5 +1,7 @@
 'use client';
 
+import { Switch } from '@/components/ui/Switch';
+import { IconButton } from '@/components/ui/IconButton';
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -245,13 +247,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                   <p className="text-caption text-slate-400 font-semibold">Linked Google Account</p>
                 </div>
               </div>
-              <button
-                onClick={handleDisconnect}
-                className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
-                title="Disconnect Google Account"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <IconButton size="sm" label="Disconnect Google Account" className="text-slate-400 hover:text-rose-600 hover:bg-rose-50" onClick={handleDisconnect}><Trash2 className="h-4 w-4" /></IconButton>
             </div>
 
             <div className="space-y-2.5 pt-1">
@@ -263,12 +259,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                     <p className="text-caption text-slate-400">Sync shifts & meetings directly to your Google Calendar</p>
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={googleData.syncCalendar !== false}
-                  onChange={e => handleToggle('syncCalendar', e.target.checked)}
-                  className="h-4 w-4 accent-orange-600 cursor-pointer"
-                />
+                <Switch size="sm" label="Sync Google Calendar" checked={googleData.syncCalendar !== false} onChange={checked => handleToggle('syncCalendar', checked)} />
               </label>
 
               <label className="flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
@@ -279,12 +270,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                     <p className="text-caption text-slate-400">Send 2FA security codes to {googleData.connectedEmail}</p>
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={googleData.useFor2FA !== false}
-                  onChange={e => handleToggle('useFor2FA', e.target.checked)}
-                  className="h-4 w-4 accent-orange-600 cursor-pointer"
-                />
+                <Switch size="sm" label="Use for two-factor sign-in" checked={googleData.useFor2FA !== false} onChange={checked => handleToggle('useFor2FA', checked)} />
               </label>
 
               <label className="flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
@@ -295,12 +281,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
                     <p className="text-caption text-slate-400">Allow resetting password using this connected Gmail</p>
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={googleData.useForPasswordReset !== false}
-                  onChange={e => handleToggle('useForPasswordReset', e.target.checked)}
-                  className="h-4 w-4 accent-orange-600 cursor-pointer"
-                />
+                <Switch size="sm" label="Use for password reset" checked={googleData.useForPasswordReset !== false} onChange={checked => handleToggle('useForPasswordReset', checked)} />
               </label>
             </div>
           </div>

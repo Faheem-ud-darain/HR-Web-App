@@ -142,13 +142,7 @@ export function AdminProfileEditor() {
 
           {editError && <p role="alert" className="text-xs font-semibold text-rose-600">{editError}</p>}
 
-          <button
-            type="submit"
-            disabled={isSavingEdit}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-lg text-sm active:scale-97 transition-colors transition-transform mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isSavingEdit ? 'Saving…' : 'Save Profile Changes'}
-          </button>
+          <Button type="submit" fullWidth loading={isSavingEdit} className="mt-4">{isSavingEdit ? 'Saving…' : 'Save Profile Changes'}</Button>
         </form>
       </Modal>
     </>

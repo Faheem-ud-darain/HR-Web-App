@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React, { useEffect } from 'react';
 import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 
@@ -22,13 +23,9 @@ export function ErrorPanel({ error, onRetry, fullScreen = false }: { error: Erro
         </p>
         {error.digest && <p className="mt-2 text-caption text-slate-400">Reference: {error.digest}</p>}
         <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
-          <button type="button" onClick={onRetry} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-700 min-h-[44px]">
-            Try again
-          </button>
+          <Button type="button" size="lg" onClick={onRetry}>Try again</Button>
           {/* A full page load on purpose: if the router itself is what broke, this still works. */}
-          <button type="button" onClick={() => window.location.assign('/')} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 min-h-[44px]">
-            Go to the start page
-          </button>
+          <Button type="button" variant="outline" size="lg" onClick={() => window.location.assign('/')}>Go to the start page</Button>
         </div>
       </div>
     </div>

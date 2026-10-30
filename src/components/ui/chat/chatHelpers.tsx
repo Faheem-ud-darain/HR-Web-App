@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React, { useEffect } from 'react';
 import { Profile } from '@/lib/hrData';
 import { Avatar } from '@/components/ui/Avatar';
@@ -67,20 +68,16 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => vo
 export function ReadReceiptFacepile({ viewers, onOpen }: { viewers: Profile[]; onOpen: () => void }) {
   if (viewers.length === 0) return null;
   return (
-    <button
-      onClick={onOpen}
-      className="flex items-center gap-1 mt-1 group py-2 -my-2"
-      title="See who has viewed this message"
-    >
+    <Button variant="ghost" size="xs" onClick={onOpen} title="See who has viewed this message" className="mt-1 gap-1 px-1 py-0.5">
       <div className="flex -space-x-1.5">
         {viewers.slice(0, 3).map(v => (
           <Avatar key={v.id} src={v.profilePicture} name={v.fullName} size={13} className="ring-1 ring-white" />
         ))}
       </div>
-      <span className="text-caption font-bold text-slate-500 group-hover:text-orange-600 transition-colors">
+      <span className="text-caption font-bold text-slate-500">
         Seen{viewers.length > 3 ? ` by ${viewers.length}` : ''}
       </span>
-    </button>
+    </Button>
   );
 }
 

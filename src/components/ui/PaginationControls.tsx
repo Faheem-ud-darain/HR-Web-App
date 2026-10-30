@@ -9,6 +9,7 @@
 // container, bg-white active/current pill) for visual consistency with
 // the nearest existing control on the pages this is used on.
 
+import { Button } from '@/components/ui/Button';
 import React from 'react';
 import { CaretLeftIcon as ChevronLeft, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 
@@ -29,25 +30,11 @@ export function PaginationControls({ page, totalPages, setPage, totalCount, item
         {totalCount} {itemLabel} total · Page {page} of {totalPages}
       </p>
       <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-        <button
-          type="button"
-          onClick={() => setPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:text-slate-950 bg-transparent hover:bg-white/60 disabled:hover:bg-transparent"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" /> Prev
-        </button>
+        <Button type="button" variant="ghost" size="xs" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}><ChevronLeft className="h-3.5 w-3.5" /> Prev</Button>
         <span className="px-2 py-1.5 text-xs font-bold text-slate-900 bg-white rounded-md shadow-sm min-w-[3.5rem] text-center">
           {page} / {totalPages}
         </span>
-        <button
-          type="button"
-          onClick={() => setPage(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:text-slate-950 bg-transparent hover:bg-white/60 disabled:hover:bg-transparent"
-        >
-          Next <ChevronRight className="h-3.5 w-3.5" />
-        </button>
+        <Button type="button" variant="ghost" size="xs" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>Next <ChevronRight className="h-3.5 w-3.5" /></Button>
       </div>
     </div>
   );

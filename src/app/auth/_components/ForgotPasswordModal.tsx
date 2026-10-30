@@ -40,7 +40,6 @@ const Footer = ({ left, children }: { left?: React.ReactNode; children: React.Re
   </div>
 );
 
-const linkButton = 'text-xs font-bold text-slate-500 hover:text-slate-700';
 
 // Forgot password: enter the email, get a 6-digit code, enter the code (checked on its own before the password
 // fields even appear, so a wrong or expired code is caught early), choose a new password. The code is verified with
@@ -137,18 +136,11 @@ export function ForgotPasswordModal({ initialEmail, onClose, onFinished }: { ini
               <OtpInput length={6} value={otp} onChange={setOtp} disabled={loading || resendLoading} />
               <div className="flex items-center justify-between mt-2 px-1">
                 <span className="text-caption text-slate-400 font-medium">Didn&apos;t receive the code?</span>
-                <button
-                  type="button"
-                  onClick={() => sendCode(true)}
-                  disabled={resendTimer > 0 || resendLoading || loading}
-                  className="text-xs font-bold text-orange-600 hover:text-orange-700 disabled:text-slate-400 transition-colors"
-                >
-                  {resendLoading ? 'Sending code…' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
-                </button>
+                <Button type="button" variant="ghost" size="xs" className="text-orange-600!" onClick={() => sendCode(true)} disabled={resendTimer > 0 || resendLoading || loading}>{resendLoading ? 'Sending code…' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}</Button>
               </div>
             </div>
             {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
-            <Footer left={<button type="button" onClick={() => setStep('email')} className={linkButton}>Use a different email</button>}>
+            <Footer left={<Button type="button" variant="ghost" size="xs" onClick={() => setStep('email')}>Use a different email</Button>}>
               <Button variant="primary" size="md" onClick={verifyCode} disabled={loading}>{loading ? 'Verifying…' : 'Continue'}</Button>
             </Footer>
           </>
@@ -166,7 +158,7 @@ export function ForgotPasswordModal({ initialEmail, onClose, onFinished }: { ini
               <PasswordInput value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} fieldSize="md" autoComplete="new-password" />
             </div>
             {error && <p className="text-xs font-bold text-rose-600">{error}</p>}
-            <Footer left={<button type="button" onClick={() => { setStep('otp'); setError(''); }} className={linkButton}>Back</button>}>
+            <Footer left={<Button type="button" variant="ghost" size="xs" onClick={() => { setStep('otp'); setError(''); }}>Back</Button>}>
               <Button variant="primary" size="md" onClick={resetPassword} disabled={loading}>{loading ? 'Resetting…' : 'Reset Password'}</Button>
             </Footer>
           </>
