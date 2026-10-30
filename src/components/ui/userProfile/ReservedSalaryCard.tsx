@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React, { useState } from 'react';
 import { CurrencyDollarIcon as DollarSign } from '@/components/ui/icons';
 import { formatMoney, updateProfileAdmin, type Profile } from '@/lib/hrData';
@@ -33,7 +34,6 @@ export function ReservedSalaryCard({ profile, onChanged }: { profile: Profile; o
     }
   };
 
-  const small = 'text-caption font-bold px-2.5 py-1.5 rounded-md active:scale-97 transition-colors transition-transform';
   return (
     <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 text-xs">
       <p className="font-bold text-indigo-900 flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Reserved Salary</p>
@@ -47,14 +47,14 @@ export function ReservedSalaryCard({ profile, onChanged }: { profile: Profile; o
       </p>
 
       {!editing ? (
-        <button type="button" onClick={open} className={`${small} text-indigo-700 bg-indigo-100 hover:bg-indigo-200`}>Edit Manually Reserved Amount</button>
+        <Button type="button" variant="softIndigo" size="xs" onClick={open}>Edit Manually Reserved Amount</Button>
       ) : (
         <div className="space-y-2 pt-1">
           <div><FieldLabel size="tiny">Amount</FieldLabel><Input type="text" value={amount} onChange={e => setAmount(e.target.value)} fieldSize="md" placeholder="0" /></div>
           <div><FieldLabel size="tiny">Note (optional)</FieldLabel><Input type="text" value={note} onChange={e => setNote(e.target.value)} fieldSize="md" placeholder="e.g. carried over from before this system" /></div>
           <div className="flex gap-2">
-            <button type="button" onClick={save} disabled={saving} className={`${small} text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50`}>{saving ? 'Saving…' : 'Save'}</button>
-            <button type="button" onClick={() => setEditing(false)} disabled={saving} className={`${small} text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50`}>Cancel</button>
+            <Button type="button" variant="indigo" size="xs" onClick={save} loading={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+            <Button type="button" variant="outline" size="xs" onClick={() => setEditing(false)} disabled={saving}>Cancel</Button>
           </div>
         </div>
       )}

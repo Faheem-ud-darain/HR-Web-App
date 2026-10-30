@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React from 'react';
 import { CalendarBlankIcon as Calendar, CurrencyDollarIcon as DollarSign, BankIcon as Landmark, EnvelopeIcon as Mail, MapPinIcon as MapPin, PhoneIcon as Phone, ShieldIcon as Shield } from '@/components/ui/icons';
 import { formatMoney, updateProfileAdmin, type Profile, type Warehouse } from '@/lib/hrData';
@@ -64,7 +65,7 @@ export function ProfileDetails({ profile, viewerRole, warehouses, canManage, onC
             : links.map(id => <Badge key={id} variant="success">{warehouses.find(w => w.id === id)?.name ?? 'Unrecognized warehouse (re-assign needed)'}</Badge>)}
         </div>
         {links.some(id => !known(id)) && canManage && (
-          <button type="button" onClick={removeUnrecognized} className="mt-1.5 text-caption font-bold text-rose-600 hover:text-rose-700 hover:underline">Remove unrecognized warehouse links</button>
+          <Button type="button" variant="ghost" size="xs" onClick={removeUnrecognized} className="mt-1 text-rose-600!">Remove unrecognized warehouse links</Button>
         )}
       </div>
 

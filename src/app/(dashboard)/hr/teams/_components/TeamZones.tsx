@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import React from 'react';
 import { StarIcon as Star, TrashIcon as Trash2 } from '@/components/ui/icons';
@@ -64,7 +65,7 @@ export function TeamZones({ teams, employees, warehouses, loading, deletingName,
                           <Star className="h-3.5 w-3.5" /> Lead
                         </span>
                       )}
-                      <button onClick={() => onRemoveMember(member, team.name)} className="min-h-9 px-2 text-slate-400 hover:text-rose-600 text-caption font-bold lg:min-h-0 lg:px-0">Remove</button>
+                      <Button variant="ghost" size="xs" onClick={() => onRemoveMember(member, team.name)} className="text-slate-400 hover:text-rose-600">Remove</Button>
                     </div>
                   </div>
                 ))}

@@ -57,19 +57,18 @@ export function WarehousesTab({ employees, warehouses, cleaning, onCleanup, onTo
                       {warehouses.map(wh => {
                         const assigned = (emp.assignedWarehouses || []).includes(wh.id);
                         return (
-                          <button
+                          <Button
                             key={wh.id}
-                            type="button"
+                            variant={assigned ? 'softOrange' : 'secondary'}
+                            size="sm"
+                            className="justify-start gap-1.5 text-left"
                             onClick={() => onToggleAssignment(emp, wh.id)}
                             title={wh.name}
                             aria-pressed={assigned}
-                            className={`flex items-center gap-1.5 text-xs font-semibold p-2 rounded-lg border text-left transition-colors ${
-                              assigned ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
-                            }`}
                           >
                             {assigned ? <CheckSquare className="h-3.5 w-3.5 text-orange-600 shrink-0" /> : <Square className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
                             <span className="truncate">{wh.name}</span>
-                          </button>
+                          </Button>
                         );
                       })}
                     </div>

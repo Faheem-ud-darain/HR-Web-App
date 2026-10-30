@@ -11,8 +11,9 @@
 // Nothing here changes how pay is calculated (that is lib/core/payroll.ts). The screen only shows
 // the result more plainly, keeps one "amount to pay" figure everywhere, and nothing is saved
 // except through an explicit button (Save bonus, Mark as paid).
+import { SearchInput } from '@/components/ui/SearchInput';
 import React, { useEffect, useMemo, useState } from 'react';
-import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
+import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, ArrowsClockwiseIcon as RefreshCw } from '@/components/ui/icons';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -234,7 +235,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
       {notice && (
         <div role="status" className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-900">
           <span>{notice}</span>
-          <button type="button" onClick={() => setNotice('')} className="shrink-0 text-emerald-700 hover:underline">Dismiss</button>
+          <Button type="button" variant="ghost" size="xs" className="shrink-0 text-emerald-700!" onClick={() => setNotice('')}>Dismiss</Button>
         </div>
       )}
 
@@ -293,10 +294,10 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                 <Card><CardContent className="pt-5">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Needs a look</p>
                   {totals.needsLook > 0 ? (
-                    <button type="button" onClick={() => setFilter('look')} className="mt-1 flex items-center gap-2 text-left">
+                    <Button type="button" variant="ghost" size="sm" className="mt-1 -ml-2 justify-start gap-2 text-left" onClick={() => setFilter('look')}>
                       <AlertTriangle className="h-5 w-5 text-amber-500" />
                       <span className="text-sm font-semibold text-slate-800">{totals.needsLook} {totals.needsLook === 1 ? 'person' : 'people'} to check first <span className="text-orange-600">— show</span></span>
-                    </button>
+                    </Button>
                   ) : (
                     <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-800"><CheckCircle2 className="h-5 w-5 text-emerald-500" /> Everyone is ready</p>
                   )}
@@ -306,16 +307,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <Tabs variant="chips" aria-label="Show" value={filter} onChange={setFilter} items={filterItems} />
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                    <input
-                      aria-label="Search employees"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search name"
-                      className="w-40 rounded-xl border border-slate-200 bg-white py-2 pl-8 pr-3 text-xs font-medium focus:border-orange-400 focus:outline-none"
-                    />
-                  </div>
+                  <SearchInput fieldSize="sm" aria-label="Search employees" value={search} onChange={setSearch} placeholder="Search name" wrapperClassName="w-40" />
                   {isAdmin && (
                     <Button variant="outline" size="md" onClick={downloadTransferSheet} disabled={totals.unpaid === 0}>
                       <Download className="h-3.5 w-3.5" /> Bank transfer sheet

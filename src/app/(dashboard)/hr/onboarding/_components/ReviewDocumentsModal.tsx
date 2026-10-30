@@ -6,7 +6,7 @@ import { approveOnboardingServer, displayName, rejectOnboardingServer, useProfil
 import { getSessionEmail } from '@/lib/session';
 import { bankIdLabel, onboardingStatus } from '@/lib/core/onboarding';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { FormError } from '@/components/ui/FormError';
 import { Textarea } from '@/components/ui/Input';
@@ -23,12 +23,8 @@ function DocumentFileRow({ name, kind, url, onPreview }: { name: string; kind: s
         <span className="text-caption text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded">{kind}</span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
-        <button type="button" onClick={onPreview} className="text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors">
-          <Eye className="h-3.5 w-3.5" /> Preview
-        </button>
-        <a href={url} download={name} aria-label={`Download ${name}`} className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors">
-          <Download className="h-3.5 w-3.5" />
-        </a>
+        <Button variant="softOrange" size="xs" onClick={onPreview}><Eye className="h-3.5 w-3.5" /> Preview</Button>
+        <ButtonLink variant="secondary" size="xs" href={url} download={name} aria-label={`Download ${name}`}><Download className="h-3.5 w-3.5" /></ButtonLink>
       </div>
     </div>
   );

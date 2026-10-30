@@ -12,7 +12,7 @@ import { Button, type ButtonVariant } from '@/components/ui/Button';
 import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, type TabTone } from '@/components/ui/Tabs';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 
@@ -25,6 +25,9 @@ const COLUMNS: { key: LeaveApplication['status']; label: string; headerBg: strin
   { key: 'approved',    label: 'CEO Approved',         headerBg: 'bg-emerald-50 border-emerald-200', locked: true },
   { key: 'rejected',    label: 'Rejected (Re-open ↩)', headerBg: 'bg-rose-50 border-rose-200'     },
 ];
+
+// The colour of each status's tab, matching its column on the desktop board.
+const COLUMN_TONE: Record<LeaveApplication['status'], TabTone> = { pending: 'warning', hr_approved: 'indigo', approved: 'success', rejected: 'danger' };
 
 type TabView = 'kanban' | 'history';
 
@@ -310,41 +313,16 @@ export default function HRLeavesPage() {
         <div className="xl:hidden space-y-3">
           {/* Phones and tablets: touch screens cannot drag cards, so the board is one status at a time with
               clear buttons on each card. The buttons run the same moveLeaveTo() rules as the desktop drag. */}
-          <div
-            role="tablist"
+          <Tabs
+            variant="chips"
             aria-label="Leave status"
-            className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide"
-            onKeyDown={e => {
-              // Arrow keys / Home / End move between the status tabs (roving focus), as in the ARIA tabs pattern.
-              const i = COLUMNS.findIndex(c => c.key === mobileCol);
-              const to = e.key === 'ArrowRight' ? (i + 1) % COLUMNS.length : e.key === 'ArrowLeft' ? (i - 1 + COLUMNS.length) % COLUMNS.length : e.key === 'Home' ? 0 : e.key === 'End' ? COLUMNS.length - 1 : -1;
-              if (to < 0) return;
-              e.preventDefault();
-              setMobileColChoice(COLUMNS[to].key);
-              document.getElementById(`leave-tab-${COLUMNS[to].key}`)?.focus();
-            }}
-          >
-            {COLUMNS.map(col => {
-              const count = filteredInCol(col.key).length;
-              const active = mobileCol === col.key;
-              return (
-                <button
-                  key={col.key}
-                  type="button"
-                  role="tab"
-                  id={`leave-tab-${col.key}`}
-                  aria-controls="leave-status-panel"
-                  tabIndex={active ? 0 : -1}
-                  aria-selected={active}
-                  onClick={() => setMobileColChoice(col.key)}
-                  className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-bold transition-colors ${active ? `${col.headerBg} text-slate-900` : 'border-slate-200 bg-white text-slate-500'}`}
-                >
-                  {col.label}
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full border border-slate-200 bg-white px-1 text-caption text-slate-600">{count}</span>
-                </button>
-              );
-            })}
-          </div>
+            idPrefix="leave-tab"
+            panelId="leave-status-panel"
+            className="-mx-4 px-4"
+            value={mobileCol}
+            onChange={setMobileColChoice}
+            items={COLUMNS.map(col => ({ value: col.key, label: col.label, count: filteredInCol(col.key).length, tone: COLUMN_TONE[col.key] }))}
+          />
           {(() => {
             const cards = filteredInCol(mobileCol);
             const panel = { id: 'leave-status-panel', role: 'tabpanel' as const, 'aria-labelledby': `leave-tab-${mobileCol}` };

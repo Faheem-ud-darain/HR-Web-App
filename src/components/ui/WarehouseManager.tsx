@@ -156,15 +156,7 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => { setError(''); setEditing({ id: wh.id, form: toForm(wh) }); }}
-                    disabled={deletingId === wh.id}
-                    className="p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white border border-transparent hover:border-slate-200 transition-colors transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Edit Warehouse"
-                    aria-label={`Edit ${wh.name}`}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
+                  <IconButton size="sm" label={`Edit ${wh.name}`} disabled={deletingId === wh.id} onClick={() => { setError(''); setEditing({ id: wh.id, form: toForm(wh) }); }}><Edit className="h-4 w-4" /></IconButton>
                   <IconButton size="sm" label="Delete warehouse" loading={deletingId === wh.id} onClick={() => !deletingId && setPendingDeleteId(wh.id)} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"><Trash className="h-4 w-4" /></IconButton>
                 </div>
               </div>

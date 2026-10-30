@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FormError } from '@/components/ui/FormError';
-import { Input } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
 import { formatMoney, type PayrollRecord, type Profile, type PayrollCorrection } from '@/lib/hrData';
 import { currentAmount } from '@/lib/core/payrollCorrections';
 import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
@@ -34,14 +34,9 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   const [done, setDone] = useState(false);
   if (!text) return null;
   return (
-    <button
-      type="button"
-      aria-label={`Copy ${label}`}
-      onClick={() => { navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {}); }}
-      className="inline-flex items-center gap-1 text-caption font-semibold text-slate-500 hover:text-slate-800"
-    >
+    <Button type="button" variant="ghost" size="xs" aria-label={`Copy ${label}`} onClick={() => { navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {}); }}>
       {done ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}{done ? 'Copied' : 'Copy'}
-    </button>
+    </Button>
   );
 }
 
@@ -202,7 +197,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
                 <label className="block font-semibold text-slate-600">What should this month have been? ({record.region === 'USA' ? 'USD' : 'PKR'})</label>
                 <Input aria-label="Corrected amount" type="text" inputMode="decimal" value={corrAmount} onChange={(e) => setCorrAmount(e.target.value)} fieldSize="md" />
                 <label className="block font-semibold text-slate-600">Why? (everyone will see this)</label>
-                <textarea aria-label="Reason for the correction" value={corrReason} onChange={(e) => setCorrReason(e.target.value)} rows={3} maxLength={500} className="w-full rounded-xl border border-slate-200 p-3 text-xs focus:border-orange-400 focus:outline-none" placeholder="For example: the absence on 14 Sept was approved leave." />
+                <Textarea aria-label="Reason for the correction" value={corrReason} onChange={(e) => setCorrReason(e.target.value)} rows={3} maxLength={500} fieldSize="sm" placeholder="For example: the absence on 14 Sept was approved leave." />
                 {corrError && <p role="alert" className="font-semibold text-rose-600">{corrError}</p>}
                 <div className="flex gap-2">
                   <Button variant="primary" size="sm" disabled={corrBusy}

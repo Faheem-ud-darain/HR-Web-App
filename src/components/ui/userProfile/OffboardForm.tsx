@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '../Checkbox';
 import React, { useState } from 'react';
 import { ShieldWarningIcon as ShieldAlert } from '@/components/ui/icons';
 import { formatMoney, getFinalLeavePayout, getPTOAccrualDate, getRemainingPTO, type LeaveApplication, type Profile } from '@/lib/hrData';
@@ -7,13 +8,6 @@ import { companyNumberBlocksOffboard, offboardFormFrom, type OffboardForm as Val
 import { Button } from '../Button';
 import { FormField } from '../FormField';
 import { Textarea } from '../Input';
-
-const CheckRow = ({ checked, onChange, children }: { checked: boolean; onChange: (checked: boolean) => void; children: React.ReactNode }) => (
-  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-    <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="rounded border-slate-300 text-orange-600 focus:ring-orange-500" />
-    {children}
-  </label>
-);
 
 interface OffboardFormProps {
   profile: Profile;
@@ -49,13 +43,13 @@ export function OffboardForm({ profile, leaves, onCancel, onSubmit }: OffboardFo
       </div>
 
       <div className="space-y-2">
-        <CheckRow checked={values.itClearance} onChange={c => set('itClearance', c)}>1. IT Hardware Clearance &amp; Assets Recovered</CheckRow>
-        <CheckRow checked={values.financeClearance} onChange={c => set('financeClearance', c)}>2. Finance Account Settlement &amp; Pending dues paid</CheckRow>
-        <CheckRow checked={values.hrClearance} onChange={c => set('hrClearance', c)}>3. HR Resignation clearance signed off</CheckRow>
+        <Checkbox className="min-h-0!" checked={values.itClearance} onChange={c => set('itClearance', c)}>1. IT Hardware Clearance &amp; Assets Recovered</Checkbox>
+        <Checkbox className="min-h-0!" checked={values.financeClearance} onChange={c => set('financeClearance', c)}>2. Finance Account Settlement &amp; Pending dues paid</Checkbox>
+        <Checkbox className="min-h-0!" checked={values.hrClearance} onChange={c => set('hrClearance', c)}>3. HR Resignation clearance signed off</Checkbox>
         {hasCompanyNumber ? (
-          <CheckRow checked={values.companyNumberReturned} onChange={c => set('companyNumberReturned', c)}>
+          <Checkbox className="min-h-0!" checked={values.companyNumberReturned} onChange={c => set('companyNumberReturned', c)}>
             4. Company-Allocated Number ({profile.companyPhone}) Returned <span className="text-rose-600">*Required</span>
-          </CheckRow>
+          </Checkbox>
         ) : (
           <p className="text-caption text-slate-400 italic pl-0.5">4. No company-allocated number on file — nothing to return.</p>
         )}
