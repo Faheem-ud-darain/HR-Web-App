@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import { TableScroll, Table, THead, Th, TBody, Tr, Td } from '@/components/ui/Table';
@@ -93,12 +95,7 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                         )}
                         {canManage && (
                           <Td align="center">
-                            <input
-                              type="checkbox"
-                              checked={settings.excludeFromAutoDelete}
-                              onChange={(e) => handleExcludeToggle(emp.email, e.target.checked)}
-                              className="h-4 w-4 accent-orange-600 cursor-pointer"
-                            />
+                            <Checkbox checked={settings.excludeFromAutoDelete} onChange={checked => handleExcludeToggle(emp.email, checked)} className="min-h-0 justify-center"><span className="sr-only">Exclude from auto-delete</span></Checkbox>
                           </Td>
                         )}
                         <Td align="center">
@@ -118,44 +115,17 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                               how many are present in that row. */}
                           <div className="flex flex-wrap sm:flex-row justify-center gap-2">
                             {canManage && (
-                            <button
-                              onClick={() => handleOpenSetup(emp)}
-                              className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                            >
-                              <Settings className="h-3.5 w-3.5" /> Setup Agent
-                            </button>
+                            <Button variant="softOrange" size="xs" className="shrink-0 whitespace-nowrap gap-1.5" onClick={() => handleOpenSetup(emp)}><Settings className="h-3.5 w-3.5" /> Setup Agent</Button>
                             )}
                             {canManage && (
-                            <button
-                              onClick={() => handleOpenViewer(emp)}
-                              className="text-caption font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                            >
-                              <ImageIcon className="h-3.5 w-3.5" /> Screenshots
-                            </button>
+                            <Button variant="secondary" size="xs" className="shrink-0 whitespace-nowrap gap-1.5" onClick={() => handleOpenViewer(emp)}><ImageIcon className="h-3.5 w-3.5" /> Screenshots</Button>
                             )}
-                            <button
-                              onClick={() => handleOpenMouseView(emp)}
-                              className="text-caption font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                            >
-                              <MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity
-                            </button>
+                            <Button variant="secondary" size="xs" className="shrink-0 whitespace-nowrap gap-1.5" onClick={() => handleOpenMouseView(emp)}><MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity</Button>
                             {canManage && openShiftFor(emp.email) && (
-                              <button
-                                onClick={() => setForceEndShiftEmp(emp)}
-                                title="End their current shift now — they'll need to Start Shift again, going through the tracker connection check"
-                                className="text-caption font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                              >
-                                <WifiOff className="h-3.5 w-3.5" /> Force End Shift
-                              </button>
+                              <Button variant="softRose" size="xs" className="shrink-0 whitespace-nowrap gap-1.5" onClick={() => setForceEndShiftEmp(emp)} title="End their current shift now — they'll need to Start Shift again, going through the tracker connection check"><WifiOff className="h-3.5 w-3.5" /> Force End Shift</Button>
                             )}
                             {canManage && (
-                              <button
-                                onClick={() => setForceDisconnectEmp(emp)}
-                                title="Invalidate their current setup code — their tracker will be forced to show 'Reconnect Required' and Start Shift will be blocked until they paste in the new code"
-                                className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                              >
-                                <ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect
-                              </button>
+                              <Button variant="softOrange" size="xs" className="shrink-0 whitespace-nowrap gap-1.5" onClick={() => setForceDisconnectEmp(emp)} title="Invalidate their current setup code — their tracker will be forced to show 'Reconnect Required' and Start Shift will be blocked until they paste in the new code"><ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect</Button>
                             )}
                           </div>
                         </Td>
@@ -227,58 +197,25 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                       {canManage && (
                         <div>
                           <p className="text-caption text-slate-400 font-semibold uppercase mb-1">Exclude Auto-Delete</p>
-                          <label className="flex items-center gap-2 cursor-pointer mt-1.5">
-                            <input
-                              type="checkbox"
-                              checked={settings.excludeFromAutoDelete}
-                              onChange={(e) => handleExcludeToggle(emp.email, e.target.checked)}
-                              className="h-4 w-4 accent-orange-600 cursor-pointer"
-                            />
-                            <span className="text-xs text-slate-600 font-medium">{settings.excludeFromAutoDelete ? 'Yes' : 'No'}</span>
-                          </label>
+                          <Checkbox checked={settings.excludeFromAutoDelete} onChange={checked => handleExcludeToggle(emp.email, checked)} className="min-h-0 mt-1.5">{settings.excludeFromAutoDelete ? 'Yes' : 'No'}</Checkbox>
                         </div>
                       )}
                     </div>
                     <div className="grid grid-cols-1 gap-2 pt-2 border-t border-slate-100">
                       {canManage && (
-                      <button
-                        onClick={() => handleOpenViewer(emp)}
-                        className="w-full text-caption font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                      >
-                        <ImageIcon className="h-3.5 w-3.5" /> View Screenshots
-                      </button>
+                      <Button variant="secondary" size="sm" className="w-full" onClick={() => handleOpenViewer(emp)}><ImageIcon className="h-3.5 w-3.5" /> View Screenshots</Button>
                       )}
                       <div className="flex gap-2">
                         {canManage && (
-                          <button
-                            onClick={() => handleOpenSetup(emp)}
-                            className="flex-1 text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                          >
-                            <Settings className="h-3.5 w-3.5" /> Setup Agent
-                          </button>
+                          <Button variant="softOrange" size="sm" className="flex-1" onClick={() => handleOpenSetup(emp)}><Settings className="h-3.5 w-3.5" /> Setup Agent</Button>
                         )}
-                        <button
-                          onClick={() => handleOpenMouseView(emp)}
-                          className="flex-1 text-caption font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                        >
-                          <MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity
-                        </button>
+                        <Button variant="secondary" size="sm" className="flex-1" onClick={() => handleOpenMouseView(emp)}><MousePointerClick className="h-3.5 w-3.5" /> Mouse Activity</Button>
                       </div>
                       {canManage && openShiftFor(emp.email) && (
-                        <button
-                          onClick={() => setForceEndShiftEmp(emp)}
-                          className="w-full text-caption font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                        >
-                          <WifiOff className="h-3.5 w-3.5" /> Force End Shift
-                        </button>
+                        <Button variant="softRose" size="sm" className="w-full" onClick={() => setForceEndShiftEmp(emp)}><WifiOff className="h-3.5 w-3.5" /> Force End Shift</Button>
                       )}
                       {canManage && (
-                        <button
-                          onClick={() => setForceDisconnectEmp(emp)}
-                          className="w-full text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 py-2.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center justify-center gap-1.5"
-                        >
-                          <ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect
-                        </button>
+                        <Button variant="softOrange" size="sm" className="w-full" onClick={() => setForceDisconnectEmp(emp)}><ShieldAlert className="h-3.5 w-3.5" /> Force Disconnect</Button>
                       )}
                     </div>
                   </div>
