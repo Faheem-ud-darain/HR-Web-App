@@ -4,9 +4,10 @@ import React, { useId, useState } from 'react';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { CrownIcon as Crown, MegaphoneIcon as Megaphone, FileTextIcon as FileText, VideoCameraIcon as Video, SmileyIcon as Smile, PlusIcon as Plus, PaperclipIcon as Paperclip } from '@/components/ui/icons';
 import { Avatar } from '@/components/ui/Avatar';
+import { IconButton } from '@/components/ui/IconButton';
 import { displayName, Team, Profile } from '@/lib/hrData';
 import { EmojiPicker } from '@/components/ui/chat/chatHelpers';
-import { AttachButton, SendButton, PendingFileChip, enterSends, SuggestionList, ROUND_BTN, COMPOSER_BAR, COMPOSER_FIELD, COMPOSER_TEXT } from '@/components/ui/ComposerParts';
+import { AttachButton, SendButton, PendingFileChip, enterSends, SuggestionList, COMPOSER_BAR, COMPOSER_FIELD, COMPOSER_TEXT } from '@/components/ui/ComposerParts';
 import type { TeamDocument } from '@/lib/hrData';
 import { useChatComposer } from '@/components/ui/chat/useChatComposer';
 import { DismissibleArea } from '@/components/ui/DismissibleArea';
@@ -91,37 +92,16 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
       <div className="flex items-center gap-1.5 md:gap-2">
         <AttachButton inputRef={fileInputRef} onPick={handleFilePick} title="Attach file" className="max-md:hidden" />
 
-        <button
-          type="button"
-          onClick={addMeetLink}
-          title="Create Google Meet Video Call" aria-label="Create Google Meet Video Call"
-          className={`${ROUND_BTN} max-md:hidden bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors`}
-        >
-          <Video className="h-4 w-4" />
-        </button>
+        <IconButton label="Create Google Meet Video Call" size="composer" tone="success" className="max-md:hidden" onClick={addMeetLink}><Video className="h-4 w-4" /></IconButton>
 
         {oversight && (
-          <button
-            type="button"
-            onClick={() => setDraftIsAnnouncement(v => !v)}
-            title="Send as Announcement" aria-label="Send as Announcement" aria-pressed={draftIsAnnouncement}
-            className={`${ROUND_BTN} max-md:hidden transition-colors ${
-              draftIsAnnouncement ? 'bg-amber-500 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'
-            }`}
-          >
-            <Megaphone className="h-4 w-4" />
-          </button>
+          <IconButton label="Send as Announcement" size="composer" tone={draftIsAnnouncement ? 'warning' : 'soft'} className="max-md:hidden" aria-pressed={draftIsAnnouncement} onClick={() => setDraftIsAnnouncement(v => !v)}><Megaphone className="h-4 w-4" /></IconButton>
         )}
 
         <DismissibleArea open={menuOpen} onClose={() => setMenuOpen(false)} className="relative md:hidden">
-          <button
-            type="button"
-            onClick={() => setMenuOpen(o => !o)}
-            aria-label="More actions" aria-haspopup="true" aria-expanded={menuOpen}
-            className={`${ROUND_BTN} transition-colors ${draftIsAnnouncement ? 'bg-amber-500 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-500'}`}
-          >
+          <IconButton label="More actions" size="composer" tone={draftIsAnnouncement ? 'warning' : 'soft'} aria-haspopup="true" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}>
             <Plus className={`h-5 w-5 transition-transform ${menuOpen ? 'rotate-45' : ''}`} />
-          </button>
+          </IconButton>
           {menuOpen && (
             <div role="menu" className="absolute bottom-full left-0 mb-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1.5 popover-enter">
               <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -141,16 +121,7 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
 
         <div className={`${COMPOSER_FIELD} pl-1 pr-3`}>
           <div ref={emojiWrapperRef} className="shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(v => !v)}
-              title="Insert emoji" aria-label="Insert emoji"
-              className={`p-2 rounded-full transition-colors flex items-center justify-center ${
-                showEmojiPicker ? 'text-orange-600' : 'text-slate-500 hover:text-slate-600'
-              }`}
-            >
-              <Smile className="h-4 w-4" />
-            </button>
+            <IconButton label="Insert emoji" size="sm" className={showEmojiPicker ? 'text-orange-600' : ''} onClick={() => setShowEmojiPicker(v => !v)}><Smile className="h-4 w-4" /></IconButton>
             {showEmojiPicker && (
               <div className="absolute bottom-full left-3 mb-2">
                 <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmojiPicker(false)} />
@@ -203,7 +174,7 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
           onClick={handleSend}
           disabled={sending || (!draft.trim() && !pendingFile)}
           busy={sending}
-          className={draftIsAnnouncement ? 'bg-amber-500 hover:bg-amber-600' : 'bg-orange-600 hover:bg-orange-700'}
+          tone={draftIsAnnouncement ? 'warning' : 'primary'}
         />
       </div>
     </div>
