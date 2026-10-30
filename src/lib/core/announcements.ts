@@ -13,7 +13,17 @@ export function announcementWhen(timestamp: string, now: Date = new Date()): str
   return `${month} ${day}${Number(year) === now.getFullYear() ? '' : `, ${year}`}, ${time}`;
 }
 
-/** Long enough to be worth cutting to a few lines with a "Read more". */
-export function isLongText(text: string, maxChars = 160, maxLines = 3): boolean {
+/** Long enough to be worth cutting short with a "Read more". */
+export function isLongText(text: string, maxChars = PREVIEW_CHARS, maxLines = 3): boolean {
   return text.length > maxChars || text.split('\n').length > maxLines;
+}
+
+export const PREVIEW_CHARS = 160;
+
+/** The start of a long text for a card: at most `maxChars` and `maxLines`, cut at a word and ended with "…". A short text comes back whole. */
+export function previewText(text: string, maxChars = PREVIEW_CHARS, maxLines = 3): string {
+  if (!isLongText(text, maxChars, maxLines)) return text;
+  const cut = text.split('\n').slice(0, maxLines).join('\n').slice(0, maxChars);
+  const atWord = cut.length === text.length || /\s/.test(text[cut.length] ?? '') ? cut : cut.replace(/\s+\S*$/, '');
+  return `${(atWord || cut).trimEnd()}…`;
 }

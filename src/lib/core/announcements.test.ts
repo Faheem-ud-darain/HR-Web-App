@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { announcementWhen, isLongText } from './announcements';
+import { announcementWhen, isLongText, previewText } from './announcements';
 
 const now = new Date('2026-10-29T12:00:00Z');
 
@@ -22,5 +22,20 @@ describe('isLongText', () => {
     expect(isLongText('x'.repeat(161))).toBe(true);
     expect(isLongText('a\nb\nc\nd')).toBe(true);
     expect(isLongText('a\nb\nc')).toBe(false);
+  });
+});
+
+describe('previewText', () => {
+  it('leaves a short text whole', () => {
+    expect(previewText('Hello everyone')).toBe('Hello everyone');
+  });
+  it('cuts a long text at a word, within the limit, and ends with an ellipsis', () => {
+    const out = previewText('word '.repeat(60));
+    expect(out.endsWith('…')).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(161);
+    expect(out).not.toMatch(/\sw…$/);
+  });
+  it('keeps at most three lines', () => {
+    expect(previewText('a\nb\nc\nd\ne')).toBe('a\nb\nc…');
   });
 });
