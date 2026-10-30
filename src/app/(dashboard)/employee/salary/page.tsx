@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FileTextIcon as FileText, ShieldCheckIcon as ShieldCheck, PrinterIcon as Printer, TrendUpIcon as TrendingUp, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { APP_TIMEZONE } from '@/lib/timezone';
-import { netPay } from '@/lib/core/payrollView';
+import { deductionLimitedBy, netPay } from '@/lib/core/payrollView';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DailyDeductionsCard } from '@/components/payroll/DailyDeductionsCard';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
@@ -406,6 +406,12 @@ export default function EmployeeSalaryPage() {
                         <span className="text-rose-600 font-semibold shrink-0">-{formatMoney(item.amount, userProfile?.region)}</span>
                       </div>
                     ))}
+                    {deductionLimitedBy(selectedSlip.deductionBreakdown, selectedSlip.deductions) > 0 && (
+                      <div className="flex justify-between items-start gap-3 pl-2">
+                        <span className="text-slate-500 text-caption leading-snug">Limited to the month&apos;s pay (it can go down to zero, not below)</span>
+                        <span className="text-emerald-600 font-semibold shrink-0">+{formatMoney(deductionLimitedBy(selectedSlip.deductionBreakdown, selectedSlip.deductions), userProfile?.region)}</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex justify-between items-center py-2">

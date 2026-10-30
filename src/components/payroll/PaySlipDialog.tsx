@@ -12,7 +12,7 @@ import { FormError } from '@/components/ui/FormError';
 import { Input } from '@/components/ui/Input';
 import { formatMoney, type PayrollRecord, type Profile, type PayrollCorrection } from '@/lib/hrData';
 import { currentAmount } from '@/lib/core/payrollCorrections';
-import { netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
+import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
 
 interface PaySlipDialogProps {
   record: PayrollRecord | null;
@@ -67,6 +67,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
   if (!record) return null;
   const net = netPay(record);
   const groups = groupDeductions(record.deductionBreakdown);
+  const limitedBy = deductionLimitedBy(record.deductionBreakdown, record.deductions);
   const flags = payrollFlags(record, profile);
   const bonusValue = Number(bonusText.replace(/[^0-9.]/g, '')) || 0;
   const bonusChanged = bonusValue !== (Number(record.bonus) || 0);
@@ -137,6 +138,9 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
               </ul>
             </details>
           ))}
+          {limitedBy > 0 && (
+            <div className="flex justify-between text-emerald-700"><span className="font-semibold">Limited to the month&apos;s pay (it can go down to zero, not below)</span><span className="shrink-0 font-bold">+{money(limitedBy)}</span></div>
+          )}
           {groups.length === 0 && <p className="text-slate-400">Nothing was deducted this month.</p>}
           <div className="flex justify-between border-t border-slate-300 pt-2 text-slate-900"><span className="font-bold">Amount to pay</span><span className="font-black">{money(net)}</span></div>
         </div>

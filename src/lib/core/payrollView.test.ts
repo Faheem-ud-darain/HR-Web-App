@@ -1,11 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod } from './payrollView';
+import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod } from './payrollView';
 import type { PayrollRecord } from '../hr/types';
 
 function rec(over: Partial<PayrollRecord> = {}): PayrollRecord {
   return { id: 'r', employeeId: 'p1', name: 'Alex', role: 'Agent', region: 'Pakistan', baseSalary: 44000, unpaidLeaves: 0, bonus: 0, deductions: 0, processed: false, incrementAmount: 0, month: '2026-10', reservedThisMonth: 0, deductionBreakdown: [], pendingArrears: 0, ...over };
 }
 const bank = { bankName: 'HBL', accountNumber: '123', iban: '' };
+
+describe('deductionLimitedBy', () => {
+  it('is how much of the listed reasons was not taken because pay cannot go below zero', () => {
+    expect(deductionLimitedBy([{ amount: 145455 }], 80000)).toBe(65455);
+    expect(deductionLimitedBy([{ amount: 3000 }, { amount: 2000 }], 5000)).toBe(0);
+  });
+  it('is 0 for nothing listed or when more was taken than listed', () => {
+    expect(deductionLimitedBy([], 0)).toBe(0);
+    expect(deductionLimitedBy(undefined, 100)).toBe(0);
+    expect(deductionLimitedBy([{ amount: 100 }], 500)).toBe(0);
+  });
+});
 
 describe('netPay', () => {
   it('never goes below zero when deductions are more than the pay', () => {

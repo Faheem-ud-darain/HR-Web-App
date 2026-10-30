@@ -40,6 +40,16 @@ function groupOf(label: string): PayrollGroupKey {
 }
 
 /** The itemised deduction reasons, collected into a few plain groups (empty groups are left out). */
+/**
+ * How much of the listed deduction reasons was NOT taken because deductions can only take pay down to zero (the engine keeps
+ * every owed reason in the list but never charges more than the month's pay). Shown as one line under the reasons so a slip adds up:
+ * reasons − this = what was actually deducted.
+ */
+export function deductionLimitedBy(breakdown: { amount: number }[] | undefined, deducted: number): number {
+  const owed = (breakdown || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  return Math.max(0, Math.round((owed - (Number(deducted) || 0)) * 100) / 100);
+}
+
 export function groupDeductions(breakdown: { label: string; amount: number }[]): DeductionGroup[] {
   const byKey = new Map<PayrollGroupKey, DeductionGroup>();
   for (const item of breakdown || []) {
