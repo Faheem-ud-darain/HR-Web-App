@@ -85,13 +85,14 @@ function Landing() {
   );
 }
 
-// A light card that a dark one wipes across, as when the theme switches.
+// A light card that a dark one wipes across, as when the theme switches. Both are always truly white and black (not the theme's
+// colours, which would turn the light one grey in dark mode).
 function Theme() {
   const lines = <><div className="h-2 w-20 rounded bg-current opacity-30" /><div className="mt-2 h-2 w-32 rounded bg-current opacity-20" /><div className="mt-2 h-5 w-12 rounded-md bg-orange-500" /></>;
   return (
     <div className="relative h-24 w-full max-w-56 overflow-hidden rounded-xl border border-slate-300">
-      <div className="absolute inset-0 bg-white p-3 text-black">{lines}</div>
-      <div className="absolute inset-0 bg-black p-3 text-white" style={{ animation: `cl-wipe ${LOOP}` }}>{lines}</div>
+      <div className="absolute inset-0 bg-[white] p-3 text-[black]">{lines}</div>
+      <div className="absolute inset-0 bg-[black] p-3 text-[white]" style={{ animation: `cl-wipe ${LOOP}` }}>{lines}</div>
     </div>
   );
 }
