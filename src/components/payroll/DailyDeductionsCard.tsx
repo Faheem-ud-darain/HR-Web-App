@@ -40,7 +40,7 @@ export function DailyDeductionsCard({ records, leaves, fullName, region, monthly
         {months.length > 1 && <Tabs variant="chips" aria-label="Choose a month" value={month} onChange={setPicked} items={months.map(m => ({ value: m, label: m === currentMonth ? `${monthLabel(m)} (this month)` : monthLabel(m) }))} />}
 
         <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Total deducted" size="md" valueTone={total > 0 ? 'danger' : 'default'} value={total > 0 ? `-${formatMoney(total, region)}` : formatMoney(0, region)} sub={capped ? 'Pay can go down to zero, not below' : undefined} />
+          <StatCard label="Total deducted" size="md" valueTone={total > 0 ? 'danger' : 'default'} value={total > 0 ? `-${formatMoney(total, region)}` : formatMoney(0, region)} sub={capped ? 'Pay can go down to zero, not below. Nothing carries over to next month.' : undefined} />
           <StatCard label="Days charged" size="md" value={charged.length} />
         </div>
 
