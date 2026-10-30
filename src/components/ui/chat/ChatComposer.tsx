@@ -1,5 +1,6 @@
 'use client';
 
+import { MenuItem } from '@/components/ui/MenuItem';
 import React, { useId, useState } from 'react';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { CrownIcon as Crown, MegaphoneIcon as Megaphone, FileTextIcon as FileText, VideoCameraIcon as Video, SmileyIcon as Smile, PlusIcon as Plus, PaperclipIcon as Paperclip } from '@/components/ui/icons';
@@ -104,16 +105,10 @@ export function ChatComposer({ oversight, activeTeamId, activeTeam, currentUserE
           </IconButton>
           {menuOpen && (
             <div role="menu" className="absolute bottom-full left-0 mb-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1.5 popover-enter">
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                <Paperclip className="h-5 w-5 text-slate-500" /> Attach a file
-              </button>
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); addMeetLink(); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                <Video className="h-5 w-5 text-emerald-600" /> Add a Google Meet link
-              </button>
+              <MenuItem icon={<Paperclip className="h-5 w-5 text-slate-500" />} onClick={() => { setMenuOpen(false); fileInputRef.current?.click(); }}>Attach a file</MenuItem>
+              <MenuItem icon={<Video className="h-5 w-5 text-emerald-600" />} onClick={() => { setMenuOpen(false); addMeetLink(); }}>Add a Google Meet link</MenuItem>
               {oversight && (
-                <button type="button" role="menuitemcheckbox" aria-checked={draftIsAnnouncement} onClick={() => { setMenuOpen(false); setDraftIsAnnouncement(v => !v); }} className="w-full flex items-center gap-3 px-4 min-h-11 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                  <Megaphone className="h-5 w-5 text-amber-600" /> {draftIsAnnouncement ? 'Sending as announcement' : 'Send as announcement'}
-                </button>
+                <MenuItem icon={<Megaphone className="h-5 w-5 text-amber-600" />} checked={draftIsAnnouncement} onClick={() => { setMenuOpen(false); setDraftIsAnnouncement(v => !v); }}>{draftIsAnnouncement ? 'Sending as announcement' : 'Send as announcement'}</MenuItem>
               )}
             </div>
           )}

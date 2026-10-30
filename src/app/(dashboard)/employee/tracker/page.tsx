@@ -299,13 +299,7 @@ export default function TrackerPage() {
                   </p>
                   <p className="text-caption text-slate-400 leading-relaxed -mt-1">
                     Switching to a new computer and blocked by a &quot;device already connected&quot; error?{' '}
-                    <button
-                      onClick={handleForceDisconnectAll}
-                      disabled={forceDisconnecting}
-                      className="font-bold text-rose-600 hover:text-rose-700 disabled:opacity-50 underline underline-offset-2"
-                    >
-                      {forceDisconnecting ? 'Disconnecting…' : 'Force Disconnect All Trackers'}
-                    </button>
+                    <Button variant="softRose" size="xs" onClick={handleForceDisconnectAll} disabled={forceDisconnecting}>{forceDisconnecting ? 'Disconnecting…' : 'Force Disconnect All Trackers'}</Button>
                   </p>
                 </>
               )}
@@ -384,18 +378,8 @@ export default function TrackerPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={handleCopySetupCode}
-                      className="text-caption font-bold text-white bg-slate-800 hover:bg-slate-900 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                    >
-                      <Copy className="h-3.5 w-3.5" /> {codeCopied ? 'Copied!' : 'Copy My Setup Code'}
-                    </button>
-                    <button
-                      onClick={handleRegenerateOwnCode}
-                      className="text-caption font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg flex items-center gap-1.5 active:scale-97 transition-colors transition-transform"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" /> Regenerate My Code
-                    </button>
+                    <Button variant="ghost" size="sm" onClick={handleCopySetupCode}><Copy className="h-3.5 w-3.5" /> {codeCopied ? 'Copied!' : 'Copy My Setup Code'}</Button>
+                    <Button variant="softRose" size="sm" onClick={handleRegenerateOwnCode}><RefreshCw className="h-3.5 w-3.5" /> Regenerate My Code</Button>
                   </div>
 
                   <p className="text-caption text-slate-400 leading-relaxed border-t border-slate-200 pt-2">

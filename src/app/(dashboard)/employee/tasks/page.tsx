@@ -1,5 +1,6 @@
 'use client';
 
+import { Tabs } from '@/components/ui/Tabs';
 import React, { useState, useMemo } from 'react';
 import { useProfiles, useTasks, displayName } from '@/lib/hrData';
 import { TaskBoard } from '@/components/ui/lazy';
@@ -62,35 +63,18 @@ export default function TeamLeadTasksPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setTeamFilter('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors transition-shadow ${
-            teamFilter === 'all' ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          All Teams ({leadTeams.join(', ')})
-        </button>
-        <button
-          onClick={() => setTeamFilter('my')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors transition-shadow ${
-            teamFilter === 'my' ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          Assigned To Me
-        </button>
-        {leadTeams.map(t => (
-          <button
-            key={t}
-            onClick={() => setTeamFilter(t)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors transition-shadow ${
-              teamFilter === t ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {t} Team
-          </button>
-        ))}
-      </div>
+      <Tabs
+        variant="chips"
+        aria-label="Team"
+        value={teamFilter}
+        onChange={setTeamFilter}
+        className="flex-wrap overflow-visible"
+        items={[
+          { value: 'all', label: `All Teams (${leadTeams.join(', ')})` },
+          { value: 'my', label: 'Assigned To Me' },
+          ...leadTeams.map(t => ({ value: t, label: `${t} Team` })),
+        ]}
+      />
 
       <LoadMoreHistory days={doneDays} maxDays={365} loading={tasksFetching} noun="completed tasks" onLoadMore={() => setDoneDays(d => Math.min(365, d + 60))} />
 

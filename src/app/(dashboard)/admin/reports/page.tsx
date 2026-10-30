@@ -1,5 +1,7 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Tabs } from '@/components/ui/Tabs';
 import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
 import { exportEmployeesCsv, exportTimesheetCsv } from '@/lib/reportExports';
 import React, { useState, useEffect } from 'react';
@@ -112,12 +114,7 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Admin Master Report</h1>
           <p className="text-slate-500">CEO overview of all company profiles, localized payroll values, and onboarding details.</p>
         </div>
-        <button
-          onClick={() => exportEmployeesCsv(filteredEmployees)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform flex items-center gap-1.5 shadow-sm self-start md:self-auto"
-        >
-          <Download className="h-4 w-4" /> Export Report (CSV)
-        </button>
+        <Button variant="success" size="md" onClick={() => exportEmployeesCsv(filteredEmployees)}><Download className="h-4 w-4" /> Export Report (CSV)</Button>
       </div>
 
       <LoadMoreHistory days={historyDays} maxDays={365} loading={fetchingHistory} noun="shifts" onLoadMore={() => setHistoryDays(d => d + 60)} />
@@ -175,24 +172,9 @@ export default function ReportsPage() {
                   </Td>
                   <Td align="center">
                     <div className="flex flex-col sm:flex-row justify-center gap-2">
-                      <button
-                        onClick={() => handleOpenAssignModal(emp)}
-                        className="text-caption font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
-                      >
-                        <MapPin className="h-3.5 w-3.5" /> Assignment
-                      </button>
-                      <button
-                        onClick={() => handleOpenReviewModal(emp)}
-                        className="text-caption font-bold text-slate-600 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
-                      >
-                        <FileText className="h-3.5 w-3.5" /> Review Tracker
-                      </button>
-                      <button
-                        onClick={() => setSelectedDocsEmp(emp)}
-                        className="text-caption font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1.5 rounded-lg active:scale-97 transition-colors transition-transform flex items-center gap-1.5"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Documents
-                      </button>
+                      <Button variant="softOrange" size="xs" onClick={() => handleOpenAssignModal(emp)}><MapPin className="h-3.5 w-3.5" /> Assignment</Button>
+                      <Button variant="secondary" size="xs" onClick={() => handleOpenReviewModal(emp)}><FileText className="h-3.5 w-3.5" /> Review Tracker</Button>
+                      <Button variant="softIndigo" size="xs" onClick={() => setSelectedDocsEmp(emp)}><Download className="h-3.5 w-3.5" /> Documents</Button>
                     </div>
                   </Td>
                 </Tr>
@@ -242,15 +224,9 @@ export default function ReportsPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-                <button onClick={() => handleOpenAssignModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-caption font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
-                  <MapPin className="h-3.5 w-3.5" /> Assign
-                </button>
-                <button onClick={() => handleOpenReviewModal(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-caption font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
-                  <FileText className="h-3.5 w-3.5" /> Tracker
-                </button>
-                <button onClick={() => setSelectedDocsEmp(emp)} className="flex-1 min-h-11 lg:min-h-0 text-xs lg:text-caption font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg flex items-center justify-center gap-1.5 active:scale-97 transition-colors transition-transform">
-                  <Download className="h-3.5 w-3.5" /> Docs
-                </button>
+                <Button variant="softOrange" size="sm" onClick={() => handleOpenAssignModal(emp)} className="flex-1"><MapPin className="h-3.5 w-3.5" /> Assign</Button>
+                <Button variant="secondary" size="sm" onClick={() => handleOpenReviewModal(emp)} className="flex-1"><FileText className="h-3.5 w-3.5" /> Tracker</Button>
+                <Button variant="softIndigo" size="sm" onClick={() => setSelectedDocsEmp(emp)} className="flex-1"><Download className="h-3.5 w-3.5" /> Docs</Button>
               </div>
             </div>
           ))}
@@ -275,28 +251,7 @@ export default function ReportsPage() {
 
             <div className="space-y-2">
               <p className="text-xs text-slate-500 font-semibold">Select Region / Base Location</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedRegion('Pakistan')}
-                  className={`py-2 px-3 text-xs font-bold border rounded-lg transition-colors ${selectedRegion === 'Pakistan'
-                    ? 'border-orange-500 bg-orange-50 text-orange-600'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                >
-                  Pakistan (Remote)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRegion('USA')}
-                  className={`py-2 px-3 text-xs font-bold border rounded-lg transition-colors ${selectedRegion === 'USA'
-                    ? 'border-orange-500 bg-orange-50 text-orange-600'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                >
-                  USA
-                </button>
-              </div>
+              <Tabs variant="segmented" fill aria-label="Region" value={selectedRegion} onChange={setSelectedRegion} items={[{ value: 'Pakistan', label: 'Pakistan (Remote)' }, { value: 'USA', label: 'USA' }]} />
             </div>
 
             {selectedRegion === 'USA' && (
@@ -306,15 +261,7 @@ export default function ReportsPage() {
                   {warehouses.map(wh => {
                     const isChecked = selectedWarehouses.includes(wh.id);
                     return (
-                      <label key={wh.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 p-2 rounded-lg cursor-pointer hover:bg-slate-100">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleWarehouse(wh.id)}
-                          className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                        />
-                        <span className="truncate" title={wh.name}>{wh.name}</span>
-                      </label>
+                      <Checkbox key={wh.id} className="min-h-0! rounded-lg border border-slate-200 bg-slate-50 p-2" checked={isChecked} onChange={() => handleToggleWarehouse(wh.id)}><span className="truncate" title={wh.name}>{wh.name}</span></Checkbox>
                     );
                   })}
                 </div>
@@ -323,34 +270,12 @@ export default function ReportsPage() {
 
             {/* Workstation Tracking Activation Switch */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
-              <label className="flex items-center gap-2.5 text-xs font-bold text-slate-800 cursor-pointer select-none bg-orange-50/40 border border-orange-100/50 p-3 rounded-xl hover:bg-orange-50/70 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={trackingEnabled}
-                  onChange={(e) => setTrackingEnabled(e.target.checked)}
-                  className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 h-4 w-4"
-                />
-                <div>
-                  <span className="text-slate-900 block font-bold text-caption uppercase tracking-wide">Enable Workstation Monitoring</span>
-                  <span className="text-caption text-slate-400 font-medium leading-tight block mt-0.5">Activate screenshot captures, activity timeline logs, and active application checks.</span>
-                </div>
-              </label>
+              <Checkbox checked={trackingEnabled} onChange={setTrackingEnabled} className="min-h-0! rounded-xl border border-orange-100/50 bg-orange-50/40 p-3" hint="Activate screenshot captures, activity timeline logs, and active application checks.">Enable Workstation Monitoring</Checkbox>
             </div>
 
             {/* Part-time / Absence Check Exempt Toggle */}
             <div className="space-y-2 pt-2">
-              <label className="flex items-center gap-2.5 text-xs font-bold text-slate-800 cursor-pointer select-none bg-amber-50/40 border border-amber-100/50 p-3 rounded-xl hover:bg-amber-50/70 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={exemptFromAbsenceCheck}
-                  onChange={(e) => setExemptFromAbsenceCheck(e.target.checked)}
-                  className="rounded border-slate-300 text-amber-500 focus:ring-amber-400 h-4 w-4"
-                />
-                <div>
-                  <span className="text-slate-900 block font-bold text-caption uppercase tracking-wide">Exempt from Absence Check</span>
-                  <span className="text-caption text-slate-400 font-medium leading-tight block mt-0.5">Part-time or flexible-schedule employees will never be auto-marked absent. Existing false records must still be removed manually.</span>
-                </div>
-              </label>
+              <Checkbox checked={exemptFromAbsenceCheck} onChange={setExemptFromAbsenceCheck} className="min-h-0! rounded-xl border border-amber-100/50 bg-amber-50/40 p-3" hint="Part-time or flexible-schedule employees will never be auto-marked absent. Existing false records must still be removed manually.">Exempt from Absence Check</Checkbox>
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
@@ -393,13 +318,7 @@ export default function ReportsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Shift History (Manual + Geofenced)</h4>
-                <button
-                  onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, reviewEntries)}
-                  disabled={reviewEntries.length === 0}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-3 py-1.5 rounded-lg text-caption active:scale-97 transition-colors transition-transform shadow-sm"
-                >
-                  <Download className="h-3.5 w-3.5" /> Export CSV
-                </button>
+                <Button variant="success" size="xs" onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, reviewEntries)} disabled={reviewEntries.length === 0}><Download className="h-3.5 w-3.5" /> Export CSV</Button>
               </div>
               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                 <TableScroll hideOnMobile>

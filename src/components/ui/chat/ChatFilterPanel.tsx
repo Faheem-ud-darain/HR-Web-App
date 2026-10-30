@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import React from 'react';
 import { XIcon as X } from '@/components/ui/icons';
 import { Input, Select } from '@/components/ui/Input';
@@ -34,9 +35,7 @@ export function ChatFilterPanel({ filters }: { filters: ReturnType<typeof useCha
         </Select>
 
         {filters.hasActiveFilters && (
-          <button onClick={filters.clear} className="flex items-center gap-1 text-caption font-bold text-rose-600 hover:text-rose-700 ml-auto">
-            <X className="h-3.5 w-3.5" /> Clear
-          </button>
+          <Button variant="ghost" size="xs" className="ml-auto text-rose-600!" onClick={filters.clear}><X className="h-3.5 w-3.5" /> Clear</Button>
         )}
       </div>
     </div>
