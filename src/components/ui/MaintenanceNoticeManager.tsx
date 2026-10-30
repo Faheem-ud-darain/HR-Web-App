@@ -95,12 +95,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
               Warn everyone before you push an update — shown as a blocking popup to Employees, Team Leads, HR, and Admin alike.
             </p>
           </div>
-          <button
-            onClick={() => { resetForm(); setIsOpen(true); }}
-            className="shrink-0 bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-2 rounded-xl text-caption active:scale-97 transition-colors transition-transform shadow-sm flex items-center gap-1.5"
-          >
-            <PlusCircle className="h-3.5 w-3.5" /> New Notice
-          </button>
+          <Button size="sm" className="shrink-0" onClick={() => { resetForm(); setIsOpen(true); }}><PlusCircle className="h-3.5 w-3.5" /> New Notice</Button>
         </div>
         <CardContent className="p-0 divide-y divide-slate-100">
           {notices

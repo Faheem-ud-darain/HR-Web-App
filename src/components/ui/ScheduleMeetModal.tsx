@@ -211,14 +211,7 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
           >
             Cancel
           </Button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Video className="h-3.5 w-3.5" />
-            {isSubmitting ? 'Scheduling…' : 'Schedule Google Meet'}
-          </button>
+          <Button type="submit" variant="success" loading={isSubmitting}>{!isSubmitting && <Video className="h-3.5 w-3.5" />}{isSubmitting ? 'Scheduling…' : 'Schedule Google Meet'}</Button>
         </div>
       </form>
     </Modal>
