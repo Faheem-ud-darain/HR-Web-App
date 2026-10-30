@@ -9,9 +9,10 @@ import { StaffDashboardHeader } from '@/components/dashboard/StaffDashboardHeade
 import { OrgCalendar, TaskModal, MaintenanceNoticeManager, ScheduleMeetModal } from '@/components/ui/lazy';
 import { CurrencyDollarIcon as DollarSign, UsersIcon as Users, ClockIcon as Clock } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
-import { useProfiles, useLeaves, useTasks, usePayroll, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
+import { useProfiles, useLeaves, useTasks, useTimesheets, hrActions, formatMoney, Profile, displayName, buildNotificationLink } from '@/lib/hrData';
 import { AvgHoursWorkedCard } from '@/components/ui/AvgHoursWorkedCard';
 import { Button } from '@/components/ui/Button';
+import { usePayrollView } from '@/hooks/usePayrollView';
 import { netPay } from '@/lib/core/payrollView';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -24,7 +25,6 @@ export default function AdminDashboard() {
   const router = useRouter();
   const { data: employees = [], isLoading: isEmployeesLoading } = useProfiles();
   const { data: leaves = [], isLoading: isLeavesLoading, refetch: refetchLeaves } = useLeaves();
-  const { data: payrollRecords = [] } = usePayroll();
   const { data: tasks = [], refetch: refetchTasks } = useTasks();
   const { data: timesheets = [], isLoading: isTimesheetsLoading } = useTimesheets({ days: 10 });
 
@@ -71,12 +71,9 @@ export default function AdminDashboard() {
 
   // Derived stats — USA (USD) and Pakistan (PKR) salaries must never be
   // summed into a single number, so this stays split by currency.
-  // Uses the exact same computation as the Payroll & Salary page (base
-  // salary + bonus - deductions, employee/team_lead roles only) so the two
-  // pages never disagree — previously this summed raw baseSalary across
-  // every profile (including HR/Admin) with no bonus/deduction adjustment,
-  // which didn't match the real payroll totals.
-  const compiledPayroll = hrActions.computePayrollView(employees, payrollRecords, leaves);
+  // Uses the very same hook as the Payroll page (usePayrollView: the same inputs, shifts and absences included), so the two
+  // can never disagree. It used to call the engine without shifts or absences and overstate pay.
+  const { records: compiledPayroll } = usePayrollView();
   const totalPayrollUSD = compiledPayroll
     .filter(emp => emp.region === 'USA')
     .reduce((acc, emp) => acc + netPay(emp), 0);

@@ -12,7 +12,6 @@
 // the result more plainly, keeps one "amount to pay" figure everywhere, and nothing is saved
 // except through an explicit button (Save bonus, Mark as paid).
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { WarningIcon as AlertTriangle, CheckCircleIcon as CheckCircle2, DownloadSimpleIcon as Download, CircleNotchIcon as Loader2, ArrowsClockwiseIcon as RefreshCw, MagnifyingGlassIcon as Search } from '@/components/ui/icons';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -23,17 +22,17 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import {
-  hrActions, usePayroll, useProfiles, useLeaves, useTimesheets, formatMoney,
+  formatMoney,
   usePayrollCorrections, createPayrollCorrection, settlePayrollCorrection, type PayrollCorrection,
   payrollAdminAction,
-  canReviewPreviousMonthPayroll, previousPayrollMonthKey, type PayrollRecord, type Profile,
+  canReviewPreviousMonthPayroll, previousPayrollMonthKey, type PayrollRecord,
 } from '@/lib/hrData';
-import { daysAgoNYDateString } from '@/lib/timezone';
 import {
   netPay, payrollFlags, summarizePayroll, monthLabel, payPeriod, groupOfRegion, type PayrollGroup,
 } from '@/lib/core/payrollView';
 import { correctionsFor, outstandingTotals } from '@/lib/core/payrollCorrections';
 import { PaySlipDialog } from './PaySlipDialog';
+import { usePayrollView } from '@/hooks/usePayrollView';
 import { downloadCsv } from '@/lib/csv';
 
 type TabKey = 'salaries' | 'settlements' | 'held' | 'past';
@@ -42,24 +41,12 @@ type Pending = { kind: 'one'; record: PayrollRecord } | { kind: 'past'; record: 
 
 const GROUP_REGION: Record<PayrollGroup, 'Pakistan' | 'USA'> = { pakistan: 'Pakistan', usa: 'USA' };
 const GROUP_LABEL: Record<PayrollGroup, string> = { pakistan: 'Pakistan (PKR)', usa: 'USA (USD)' };
-const NO_EMPLOYEES: Profile[] = [];
-const NO_RECORDS: PayrollRecord[] = [];
 
 /** "YYYY-MM" of the calendar month we are in right now (New York time), to tell "this month so far" from a finished month. */
 const monthKeyNow = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).slice(0, 7);
 
 export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
   const isAdmin = role === 'admin';
-  const { data: rawPayroll = NO_RECORDS, isLoading: payrollLoading, refetch: refetchPayroll } = usePayroll();
-  const { data: employees = NO_EMPLOYEES, isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
-  const { data: leaves = [] } = useLeaves();
-  const { data: timesheets = [] } = useTimesheets({ days: 45 });
-  const { data: absenceRecords = [] } = useQuery({
-    queryKey: ['hr_absence_records', 'payroll'],
-    queryFn: () => hrActions.getAbsenceRecords({ sinceDate: daysAgoNYDateString(120) }),
-    staleTime: 60_000,
-  });
-
   const { data: correctionData, refetch: refetchCorrections } = usePayrollCorrections();
   const corrections: PayrollCorrection[] = correctionData?.corrections ?? [];
   const correctionsConfigured = correctionData?.configured !== false;
@@ -88,12 +75,8 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     return () => window.removeEventListener('globalSearch', onSearch);
   }, []);
 
-  const records = useMemo(
-    () => hrActions.computePayrollView(employees, rawPayroll, leaves, timesheets, absenceRecords, new Date(), showPrevious),
-    [employees, rawPayroll, leaves, timesheets, absenceRecords, showPrevious],
-  );
+  const { records, employees, rawPayroll, loading, refetchPayroll, refetchProfiles } = usePayrollView({ previous: showPrevious });
   const profileById = useMemo(() => new Map(employees.map(e => [e.id, e])), [employees]);
-  const loading = payrollLoading || profilesLoading;
   const currentMonth = records[0]?.month || '';
 
   const inGroup = useMemo(() => records.filter(r => groupOfRegion(r.region) === group), [records, group]);
