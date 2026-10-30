@@ -1,7 +1,7 @@
 // Plain TypeScript. The rules behind "What's New": the entries are written in code (lib/changelogEntries.ts), newest first, and a
 // person has seen them up to one entry id.
 
-export type ChangelogPreviewKind = 'stack' | 'dates' | 'readmore' | 'layout' | 'dashboard' | 'profile' | 'landing' | 'theme' | 'motion';
+export type ChangelogPreviewKind = 'stack' | 'dates' | 'readmore' | 'layout' | 'dashboard' | 'profile' | 'landing' | 'theme' | 'motion' | 'phone';
 
 /** A release: a named group of entries shown together on the changelog page. */
 export interface ChangelogUpdate {

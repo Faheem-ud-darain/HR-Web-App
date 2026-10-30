@@ -9,6 +9,7 @@ import { ChangelogCard } from '@/components/changelog/ChangelogCard';
 import { CHANGELOG, LATEST_CHANGELOG_ID } from '@/lib/changelogEntries';
 import { unseenEntries, type ChangelogEntry } from '@/lib/core/changelog';
 import { useAnyModalOpen } from '@/lib/modalStack';
+import { READ_MORE } from '@/components/changelog/ChangelogCard';
 
 const seenKey = (email: string) => `whatsnew_seen:${email.toLowerCase()}`;
 const readSeen = (email: string): string | null => { try { return localStorage.getItem(seenKey(email)); } catch { return null; } };
@@ -42,7 +43,7 @@ export function WhatsNewPopup({ email }: { email: string | null }) {
       <ChangelogCard
         entry={entry}
         label="Changelog"
-        action={<Button size="sm" onClick={() => { close(); router.push('/changelog'); }}>Read More <ArrowRight className="ml-1 h-4 w-4" /></Button>}
+        action={<Button size="sm" className={READ_MORE} onClick={() => { close(); router.push('/changelog'); }}>Read More <ArrowRight className="h-3 w-3" /></Button>}
       >
         <div className="flex items-center justify-between pt-2">
           <span className="text-sm font-bold text-slate-400">{index + 1}/{entries.length}</span>

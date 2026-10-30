@@ -12,6 +12,18 @@ export const CHANGELOG_UPDATES: ChangelogUpdate[] = [
     when: 'October 30, 2026',
     entries: [
       {
+        id: 'phone-ready',
+        title: 'Now made for your phone too',
+        summary: 'Every page now fits a phone screen, so you can use the app from your phone as well as your computer.',
+        preview: 'phone',
+        details: [
+          'Pages, tables and forms adjust to a phone screen, with large, easy-to-tap buttons.',
+          'Popups open as a sheet at the bottom of your screen, easy to reach with a thumb.',
+          'Navigate with the bar at the bottom of your phone.',
+          'Swipe through announcements and requests as a stack of cards.',
+        ],
+      },
+      {
         id: 'leave-date-changes',
         title: 'Change your leave dates in the app',
         summary: 'Need other days for a leave you already requested? Ask for the change here and HR or Admin answers it.',

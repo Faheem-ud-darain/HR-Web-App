@@ -1,12 +1,12 @@
 'use client';
 
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import React, { useState } from 'react';
 import { KeyIcon as KeyRound, ShieldCheckIcon as ShieldCheck } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { FormError } from '@/components/ui/FormError';
 import { Modal } from '@/components/ui/Modal';
 import { Profile, changeOwnPassword } from '@/lib/hrData';
-import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { errMsg } from '@/lib/errors';
 
@@ -92,13 +92,13 @@ export function ForcedPasswordChangeModal({ profile, onChanged }: ForcedPassword
         </p>
 
         <FormField label="Current (Temporary) Password">
-          <Input type="password" value={currentPass} onChange={e => setCurrentPass(e.target.value)} fieldSize="soft" autoComplete="current-password" />
+          <PasswordInput value={currentPass} onChange={e => setCurrentPass(e.target.value)} fieldSize="soft" autoComplete="current-password" />
         </FormField>
         <FormField label="New Password">
-          <Input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} fieldSize="soft" autoComplete="new-password" />
+          <PasswordInput value={newPass} onChange={e => setNewPass(e.target.value)} fieldSize="soft" autoComplete="new-password" />
         </FormField>
         <FormField label="Confirm New Password">
-          <Input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} fieldSize="soft" autoComplete="new-password" />
+          <PasswordInput value={confirmPass} onChange={e => setConfirmPass(e.target.value)} fieldSize="soft" autoComplete="new-password" />
         </FormField>
 
         <FormError>{error}</FormError>

@@ -42,9 +42,9 @@ export function ChangePasswordModal({ logTag, onChanged, onClose }: { logTag: st
 
   return (
     <FormModal title="Change Password" onClose={onClose} onSubmit={submit} busy={busy} error={error} submitLabel="Update Password">
-      <FormField label="Current Password" size="md"><PasswordInput value={current} onChange={setCurrent} placeholder="Enter current password" /></FormField>
-      <FormField label="New Password" size="md"><PasswordInput value={next} onChange={setNext} placeholder="Min. 6 characters" /></FormField>
-      <FormField label="Confirm New Password" size="md"><PasswordInput value={confirm} onChange={setConfirm} placeholder="Repeat new password" /></FormField>
+      <FormField label="Current Password" size="md"><PasswordInput value={current} onChange={e => setCurrent(e.target.value)} placeholder="Enter current password" autoComplete="current-password" /></FormField>
+      <FormField label="New Password" size="md"><PasswordInput value={next} onChange={e => setNext(e.target.value)} placeholder="Min. 6 characters" autoComplete="new-password" /></FormField>
+      <FormField label="Confirm New Password" size="md"><PasswordInput value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat new password" autoComplete="new-password" /></FormField>
     </FormModal>
   );
 }

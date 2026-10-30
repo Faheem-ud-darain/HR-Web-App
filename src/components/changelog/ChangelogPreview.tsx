@@ -107,7 +107,18 @@ function Motion() {
   );
 }
 
-const PREVIEWS: Record<ChangelogPreviewKind, () => React.JSX.Element> = { stack: Stack, dates: Dates, readmore: ReadMore, layout: Layout, dashboard: Dashboard, profile: Profile, landing: Landing, theme: Theme, motion: Motion };
+// A phone outline with cards popping in one after another.
+function Phone() {
+  return (
+    <div className="flex h-28 w-16 flex-col gap-1.5 rounded-xl border-2 border-slate-400 bg-card p-1.5">
+      <div className="mx-auto h-1 w-5 rounded-full bg-slate-300" />
+      {[0, 0.3, 0.6].map(d => <div key={d} className="flex-1 rounded-md bg-slate-200" style={{ animation: `cl-pop ${LOOP}`, animationDelay: `${d}s` }} />)}
+      <div className="mx-auto h-1.5 w-8 rounded-full bg-orange-500" />
+    </div>
+  );
+}
+
+const PREVIEWS: Record<ChangelogPreviewKind, () => React.JSX.Element> = { stack: Stack, dates: Dates, readmore: ReadMore, layout: Layout, dashboard: Dashboard, profile: Profile, landing: Landing, theme: Theme, motion: Motion, phone: Phone };
 
 export function ChangelogPreview({ kind, badge = true }: { kind: ChangelogPreviewKind; badge?: boolean }) {
   const Preview = PREVIEWS[kind];

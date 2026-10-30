@@ -2,6 +2,9 @@ import React from 'react';
 import { ChangelogPreview } from '@/components/changelog/ChangelogPreview';
 import type { ChangelogEntry } from '@/lib/core/changelog';
 
+// The Read More button's size: a small pill (it opts out of the usual 36px touch height on purpose; the whole card is the target).
+export const READ_MORE = 'min-h-0! px-2.5! py-1! text-[11px]!';
+
 // One What's New entry: the animation with a "What's new" badge on top; below it the label, title and summary with the Read More
 // button on the right (`action`), and whatever else belongs beneath (`children`: the full details, or the popup's Next row).
 // `badge` is false once someone has opened the entry's details. The popup and the changelog page both use it.

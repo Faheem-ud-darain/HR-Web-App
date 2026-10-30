@@ -1,5 +1,6 @@
 'use client';
 
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { PublicPage } from '@/components/landing/PublicPage';
 import { Globe } from '@/components/landing/Globe';
@@ -24,7 +25,7 @@ import {
   getOrCreateDeviceId,
 } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
-import { EyeIcon as Eye, EyeSlashIcon as EyeOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
+import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
@@ -55,7 +56,6 @@ export default function AuthPage() {
   const rememberedEmail = useSyncExternalStore(() => () => {}, () => getRememberedEmail() || '', () => '');
   const email = typedEmail ?? rememberedEmail;
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -282,6 +282,8 @@ export default function AuthPage() {
                 <FieldLabel size="md">Email Address</FieldLabel>
                 <Input 
                   type="email" 
+                  name="email"
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -291,25 +293,15 @@ export default function AuthPage() {
               </div>
               <div className="space-y-1.5">
                 <FieldLabel size="md">Password</FieldLabel>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    fieldSize="lg" className="pr-10 hover:bg-slate-100/50 focus:bg-white focus:ring-2 focus:ring-orange-100 transition-colors text-slate-900"
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                    tabIndex={-1}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+                <PasswordInput
+                  name="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  fieldSize="lg" className="hover:bg-slate-100/50 focus:bg-white focus:ring-2 focus:ring-orange-100 transition-colors text-slate-900"
+                  placeholder="••••••••"
+                />
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer select-none">
                     <input

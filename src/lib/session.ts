@@ -5,7 +5,7 @@
 // directly, so the "Remember me" checkbox on the login screen actually has
 // an effect everywhere, not just at the moment of logging in.
 //
-// Remember me checked   -> localStorage   (survives closing the browser)
+// Remember me checked   -> localStorage   (survives closing the browser or the app)
 // Remember me unchecked -> sessionStorage (cleared when the tab/browser closes)
 //
 // IMPORTANT: this never stores the password, only "who is signed in" (email
@@ -103,18 +103,18 @@ export async function setSession(email: string, role: string, remember: boolean,
   if (typeof window === 'undefined') return;
   const cleanEmail = (email || '').toLowerCase().trim();
 
-  // Always persist in localStorage so sessions survive tab closes, page refreshes, and app restarts
-  window.localStorage.setItem(EMAIL_KEY, cleanEmail);
-  window.localStorage.setItem(ROLE_KEY, role);
-  if (sessionToken) window.localStorage.setItem(TOKEN_KEY, sessionToken);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  // "Remember me" decides where the session lives: localStorage keeps it across closing the browser or the app, sessionStorage
+  // ends it with the tab. The other store is always cleared, so a stale copy there can never keep someone signed in.
+  const keep = remember ? window.localStorage : window.sessionStorage;
+  const drop = remember ? window.sessionStorage : window.localStorage;
+  keep.setItem(EMAIL_KEY, cleanEmail);
+  keep.setItem(ROLE_KEY, role);
+  if (sessionToken) keep.setItem(TOKEN_KEY, sessionToken);
+  else keep.removeItem(TOKEN_KEY);
+  for (const key of [EMAIL_KEY, ROLE_KEY, TOKEN_KEY]) drop.removeItem(key);
 
-  // Clear any temporary copies from sessionStorage
-  window.sessionStorage.removeItem(EMAIL_KEY);
-  window.sessionStorage.removeItem(ROLE_KEY);
-  window.sessionStorage.removeItem(TOKEN_KEY);
-
-  await mirrorToNativePreferences(cleanEmail, role, sessionToken || null);
+  // The native backup only ever holds a remembered session, so an app restart cannot bring back one that was not.
+  await mirrorToNativePreferences(remember ? cleanEmail : null, role, remember ? sessionToken || null : null);
   notifySessionChanged();
 }
 

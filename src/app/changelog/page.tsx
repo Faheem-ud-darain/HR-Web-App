@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { PublicPage } from '@/components/landing/PublicPage';
 import { ArrowRightIcon as ArrowRight } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
-import { ChangelogCard } from '@/components/changelog/ChangelogCard';
+import { ChangelogCard, READ_MORE } from '@/components/changelog/ChangelogCard';
 import { CHANGELOG_UPDATES } from '@/lib/changelogEntries';
 import type { ChangelogEntry } from '@/lib/core/changelog';
 
@@ -12,7 +12,7 @@ import type { ChangelogEntry } from '@/lib/core/changelog';
 function PageEntry({ entry }: { entry: ChangelogEntry }) {
   const [open, setOpen] = useState(false);
   return (
-    <ChangelogCard entry={entry} label="Changelog" badge={!open} action={<Button size="sm" aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : <>Read More <ArrowRight className="ml-1 h-4 w-4" /></>}</Button>}>
+    <ChangelogCard entry={entry} label="Changelog" badge={!open} action={<Button size="sm" className={READ_MORE} aria-expanded={open} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : <>Read More <ArrowRight className="h-3 w-3" /></>}</Button>}>
       {open && <ul className="list-disc space-y-1 pl-5 pt-1 text-sm text-slate-600">{entry.details.map(d => <li key={d}>{d}</li>)}</ul>}
     </ChangelogCard>
   );
