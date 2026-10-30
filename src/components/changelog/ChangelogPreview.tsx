@@ -1,4 +1,5 @@
 import React from 'react';
+import { Badge } from '@/components/ui/Badge';
 import type { ChangelogPreviewKind } from '@/lib/core/changelog';
 
 // The small looping animation at the top of a What's New card, drawn with the app's own colours (so it follows dark mode and never
@@ -44,13 +45,55 @@ function ReadMore() {
   );
 }
 
-const PREVIEWS: Record<ChangelogPreviewKind, () => React.JSX.Element> = { stack: Stack, dates: Dates, readmore: ReadMore };
+// A sidebar and a few blocks that pop in one after another.
+function Layout() {
+  const block = (delay: number, cls: string) => <div className={`rounded-lg border border-slate-200 bg-card ${cls}`} style={{ animation: `cl-pop ${LOOP} ${delay}s infinite` }} />;
+  return (
+    <div className="flex h-24 w-full max-w-56 gap-2">
+      {block(0, 'w-7')}
+      <div className="flex flex-1 flex-col gap-2">{block(0.2, 'h-5')}<div className="flex flex-1 gap-2">{block(0.4, 'flex-1')}{block(0.6, 'flex-1')}</div></div>
+    </div>
+  );
+}
+
+function Dashboard() {
+  return (
+    <div className="grid h-24 w-full max-w-56 grid-cols-2 gap-2">
+      {[0, 0.25, 0.5, 0.75].map(d => <div key={d} className="rounded-xl border border-slate-200 bg-card p-2" style={{ animation: `cl-pop ${LOOP} ${d}s infinite` }}><div className="h-1.5 w-8 rounded bg-slate-300" /><div className="mt-2 h-3 w-12 rounded bg-slate-200" /></div>)}
+    </div>
+  );
+}
+
+function Profile() {
+  return (
+    <div className="w-full max-w-56 space-y-2">
+      <div className="flex items-center gap-2"><div className="h-9 w-9 rounded-full bg-slate-300" /><div className="space-y-1.5"><div className="h-2 w-20 rounded bg-slate-300" /><div className="h-2 w-14 rounded bg-slate-200" /></div></div>
+      <div className="grid grid-cols-3 gap-1.5">{[0, 1, 2].map(i => <div key={i} className="h-6 rounded-lg border border-slate-200 bg-card" />)}</div>
+      <div className="grid grid-cols-3 gap-1.5"><div className="h-1 rounded-full bg-orange-500" style={{ animation: `cl-tab ${LOOP}` }} /></div>
+    </div>
+  );
+}
+
+// A strip of photo cards drifting past, as on the landing page.
+function Landing() {
+  return (
+    <div className="w-full max-w-56 overflow-hidden">
+      <div className="mb-2 h-3 w-28 rounded bg-slate-300" />
+      <div className="flex w-[200%] gap-2" style={{ animation: `cl-slide 6s linear infinite` }}>
+        {Array.from({ length: 10 }, (_, i) => <div key={i} className={`h-14 flex-1 rounded-lg ${i % 2 ? 'bg-slate-300' : 'bg-orange-300'}`} />)}
+      </div>
+    </div>
+  );
+}
+
+const PREVIEWS: Record<ChangelogPreviewKind, () => React.JSX.Element> = { stack: Stack, dates: Dates, readmore: ReadMore, layout: Layout, dashboard: Dashboard, profile: Profile, landing: Landing };
 
 export function ChangelogPreview({ kind }: { kind: ChangelogPreviewKind }) {
   const Preview = PREVIEWS[kind];
   return (
-    <div aria-hidden="true" className="flex h-40 items-center justify-center overflow-hidden bg-slate-100 px-4">
-      <Preview />
+    <div className="relative flex h-40 items-center justify-center overflow-hidden bg-slate-100 px-4">
+      <Badge variant="default" size="sm" className="absolute left-3 top-3 uppercase tracking-wide">What&apos;s new !</Badge>
+      <div aria-hidden="true" className="flex w-full justify-center"><Preview /></div>
     </div>
   );
 }

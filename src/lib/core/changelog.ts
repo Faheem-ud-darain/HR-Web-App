@@ -1,13 +1,23 @@
 // Plain TypeScript. The rules behind "What's New": the entries are written in code (lib/changelogEntries.ts), newest first, and a
 // person has seen them up to one entry id.
 
-export type ChangelogPreviewKind = 'stack' | 'dates' | 'readmore';
+export type ChangelogPreviewKind = 'stack' | 'dates' | 'readmore' | 'layout' | 'dashboard' | 'profile' | 'landing';
+
+/** A release: a named group of entries shown together on the changelog page. */
+export interface ChangelogUpdate {
+  id: string;
+  /** "Update 3" */
+  name: string;
+  /** "Made for phones" */
+  tagline: string;
+  /** "October 30, 2026" */
+  when: string;
+  entries: ChangelogEntry[];
+}
 
 export interface ChangelogEntry {
   /** Stable and unique; also what "seen up to here" is remembered by. */
   id: string;
-  /** "October 2026" */
-  when: string;
   title: string;
   /** Two short lines for the card. */
   summary: string;

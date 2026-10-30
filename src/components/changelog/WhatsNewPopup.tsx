@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowRightIcon as ArrowRight } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { PopupCard } from '@/components/ui/PopupCard';
 import { ChangelogCard } from '@/components/changelog/ChangelogCard';
 import { CHANGELOG, LATEST_CHANGELOG_ID } from '@/lib/changelogEntries';
 import { unseenEntries, type ChangelogEntry } from '@/lib/core/changelog';
@@ -13,10 +14,11 @@ const seenKey = (email: string) => `whatsnew_seen:${email.toLowerCase()}`;
 const readSeen = (email: string): string | null => { try { return localStorage.getItem(seenKey(email)); } catch { return null; } };
 const writeSeen = (email: string) => { try { localStorage.setItem(seenKey(email), LATEST_CHANGELOG_ID); } catch { /* nothing to remember it in: it shows again next time */ } };
 
-// After an update, once per person: the new entries one at a time (1/3, Next), each with a link to the whole changelog. It waits for
-// any blocking popup (a forced password change, an important announcement) to be dealt with first, and closing it, however, marks
-// everything as seen.
+// For every role, after an update, once per person: the new entries one at a time on a small floating card (1/3, Next), each
+// with a Read More to the whole changelog. It waits for any blocking popup (a forced password change, an important announcement)
+// to be dealt with first, and closing it, however, marks everything as seen.
 export function WhatsNewPopup({ email }: { email: string | null }) {
+  const router = useRouter();
   const anyModalOpen = useAnyModalOpen();
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
   const [index, setIndex] = useState(0);
@@ -36,21 +38,17 @@ export function WhatsNewPopup({ email }: { email: string | null }) {
   const close = () => { writeSeen(email); setOpen(false); setEntries([]); };
 
   return (
-    <Modal
-      isOpen={open}
-      onClose={close}
-      title="What's new"
-      eyebrow={`${index + 1}/${entries.length}`}
-      footer={
-        <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" size="sm" onClick={close}>{last ? 'Close' : 'Skip'}</Button>
-          {!last && <Button size="sm" onClick={() => setIndex(index + 1)}>Next</Button>}
+    <PopupCard isOpen={open} onClose={close} label="What's new">
+      <ChangelogCard
+        entry={entry}
+        label="Changelog"
+        action={<Button size="sm" onClick={() => { close(); router.push('/changelog'); }}>Read More <ArrowRight className="ml-1 h-4 w-4" /></Button>}
+      >
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-sm font-bold text-slate-400">{index + 1}/{entries.length}</span>
+          <Button variant="ghost" size="sm" onClick={last ? close : () => setIndex(index + 1)}>{last ? 'Done' : <>Next <ArrowRight className="ml-1 h-4 w-4" /></>}</Button>
         </div>
-      }
-    >
-      <ChangelogCard entry={entry}>
-        <Link href="/changelog" onClick={close} className="inline-block pt-1 text-sm font-semibold text-orange-600 hover:text-orange-700">Read more →</Link>
       </ChangelogCard>
-    </Modal>
+    </PopupCard>
   );
 }

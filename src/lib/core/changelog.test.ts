@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { unseenEntries, type ChangelogEntry } from './changelog';
 
-const entry = (id: string): ChangelogEntry => ({ id, when: 'October 2026', title: id, summary: '', preview: 'stack', details: [] });
+const entry = (id: string): ChangelogEntry => ({ id, title: id, summary: '', preview: 'stack', details: [] });
 const entries = [entry('c'), entry('b'), entry('a')];
 
 describe('unseenEntries', () => {
