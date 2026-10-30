@@ -95,9 +95,9 @@ export function CardStack<T>({ items, keyOf, render, peek, label }: CardStackPro
         style={dragY !== null ? { transform: `translateY(${dragY}px)`, opacity: leaving ? 0 : 1 - Math.min(0.4, Math.abs(dragY) / 400), transition: isDragging ? 'none' : `transform ${EXIT_MS}ms ease-out, opacity ${EXIT_MS}ms ease-out` } : { transition: `transform ${EXIT_MS}ms ease-out` }}
       >
         <div className="flex items-center justify-between rounded-t-xl border border-b-0 border-slate-200 bg-slate-50 px-3 py-1.5">
-          <div className="flex flex-1 cursor-grab items-center gap-3 py-1">
-            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-orange-500 px-1.5 text-caption font-bold text-white" aria-label={`${current + 1} of ${count}`}>{current + 1}</span>
-            <span className="text-caption font-bold text-slate-500" aria-hidden="true">of {count}</span>
+          <div className="flex min-w-0 flex-1 cursor-grab items-center gap-2 py-1">
+            <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 px-1.5 text-caption font-bold text-white" aria-label={`${current + 1} of ${count}`}>{current + 1}</span>
+            <span className="min-w-0 flex-1 truncate text-caption font-bold text-slate-600">{peek(items[current])}</span>
           </div>
           <div className="flex items-center">
             <IconButton label="Previous request" size="sm" onClick={() => go(-1)}><CaretUp className="h-4 w-4" aria-hidden="true" /></IconButton>
