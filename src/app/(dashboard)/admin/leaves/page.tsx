@@ -1,5 +1,6 @@
 'use client';
 
+import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ShieldCheckIcon as ShieldCheck, ListBulletsIcon as List, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
@@ -83,6 +84,8 @@ export default function AdminLeavesPage() {
           <p className="text-slate-500 text-sm">Final CEO decisions on HR-approved leaves. See full org history in the History tab.</p>
         </div>
       </div>
+
+      <LeaveDateChangeRequests onAnswered={refetchLeaves} />
 
       <LeaveStatTiles
         tiles={[

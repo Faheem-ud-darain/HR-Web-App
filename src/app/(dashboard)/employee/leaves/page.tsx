@@ -1,5 +1,7 @@
 'use client';
 
+import { LeaveChangeControl } from '@/components/ui/leaves/LeaveChangeControl';
+import { useLeaveDateChanges } from '@/lib/hr/leaveDateChange';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProfiles, useLeaves, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
@@ -25,6 +27,9 @@ export default function EmployeeLeavesPage() {
   const { data: allProfiles } = useProfiles();
   const myLeaveName = allProfiles?.find(p => p.email && p.email.toLowerCase() === (getSessionEmail() || '').toLowerCase())?.fullName;
   const { data: allLeaves, isLoading: leavesLoading, refetch: refetchLeaves } = useLeaves({ employeeName: myLeaveName ?? null });
+  // Requests to move a leave to other days (the employee's own).
+  const { data: dateChanges, refetch: refetchChanges } = useLeaveDateChanges();
+  const pendingChangeFor = (leaveId: string) => dateChanges?.requests.find(r => r.leaveId === leaveId && r.status === 'pending');
 
   const [searchQuery, setSearchQuery] = useState('');
   const sessionEmail = useSessionEmail();
@@ -352,18 +357,19 @@ export default function EmployeeLeavesPage() {
                   <Td className="text-slate-500">{leave.reason}</Td>
                   <Td align="center">{getStatusBadge(leave.status)}</Td>
                   <Td align="center">
-                    {leave.status === 'pending' ? (
-                      <button
-                        type="button"
-                        onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
-                        title="Withdraw this leave request"
-                        className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <span className="text-slate-300 text-xs">—</span>
-                    )}
+                    <div className="flex items-center justify-center gap-2">
+                      <LeaveChangeControl leave={leave} pending={pendingChangeFor(leave.id)} configured={!!dateChanges?.configured} onChanged={() => { void refetchChanges(); void refetchLeaves(); }} />
+                      {leave.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => { setDeletingLeaveId(leave.id); setDeleteError(''); }}
+                          title="Withdraw this leave request"
+                          className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </Td>
                 </Tr>
               ))}
@@ -409,6 +415,7 @@ export default function EmployeeLeavesPage() {
                   <p className="text-xs font-semibold text-slate-700">{leave.reason}</p>
                 </div>
               </div>
+              <LeaveChangeControl leave={leave} pending={pendingChangeFor(leave.id)} configured={!!dateChanges?.configured} onChanged={() => { void refetchChanges(); void refetchLeaves(); }} />
             </div>
           ))}
           {leavesLoading && <ListSkeleton rows={3} />}

@@ -1,5 +1,6 @@
 'use client';
 
+import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, displayName, buildNotificationLink } from '@/lib/hrData';
@@ -252,6 +253,8 @@ export default function HRLeavesPage() {
           also tacked on a PTO/Sick/Urgent type breakdown at the same visual
           weight, which duplicated the Type column already visible on every
           kanban card and history row without adding new information. */}
+      <LeaveDateChangeRequests onAnswered={refetchLeaves} />
+
       <LeaveStatTiles
         tiles={[
           { label: 'Total', value: stats.total, tone: 'slate' },
