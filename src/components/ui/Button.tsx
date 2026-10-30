@@ -11,7 +11,7 @@ import { CircleNotchIcon as Loader2 } from '@/components/ui/icons';
 // same radius as Card/Modal (rounded-xl, 12px — DESIGN.md's stated cap),
 // same 150ms snappy transition + scale(0.97) press feedback defined
 // globally in globals.css, same weight/size scale everywhere.
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink' | 'softOrange' | 'softAmber' | 'softRose';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'warning' | 'success' | 'indigo' | 'purple' | 'ghost' | 'outline' | 'ink' | 'softOrange' | 'softAmber' | 'softRose' | 'softEmerald' | 'softIndigo';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -39,6 +39,8 @@ const VARIANT_STYLES: Record<ButtonVariant, string> = {
   // Tinted, for a small toggle or action that is "on" (the orange and amber chips) or a gentle warning (close a ticket).
   softOrange: 'bg-orange-100 hover:bg-orange-200 text-orange-700 disabled:opacity-50',
   softAmber: 'bg-amber-100 hover:bg-amber-200 text-amber-700 disabled:opacity-50',
+  softIndigo: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-50',
+  softEmerald: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 disabled:opacity-50',
   softRose: 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-50',
 };
 

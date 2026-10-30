@@ -1,10 +1,11 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import React, { useState } from 'react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CareerPosition, CareerApplication, useCareers, useWarehouses, useTeams, hrActions, getCareerApplicationsAdmin } from '@/lib/hrData';
-import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { MapPinIcon as MapPin, PlusIcon as Plus, TrashIcon as Trash2, ArrowRightIcon as ArrowRight, UsersIcon as Users } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { useQuery } from '@tanstack/react-query';
 import { CAREERS_HERO, DEPARTMENTS } from '@/components/ui/careers/careerOptions';
@@ -184,13 +185,7 @@ export function CareersView({ role, hero = true }: CareersViewProps) {
                     </div>
                   </div>
                   {canEdit && (
-                    <button
-                      onClick={() => handleDeleteJob(job.id)}
-                      disabled={deletingJobId === job.id}
-                      className="text-slate-400 hover:text-rose-600 p-1.5 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
-                    >
-                      {deletingJobId === job.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </button>
+                    <IconButton size="sm" label="Delete job" loading={deletingJobId === job.id} onClick={() => handleDeleteJob(job.id)} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></IconButton>
                   )}
                 </div>
 

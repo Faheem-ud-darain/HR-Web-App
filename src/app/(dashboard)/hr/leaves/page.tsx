@@ -8,8 +8,8 @@ import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
 import { hrActions, LeaveApplication, Profile, useLeaves, useProfiles, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
-import { Button } from '@/components/ui/Button';
-import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { Button, type ButtonVariant } from '@/components/ui/Button';
+import { DotsSixVerticalIcon as GripVertical, ChartBarIcon as BarChart3, ListBulletsIcon as List, DownloadSimpleIcon as Download, LockIcon as Lock, CalendarBlankIcon as Calendar } from '@/components/ui/icons';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { LeaveHistory, LeaveStatTiles, matchesLeaveSearch, useLeaveFilters } from '@/components/ui/LeaveHistory';
 import { Tabs } from '@/components/ui/Tabs';
@@ -212,25 +212,26 @@ export default function HRLeavesPage() {
   // Row buttons for the History tab. A table row gets compact buttons; a phone card gets wide, tall ones.
   const historyActions = (l: LeaveApplication, variant: 'row' | 'card') => {
     const wide = variant === 'card';
-    const button = (tone: string, onClick: () => void, label: string, full = false) => (
-      <button
-        onClick={onClick}
+    const button = (variant: ButtonVariant, onClick: () => void, label: string, full = false) => (
+      <Button
+        variant={variant}
+        size="xs"
+        loading={processingLeaveId === l.id}
         disabled={processingLeaveId !== null}
-        className={`font-semibold transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 ${tone} ${
-          wide ? `min-h-11 text-caption font-bold py-2 rounded-lg ${full ? 'w-full' : 'flex-1'}` : 'text-xs px-2.5 py-1 rounded pointer-coarse:min-h-11'
-        }`}
-      >{processingLeaveId === l.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{label}</button>
+        onClick={onClick}
+        className={wide ? `min-h-11 ${full ? 'w-full' : 'flex-1'}` : 'pointer-coarse:min-h-11'}
+      >{label}</Button>
     );
     if (l.status === 'pending') {
       return (
         <div className={`flex gap-2 ${wide ? 'w-full' : 'justify-center'}`}>
-          {button('text-emerald-600 bg-emerald-50 hover:bg-emerald-100', () => handleSendToCEO(l), 'Send to CEO')}
-          {button('text-rose-600 bg-rose-50 hover:bg-rose-100', () => handleHistoryReject(l), 'Reject')}
+          {button('softEmerald', () => handleSendToCEO(l), 'Send to CEO')}
+          {button('softRose', () => handleHistoryReject(l), 'Reject')}
         </div>
       );
     }
     // A request sent to the CEO by mistake can be recalled; the CEO's own decision (approved) cannot.
-    if (l.status === 'rejected' || l.status === 'hr_approved') return button('text-slate-600 bg-slate-100 hover:bg-slate-200', () => handleReopenLeave(l), 'Re-open', true);
+    if (l.status === 'rejected' || l.status === 'hr_approved') return button('secondary', () => handleReopenLeave(l), 'Re-open', true);
     return <span className="text-xs text-slate-400 font-medium">—</span>;
   };
 

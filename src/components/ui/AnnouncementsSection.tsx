@@ -9,7 +9,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { announcementWhen } from '@/lib/core/announcements';
 import { Modal } from '@/components/ui/Modal';
 import { Avatar } from '@/components/ui/Avatar';
-import { CheckCircleIcon as CheckCircle2, CircleNotchIcon as Loader2, TrashIcon as Trash2, EyeIcon as Eye, WarningIcon as AlertTriangle, ArrowBendUpRightIcon as Forward } from '@/components/ui/icons';
+import { CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, EyeIcon as Eye, WarningIcon as AlertTriangle, ArrowBendUpRightIcon as Forward } from '@/components/ui/icons';
 import { hrActions, Profile, Announcement, useProfiles, useAnnouncements, useWarehouses, displayName } from '@/lib/hrData';
 import { getSessionEmail } from '@/lib/session';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -157,8 +157,8 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
                   actions={
                     <>
                       <IconButton size="sm" label="Forward to HR & Admin" onClick={() => setForwardingAnn(ann)}><Forward className="h-4 w-4" /></IconButton>
-                      <IconButton size="sm" label="Delete announcement" onClick={() => handleDeleteAnnouncement(ann.id)} disabled={deletingAnnId === ann.id} className="hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50">
-                        {deletingAnnId === ann.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      <IconButton size="sm" label="Delete announcement" onClick={() => handleDeleteAnnouncement(ann.id)} loading={deletingAnnId === ann.id} className="hover:text-rose-600 hover:bg-rose-50">
+                        <Trash2 className="h-4 w-4" />
                       </IconButton>
                     </>
                   }

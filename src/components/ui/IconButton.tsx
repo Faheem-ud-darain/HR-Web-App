@@ -1,4 +1,5 @@
 import React from 'react';
+import { Spinner } from '@/components/ui/Spinner';
 
 interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** What the button does. Spoken by screen readers and shown as the hover hint. */
@@ -12,6 +13,8 @@ interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElem
   dot?: boolean;
   /** plain = no fill until hovered; soft = a grey fill; primary = the orange send button; success and warning are tinted (a Meet link, a pinned announcement that is on). */
   tone?: keyof typeof TONES;
+  /** Swap the icon for the shared spinner while the action runs (and ignore taps). */
+  loading?: boolean;
 }
 
 const TONES = {
@@ -25,7 +28,7 @@ const TONES = {
 const SIZES = { md: 'h-10 w-10', sm: 'h-8 w-8', composer: 'h-10 w-10 md:h-9 md:w-9' };
 
 // The round icon-only button used in the top bar: 40px to tap, one hover look, always named.
-export function IconButton({ label, badge = 0, dot = false, size = 'md', tone = 'plain', className = '', children, ...props }: IconButtonProps) {
+export function IconButton({ label, badge = 0, dot = false, size = 'md', tone = 'plain', loading = false, className = '', children, ...props }: IconButtonProps) {
   return (
     <button
       type="button"
@@ -33,8 +36,9 @@ export function IconButton({ label, badge = 0, dot = false, size = 'md', tone = 
       title={label}
       className={`relative ${SIZES[size]} shrink-0 rounded-full transition-colors transition-transform active:scale-95 flex items-center justify-center ${TONES[tone]} ${className}`}
       {...props}
+      disabled={props.disabled || loading}
     >
-      {children}
+      {loading ? <Spinner className="h-4 w-4" /> : children}
       {dot && <span aria-hidden="true" className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white presence-dot" />}
       {badge > 0 && (
         <span aria-hidden="true" className="absolute top-0.5 right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white font-bold text-caption leading-none flex items-center justify-center border border-white">

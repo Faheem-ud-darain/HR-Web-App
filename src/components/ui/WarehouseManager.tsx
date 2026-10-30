@@ -1,7 +1,8 @@
 'use client';
 
+import { IconButton } from '@/components/ui/IconButton';
 import React, { useState } from 'react';
-import { PencilSimpleLineIcon as Edit, CircleNotchIcon as Loader2, MapPinIcon as MapPin, TrashIcon as Trash } from '@/components/ui/icons';
+import { PencilSimpleLineIcon as Edit, MapPinIcon as MapPin, TrashIcon as Trash } from '@/components/ui/icons';
 import { hrActions, useProfiles, useWarehouses, type Warehouse } from '@/lib/hrData';
 import { Button } from '@/components/ui/Button';
 import { SuccessNote } from '@/components/ui/SuccessNote';
@@ -164,15 +165,7 @@ export function WarehouseManager({ layout = 'split', className = '' }: { layout?
                   >
                     <Edit className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => !deletingId && setPendingDeleteId(wh.id)}
-                    disabled={deletingId === wh.id}
-                    className="p-2 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-colors transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Delete Warehouse"
-                    aria-label={`Delete ${wh.name}`}
-                  >
-                    {deletingId === wh.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash className="h-4 w-4" />}
-                  </button>
+                  <IconButton size="sm" label="Delete warehouse" loading={deletingId === wh.id} onClick={() => !deletingId && setPendingDeleteId(wh.id)} className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"><Trash className="h-4 w-4" /></IconButton>
                 </div>
               </div>
             ))}

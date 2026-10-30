@@ -1,12 +1,13 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from './Card';
 import { hrActions, UserSessionSlot } from '@/lib/hrData';
 import { getOrCreateDeviceId, clearSession, getSessionRole } from '@/lib/session';
 import { formatDateTimeNY } from '@/lib/timezone';
-import { LaptopIcon as Laptop, SignOutIcon as LogOut, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { LaptopIcon as Laptop, SignOutIcon as LogOut } from '@/components/ui/icons';
 import { useQuery } from '@tanstack/react-query';
 
 // Employee-facing (and Team Lead, who shares the Employee dashboard) view
@@ -95,14 +96,10 @@ export function LoggedInDevicesCard({ email }: { email: string }) {
                     Last active {formatDateTimeNY(s.lastSeenAt)}
                   </p>
                 </div>
-                <button
-                  onClick={() => handleLogOut(s.deviceId)}
-                  disabled={removingId === s.deviceId}
-                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {removingId === s.deviceId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+                <Button variant="softRose" size="sm" className="shrink-0" loading={removingId === s.deviceId} onClick={() => handleLogOut(s.deviceId)}>
+                  {removingId !== s.deviceId && <LogOut className="h-3.5 w-3.5" />}
                   {isThisDevice ? 'Log Out' : 'Log Out This Device'}
-                </button>
+                </Button>
               </div>
             );
           })

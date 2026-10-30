@@ -148,10 +148,9 @@ body {
   overscroll-behavior-y: none; /* Native app feel, no pull-to-refresh bounce */
 }
 
-/* Your own message bubble: orange-700, so white text on it reads at 5.2:1 (on the brand orange-600 it was 3.6:1).
-   The dark theme already uses this shade for filled orange, so one value serves both. */
+/* Your own message bubble: the app's brand orange (--primary), the same in the light and dark themes. */
 @utility bg-bubble-own {
-  background-color: #c2410c;
+  background-color: var(--primary);
 }
 
 /* The smallest text in the app: badges, timestamps, hints. One named step instead of 8px, 9px, 10px and 11px. */

@@ -1,11 +1,13 @@
 'use client';
 
+import { SearchInput } from '@/components/ui/SearchInput';
+import { Select } from '@/components/ui/Input';
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Task, hrActions } from '@/lib/hrData';
-import { TrashIcon as Trash2, CheckCircleIcon as CheckCircle2, ArrowCounterClockwiseIcon as RotateCcw, ClockIcon as Clock, WarningIcon as AlertTriangle, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, UserIcon as User, FlagIcon as Flag, ArrowRightIcon as ArrowRight, BuildingsIcon as Building2, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { TrashIcon as Trash2, CheckCircleIcon as CheckCircle2, ArrowCounterClockwiseIcon as RotateCcw, ClockIcon as Clock, WarningIcon as AlertTriangle, BriefcaseIcon as Briefcase, CalendarBlankIcon as Calendar, UserIcon as User, FlagIcon as Flag, ArrowRightIcon as ArrowRight, BuildingsIcon as Building2 } from '@/components/ui/icons';
 import { TASK_PRIORITY_STYLES, TASK_STATUS_STYLES, TASK_STATUS_LABELS } from '@/components/ui/StatusBadges';
 
 interface TaskBoardProps {
@@ -152,13 +154,9 @@ function TaskDetailModal({ task, onClose, onUpdate, canDelete, readOnly }: {
             </Button>
           )}
           {canDelete && (
-            <button
-              onClick={handleDelete}
-              disabled={isWorking}
-              className="flex items-center justify-center gap-1.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 font-semibold px-4 py-3 md:py-2 rounded-lg text-sm active:scale-97 transition-colors transition-transform md:ml-auto min-h-[44px] md:min-h-0 w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete Task
-            </button>
+            <Button variant="softRose" onClick={handleDelete} disabled={isWorking} loading={isWorking} className="min-h-[44px] md:min-h-0 w-full md:w-auto">
+              {!isWorking && <Trash2 className="h-4 w-4" />} Delete Task
+            </Button>
           )}
         </div>
       </div>
@@ -197,33 +195,19 @@ export function TaskBoard({ tasks, onUpdate, filterEmails, canDelete = true, rea
     <div className="space-y-4">
       {/* Filters — stack on mobile, row on md+ */}
       <div className="flex flex-col md:flex-row gap-3">
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search tasks, employees, teams..."
-          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2.5 md:py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 min-h-[44px] md:min-h-0"
-        />
-        <select
-          value={filterPriority}
-          onChange={e => setFilterPriority(e.target.value as Task['priority'] | 'all')}
-          className="bg-slate-50 border border-slate-200 rounded-lg py-2.5 md:py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 min-h-[44px] md:min-h-0"
-        >
+        <SearchInput fieldSize="md" value={search} onChange={setSearch} placeholder="Search tasks, employees, teams..." wrapperClassName="flex-1" />
+        <Select value={filterPriority} onChange={e => setFilterPriority(e.target.value as Task['priority'] | 'all')} fieldSize="md" chevron className="md:w-auto">
           <option value="all">All Priorities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
-        </select>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value as Task['status'] | 'all')}
-          className="bg-slate-50 border border-slate-200 rounded-lg py-2.5 md:py-2 px-3 text-sm focus:border-orange-500 outline-none text-slate-900 min-h-[44px] md:min-h-0"
-        >
+        </Select>
+        <Select value={filterStatus} onChange={e => setFilterStatus(e.target.value as Task['status'] | 'all')} fieldSize="md" chevron className="md:w-auto">
           <option value="all">All Statuses</option>
           <option value="todo">To Do</option>
           <option value="in_progress">In Progress</option>
           <option value="done">Done</option>
-        </select>
+        </Select>
       </div>
 
       {/* Summary counts — wrap on mobile */}

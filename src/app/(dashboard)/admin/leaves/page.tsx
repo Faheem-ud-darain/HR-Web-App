@@ -1,12 +1,13 @@
 'use client';
 
+import { Button } from '@/components/ui/Button';
 import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
 import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
-import { ShieldCheckIcon as ShieldCheck, ListBulletsIcon as List, CircleNotchIcon as Loader2 } from '@/components/ui/icons';
+import { ShieldCheckIcon as ShieldCheck, ListBulletsIcon as List } from '@/components/ui/icons';
 import { useLeaves, useProfiles, hrActions, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
@@ -144,12 +145,8 @@ export default function AdminLeavesPage() {
                     <Td className="text-slate-500 max-w-xs truncate text-xs">{leave.reason}</Td>
                     <Td align="center">
                       <div className="flex justify-center gap-2">
-                        <button onClick={() => handleCEOAction(leave.id, 'approve')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === leave.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} CEO Approve
-                        </button>
-                        <button onClick={() => handleCEOAction(leave.id, 'reject')} disabled={processingLeaveId !== null} className="text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors transition-transform active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1">
-                          {processingLeaveId === leave.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Reject
-                        </button>
+                        <Button variant="softEmerald" size="xs" loading={processingLeaveId === leave.id} disabled={processingLeaveId !== null} onClick={() => handleCEOAction(leave.id, 'approve')}>CEO Approve</Button>
+                        <Button variant="softRose" size="xs" loading={processingLeaveId === leave.id} disabled={processingLeaveId !== null} onClick={() => handleCEOAction(leave.id, 'reject')}>Reject</Button>
                       </div>
                     </Td>
                   </Tr>
