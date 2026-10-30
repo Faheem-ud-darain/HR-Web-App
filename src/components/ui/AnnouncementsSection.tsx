@@ -267,7 +267,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
               <FieldLabel size="tiny">Select Warehouses</FieldLabel>
               <div className="space-y-1.5">
                 {warehouses.map(wh => (
-                  <Checkbox key={wh.id} className="min-h-0 items-center" checked={annSelectedWarehouses.includes(wh.id)} onChange={checked => setAnnSelectedWarehouses(prev => checked ? [...prev, wh.id] : prev.filter(id => id !== wh.id))}>{wh.name}</Checkbox>
+                  <Checkbox key={wh.id} className="min-h-0! items-center" checked={annSelectedWarehouses.includes(wh.id)} onChange={checked => setAnnSelectedWarehouses(prev => checked ? [...prev, wh.id] : prev.filter(id => id !== wh.id))}>{wh.name}</Checkbox>
                 ))}
               </div>
             </div>
@@ -276,7 +276,7 @@ export function AnnouncementsSection({ role, isCreateOpen, onCreateClose }: Anno
           <Checkbox
             checked={annImportant}
             onChange={setAnnImportant}
-            className="min-h-0 rounded-xl border border-amber-200 bg-amber-50 p-3"
+            className="min-h-0! rounded-xl border border-amber-200 bg-amber-50 p-3"
             hint="Every targeted employee gets a popup they must explicitly mark as read — it reappears on every login or page refresh until they do."
           >
             <span className="flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Mark as Important</span>

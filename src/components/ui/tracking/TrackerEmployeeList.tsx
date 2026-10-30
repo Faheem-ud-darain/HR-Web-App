@@ -95,7 +95,7 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                         )}
                         {canManage && (
                           <Td align="center">
-                            <Checkbox checked={settings.excludeFromAutoDelete} onChange={checked => handleExcludeToggle(emp.email, checked)} className="min-h-0 justify-center"><span className="sr-only">Exclude from auto-delete</span></Checkbox>
+                            <Checkbox checked={settings.excludeFromAutoDelete} onChange={checked => handleExcludeToggle(emp.email, checked)} className="min-h-0! justify-center"><span className="sr-only">Exclude from auto-delete</span></Checkbox>
                           </Td>
                         )}
                         <Td align="center">
@@ -197,7 +197,7 @@ export function TrackerEmployeeList({ canManage, profilesLoading, filteredEmploy
                       {canManage && (
                         <div>
                           <p className="text-caption text-slate-400 font-semibold uppercase mb-1">Exclude Auto-Delete</p>
-                          <Checkbox checked={settings.excludeFromAutoDelete} onChange={checked => handleExcludeToggle(emp.email, checked)} className="min-h-0 mt-1.5">{settings.excludeFromAutoDelete ? 'Yes' : 'No'}</Checkbox>
+                          <Checkbox checked={settings.excludeFromAutoDelete} onChange={checked => handleExcludeToggle(emp.email, checked)} className="min-h-0! mt-1.5">{settings.excludeFromAutoDelete ? 'Yes' : 'No'}</Checkbox>
                         </div>
                       )}
                     </div>
