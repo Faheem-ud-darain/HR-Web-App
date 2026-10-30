@@ -12,7 +12,7 @@ import { FormError } from '@/components/ui/FormError';
 import { Input, Textarea } from '@/components/ui/Input';
 import { formatMoney, type PayrollRecord, type Profile, type PayrollCorrection } from '@/lib/hrData';
 import { currentAmount } from '@/lib/core/payrollCorrections';
-import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
+import { dayLabel, deductionLimitedBy, netPay, groupDeductions, payrollFlags, payPeriod } from '@/lib/core/payrollView';
 
 interface PaySlipDialogProps {
   record: PayrollRecord | null;
@@ -127,7 +127,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
               <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-slate-600">
                 {g.items.map((item, i) => (
                   <li key={i} className="flex items-start justify-between gap-3 leading-snug">
-                    <span>{item.label}</span><span className="shrink-0 font-semibold">−{money(item.amount)}</span>
+                    <span>{item.date && <span className="font-bold text-slate-800">{dayLabel(item.date)} · </span>}{item.date ? item.label.replace(/^(Absence|Partial Shifts) — /, '') : item.label}</span><span className="shrink-0 font-semibold">−{money(item.amount)}</span>
                   </li>
                 ))}
               </ul>

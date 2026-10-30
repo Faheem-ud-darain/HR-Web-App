@@ -1,6 +1,6 @@
 // Plain TypeScript — turns raw PocketBase rows into the shapes payroll works with. Shared by the
 // browser (hr/leaves.ts, hr/absences.ts) and the server-side monthly jobs, so both read a row the same way.
-import type { LeaveApplication, AbsenceRecord, PayrollRecord } from '../hr/types';
+import type { LeaveApplication, AbsenceRecord, PayrollRecord, DeductionItem } from '../hr/types';
 import type { PbRow } from '../pbTypes';
 import { parseLeaveDateStrings } from './leaves';
 
@@ -36,7 +36,7 @@ export function toPayrollRecordFromRow(p: PbRow, extra?: PbRow): PayrollRecord {
   const net = Number(p.net_pay);
   const impliedEarlier = processed && !useStored && Number.isFinite(net) ? Math.round((net - (baseSalary + bonus - deductions + incrementAmount)) * 100) / 100 : 0;
   const earlierPay = useStored ? Number(extra!.earlierPay) || 0 : impliedEarlier > 0 ? impliedEarlier : 0;
-  const stored = useStored && Array.isArray(extra!.deductionBreakdown) ? (extra!.deductionBreakdown as { label: string; amount: number }[]) : null;
+  const stored = useStored && Array.isArray(extra!.deductionBreakdown) ? (extra!.deductionBreakdown as DeductionItem[]) : null;
   return {
     id: p.id, employeeId: p.employee_id, name: p.employee_name, role: p.role, region: p.region,
     baseSalary, unpaidLeaves: Number(p.unpaid_leaves) || 0, bonus,

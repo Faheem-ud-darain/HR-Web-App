@@ -2,7 +2,8 @@
 // import from the browser, Next route handlers and the Edge runtime alike.
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import { getNYDateString } from '../timezone';
-import type { Profile, LeaveApplication, TimesheetEntry, PayrollRecord, AbsenceRecord } from '../hr/types';
+import type { Profile, LeaveApplication, TimesheetEntry, PayrollRecord, AbsenceRecord, DeductionItem } from '../hr/types';
+import { absenceReasonLabel, hoursMinutes } from './absences';
 import { getWeekdaysInMonth, isWeekday } from './dates';
 import {
   getApprovedLeaveOnDate, isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
@@ -39,6 +40,36 @@ export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[]
 // pages' own "absence total" breakdown so both always show the same number.
 // Never negative (a month can't have a negative absence count) — guarded
 // anyway in case a bad/NaN baseSalary ever slips through.
+/** The absence days that cost pay in a month, oldest first: not deleted, not covered by an approved leave, one per date. */
+export function getChargedAbsenceDays(absenceRecords: AbsenceRecord[], employeeEmail: string, monthKey: string, leaves: LeaveApplication[] = []): AbsenceRecord[] {
+  const wanted = (employeeEmail || '').toLowerCase();
+  const seenDates = new Set<string>();
+  return absenceRecords.filter(a => {
+    if (a.deleted) return false;
+    if (a.employeeEmail.toLowerCase() !== wanted) return false;
+    if (a.date.slice(0, 7) !== monthKey) return false;
+    // A date covered by an approved leave is already charged at the Urgent/Normal leave rate (or not at all for PTO, Sick and
+    // Parental): a stale record from before the approval must not charge the same day twice.
+    if (getApprovedLeaveOnDate(leaves, a.employeeName, a.date)) return false;
+    // One charge per day, even if two records exist for the same date.
+    if (seenDates.has(a.date)) return false;
+    seenDates.add(a.date);
+    return true;
+  }).sort((x, y) => x.date.localeCompare(y.date));
+}
+
+/** Splits a whole-number total across parts in proportion to their weights so the parts add up to exactly the total. */
+export function apportion(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((x, y) => x + y, 0);
+  if (weights.length === 0) return [];
+  const exact = weights.map(w => (sum > 0 ? (total * w) / sum : total / weights.length));
+  const parts = exact.map(Math.floor);
+  let left = total - parts.reduce((x, y) => x + y, 0);
+  const order = exact.map((e, i) => ({ i, rest: e - Math.floor(e) })).sort((x, y) => y.rest - x.rest);
+  for (let k = 0; left > 0; k = (k + 1) % order.length, left--) parts[order[k].i] += 1;
+  return parts;
+}
+
 export function getAbsenceDeductionForMonth(
   absenceRecords: AbsenceRecord[],
   employeeEmail: string,
@@ -46,26 +77,7 @@ export function getAbsenceDeductionForMonth(
   monthKey: string,
   leaves: LeaveApplication[] = []
 ): number {
-  const wanted = (employeeEmail || '').toLowerCase();
-  const seenDates = new Set<string>();
-  const count = absenceRecords.filter(a => {
-    if (a.deleted) return false;
-    if (a.employeeEmail.toLowerCase() !== wanted) return false;
-    if (a.date.slice(0, 7) !== monthKey) return false;
-    // Skip any absence record whose date turned out to be covered by an
-    // approved leave — see getApprovedLeaveOnDate's comment. runAbsenceCheck
-    // only checked leave status at scan time, so a leave approved afterward
-    // leaves a stale 'no_clock_in'/'under_4_hours'/'inactivity' record
-    // behind for what is actually now a leave day. That day is already
-    // charged (at the correct Urgent/Normal rate, or not at all for
-    // PTO/Sick/Parental) via the Urgent/Normal Leave deduction above —
-    // counting it here too would double-charge the same day.
-    if (getApprovedLeaveOnDate(leaves, a.employeeName, a.date)) return false;
-    // One charge per day, even if two records exist for the same date.
-    if (seenDates.has(a.date)) return false;
-    seenDates.add(a.date);
-    return true;
-  }).length;
+  const count = getChargedAbsenceDays(absenceRecords, employeeEmail, monthKey, leaves).length;
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
   const raw = Math.round(count * 2 * dailyRate);
   return Number.isFinite(raw) ? Math.max(0, raw) : 0;
@@ -420,11 +432,21 @@ export function computePayrollForMonth(employees: Profile[], existingPayroll: Pa
       // honest picture ("here's everything that was owed, but you can
       // never be charged more than one month's pay") rather than
       // quietly rescaling each reason down.
-      const deductionBreakdown: { label: string; amount: number }[] = [];
+      const deductionBreakdown: DeductionItem[] = [];
       if (urgentDeduction > 0) deductionBreakdown.push({ label: `Urgent Leave (${urgentDays} day${urgentDays === 1 ? '' : 's'} × 2 days' pay)`, amount: urgentDeduction });
       if (normalDeduction > 0) deductionBreakdown.push({ label: `Normal Leave (${normalDays} day${normalDays === 1 ? '' : 's'} × 1 day's pay)`, amount: normalDeduction });
-      if (absenceDeduction > 0) deductionBreakdown.push({ label: 'Absence (no-show / under 4h / inactivity)', amount: absenceDeduction });
-      if (shiftShortfallDeduction > 0) deductionBreakdown.push({ label: 'Partial Shifts (worked under 8h, at/above 4h)', amount: shiftShortfallDeduction });
+      // One line per day, so HR and the employee can see exactly which days cost pay. The per-day amounts add up to the
+      // month's total exactly (the cents of an uneven split go to the first days).
+      if (absenceDeduction > 0) {
+        const days = getChargedAbsenceDays(absenceRecords, emp.email, targetMonthKey, leaves);
+        const parts = apportion(absenceDeduction, days.map(() => 1));
+        days.forEach((d, i) => deductionBreakdown.push({ label: `Absence — ${absenceReasonLabel(d)}`, amount: parts[i], date: d.date }));
+      }
+      if (shiftShortfallDeduction > 0) {
+        const days = getShortShiftDays(timesheets, absenceRecords, leaves, emp, emp.baseSalary, targetMonthKey, today);
+        const parts = apportion(shiftShortfallDeduction, days.map(d => d.amount));
+        days.forEach((d, i) => deductionBreakdown.push({ label: `Partial Shifts — worked ${hoursMinutes(d.minutes)} of ${STANDARD_SHIFT_MINUTES / 60}h`, amount: parts[i], date: d.date }));
+      }
       if (onboardingPenalty > 0) deductionBreakdown.push({ label: 'Onboarding Not Completed', amount: onboardingPenalty });
       if (deferredThisMonth > 0) deductionBreakdown.push({ label: `Part-month pay — paid with the ${monthLabel(addMonths(targetMonthKey, 2))} salary`, amount: deferredThisMonth });
       if (reservedThisMonth > 0) deductionBreakdown.push({ label: 'First-Month Reserve (not lost — paid at resignation/termination)', amount: reservedThisMonth });

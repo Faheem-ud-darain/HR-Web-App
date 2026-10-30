@@ -10,7 +10,7 @@
 // Month under test: October 2026 (22 weekdays). A base salary of 44,000 gives a clean daily rate
 // of 2,000. `now` is 5 Nov 2026 with previousMonth=true, i.e. the "Pay run" view of October.
 import { describe, it, expect } from 'vitest';
-import { computePayrollView } from './payroll';
+import { apportion, computePayrollView } from './payroll';
 import type { AbsenceRecord, LeaveApplication, PayrollRecord, Profile, TimesheetEntry } from '../hr/types';
 
 const NOW = new Date('2026-11-05T16:00:00Z');
@@ -142,7 +142,11 @@ describe('payroll pins — October 2026', () => {
     const absences = [absence('alex@x.us', 'Alex Example', '2026-10-06'), absence('alex@x.us', 'Alex Example', '2026-10-07')];
     const [two] = run([emp()], { absences });
     expect(two.deductions).toBe(8000);
-    expect(two.deductionBreakdown).toEqual([{ label: 'Absence (no-show / under 4h / inactivity)', amount: 8000 }]);
+    // One line per day, each dated, adding up to exactly the month's total.
+    expect(two.deductionBreakdown).toEqual([
+      { label: "Absence — Didn't start a shift that day", amount: 4000, date: '2026-10-06' },
+      { label: "Absence — Didn't start a shift that day", amount: 4000, date: '2026-10-07' },
+    ]);
     const [covered] = run([emp()], { absences, leaves: [leave('Alex Example', 'PTO', 'Oct 06, 2026 - Oct 06, 2026')] });
     expect(covered.deductions).toBe(4000); // 10-06 is covered by (unpaid-rate-free) PTO; only 10-07 counts
   });
@@ -163,7 +167,10 @@ describe('payroll pins — October 2026', () => {
     ];
     const [r] = run([emp()], { timesheets });
     expect(r.deductions).toBe(1250);
-    expect(r.deductionBreakdown).toEqual([{ label: 'Partial Shifts (worked under 8h, at/above 4h)', amount: 1250 }]);
+    expect(r.deductionBreakdown).toEqual([
+      { label: 'Partial Shifts — worked 6h 0m of 8h', amount: 500, date: '2026-10-06' },
+      { label: 'Partial Shifts — worked 5h 0m of 8h', amount: 750, date: '2026-10-07' },
+    ]);
   });
 
   it('USA employees are never charged absence or partial-shift deductions, but do get leave and onboarding charges', () => {
@@ -176,7 +183,7 @@ describe('payroll pins — October 2026', () => {
     // The USA absence rule is skipped only by the shortfall function; the absence-record sum itself is
     // region-blind (no absence records are ever created for USA staff by the detector). Pinned as is.
     expect(r.unpaidLeaves).toBe(2);
-    expect(r.deductionBreakdown.map(d => d.label.split(' (')[0])).toEqual(['Urgent Leave', 'Absence', 'Onboarding Not Completed']);
+    expect(r.deductionBreakdown.map(d => d.label.split(/ \(| — /)[0])).toEqual(['Urgent Leave', 'Absence', 'Onboarding Not Completed']);
     expect(r.deductions).toBe(400 + 400 + 10);
   });
 
@@ -259,5 +266,22 @@ describe('payroll pins — who gets a row for a month', () => {
     const gone = { ...absence('alex@x.us', 'Alex Example', '2026-10-07'), deleted: true } as AbsenceRecord;
     const [r] = run([emp()], { absences: [...dup, gone] });
     expect(r.deductions).toBe(4000);
+  });
+});
+
+describe('apportion and the per-day deduction lines', () => {
+  it('splits a total so the parts add up exactly, leftovers going to the biggest remainders', () => {
+    expect(apportion(100, [1, 1, 1])).toEqual([34, 33, 33]);
+    expect(apportion(7, [1, 1])).toEqual([4, 3]);
+    expect(apportion(1250, [500, 750])).toEqual([500, 750]);
+    expect(apportion(0, [1, 2])).toEqual([0, 0]);
+    expect(apportion(5, [])).toEqual([]);
+  });
+  it('every day line adds up to the month total even when the days do not divide evenly', () => {
+    const absences = [absence('alex@x.us', 'Alex Example', '2026-10-06'), absence('alex@x.us', 'Alex Example', '2026-10-07'), absence('alex@x.us', 'Alex Example', '2026-10-08')];
+    const [r] = run([emp({ baseSalary: 44001 })], { absences });
+    const lines = r.deductionBreakdown.filter(d => d.label.startsWith('Absence'));
+    expect(lines.map(d => d.date)).toEqual(['2026-10-06', '2026-10-07', '2026-10-08']);
+    expect(lines.reduce((sum, d) => sum + d.amount, 0)).toBe(r.deductions);
   });
 });
