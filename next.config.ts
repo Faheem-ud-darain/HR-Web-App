@@ -58,6 +58,9 @@ const nextConfig: NextConfig = {
       // nonce/hash-based policy is a larger follow-up pass of its own
       // (flagged in plan 013 rather than rushed in here blind). 'self' +
       // OneSignal's CDN covers every actual <script> this app loads.
+      // static.cloudflareinsights.com is Cloudflare Web Analytics: Cloudflare Pages adds its beacon script to every page, and
+      // without this entry the browser blocks it ("violates script-src") so no analytics are collected. Its reports go to
+      // cloudflareinsights.com (connect-src below).
       // 'unsafe-eval' is dev-only — React's development build uses eval()
       // for its debugging/call-stack features (confirmed live: without
       // this, `next dev` logs "eval() is not supported... make sure
@@ -73,7 +76,7 @@ const nextConfig: NextConfig = {
       // completed. connect-src already allowed onesignal.com/*.onesignal.com
       // for fetch/XHR, but script-src (which gates actual <script> tags)
       // did not.
-      `script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://api.onesignal.com${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
+      `script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://api.onesignal.com https://static.cloudflareinsights.com${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
       "style-src 'self' 'unsafe-inline'",
       // data:/blob: cover this app's many inline/base64 avatars, cropper
       // output, and document/screenshot previews (see AvatarCropperModal,
@@ -85,7 +88,7 @@ const nextConfig: NextConfig = {
       // PocketBase (REST + its realtime SSE subscriptions) and OneSignal's
       // own API/service-worker traffic are the only non-self network
       // destinations this app's browser code actually calls.
-      "connect-src 'self' https://pb.delcargo.us https://onesignal.com https://*.onesignal.com",
+      "connect-src 'self' https://pb.delcargo.us https://onesignal.com https://*.onesignal.com https://cloudflareinsights.com",
       "worker-src 'self' https://cdn.onesignal.com",
       "media-src 'self' blob:",
       // Equivalent to X-Frame-Options: DENY, expressed the modern way —
