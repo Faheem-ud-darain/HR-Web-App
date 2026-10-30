@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProfiles, useLeaves, hrActions, getAccruedPTOForDisplay, getPTOAccrualDate, getRemainingPTO, LeaveApplication, formatMoney, buildNotificationLink } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
+import { fetchLeaves } from '@/lib/hr/leaves';
+import { describeLeaveConflict, findLeaveConflict } from '@/lib/core/leaves';
 import { getSessionEmail } from '@/lib/session';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -167,6 +169,14 @@ export default function EmployeeLeavesPage() {
 
     setIsSubmittingLeave(true);
     try {
+      // The same days cannot be requested twice. Checked against a fresh copy from the server, not just this screen's list,
+      // so a request made a moment ago on another tab or device counts too.
+      const current = await fetchLeaves({ employeeName: newLeave.employeeName }).catch(() => allLeaves ?? []);
+      const clash = findLeaveConflict(current, newLeave.employeeName, startDate, endDate);
+      if (clash) {
+        setError(describeLeaveConflict(clash));
+        return;
+      }
       const createdLeave = await hrActions.addLeave(newLeave);
       // Both HR and Admin manage leave approvals (see admin/leaves + hr/leaves
       // pages) — this previously only notified 'hr', so Admin never found
