@@ -93,12 +93,12 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
           </div>
         ) : (
           <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-            <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Deduction Applied</p>
+            <p className="text-caption font-bold text-slate-400 uppercase tracking-wider">Deduction recorded</p>
             <p className="text-sm font-bold text-rose-600 mt-0.5">{formatMoney(current.deductionAmount, 'Pakistan')} (2 days&apos; pay)</p>
           </div>
         )}
         <p className="text-caption text-slate-400 leading-relaxed">
-          If you believe this is a mistake, contact HR — this deduction shows up on your Payroll and Absent Details pages.
+          Pay can go down to zero but not below, so what is actually taken from this month&apos;s salary can be less. Your Salary page shows the exact amount for each day. If you believe this is a mistake, contact HR.
         </p>
       </div>
     </AcknowledgeModal>
