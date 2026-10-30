@@ -1,5 +1,4 @@
 import React from 'react';
-import { Badge } from '@/components/ui/Badge';
 import type { ChangelogPreviewKind } from '@/lib/core/changelog';
 
 // The small looping animation at the top of a What's New card, drawn with the app's own colours (so it follows dark mode and never
@@ -92,7 +91,7 @@ export function ChangelogPreview({ kind }: { kind: ChangelogPreviewKind }) {
   const Preview = PREVIEWS[kind];
   return (
     <div className="relative flex h-40 items-center justify-center overflow-hidden bg-slate-100 px-4">
-      <Badge variant="default" size="sm" className="absolute left-3 top-3 uppercase tracking-wide">What&apos;s new !</Badge>
+      <span className="whats-new-badge absolute left-3 top-3 rounded-lg px-2.5 py-1 text-caption font-bold uppercase tracking-wide">What&apos;s new !</span>
       <div aria-hidden="true" className="flex w-full justify-center"><Preview /></div>
     </div>
   );

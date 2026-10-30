@@ -1339,3 +1339,13 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
 @media (prefers-reduced-motion: reduce) {
   [class*="animate-[cl-"] { animation: none !important; }
 }
+
+/* The "What's new" badge: black with white text on light, and the inverse (white with black text) in dark mode. */
+.whats-new-badge {
+  background: black;
+  color: white;
+}
+:root[data-theme='dark'] .whats-new-badge {
+  background: white;
+  color: black;
+}
