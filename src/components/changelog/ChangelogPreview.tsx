@@ -46,7 +46,7 @@ function ReadMore() {
 
 // A sidebar and a few blocks that pop in one after another.
 function Layout() {
-  const block = (delay: number, cls: string) => <div className={`rounded-lg border border-slate-200 bg-card ${cls}`} style={{ animation: `cl-pop ${LOOP} ${delay}s infinite` }} />;
+  const block = (delay: number, cls: string) => <div className={`rounded-lg border border-slate-200 bg-card ${cls}`} style={{ animation: `cl-pop ${LOOP}`, animationDelay: `${delay}s` }} />;
   return (
     <div className="flex h-24 w-full max-w-56 gap-2">
       {block(0, 'w-7')}
@@ -58,7 +58,7 @@ function Layout() {
 function Dashboard() {
   return (
     <div className="grid h-24 w-full max-w-56 grid-cols-2 gap-2">
-      {[0, 0.25, 0.5, 0.75].map(d => <div key={d} className="rounded-xl border border-slate-200 bg-card p-2" style={{ animation: `cl-pop ${LOOP} ${d}s infinite` }}><div className="h-1.5 w-8 rounded bg-slate-300" /><div className="mt-2 h-3 w-12 rounded bg-slate-200" /></div>)}
+      {[0, 0.25, 0.5, 0.75].map(d => <div key={d} className="rounded-xl border border-slate-200 bg-card p-2" style={{ animation: `cl-pop ${LOOP}`, animationDelay: `${d}s` }}><div className="h-1.5 w-8 rounded bg-slate-300" /><div className="mt-2 h-3 w-12 rounded bg-slate-200" /></div>)}
     </div>
   );
 }
