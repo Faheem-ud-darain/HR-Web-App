@@ -11,12 +11,13 @@
 //   */10 5-23 1 * *   the 1st (from 05:00 UTC, i.e. after midnight New York) and
 //   */10 * 2-3 * *    the 2nd–3rd: freeze last month's payroll, then apply anniversary raises. Each call
 //                     does one small batch; both steps report "already done" once finished.
-//   30 4 * * *       every day: delete saved assistant chats older than the 30-day retention period
-//   */20 * * * *     every 20 minutes: notify HR and Admin who is on shift with nothing being captured (tracking OFF, or no screenshots)
+//   */20 * * * *     every 20 minutes: notify HR and Admin who is on shift with nothing being captured (tracking OFF, or no screenshots).
+//                     The 04:00 UTC tick of this same schedule also deletes saved assistant chats older than the 30-day retention period
+//                     (once a day). They share a trigger because the Workers Free plan allows only 5 cron triggers per account.
 //
 // Secrets (never in the repo): CRON_SECRET — the same value must be set on the Pages project.
 // Minimal shapes of the Workers runtime types, so this file needs no extra type packages.
-interface ScheduledController { cron: string }
+interface ScheduledController { cron: string; scheduledTime: number }
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void }
 
 export interface Env {
@@ -37,8 +38,6 @@ async function call(env: Env, mode: 'warn' | 'delete'): Promise<void> {
   if (!res.ok) throw new Error(`screenshot-retention ${mode} failed: ${res.status}`);
 }
 
-const ASSISTANT_CRON = '30 4 * * *';
-
 async function callAssistantRetention(env: Env): Promise<void> {
   const res = await fetch(`${env.APP_URL}/api/cron/assistant-retention`, { method: 'POST', headers: { Authorization: `Bearer ${env.CRON_SECRET}` } });
   console.log(`[cron] assistant-retention -> ${res.status} ${(await res.text()).slice(0, 200)}`);
@@ -46,6 +45,12 @@ async function callAssistantRetention(env: Env): Promise<void> {
 }
 
 const TRACKING_CRON = '*/20 * * * *';
+
+/** True for the one tick of the day at 04:00 UTC (the first 20 minutes of the hour): the daily assistant clean-up rides on it. */
+const isDailyTick = (scheduledTime: number): boolean => {
+  const at = new Date(scheduledTime);
+  return at.getUTCHours() === 4 && at.getUTCMinutes() < 20;
+};
 
 async function callTrackingIntegrity(env: Env): Promise<void> {
   const res = await fetch(`${env.APP_URL}/api/cron/tracking-integrity`, { method: 'POST', headers: { Authorization: `Bearer ${env.CRON_SECRET}` } });
@@ -79,8 +84,11 @@ async function payrollMonthly(env: Env): Promise<void> {
 const worker = {
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (PAYROLL_CRONS.includes(event.cron)) { ctx.waitUntil(payrollMonthly(env)); return; }
-    if (event.cron === TRACKING_CRON) { ctx.waitUntil(callTrackingIntegrity(env)); return; }
-    if (event.cron === ASSISTANT_CRON) { ctx.waitUntil(callAssistantRetention(env)); return; }
+    if (event.cron === TRACKING_CRON) {
+      ctx.waitUntil(callTrackingIntegrity(env));
+      if (isDailyTick(event.scheduledTime)) ctx.waitUntil(callAssistantRetention(env));
+      return;
+    }
     ctx.waitUntil(call(env, event.cron === WARN_CRON ? 'warn' : 'delete'));
   },
   // Visiting the Worker's address does nothing but say it exists — no job can be started from here.
