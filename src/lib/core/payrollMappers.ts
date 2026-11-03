@@ -10,6 +10,7 @@ export function toLeave(l: PbRow): LeaveApplication {
   return {
     id: l.id, employeeName: l.employee_name, type: l.type, duration: l.duration, reason: l.reason, status: l.status,
     startDate: range?.start, endDate: range?.end,
+    submittedAt: l.created || undefined, updatedAt: l.updated || undefined,
   };
 }
 

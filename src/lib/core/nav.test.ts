@@ -3,6 +3,14 @@ import { isChatScreen, isNavActive, navDotKey, navGroups, navRoot, policyItem, q
 
 const hrefs = (role: Parameters<typeof navGroups>[0], flags = {}) => navGroups(role, flags).flatMap(g => g.items.map(i => i.href));
 
+describe('Tracker Health page', () => {
+  it('is in the Admin and HR menus, never team leads or employees', () => {
+    expect(hrefs('admin')).toContain('/admin/tracker-health');
+    expect(hrefs('hr')).toContain('/hr/tracker-health');
+    for (const role of ['employee', 'team_lead'] as const) expect(hrefs(role, { trackingEnabled: true, isTeamLead: true }).some(h => h.includes('tracker-health'))).toBe(false);
+  });
+});
+
 describe('navGroups', () => {
   it('starts every role with its home page on its own', () => {
     for (const role of ['admin', 'hr', 'employee'] as const) {

@@ -2,6 +2,7 @@ import React from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { LeaveTypeBadge } from '@/components/ui/StatusBadges';
+import { LeaveDetails } from '@/components/ui/leaves/LeaveDetails';
 import type { LeaveApplication } from '@/lib/hrData';
 
 // One leave request as a card: who, the type, the dates and the reason, with whatever buttons or note belong to its state in
@@ -27,6 +28,7 @@ export function LeaveRequestCard({ leave, name, picture, children }: { leave: Le
           <p className="line-clamp-2 text-xs font-bold text-slate-800">{leave.reason || '—'}</p>
         </div>
       </div>
+      <LeaveDetails leave={leave} name={name} picture={picture} className="-ml-2" />
       {children}
     </div>
   );

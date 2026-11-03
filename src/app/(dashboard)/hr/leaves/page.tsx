@@ -3,6 +3,7 @@
 import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
+import { LeaveDetails } from '@/components/ui/leaves/LeaveDetails';
 import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import { csvFilename, downloadCsv } from '@/lib/csv';
 import React, { useState, useEffect } from 'react';
@@ -389,7 +390,7 @@ export default function HRLeavesPage() {
                       <LeaveTypeBadge type={leave.type} className="inline-block mb-2" />
                       <div className="text-caption font-semibold text-slate-500 mb-1.5 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {leave.duration}</div>
                       <p className="text-caption text-slate-400 leading-relaxed line-clamp-2">{leave.reason}</p>
-
+                      <LeaveDetails leave={leave} name={nameFor(leave.employeeName)} picture={pictureFor(leave.employeeName)} className="mt-1 -ml-2" />
                     </div>
                   ))}
                   {cards.length === 0 && (

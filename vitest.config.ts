@@ -2,6 +2,7 @@
 // so results would otherwise differ by machine (see src/lib/core/core.test.ts).
 process.env.TZ = process.env.TZ || 'America/New_York';
 
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 // Deliberately scoped to src/lib/**/*.test.ts only (plan 015, step 1) —
@@ -10,6 +11,8 @@ import { defineConfig } from 'vitest/config';
 // NY timezone utilities), not React component rendering or end-to-end
 // coverage. See plans/015-add-test-coverage.md for the full scope/boundaries.
 export default defineConfig({
+  // Same '@/' shortcut as the app (tsconfig paths), so the API route tests can import the real routes.
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   test: {
     environment: 'node',
     include: ['src/lib/**/*.test.ts'],

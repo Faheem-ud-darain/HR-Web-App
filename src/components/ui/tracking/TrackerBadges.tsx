@@ -48,7 +48,7 @@ export function TrackerStatusBadge({ hb, settings, openShift, align }: TrackerSt
       <AlertTriangle className="h-3.5 w-3.5" /> On shift, tracking OFF
     </Badge>
   ) : gap.status === 'no_captures' ? (
-    <Badge variant="warning" size="sm" className="gap-1" title="The tracker is connected but has not captured a screenshot for longer than two intervals.">
+    <Badge variant="warning" size="sm" className="gap-1" title={`The tracker is connected but has not captured a screenshot for longer than two intervals.${hb?.lastCaptureError ? ` Last problem: ${hb.lastCaptureError}` : ''}`}>
       <AlertTriangle className="h-3.5 w-3.5" /> No screenshots for {gap.minutes} min
     </Badge>
   ) : null;
