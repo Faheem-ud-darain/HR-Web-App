@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Input';
 import { ListSkeleton, TableSkeletonRows } from '@/components/ui/Skeleton';
 import { LeaveStatusBadge, LeaveTypeBadge } from '@/components/ui/StatusBadges';
 import { Table, TableScroll, TBody, Td, Th, THead, Tr } from '@/components/ui/Table';
+import { LeaveDetails } from '@/components/ui/leaves/LeaveDetails';
 
 // Pieces shared by the HR and Admin leave pages: the search match, the status/type filters with the History
 // table (and its phone card stack), and the row of count tiles at the top.
@@ -44,7 +45,7 @@ interface LeaveHistoryProps {
 
 export function LeaveHistory({ filters, loading, nameFor, actions }: LeaveHistoryProps) {
   const { rows } = filters;
-  const cols = actions ? 6 : 5;
+  const cols = actions ? 7 : 6;
   const empty = 'No records match your filters.';
 
   return (
@@ -74,6 +75,7 @@ export function LeaveHistory({ filters, loading, nameFor, actions }: LeaveHistor
                 <Th>Duration</Th>
                 <Th>Reason</Th>
                 <Th align="center">Status</Th>
+                <Th align="center">Details</Th>
                 {actions && <Th align="center">Action</Th>}
               </tr>
             </THead>
@@ -89,6 +91,7 @@ export function LeaveHistory({ filters, loading, nameFor, actions }: LeaveHistor
                       <Td density="cozy" className="text-slate-600 font-medium text-xs">{l.duration}</Td>
                       <Td density="cozy" className="text-slate-500 text-xs max-w-[200px] truncate">{l.reason}</Td>
                       <Td align="center" density="cozy"><LeaveStatusBadge status={l.status} /></Td>
+                      <Td align="center" density="cozy"><LeaveDetails leave={l} name={nameFor(l.employeeName)} /></Td>
                       {actions && <Td align="center" density="cozy">{actions(l, 'row')}</Td>}
                     </Tr>
                   ))}
@@ -122,7 +125,10 @@ export function LeaveHistory({ filters, loading, nameFor, actions }: LeaveHistor
                   <p className="text-xs font-medium text-slate-600 line-clamp-2">{l.reason}</p>
                 </div>
               </div>
-              {actions && <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">{actions(l, 'card')}</div>}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                <LeaveDetails leave={l} name={nameFor(l.employeeName)} />
+                {actions && <div className="flex justify-end gap-2">{actions(l, 'card')}</div>}
+              </div>
             </div>
           ))}
           {loading && <ListSkeleton rows={3} />}

@@ -55,6 +55,13 @@ export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 // below v24 must be forced to update rather than soft-rolled-out.
 export const TRACKER_MIN_VERSION = '24';
 
+// The newest build of each tracker that has been released. Unlike TRACKER_MIN_VERSION this blocks nobody: it only lets the Tracker Health
+// page say who has not updated yet. Move it with each release (desktop agent: APP_VERSION in tracker-agent/agent_gui.py; Chromebook:
+// "version" in chrome-extension/manifest.json). Raise TRACKER_MIN_VERSION (and the agent's MIN_SUPPORTED_VERSION) only once nearly
+// everyone is on the new build, because that forces the rest to stop and update.
+export const TRACKER_LATEST_VERSION = '25';
+export const TRACKER_LATEST_EXTENSION_VERSION = '1.0.16';
+
 // Device label the Chromebook/Chrome extension reports in its heartbeat
 // (see chrome-extension/background.js's handleHeartbeatTick) — used below
 // to recognize it distinctly from the Windows/Mac desktop agent.
@@ -89,6 +96,27 @@ export function needsTrackerUpdate(agentVersion: string | undefined, deviceLabel
     if (a > m) return false;
   }
   return false; // equal — up to date
+}
+
+const versionParts = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
+const isOlder = (a: string, b: string): boolean => {
+  const x = versionParts(a);
+  const y = versionParts(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0);
+  }
+  return false;
+};
+
+/**
+ * The newest version this tracker could be running, when it is running an older one; null when it is up to date. The Chromebook extension
+ * and the desktop agent are numbered differently, so each is compared with its own latest. A tracker that reports no version (a very old
+ * build) is not guessed at.
+ */
+export function latestVersionIfBehind(agentVersion: string | undefined, deviceLabel?: string): string | null {
+  if (!agentVersion) return null;
+  const latest = deviceLabel === CHROMEBOOK_DEVICE_LABEL ? TRACKER_LATEST_EXTENSION_VERSION : TRACKER_LATEST_VERSION;
+  return isOlder(agentVersion, latest) ? latest : null;
 }
 
 /** Best-effort OS guess from the browser, used only to default which

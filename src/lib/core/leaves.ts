@@ -247,3 +247,23 @@ export function countApprovedLeaveRequestsInMonth(
 export function getPTOAccrualDate(profile: Pick<Profile, 'joinedDate' | 'accountCreationDate'>): string {
   return profile.accountCreationDate || profile.joinedDate;
 }
+
+export interface LeaveStep { label: string; state: 'done' | 'current' | 'todo' | 'stopped' }
+
+/**
+ * Where a leave request is on its way: made, reviewed by HR, signed off by the CEO. A rejected leave stops there (the record does not keep
+ * who rejected it, so the path ends at "Rejected" rather than guessing which step it was).
+ */
+export function leaveProgress(status: LeaveApplication['status']): LeaveStep[] {
+  if (status === 'rejected') return [{ label: 'Requested', state: 'done' }, { label: 'Rejected', state: 'stopped' }];
+  const at = status === 'pending' ? 1 : status === 'hr_approved' ? 2 : 3;
+  const steps = ['Requested', 'HR review', 'CEO sign-off'];
+  return steps.map((label, i): LeaveStep => ({ label, state: i < at ? 'done' : i === at ? 'current' : 'todo' }));
+}
+
+export const LEAVE_STATUS_MEANING: Record<LeaveApplication['status'], string> = {
+  pending: 'Waiting for HR to review it.',
+  hr_approved: 'HR has approved it and sent it to the CEO. It is not final until the CEO signs off.',
+  approved: 'The CEO has signed off. These days are approved leave.',
+  rejected: 'This request was rejected. The days are not leave.',
+};

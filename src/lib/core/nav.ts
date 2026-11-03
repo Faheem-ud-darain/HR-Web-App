@@ -5,7 +5,7 @@ export type NavRole = 'admin' | 'hr' | 'employee' | 'team_lead';
 
 export type NavIcon =
   | 'dashboard' | 'hrAdmin' | 'tickets' | 'teamChat' | 'directMessages' | 'assistant' | 'tasks' | 'warehouses' | 'careers'
-  | 'leaves' | 'attendance' | 'payroll' | 'reports' | 'insights' | 'tracking' | 'onboarding' | 'teams' | 'tracker' | 'teamTasks' | 'policy';
+  | 'leaves' | 'attendance' | 'payroll' | 'reports' | 'insights' | 'tracking' | 'trackerHealth' | 'onboarding' | 'teams' | 'tracker' | 'teamTasks' | 'policy';
 
 export type DotKey = 'tickets' | 'chat' | 'hrAdmin';
 
@@ -35,7 +35,7 @@ export function navGroups(role: NavRole, { trackingEnabled = false, isTeamLead =
       { title: 'Communicate', items: [item('HR & Admin', `${r}/hr-admin`, 'hrAdmin'), item('Support Tickets', `${r}/tickets`, 'tickets'), item('Team Chats', `${r}/team-chats`, 'teamChat'), item('Direct Messages', `${r}/direct-messages`, 'directMessages'), item('Del Assistant', `${r}/assistant`, 'assistant')] },
       { title: 'Work', items: [item('Tasks', `${r}/tasks`, 'tasks'), item('Warehouses', `${r}/warehouses`, 'warehouses'), item('Career Board', `${r}/careers`, 'careers')] },
       { title: 'People & pay', items: [item('Leaves Approval', `${r}/leaves`, 'leaves'), item('Attendance', `${r}/absences`, 'attendance'), item('Payroll & Salary', `${r}/payroll`, 'payroll')] },
-      { title: 'Insights', items: [item('Master Reports', `${r}/reports`, 'reports'), item('Insights', `${r}/insights`, 'insights'), item('Screen Tracking', `${r}/tracking`, 'tracking')] },
+      { title: 'Insights', items: [item('Master Reports', `${r}/reports`, 'reports'), item('Insights', `${r}/insights`, 'insights'), item('Screen Tracking', `${r}/tracking`, 'tracking'), item('Tracker Health', `${r}/tracker-health`, 'trackerHealth')] },
     ];
   }
   if (role === 'hr') {
@@ -44,7 +44,7 @@ export function navGroups(role: NavRole, { trackingEnabled = false, isTeamLead =
       { title: 'Communicate', items: [item('HR & Admin', `${r}/hr-admin`, 'hrAdmin'), item('Support Tickets', `${r}/tickets`, 'tickets'), item('Team Chats', `${r}/team-chats`, 'teamChat'), item('Direct Messages', `${r}/direct-messages`, 'directMessages'), item('Del Assistant', `${r}/assistant`, 'assistant')] },
       { title: 'Work', items: [item('Task Management', `${r}/tasks`, 'tasks'), item('Onboarding', `${r}/onboarding`, 'onboarding'), item('Team Management', `${r}/teams`, 'teams'), item('Career Board', `${r}/careers`, 'careers')] },
       { title: 'People & pay', items: [item('Leave Management', `${r}/leaves`, 'leaves'), item('Attendance', `${r}/absences`, 'attendance'), item('Payroll Records', `${r}/payroll`, 'payroll')] },
-      { title: 'Insights', items: [item('Master Reports', `${r}/reports`, 'reports'), item('Screen Tracking', `${r}/tracking`, 'tracking')] },
+      { title: 'Insights', items: [item('Master Reports', `${r}/reports`, 'reports'), item('Screen Tracking', `${r}/tracking`, 'tracking'), item('Tracker Health', `${r}/tracker-health`, 'trackerHealth')] },
     ];
   }
   return [

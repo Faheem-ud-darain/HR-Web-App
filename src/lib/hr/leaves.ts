@@ -20,7 +20,7 @@ export { sameEmployeeName, normalizeEmployeeName } from './employeeName';
 // Columns the app reads. start_date / end_date are "YYYY-MM-DD" calendar days
 // (older rows get them via the backfillLeaveDates migration; until then they
 // are derived from the free-text `duration`).
-const LEAVE_FIELDS = 'id,employee_name,type,duration,reason,status,start_date,end_date';
+const LEAVE_FIELDS = 'id,employee_name,type,duration,reason,status,start_date,end_date,created,updated';
 
 
 export interface LeaveQuery {

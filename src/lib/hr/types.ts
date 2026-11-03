@@ -140,6 +140,8 @@ export interface LeaveApplication {
   // rows until backfilled — use getLeaveRange() (core/leaves) rather than reading
   // these directly so both cases work.
   startDate?: string; endDate?: string;
+  /** When the request was made and last changed (the record's own created / updated times). */
+  submittedAt?: string; updatedAt?: string;
 }
 
 export interface Task {

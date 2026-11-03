@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { useLeaveNames } from '@/hooks/useLeaveNames';
 import { CardStack } from '@/components/ui/CardStack';
 import { CeoDecisionButtons, LeaveRequestCard } from '@/components/ui/leaves/LeaveRequestCard';
+import { LeaveDetails } from '@/components/ui/leaves/LeaveDetails';
 import { LeaveDateChangeRequests } from '@/components/ui/leaves/LeaveDateChangeRequests';
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
@@ -127,12 +128,13 @@ export default function AdminLeavesPage() {
                   <Th>Type</Th>
                   <Th>Dates</Th>
                   <Th>Reason</Th>
+                  <Th align="center">Details</Th>
                   <Th align="center">Actions</Th>
                 </tr>
               </THead>
               <TBody>
 {leavesLoading ? (
-  <TableSkeletonRows rows={6} cols={5} />
+  <TableSkeletonRows rows={6} cols={6} />
 ) : (
 <>
                 {pendingCEOLeaves.map(leave => (
@@ -143,6 +145,7 @@ export default function AdminLeavesPage() {
                     </Td>
                     <Td className="text-slate-600 font-medium text-xs">{leave.duration}</Td>
                     <Td className="text-slate-500 max-w-xs truncate text-xs">{leave.reason}</Td>
+                    <Td align="center"><LeaveDetails leave={leave} name={nameFor(leave.employeeName)} picture={pictureFor(leave.employeeName)} /></Td>
                     <Td align="center">
                       <div className="flex justify-center gap-2">
                         <Button variant="softEmerald" size="xs" loading={processingLeaveId === leave.id} disabled={processingLeaveId !== null} onClick={() => handleCEOAction(leave.id, 'approve')}>CEO Approve</Button>
@@ -153,7 +156,7 @@ export default function AdminLeavesPage() {
                 ))}
                 {pendingCEOLeaves.length === 0 && (
                   <Tr>
-                    <EmptyState as="td" colSpan={5} py={12} size="sm">
+                    <EmptyState as="td" colSpan={6} py={12} size="sm">
                       No leaves waiting for CEO approval.
                     </EmptyState>
                   </Tr>

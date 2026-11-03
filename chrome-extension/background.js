@@ -2,6 +2,8 @@
 // Automatic active shift detection, idle tracking, heartbeats, screen captures,
 // and 37-minute continuous idle auto clock-out on ChromeOS & Chrome browser.
 
+importScripts('capture-health.js'); // buildHeartbeat / afterCapture / CAPTURE_REASONS (globalThis.CaptureHealth)
+
 const DEFAULT_SERVER_URL = 'https://pb.delcargo.us';
 const INACTIVITY_REPORT_SECONDS = 180; // 3 minutes — loggable idle threshold
 const AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60; // 37 minutes — continuous idle auto clock-out
@@ -108,6 +110,10 @@ async function getStorageData() {
         'idleStartTimestamp',
         'autoAbsentFired',
         'lastScreenshotTime',
+        'lastUploadedAt',
+        'captureBlocked',
+        'lastCaptureError',
+        'captureFailures',
         'screenshotIntervalMinutes'
       ],
       (res) => resolve(res || {})
@@ -298,14 +304,11 @@ async function handleHeartbeatTick() {
     // APP_VERSION integer, so needsTrackerUpdate() in trackerSetup.ts
     // deliberately skips the update-required check for this device type —
     // see the deviceLabel check there.
-    const hbValue = {
-      employeeEmail: email,
-      deviceId: deviceId,
-      deviceLabel: 'Chromebook / Chrome OS',
-      connectedAt: connectedAt,
-      lastSeenAt: nowIso,
-      agentVersion: chrome.runtime.getManifest().version
-    };
+    // Also carries when the last screenshot arrived and why one did not, so the dashboard's "No screenshots
+    // for N min" alert works for Chromebooks too (see capture-health.js).
+    const hbValue = CaptureHealth.buildHeartbeat({
+      email, deviceId, connectedAt, nowIso, version: chrome.runtime.getManifest().version, stored: data
+    });
 
     await setTrackerSignalField(serverUrl, email, 'heartbeat', hbValue);
     console.log(`[Delcargo Tracker] Heartbeat sent for ${email} (${nowIso})`);
@@ -382,9 +385,9 @@ async function handleHeartbeatTick() {
             enabledByHr: !!data.shiftActive,
             shiftActive: !!data.shiftActive,
             isLocked: false,
-            lastError: null,
-            lastCaptureAt: data.lastScreenshotTime ? new Date(data.lastScreenshotTime).toISOString() : null,
-            consecutiveCaptureFailures: 0,
+            lastError: data.lastCaptureError || null,
+            lastCaptureAt: data.lastUploadedAt ? new Date(data.lastUploadedAt).toISOString() : null,
+            consecutiveCaptureFailures: data.captureFailures || 0,
             intervalMinutes: data.screenshotIntervalMinutes || 1,
             autostart: true,
             updateAvailableVersion: null
@@ -434,9 +437,13 @@ async function handleHeartbeatTick() {
       // setup code; still fall through to the idle/auto-absence check
       // below since that's about attendance, not screen recording.
       console.warn('[Delcargo Tracker] Setup token not recognized by server — ask HR/Admin to check your setup.');
+      // Reported in the heartbeat, so HR sees the real cause instead of a vague "no screenshots".
+      chrome.storage.local.set({ captureBlocked: 'token', lastCaptureError: CaptureHealth.CAPTURE_REASONS.staleToken });
     } else if (!enabledByHr) {
       console.log('[Delcargo Tracker] Tracking is disabled for this account — skipping capture.');
+      chrome.storage.local.set({ captureBlocked: 'disabled', lastCaptureError: null });
     } else {
+      if (data.captureBlocked) chrome.storage.local.set({ captureBlocked: null, lastCaptureError: null });
       // ── Staggered screenshot uploads (see staggered_screenshot_plan.md) ──
       // Without this, lastScreenshotTime starts at 0, so the very first
       // "is it due" check after a shift opens is always true — meaning every
@@ -634,7 +641,10 @@ async function handleScreenshotTick() {
         });
       }
 
-      if (!dataUrl) return;
+      if (!dataUrl) {
+        chrome.storage.local.set(CaptureHealth.afterCapture(data, { ok: false, reason: CaptureHealth.CAPTURE_REASONS.noFrame }, Date.now()));
+        return;
+      }
 
       const blob = dataUrlToBlob(dataUrl);
       const filename = `scr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.jpg`;
@@ -652,10 +662,10 @@ async function handleScreenshotTick() {
         body: formData
       }).catch(() => null);
 
-      if (resp && resp.ok) {
-        chrome.storage.local.set({ lastScreenshotTime: Date.now() });
-        console.log('[Delcargo Tracker] Full Desktop Screenshot captured & uploaded successfully.');
-      }
+      const reasons = CaptureHealth.CAPTURE_REASONS;
+      const outcome = resp && resp.ok ? { ok: true } : { ok: false, reason: resp ? reasons.uploadRejected(resp.status) : reasons.noConnection };
+      chrome.storage.local.set(CaptureHealth.afterCapture(data, outcome, Date.now()));
+      if (outcome.ok) console.log('[Delcargo Tracker] Full Desktop Screenshot captured & uploaded successfully.');
     });
   } catch (e) {
     console.warn('[Delcargo Tracker] Screenshot tick exception:', e);

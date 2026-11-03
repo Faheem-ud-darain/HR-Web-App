@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isMobileDevice } from './trackerSetup';
+import { isMobileDevice, latestVersionIfBehind, TRACKER_LATEST_EXTENSION_VERSION, TRACKER_LATEST_VERSION, TRACKER_MIN_VERSION } from './trackerSetup';
 
 type Env = { ua: string; platform?: string; touch?: number; coarse?: boolean; hover?: boolean; capacitor?: boolean };
 
@@ -42,5 +42,36 @@ describe('isMobileDevice (Pakistan manual shifts must never start from a phone o
     expect(isMobileDevice()).toBe(false);
     setEnv({ ua: 'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/126', touch: 10, coarse: true, hover: false });
     expect(isMobileDevice()).toBe(false);
+  });
+});
+
+describe('latestVersionIfBehind', () => {
+  const CHROMEBOOK = 'Chromebook / Chrome OS';
+
+  it('names the latest desktop build for an agent that is older, and nothing once it is current', () => {
+    expect(latestVersionIfBehind('24', 'Windows PC')).toBe(TRACKER_LATEST_VERSION);
+    expect(latestVersionIfBehind('9', undefined)).toBe(TRACKER_LATEST_VERSION);
+    expect(latestVersionIfBehind(TRACKER_LATEST_VERSION, 'Windows PC')).toBeNull();
+    expect(latestVersionIfBehind('99', 'Mac')).toBeNull();
+  });
+
+  it('compares numbers, not text, so 9 is older than 25 and 100 is newer', () => {
+    expect(latestVersionIfBehind('9')).toBe(TRACKER_LATEST_VERSION);
+    expect(latestVersionIfBehind('100')).toBeNull();
+  });
+
+  it('a Chromebook is compared with the extension version, not the desktop one', () => {
+    expect(latestVersionIfBehind('1.0.15', CHROMEBOOK)).toBe(TRACKER_LATEST_EXTENSION_VERSION);
+    expect(latestVersionIfBehind('1.0.9', CHROMEBOOK)).toBe(TRACKER_LATEST_EXTENSION_VERSION);
+    expect(latestVersionIfBehind(TRACKER_LATEST_EXTENSION_VERSION, CHROMEBOOK)).toBeNull();
+  });
+
+  it('a tracker that reports no version is not guessed at', () => {
+    expect(latestVersionIfBehind(undefined, CHROMEBOOK)).toBeNull();
+    expect(latestVersionIfBehind('', undefined)).toBeNull();
+  });
+
+  it('the latest build is never older than the minimum that is enforced', () => {
+    expect(Number(TRACKER_LATEST_VERSION)).toBeGreaterThanOrEqual(Number(TRACKER_MIN_VERSION));
   });
 });

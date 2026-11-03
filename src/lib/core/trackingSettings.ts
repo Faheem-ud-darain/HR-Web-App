@@ -128,6 +128,29 @@ export interface IntegrityFinding {
   detail: string;
 }
 
+// ── Gap alerts ─────────────────────────────────────────────────────────────────
+// The scheduled job (/api/cron/tracking-integrity) tells HR and Admin when someone is on shift with nothing being
+// captured. It runs every 20 minutes, so without a memory it would repeat the same warning all day: an employee
+// is re-announced only after GAP_ALERT_EVERY_MS, and once they are no longer flagged they are forgotten, so a
+// new problem later the same day alerts again.
+
+export const GAP_ALERT_EVERY_MS = 2 * 60 * 60 * 1000;
+/** `${kind}:${email}` -> ISO time the last alert for it was sent. Kept in hr_system_state. */
+export type GapAlertState = Record<string, string>;
+
+export function planGapAlerts(findings: IntegrityFinding[], state: GapAlertState, now: number, everyMs = GAP_ALERT_EVERY_MS): { send: IntegrityFinding[]; next: GapAlertState } {
+  const send: IntegrityFinding[] = [];
+  const next: GapAlertState = {};
+  for (const f of findings) {
+    if (f.kind !== 'on_shift_tracking_off' && f.kind !== 'on_shift_no_captures') continue;
+    const key = `${f.kind}:${f.email.toLowerCase()}`;
+    const last = state[key] ? new Date(state[key]).getTime() : NaN;
+    if (isNaN(last) || now - last >= everyMs) { send.push(f); next[key] = new Date(now).toISOString(); }
+    else next[key] = state[key];
+  }
+  return { send, next };
+}
+
 export function buildIntegrityReport(args: {
   /** Only people who should have tracking considered (employees / team leads). */
   profiles: { email: string; role: string; region?: string; trackingEnabled?: boolean }[];
