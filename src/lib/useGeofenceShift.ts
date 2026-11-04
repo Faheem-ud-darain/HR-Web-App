@@ -14,7 +14,11 @@ export interface LiveDistance { meters: number; warehouseName: string; isInside:
 const RETRY_MS = 60 * 1000; // a phone that has not moved sends no new fix, so the last one is re-checked this often
 const RESUME_GAP_MS = 30 * 1000; // coming back to the app refreshes the location, at most this often
 const consentKey = (email: string) => `geo_consent_v1:${email.toLowerCase()}`;
-const storedConsent = (email: string) => { try { return localStorage.getItem(consentKey(email)) === '1'; } catch { return false; } };
+// '1' = said yes, '0' = said "Not now". A "Not now" is remembered, so the question is not asked again on every launch; the shift card offers "Turn on".
+const storedConsent = (email: string): 'granted' | 'declined' | 'ask' => {
+  try { const v = localStorage.getItem(consentKey(email)); return v === '1' ? 'granted' : v === '0' ? 'declined' : 'ask'; } catch { return 'ask'; }
+};
+const saveConsent = (email: string, yes: boolean) => { try { localStorage.setItem(consentKey(email), yes ? '1' : '0'); } catch { /* asked again next time */ } };
 
 export function useGeofenceShift(args: {
   profile: Profile | null | undefined;
@@ -37,10 +41,11 @@ export function useGeofenceShift(args: {
   // Ask before the system prompt, once per person on this device (Apple and Google both require saying why first).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (email && isUsa) setConsent(storedConsent(email) ? 'granted' : 'ask');
+    if (email && isUsa) setConsent(storedConsent(email));
   }, [email, isUsa]);
   /* eslint-enable react-hooks/set-state-in-effect */
-  const accept = () => { if (email) { try { localStorage.setItem(consentKey(email), '1'); } catch { /* asked again next time */ } } setConsent('granted'); setRestartKey(k => k + 1); };
+  const accept = () => { if (email) saveConsent(email, true); setConsent('granted'); setRestartKey(k => k + 1); };
+  const decline = () => { if (email) saveConsent(email, false); setConsent('declined'); };
 
   useEffect(() => {
     if (!email || !isUsa || consent !== 'granted') return;
@@ -82,14 +87,14 @@ export function useGeofenceShift(args: {
       setState({ permission: 'granted', error: '' });
       void evaluate(point);
     };
-    const onError = (message: string, code?: string) => {
+    const onError = (_message: string, code?: string) => {
       if (cancelled) return;
       if (code === 'UNSUPPORTED') { setState({ permission: 'unsupported', error: '' }); return; }
       setState({
         permission: 'denied',
         error: code === 'NOT_AUTHORIZED'
           ? 'Location is switched off for Delcargo Internal. Set Location to "Always" in your phone settings so your shift can start and end automatically.'
-          : (message || 'Unable to determine your location.'),
+          : 'We could not find your location. Check that Location is turned on and that you have signal. Your shift will start when we do.',
       });
     };
 
@@ -109,5 +114,5 @@ export function useGeofenceShift(args: {
   }, [isUsa, consent]);
 
   const permission: GeoPermission = !isUsa ? 'idle' : consent === 'declined' ? 'declined' : state.permission ?? 'requesting';
-  return { permission, error: state.error, liveDistance, consentPending: consent === 'ask', accept, decline: () => setConsent('declined') };
+  return { permission, error: state.error, liveDistance, consentPending: consent === 'ask', accept, decline };
 }
