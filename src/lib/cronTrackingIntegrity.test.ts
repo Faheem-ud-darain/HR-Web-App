@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TrackerDiagnosis } from './core/trackerDiagnosis';
 import type { IntegrityFinding } from './core/trackingSettings';
 
