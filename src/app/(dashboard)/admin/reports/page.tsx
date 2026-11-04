@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin, hrActions } from '@/lib/hrData';
+import { Profile, formatMoney, TimesheetEntry, localShiftDate, useProfiles, useProfileDocuments, useWarehouses, useTimesheets, displayName, updateProfileAdmin, hrActions, useTrackingSettings } from '@/lib/hrData';
 import { FileTextIcon as FileText, DownloadSimpleIcon as Download, MapPinIcon as MapPin, MonitorIcon as Monitor, BankIcon as Landmark } from '@/components/ui/icons';
 import { UserProfileModal, DocumentsModal } from '@/components/ui/lazy';
 import { Avatar } from '@/components/ui/Avatar';
@@ -22,9 +22,13 @@ import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Ta
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 import { useSessionEmail } from '@/lib/useSession';
+import { isTrackingOn } from '@/lib/core/trackingSettings';
 
 export default function ReportsPage() {
   const { data: employees = [], isLoading: profilesLoading, refetch: refetchProfiles } = useProfiles();
+  const { data: trackingRows } = useTrackingSettings({ all: true });
+  // The one answer to "is tracking on for this person": the settings row when there is one, never the profile copy on its own.
+  const trackingNow = (emp: Profile) => isTrackingOn(emp.trackingEnabled, (trackingRows || []).find(t => t.employeeEmail?.toLowerCase() === emp.email.toLowerCase()));
   const { data: warehouses = [] } = useWarehouses();
   const [historyDays, setHistoryDays] = useState(60);
   const { data: timesheets = [], isLoading: timesheetsLoading, isFetching: fetchingHistory } = useTimesheets({ days: historyDays });
@@ -61,7 +65,7 @@ export default function ReportsPage() {
     setSelectedEmp(emp);
     setSelectedRegion(emp.region || 'Pakistan');
     setSelectedWarehouses(emp.assignedWarehouses || []);
-    setTrackingEnabled(!!emp.trackingEnabled);
+    setTrackingEnabled(trackingNow(emp));
     setExemptFromAbsenceCheck(!!emp.exemptFromAbsenceCheck);
   };
 
@@ -84,8 +88,8 @@ export default function ReportsPage() {
         exemptFromAbsenceCheck: exemptFromAbsenceCheck,
       });
       // Tracking goes through the tracking-settings route (the single source of truth); it also
-      // keeps the profile flag in step. Writing the profile flag alone is how the two drifted apart.
-      if (trackingEnabled !== !!selectedEmp.trackingEnabled) {
+      // keeps the profile mirror in step. Comparing with the profile copy alone is how the two drifted apart.
+      if (trackingEnabled !== trackingNow(selectedEmp)) {
         await hrActions.updateTrackingSettings(selectedEmp.email, { enabled: trackingEnabled });
       }
 

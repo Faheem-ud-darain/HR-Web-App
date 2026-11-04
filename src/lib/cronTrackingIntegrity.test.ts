@@ -7,6 +7,8 @@ const db = vi.hoisted(() => ({
   state: null as Record<string, string> | null,
   notifications: [] as { role: string; message: string }[],
   saves: 0,
+  syncs: [] as { email: string; enabled: boolean }[],
+  syncResult: true,
   health: { findings: [] as IntegrityFinding[], diagnoses: [] as TrackerDiagnosis[] },
   failRead: false,
 }));
@@ -16,6 +18,7 @@ vi.mock('@/lib/pbAdmin', () => ({
   adminUpsertByField: async (_c: string, _f: string, _v: string, data: Record<string, string>) => { db.state = data; db.saves++; },
   adminAddNotification: async (_email: string, role: string, message: string) => { db.notifications.push({ role, message }); },
 }));
+vi.mock('@/lib/trackingSync', () => ({ syncProfileTrackingFlag: async (email: string, enabled: boolean) => { db.syncs.push({ email, enabled }); return db.syncResult; } }));
 vi.mock('@/lib/trackingIntegrity', () => ({
   loadTrackingHealth: async () => { if (db.failRead) throw new Error('database down'); return db.health; },
 }));
@@ -29,7 +32,7 @@ const diagnosis: TrackerDiagnosis = { email: 'zara@x.com', state: 'tracking_off'
   details: { trackingOn: false, intervalMinutes: 15, onShiftSince: null, lastSeenAt: null, lastCaptureAt: null, agentVersion: null, device: null, lastError: null, failures: 0 } };
 
 beforeEach(() => {
-  db.state = null; db.notifications = []; db.saves = 0; db.failRead = false;
+  db.state = null; db.notifications = []; db.saves = 0; db.failRead = false; db.syncs = []; db.syncResult = true;
   db.health = { findings: [], diagnoses: [] };
   process.env.CRON_SECRET = SECRET;
 });
@@ -46,7 +49,7 @@ describe('POST /api/cron/tracking-integrity', () => {
   it('tells HR and Admin who is affected, what is wrong and what to do', async () => {
     db.health = { findings: [off], diagnoses: [diagnosis] };
     const res = await call();
-    expect(await res.json()).toEqual({ status: 'ok', flagged: 1, alerted: 1 });
+    expect(await res.json()).toEqual({ status: 'ok', flagged: 1, alerted: 1, repaired: 0 });
     expect(db.notifications.map(n => n.role).sort()).toEqual(['admin', 'hr']);
     expect(db.notifications[0].message).toBe('zara@x.com: On shift with tracking switched OFF, so nothing is being captured. Switch tracking on for them in Tracking.');
   });
@@ -56,7 +59,7 @@ describe('POST /api/cron/tracking-integrity', () => {
     await call();
     const saved = db.saves;
     const second = await (await call()).json();
-    expect(second).toEqual({ status: 'ok', flagged: 1, alerted: 0 });
+    expect(second).toEqual({ status: 'ok', flagged: 1, alerted: 0, repaired: 0 });
     expect(db.notifications).toHaveLength(2);
     expect(db.saves).toBe(saved);
   });
@@ -75,6 +78,22 @@ describe('POST /api/cron/tracking-integrity', () => {
     db.health = { findings: [off], diagnoses: [] };
     await call();
     expect(db.notifications[0].message).toBe('zara@x.com: On shift with tracking switched OFF.');
+  });
+
+  it('repairs a profile copy that disagrees with the real switch, in the direction the switch says', async () => {
+    const mismatch = (email: string, settingsEnabled: boolean): IntegrityFinding => ({ kind: 'flag_mismatch', email, settingsEnabled, detail: 'Flags disagree.' });
+    db.health = { findings: [mismatch('luna@x.com', true), mismatch('rahim@x.com', false)], diagnoses: [] };
+    expect(await (await call()).json()).toEqual({ status: 'ok', flagged: 2, alerted: 0, repaired: 2 });
+    expect(db.syncs).toEqual([{ email: 'luna@x.com', enabled: true }, { email: 'rahim@x.com', enabled: false }]);
+    expect(db.notifications).toHaveLength(0); // repairing is not an alert
+  });
+
+  it('does not count a repair that failed, and never repairs more than the cap in one run', async () => {
+    db.syncResult = false;
+    const many: IntegrityFinding[] = Array.from({ length: 14 }, (_, i) => ({ kind: 'flag_mismatch', email: `p${i}@x.com`, settingsEnabled: true, detail: 'x' }));
+    db.health = { findings: many, diagnoses: [] };
+    expect((await (await call()).json()).repaired).toBe(0);
+    expect(db.syncs).toHaveLength(10);
   });
 
   it('a failed read alerts nobody, saves nothing and reports an error', async () => {

@@ -126,6 +126,8 @@ export interface IntegrityFinding {
   kind: 'flag_mismatch' | 'no_settings_row' | 'on_shift_tracking_off' | 'on_shift_no_captures';
   email: string;
   detail: string;
+  /** For flag_mismatch: what the real switch (hr_tracking_settings.enabled) says, which is the value the profile copy must take. */
+  settingsEnabled?: boolean;
 }
 
 // ── Gap alerts ─────────────────────────────────────────────────────────────────
@@ -176,7 +178,7 @@ export function buildIntegrityReport(args: {
       continue;
     }
     if (!!p.trackingEnabled !== !!s.enabled) {
-      out.push({ kind: 'flag_mismatch', email, detail: `Profile flag is ${p.trackingEnabled ? 'ON' : 'OFF'} but tracking settings say ${s.enabled ? 'ON' : 'OFF'} (the settings value is the one that counts).` });
+      out.push({ kind: 'flag_mismatch', email, settingsEnabled: !!s.enabled, detail: `Profile flag is ${p.trackingEnabled ? 'ON' : 'OFF'} but tracking settings say ${s.enabled ? 'ON' : 'OFF'} (the settings value is the one that counts).` });
     }
     if (!shift) continue;
     const hb = args.heartbeats[email];
