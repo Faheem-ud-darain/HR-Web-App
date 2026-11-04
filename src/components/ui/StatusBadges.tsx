@@ -19,6 +19,11 @@ export function LeaveTypeBadge({ type, className }: { type: string; className?: 
   return <Badge variant={LEAVE_TYPE_VARIANT[type] ?? 'default'} size="sm" className={className}>{type}</Badge>;
 }
 
+// "On Shift" / "Completed" on every timesheet row, card and report.
+export function ShiftStatusBadge({ status, className }: { status: 'in_progress' | 'completed'; className?: string }) {
+  return <Badge variant={status === 'in_progress' ? 'warning' : 'success'} className={className}>{status === 'in_progress' ? 'On Shift' : 'Completed'}</Badge>;
+}
+
 const LEAVE_STATUS: Record<LeaveApplication['status'], { variant: 'success' | 'warning' | 'danger' | 'default'; label: string }> = {
   pending:     { variant: 'warning', label: 'Pending'      },
   hr_approved: { variant: 'default', label: 'HR Approved'  },

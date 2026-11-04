@@ -7,6 +7,7 @@
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
+import { DEFAULT_PB_URL } from '../pbUrl';
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
@@ -187,7 +188,7 @@ export const teamActions = {
       form.append('attachment_size', String(file.size));
       if (isAnnouncement) form.append('is_announcement', 'true');
       // Bypass Vercel proxy for large file uploads (same as uploadTeamDocument)
-      const res = await fetch('https://pb.delcargo.us/api/collections/hr_messages/records', {
+      const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_messages/records`, {
         method: 'POST',
         body: form,
       });
@@ -257,7 +258,7 @@ export const teamActions = {
         form.append('attachment_name', file.name);
         form.append('attachment_size', String(file.size));
         // Bypass Vercel proxy for large file uploads (same as sendMessage/uploadTeamDocument)
-        const res = await fetch('https://pb.delcargo.us/api/collections/hr_messages/records', { method: 'POST', body: form });
+        const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_messages/records`, { method: 'POST', body: form });
         if (!res.ok) throw new Error(`Forward failed: ${res.status} ${await res.text()}`);
         attachmentCopied = true;
       } catch (err) {
@@ -327,7 +328,7 @@ export const teamActions = {
     form.append('uploaded_by_role', uploaderRole);
     // Bypass the Vercel proxy (/api/pb) for large file uploads to avoid Vercel's
     // strict 4.5MB Serverless Function payload limit, which would block videos.
-    const res = await fetch('https://pb.delcargo.us/api/collections/hr_team_documents/records', {
+    const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_team_documents/records`, {
       method: 'POST',
       body: form,
     });

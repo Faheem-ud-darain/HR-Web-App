@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useNow } from '@/lib/useNow';
 import { useQuery } from '@tanstack/react-query';
+import { shiftMinutes } from '@/lib/core/timesheets';
 
 
 interface AbsenceDetailsViewProps {
@@ -205,9 +206,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         const m = mMatch ? parseInt(mMatch[1], 10) : 0;
         shiftMins = h * 60 + m;
       } else if (t.clockIn) {
-        const start = new Date(t.clockIn).getTime();
-        const end = t.clockOut ? new Date(t.clockOut).getTime() : (now || start);
-        shiftMins = Math.max(0, Math.floor((end - start) / 60000));
+        shiftMins = shiftMinutes(t.clockIn, t.clockOut, now);
       }
 
       const existing = groupedMap.get(groupKey);

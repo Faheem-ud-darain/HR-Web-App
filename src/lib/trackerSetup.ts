@@ -1,4 +1,5 @@
 
+import { DEFAULT_PB_URL } from './pbUrl';
 import type { PbRow } from '@/lib/pbTypes';// Shared helpers for the DelCargo Tracker desktop agent's one-time setup
 // code — used by both the HR/Admin Setup Agent modal (TrackingView.tsx)
 // and the employee self-service setup card (employee/tracker/page.tsx), so
@@ -179,7 +180,7 @@ export function isMobileDevice(): boolean {
  * Now HTTPS via pb.delcargo.us (Caddy reverse proxy in front of PocketBase)
  * instead of the old bare HTTP IP — see src/lib/pocketbase.ts for the full
  * story on why that mattered. */
-export const POCKETBASE_URL = 'https://pb.delcargo.us';
+export const POCKETBASE_URL = DEFAULT_PB_URL;
 
 export function encodeSetupCode(url: string, token: string): string {
   const json = JSON.stringify({ u: url, t: token });

@@ -1,5 +1,6 @@
 'use client';
 
+import { ShiftStatusBadge } from '@/components/ui/StatusBadges';
 import { Input } from '@/components/ui/Input';
 import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
 import { exportEmployeesCsv, exportTimesheetCsv } from '@/lib/reportExports';
@@ -19,6 +20,7 @@ import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 import { useSessionEmail } from '@/lib/useSession';
 import { useNow } from '@/lib/useNow';
+import { shiftMinutes } from '@/lib/core/timesheets';
 
 export default function ReportsPage() {
   const now = useNow(); // for the running total of still-open shifts (see lib/useNow.ts)
@@ -63,13 +65,7 @@ export default function ReportsPage() {
   // objects, so this is unaffected by the calendar date rolling over.
   // Still-open shifts count their elapsed time up to now, matching the live
   // ticker shown elsewhere instead of being silently excluded from the total.
-  const totalHours = filteredReviewEntries.reduce((acc, e) => {
-    if (!e.clockIn) return acc;
-    const start = new Date(e.clockIn).getTime();
-    const end = e.clockOut ? new Date(e.clockOut).getTime() : (now || start);
-    const minutes = Math.max(0, Math.round((end - start) / 60000));
-    return acc + minutes;
-  }, 0);
+  const totalHours = filteredReviewEntries.reduce((acc, e) => acc + shiftMinutes(e.clockIn, e.clockOut, now), 0);
   const completedShifts = filteredReviewEntries.filter(e => e.status === 'completed').length;
   const openShifts = filteredReviewEntries.filter(e => e.status === 'in_progress').length;
 
@@ -285,9 +281,7 @@ export default function ReportsPage() {
                         <Td className="font-mono text-slate-500 text-caption">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                         <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                         <Td align="right">
-                          <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
-                            {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                          </Badge>
+                          <ShiftStatusBadge status={entry.status} />
                         </Td>
                       </Tr>
                     ))}

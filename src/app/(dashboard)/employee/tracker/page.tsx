@@ -1,5 +1,6 @@
 'use client';
 
+import { ShiftStatusBadge } from '@/components/ui/StatusBadges';
 import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, TrackingSettings, TrackerHeartbeat, localShiftDate, hasStaleTrackerToken } from '@/lib/hrData';
@@ -421,9 +422,7 @@ export default function TrackerPage() {
                         <Td density="comfortable" className="text-slate-600 font-medium font-mono">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                         <Td align="right" density="comfortable" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                         <Td align="right" density="comfortable">
-                          <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
-                            {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                          </Badge>
+                          <ShiftStatusBadge status={entry.status} />
                         </Td>
                       </Tr>
                     ))}
@@ -441,9 +440,7 @@ export default function TrackerPage() {
                   <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-sm">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-bold text-slate-900">{localShiftDate(entry.clockIn, entry.date)}</p>
-                      <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
-                        {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                      </Badge>
+                      <ShiftStatusBadge status={entry.status} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>

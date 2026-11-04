@@ -37,7 +37,7 @@ interface TrackerStatusBadgeProps {
 
 // "Is this employee's desktop tracker connected right now", with its warnings stacked underneath.
 export function TrackerStatusBadge({ hb, settings, openShift, align }: TrackerStatusBadgeProps) {
-  const isLive = hrActions.isHeartbeatLive(hb, settings.intervalMinutes);
+  const isLive = hrActions.isHeartbeatLive(hb);
   const gap = getCaptureGap({
     onShift: !!openShift, trackingOn: settings.enabled, heartbeatLive: isLive,
     lastCaptureAt: hb?.lastCaptureAt, shiftStartedAt: openShift?.clockIn, intervalMinutes: settings.intervalMinutes,

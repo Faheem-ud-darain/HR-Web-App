@@ -63,7 +63,7 @@ export function diagnoseTracker(args: {
   }
   if (!hb) return make('not_installed', onShift ? 'problem' : 'warn', 'Tracking is on but their tracker has never connected.', 'Send them the tracker download and their setup code.');
   const minutesAgo = Math.max(0, Math.round((now - new Date(hb.lastSeenAt).getTime()) / 60000));
-  if (!isHeartbeatLive(hb, settings.intervalMinutes, now)) {
+  if (!isHeartbeatLive(hb, now)) {
     return make('offline', onShift ? 'problem' : 'info', `The tracker has not been heard from for ${minutesAgo} min. The computer may be off, asleep or offline, or the tracker was closed.`, onShift ? 'Ask them to open the tracker and check their internet connection.' : '');
   }
   if (args.updateRequired) return make('update_required', 'warn', `Their tracker (v${hb.agentVersion}) is too old.`, 'Ask them to install the latest tracker.');

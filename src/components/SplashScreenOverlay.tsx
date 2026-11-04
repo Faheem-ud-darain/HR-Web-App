@@ -110,7 +110,7 @@ export function SplashScreenOverlay() {
       // (#0B0F1A) at the edges — the radial lift toward the center is what
       // makes the bubble read as "lit" rather than flat, same effect as the
       // source icon's own background treatment.
-      style={{ background: 'radial-gradient(circle at 50% 42%, #141c33 0%, #0b0f1a 60%, #05070c 100%)' }}
+      style={{ background: 'radial-gradient(circle at 50% 42%, var(--splash-bg-center) 0%, var(--splash-bg-mid) 60%, var(--splash-bg-edge) 100%)' }}
       aria-hidden="true"
     >
       <svg
@@ -121,9 +121,9 @@ export function SplashScreenOverlay() {
       >
         <defs>
           <linearGradient id="dcGold" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FFE08A" />
-            <stop offset="45%" stopColor="#FFC93C" />
-            <stop offset="100%" stopColor="#F2A93B" />
+            <stop offset="0%" style={{ stopColor: 'var(--splash-gold-1)' }} />
+            <stop offset="45%" style={{ stopColor: 'var(--splash-gold-2)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--splash-gold-3)' }} />
           </linearGradient>
         </defs>
 
@@ -151,7 +151,7 @@ export function SplashScreenOverlay() {
             of pushing toward the bubble's rounded corners. */}
         <text
           x="70" y="94" textAnchor="middle" fontSize="70" fontWeight={800}
-          fill="#ffffff" fontFamily="var(--font-display), Arial, sans-serif"
+          fill="white" fontFamily="var(--font-display), Arial, sans-serif"
           className="splash-letter splash-letter-d"
         >
           D

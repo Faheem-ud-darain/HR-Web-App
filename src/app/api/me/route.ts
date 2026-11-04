@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { PB_URL } from '@/lib/pbUrl';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch, adminFindProfileByEmail } from '@/lib/pbAdmin';
 import { mapProfileRecord, scopeProfileForViewer } from '@/lib/core/profiles';
@@ -11,7 +12,6 @@ export const runtime = 'edge';
 // The dashboard needs this to start up: it used to wait for the full roster (every profile plus
 // every overlay row) before it rendered anything and before any of its own data requests began,
 // which on a slow link is seconds of looking at a spinner.
-const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
 export async function GET(request: Request) {
   const session = await requireSession(request);
