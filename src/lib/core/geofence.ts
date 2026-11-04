@@ -11,6 +11,8 @@ export function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2
 
 /** A location fix is ignored when its error radius is bigger than this: a 400 m guess says nothing about a 150 m fence. */
 export const GEO_MAX_ACCURACY_METERS = 100;
+/** Smallest fence radius HR can set: phone GPS is rarely better than about 50 m, so a smaller fence would miss people who are inside. */
+export const GEO_MIN_RADIUS_METERS = 100;
 /** A fix older than this is a cached position, not where the phone is now. */
 export const GEO_MAX_FIX_AGE_MS = 2 * 60 * 1000;
 /** Shift ends only once the phone is this far beyond the fence edge, so GPS wobble at the edge cannot clock someone in and out repeatedly. */

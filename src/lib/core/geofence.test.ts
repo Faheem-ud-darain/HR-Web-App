@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GEO_EXIT_BUFFER_METERS, GEO_MAX_ACCURACY_METERS, GEO_MAX_FIX_AGE_MS, decideGeoAction, getDistanceMeters } from './geofence';
+import { GEO_EXIT_BUFFER_METERS, GEO_MIN_RADIUS_METERS, GEO_MAX_ACCURACY_METERS, GEO_MAX_FIX_AGE_MS, decideGeoAction, getDistanceMeters } from './geofence';
 
 const yard = { id: 'w1', name: 'Dallas Yard', latitude: 32.7767, longitude: -96.797, radius: 150 };
 const dock = { id: 'w2', name: 'Fort Worth Dock', latitude: 32.7555, longitude: -97.3308, radius: 100 };
@@ -55,5 +55,11 @@ describe('fixes that cannot be trusted', () => {
     expect(decide(north(10), false, [{ ...yard, latitude: NaN }])).toMatchObject({ action: 'none', ignored: 'no_warehouse' });
     expect(decide(north(10), false, [{ ...yard, radius: 0 }]).ignored).toBe('no_warehouse');
     expect(decide(north(10), false, [])).toMatchObject({ action: 'none', ignored: 'no_warehouse' });
+  });
+});
+
+describe('fence size', () => {
+  it('a fence must be big enough for phone GPS', () => {
+    expect(GEO_MIN_RADIUS_METERS).toBeGreaterThanOrEqual(GEO_EXIT_BUFFER_METERS * 2);
   });
 });
