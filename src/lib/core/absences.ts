@@ -12,6 +12,13 @@ import { elapsedMinutes } from './timesheets';
 export const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
 // Under 4 hours on shift in a day = absent, 4h or more = present.
 export const MIN_REQUIRED_WORK_MINUTES = 4 * 60;
+// A day marked absent costs this many days' pay.
+export const ABSENCE_PENALTY_DAYS = 2;
+/** What one absent day costs at this salary, in the pay month of `date` ("YYYY-MM-DD"). The one place the charge is worked out: detection, payroll and every screen use it. */
+export const absenceDayCharge = (baseSalary: number, date: string): number => {
+  const charge = Math.round(ABSENCE_PENALTY_DAYS * (Number(baseSalary) || 0) / getWeekdaysInMonth(date.slice(0, 7)));
+  return Number.isFinite(charge) ? Math.max(0, charge) : 0;
+};
 // Absence enforcement began on this date; earlier days are never flagged.
 export const ABSENCE_ENFORCEMENT_START_DATE = '2026-08-04';
 // runAbsenceCheck only ever looks back this many days.
@@ -297,8 +304,7 @@ export function detectAbsences(input: {
       }
       if (!reason) continue; // present and accounted for (worked >= 4h without excessive inactivity)
 
-      const dailyRate = emp.baseSalary / getWeekdaysInMonth(dateStr.slice(0, 7));
-      const deductionAmount = Math.round(2 * dailyRate);
+      const deductionAmount = absenceDayCharge(emp.baseSalary, dateStr);
 
       candidates.push({ employee: emp, date: dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount });
     }

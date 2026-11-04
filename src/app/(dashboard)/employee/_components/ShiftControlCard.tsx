@@ -8,6 +8,7 @@ import { FlagIcon as Flag, CrosshairIcon as LocateFixed, DeviceMobileIcon as Sma
 import { hrActions, TrackerHeartbeat, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
 import { isMobileDevice } from '@/lib/trackerSetup';
 import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
+import { STANDARD_SHIFT_MINUTES } from '@/lib/core/payroll';
 import { checkTracker, notifyShift } from '@/lib/hr/shiftActions';
 import { Button } from '@/components/ui/Button';
 
@@ -165,7 +166,6 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   }
     
                   const totalWorkedMins = Math.floor(totalWorkedMs / 60000);
-                  const REQUIRED_SHIFT_MINUTES = 8 * 60; // 480 minutes
     
                   // End the shift first — always — then, separately,
                   // surface the under-8-hour heads-up as a plain
@@ -173,8 +173,8 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   // left open waiting on this.
                   await doClockOut();
     
-                  if (totalWorkedMins < REQUIRED_SHIFT_MINUTES) {
-                    onUnderEight({ workedMinutes: totalWorkedMins, remainingMinutes: REQUIRED_SHIFT_MINUTES - totalWorkedMins });
+                  if (totalWorkedMins < STANDARD_SHIFT_MINUTES) {
+                    onUnderEight({ workedMinutes: totalWorkedMins, remainingMinutes: STANDARD_SHIFT_MINUTES - totalWorkedMins });
                   }
                 }}
                 disabled={!shiftActive}

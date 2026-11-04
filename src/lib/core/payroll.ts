@@ -3,7 +3,7 @@
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import { getNYDateString } from '../timezone';
 import type { Profile, LeaveApplication, TimesheetEntry, PayrollRecord, AbsenceRecord, DeductionItem } from '../hr/types';
-import { absenceReasonLabel, hoursMinutes } from './absences';
+import { absenceDayCharge, absenceReasonLabel, hoursMinutes, MIN_REQUIRED_WORK_MINUTES } from './absences';
 import { getWeekdaysInMonth, isWeekday } from './dates';
 import {
   getApprovedLeaveOnDate, isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
@@ -78,9 +78,7 @@ export function getAbsenceDeductionForMonth(
   leaves: LeaveApplication[] = []
 ): number {
   const count = getChargedAbsenceDays(absenceRecords, employeeEmail, monthKey, leaves).length;
-  const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
-  const raw = Math.round(count * 2 * dailyRate);
-  return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  return count * absenceDayCharge(currentBaseSalary, `${monthKey}-01`);
 }
 
 // Shift-shortfall deduction — the "for each day divide their worked/onshift
@@ -138,7 +136,6 @@ export function getShortShiftDays(
   }
 
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
-  const MIN_REQUIRED_WORK_MINUTES = 4 * 60;
   const days: ShortShiftDay[] = [];
 
   for (const [dateStr, mins] of minutesByDate) {
@@ -308,7 +305,7 @@ export function computePayrollForMonth(employees: Profile[], existingPayroll: Pa
           // Rule:
           // - If joined in month's first 5 days (joinDayOfMonth <= 5): Processed normally with full base salary.
           // - If joined after a week (joinDayOfMonth > 5): Prorated for days worked, and carried over if unpaid.
-          if (joinDayOfMonth > 5) {
+          if (joinDayOfMonth > FIRST_MONTH_CUTOFF_DAY) {
             const totalDaysInMonth = new Date(joinedYear, joinedMonthNum, 0).getDate();
             const daysWorkedInMonth = totalDaysInMonth - joinDayOfMonth + 1;
             const dailyRate = emp.baseSalary / totalDaysInMonth;

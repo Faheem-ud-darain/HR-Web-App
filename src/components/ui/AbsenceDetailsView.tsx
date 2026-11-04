@@ -9,6 +9,7 @@ import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, u
 import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
+import { absenceDayCharge } from '@/lib/core/absences';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { NoticeModal } from '@/components/ui/NoticeModal';
@@ -274,8 +275,12 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   // so every "$X deducted" total on this page needs to skip it too, or
   // this audit page would show money being taken that payroll never
   // actually takes.
-  const effectiveDeductionAmount = (r: AbsenceRecord): number =>
-    getApprovedLeaveOnDate(leaves, r.employeeName, r.date) ? 0 : r.deductionAmount;
+  // The charge is worked out from today's salary, the same way payroll does it, so this page and the pay slip agree after a salary correction.
+  const effectiveDeductionAmount = (r: AbsenceRecord): number => {
+    if (getApprovedLeaveOnDate(leaves, r.employeeName, r.date)) return 0;
+    const salary = allProfiles.find(p => p.email.toLowerCase() === r.employeeEmail.toLowerCase())?.baseSalary || 0;
+    return salary > 0 ? absenceDayCharge(salary, r.date) : r.deductionAmount;
+  };
 
   const totalDeducted = filteredAbsences.reduce((acc, r) => acc + effectiveDeductionAmount(r), 0);
 
