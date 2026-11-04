@@ -5,10 +5,14 @@
 import type { DeductionItem } from '../hr/types';
 import type { PayrollRecord, Profile } from '../hr/types';
 
-/** What the person is paid: base + increment + bonus + earlier part-month pay (new joiners) − deductions, never below zero (deductions can take pay down to nothing, not past it). The ONE definition used by rows, cards, exports and the pay slip. */
-export function netPay(r: Pick<PayrollRecord, 'baseSalary' | 'incrementAmount' | 'bonus' | 'deductions'> & { earlierPay?: number }): number {
-  return Math.max(0, (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0));
-}
+type NetInputs = Pick<PayrollRecord, 'baseSalary' | 'incrementAmount' | 'bonus' | 'deductions'> & { earlierPay?: number };
+
+/** The plain sum: base + increment + bonus + earlier part-month pay (new joiners) − deductions. It can be negative; this is what is stored in hr_payroll.net_pay, because earlier pay can be worked back out of it. Never show or pay this: use netPay. */
+export const netPayBeforeFloor = (r: NetInputs): number =>
+  (Number(r.baseSalary) || 0) + (Number(r.incrementAmount) || 0) + (Number(r.bonus) || 0) + (Number(r.earlierPay) || 0) - (Number(r.deductions) || 0);
+
+/** What the person is actually paid: the sum, never below zero (deductions can take pay down to nothing, not past it). The ONE definition used by rows, cards, exports, the pay slip and corrections. */
+export const netPay = (r: NetInputs): number => Math.max(0, netPayBeforeFloor(r));
 
 export type PayrollGroupKey = 'hours' | 'absence' | 'leave' | 'other' | 'held' | 'later';
 

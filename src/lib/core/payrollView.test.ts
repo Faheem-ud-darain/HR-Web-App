@@ -108,3 +108,20 @@ describe('new-joiner payments on the screen', () => {
     expect(groupDeductions(stub.deductionBreakdown).map(g => g.key)).toEqual(['later']);
   });
 });
+
+describe('netPayBeforeFloor and the stored net_pay', () => {
+  it('keeps the exact sum for storage and floors it at zero for everything shown or paid', async () => {
+    const { netPay, netPayBeforeFloor } = await import('./payrollView');
+    const over = { baseSalary: 50000, incrementAmount: 0, bonus: 0, deductions: 60000 };
+    expect(netPayBeforeFloor(over)).toBe(-10000);
+    expect(netPay(over)).toBe(0);
+    expect(netPay({ ...over, deductions: 2000, earlierPay: 1000 })).toBe(49000);
+  });
+
+  it('the stored value and the earlier pay recovered from it agree, also when the sum is negative', async () => {
+    const { toPayrollRowFields, toPayrollRecordFromRow } = await import('./payrollMappers');
+    const row = toPayrollRowFields({ employeeId: 'e', name: 'Z', baseSalary: 10000, bonus: 0, deductions: 50000, incrementAmount: 0, earlierPay: 3000, processed: true, month: '2026-09' }, '2026-10-01');
+    expect(row.net_pay).toBe(-37000);
+    expect(toPayrollRecordFromRow({ ...row, id: 'p' }).earlierPay).toBe(3000);
+  });
+});

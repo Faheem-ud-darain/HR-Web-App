@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { pbAdminFetch, adminAddNotification } from '@/lib/pbAdmin';
+import { pbAdminFetch, adminAddNotification, adminFindByField } from '@/lib/pbAdmin';
+import { toPayrollRecordFromRow } from '@/lib/core/payrollMappers';
+import { breakdownKey } from '@/lib/server/payrollInputs';
 import { pbFilter } from '@/lib/pbFilter';
 import { planCorrection, type PayrollCorrection } from '@/lib/core/payrollCorrections';
-import { monthLabel } from '@/lib/core/payrollView';
+import { monthLabel, netPay } from '@/lib/core/payrollView';
 import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
@@ -58,7 +60,10 @@ export async function POST(request: Request) {
 
     const earlierList = await pbAdminFetch(`/api/collections/${COLLECTION}/records?perPage=200&filter=${encodeURIComponent(pbFilter('employee_id = {:id} && month = {:m}', { id: employeeId, m: month }))}`);
     const earlier = ((earlierList?.items || []) as PbRow[]).map(toCorrection);
-    const paidAmount = num(paid.net_pay) || (num(paid.base_salary) + num(paid.bonus) - num(paid.deductions) + num(paid.increment_amount));
+    // What was actually paid is read exactly as the pay screens and the pay slip read it (netPay of the mapped row), so a month whose
+    // deductions exceeded its pay is corrected from 0, not from the unfloored sum stored in the row.
+    const breakdown = await adminFindByField('hr_payroll_breakdowns', 'breakdown_key', breakdownKey(employeeId, month));
+    const paidAmount = netPay(toPayrollRecordFromRow(paid, breakdown?.data));
     const plan = planCorrection({ paidAmount, earlier, correctedAmount: body.correctedAmount, reason: body.reason });
     if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: 400 });
 
