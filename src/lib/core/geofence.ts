@@ -33,7 +33,8 @@ export interface GeoDecision {
 
 const usable = (w: Warehouse) => Number.isFinite(w.latitude) && Number.isFinite(w.longitude) && w.radius > 0;
 
-export function decideGeoAction(fix: GeoFix, warehouses: Warehouse[], shiftActive: boolean, now: number = Date.now()): GeoDecision {
+/** `canEnd` is false for a device that has no proof the person was ever at the warehouse (a laptop at home), so it can show the distance but never ends a shift. */
+export function decideGeoAction(fix: GeoFix, warehouses: Warehouse[], shiftActive: boolean, now: number = Date.now(), canEnd: boolean = true): GeoDecision {
   const none = (ignored: GeoDecision['ignored']): GeoDecision => ({ action: 'none', ignored, nearest: null, distanceMeters: null, isInside: false });
   const fences = warehouses.filter(usable);
   if (fences.length === 0) return none('no_warehouse');
@@ -50,6 +51,6 @@ export function decideGeoAction(fix: GeoFix, warehouses: Warehouse[], shiftActiv
     if (d <= w.radius) isInside = true;
     if (d <= w.radius + GEO_EXIT_BUFFER_METERS) clearlyOutsideAll = false;
   }
-  const action = !shiftActive && isInside ? 'in' : shiftActive && clearlyOutsideAll ? 'out' : 'none';
+  const action = !shiftActive && isInside ? 'in' : shiftActive && canEnd && clearlyOutsideAll ? 'out' : 'none';
   return { action, nearest, distanceMeters: nearestDistance, isInside };
 }

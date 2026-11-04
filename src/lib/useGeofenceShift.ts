@@ -7,6 +7,7 @@ import { hrActions, type Profile, type Warehouse } from '@/lib/hrData';
 import { notifyShift } from '@/lib/hr/shiftActions';
 import { decideGeoAction, type GeoFix } from '@/lib/core/geofence';
 import { watchLocation, type GeoPoint } from '@/lib/backgroundGeolocation';
+import { Capacitor } from '@capacitor/core';
 
 export type GeoPermission = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'declined';
 export interface LiveDistance { meters: number; warehouseName: string; isInside: boolean }
@@ -37,6 +38,8 @@ export function useGeofenceShift(args: {
   const latest = useRef({ profile, warehouses, refetchTimesheets });
   useEffect(() => { latest.current = { profile, warehouses, refetchTimesheets }; });
   const lastFix = useRef<GeoFix | null>(null);
+  // The phone app may always end a shift. A browser may only after it has itself seen the person inside, so a laptop left open at home cannot end a shift the phone started at the warehouse.
+  const sawInside = useRef(false);
 
   // Ask before the system prompt, once per person on this device (Apple and Google both require saying why first).
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -56,7 +59,8 @@ export function useGeofenceShift(args: {
       const { profile: p, warehouses: all, refetchTimesheets: refetch } = latest.current;
       if (cancelled || !p) return;
       const assigned = all.filter(w => p.assignedWarehouses?.includes(w.id));
-      const d = decideGeoAction(fix, assigned, shiftActiveRef.current);
+      const d = decideGeoAction(fix, assigned, shiftActiveRef.current, Date.now(), Capacitor.isNativePlatform() || sawInside.current);
+      if (d.isInside) sawInside.current = true;
       if (d.ignored === 'no_warehouse') { setLiveDistance(null); return; }
       if (d.ignored || !d.nearest || d.distanceMeters === null) return;
       lastFix.current = fix;
