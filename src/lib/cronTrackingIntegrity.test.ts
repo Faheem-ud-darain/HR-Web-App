@@ -11,12 +11,13 @@ const db = vi.hoisted(() => ({
   syncResult: true,
   health: { findings: [] as IntegrityFinding[], diagnoses: [] as TrackerDiagnosis[] },
   failRead: false,
+  failNotify: false,
 }));
 
 vi.mock('@/lib/pbAdmin', () => ({
   adminFindByField: async () => (db.state ? { id: '1', data: db.state } : null),
   adminUpsertByField: async (_c: string, _f: string, _v: string, data: Record<string, string>) => { db.state = data; db.saves++; },
-  adminAddNotification: async (_email: string, role: string, message: string) => { db.notifications.push({ role, message }); },
+  adminAddNotification: async (_email: string, role: string, message: string) => { if (db.failNotify) throw new Error('notifications down'); db.notifications.push({ role, message }); },
 }));
 vi.mock('@/lib/trackingSync', () => ({ syncProfileTrackingFlag: async (email: string, enabled: boolean) => { db.syncs.push({ email, enabled }); return db.syncResult; } }));
 vi.mock('@/lib/trackingIntegrity', () => ({
@@ -31,8 +32,11 @@ const off: IntegrityFinding = { kind: 'on_shift_tracking_off', email: 'zara@x.co
 const diagnosis: TrackerDiagnosis = { email: 'zara@x.com', state: 'tracking_off', severity: 'problem', cause: 'On shift with tracking switched OFF, so nothing is being captured.', action: 'Switch tracking on for them in Tracking.',
   details: { trackingOn: false, intervalMinutes: 15, onShiftSince: null, lastSeenAt: null, lastCaptureAt: null, agentVersion: null, device: null, lastError: null, failures: 0 } };
 
+afterEach(() => { vi.useRealTimers(); });
+
 beforeEach(() => {
-  db.state = null; db.notifications = []; db.saves = 0; db.failRead = false; db.syncs = []; db.syncResult = true;
+  vi.useFakeTimers();
+  db.state = null; db.notifications = []; db.saves = 0; db.failRead = false; db.failNotify = false; db.syncs = []; db.syncResult = true;
   db.health = { findings: [], diagnoses: [] };
   process.env.CRON_SECRET = SECRET;
 });
@@ -94,6 +98,22 @@ describe('POST /api/cron/tracking-integrity', () => {
     db.health = { findings: many, diagnoses: [] };
     expect((await (await call()).json()).repaired).toBe(0);
     expect(db.syncs).toHaveLength(10);
+  });
+
+  it('repairs even when the alert cannot be delivered', async () => {
+    db.failNotify = true;
+    db.health = { findings: [off, { kind: 'flag_mismatch', email: 'luna@x.com', settingsEnabled: true, detail: 'x' }], diagnoses: [diagnosis] };
+    await call();
+    expect(db.syncs).toEqual([{ email: 'luna@x.com', enabled: true }]);
+  });
+
+  it('does not always start with the same people when there are more mismatches than the cap', async () => {
+    db.syncResult = false;
+    const many: IntegrityFinding[] = Array.from({ length: 14 }, (_, i) => ({ kind: 'flag_mismatch', email: `p${i}@x.com`, settingsEnabled: true, detail: 'x' }));
+    db.health = { findings: many, diagnoses: [] };
+    const seen = new Set<string>();
+    for (const t of [0, 1, 2]) { vi.setSystemTime(t * 20 * 60 * 1000); db.syncs = []; await call(); db.syncs.forEach(s => seen.add(s.email)); }
+    expect(seen.size).toBeGreaterThan(10);
   });
 
   it('a failed read alerts nobody, saves nothing and reports an error', async () => {

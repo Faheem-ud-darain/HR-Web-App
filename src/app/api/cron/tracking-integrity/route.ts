@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminAddNotification, adminFindByField, adminUpsertByField } from '@/lib/pbAdmin';
-import { planGapAlerts, type GapAlertState } from '@/lib/core/trackingSettings';
+import { planGapAlerts, type GapAlertState, type IntegrityFinding } from '@/lib/core/trackingSettings';
 import { loadTrackingHealth } from '@/lib/trackingIntegrity';
 import { syncProfileTrackingFlag } from '@/lib/trackingSync';
 
@@ -24,6 +24,18 @@ function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Runs before any notification is written, so a failing notification can never stop a repair. The starting point moves every run:
+// ten permanently failing profiles cannot keep the others from ever being tried.
+async function repairMismatches(findings: IntegrityFinding[], now: number): Promise<number> {
+  const todo = findings.filter(x => x.kind === 'flag_mismatch' && x.settingsEnabled !== undefined);
+  const start = todo.length ? Math.floor(now / (20 * 60 * 1000)) % todo.length : 0;
+  let repaired = 0;
+  for (const f of [...todo.slice(start), ...todo.slice(0, start)].slice(0, MAX_REPAIRS)) {
+    if (await syncProfileTrackingFlag(f.email, !!f.settingsEnabled)) repaired++;
+  }
+  return repaired;
+}
+
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET || '';
   if (secret.length < 24) return NextResponse.json({ error: 'The cron secret is not configured.' }, { status: 503 });
@@ -32,6 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const { findings, diagnoses } = await loadTrackingHealth();
+    const repaired = await repairMismatches(findings, Date.now());
     const state = ((await adminFindByField('hr_system_state', 'key', STATE_KEY))?.data || {}) as GapAlertState;
     const { send, next } = planGapAlerts(findings, state, Date.now());
     const byEmail = new Map(diagnoses.map(d => [d.email, d]));
@@ -40,10 +53,6 @@ export async function POST(request: Request) {
       const d = byEmail.get(f.email.toLowerCase());
       const message = d && d.action ? `${f.email}: ${d.cause} ${d.action}` : `${f.email}: ${d?.cause || f.detail}`;
       await Promise.all([adminAddNotification('all', 'hr', message, 'shift'), adminAddNotification('all', 'admin', message)]);
-    }
-    let repaired = 0;
-    for (const f of findings.filter(x => x.kind === 'flag_mismatch' && x.settingsEnabled !== undefined).slice(0, MAX_REPAIRS)) {
-      if (await syncProfileTrackingFlag(f.email, !!f.settingsEnabled)) repaired++;
     }
     // Saved after sending: if saving fails the worst case is one repeated alert, never a missed one.
     if (JSON.stringify(next) !== JSON.stringify(state)) await adminUpsertByField('hr_system_state', 'key', STATE_KEY, next);
