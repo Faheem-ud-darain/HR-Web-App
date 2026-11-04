@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { pbAdminFetch, adminFindProfileByEmail, adminUpdateProfile } from '@/lib/pbAdmin';
+import { pbAdminFetch } from '@/lib/pbAdmin';
+import { syncProfileTrackingFlag } from '@/lib/trackingSync';
 import { pbFilter } from '@/lib/pbFilter';
 import { planTrackingSettingsChange, type TrackingSettingsRow } from '@/lib/core/trackingSettings';
 import type { PbRow } from '@/lib/pbTypes';
@@ -17,7 +18,8 @@ export const runtime = 'edge';
 //  - HR/Admin: any employee, any of those fields.
 //  - Employee / team lead: only their own row, and only agentToken (or {} to make sure a row exists).
 // Every change is written to hr_tracking_settings_log (best-effort, see schema-migration's
-// ensureTrackingSettingsLog) and hr_profiles.tracking_enabled is kept in step with `enabled`.
+// ensureTrackingSettingsLog). hr_profiles.tracking_enabled is only a mirror of `enabled`: it is made equal on EVERY save that
+// includes `enabled` (even one that changes nothing, so a drifted copy is repaired by saving), and `profileSynced` says whether it worked.
 
 function toRow(r: PbRow): TrackingSettingsRow {
   return {
@@ -53,14 +55,11 @@ export async function POST(request: Request) {
       row = toRow(await pbAdminFetch(`/api/collections/hr_tracking_settings/records/${existing.id}`, { method: 'PATCH', body: JSON.stringify(plan.write) }));
     }
 
+    // The mirror follows the switch whenever `enabled` was part of the save, changed or not.
+    const sentEnabled = !!body.updates && typeof body.updates === 'object' && 'enabled' in body.updates;
+    const profileSynced = row && (sentEnabled || ('enabled' in plan.changes)) ? await syncProfileTrackingFlag(email, !!row.enabled) : undefined;
+
     if (plan.mode !== 'none') {
-      // Keep the profile flag (what the dashboard menu reads) in step with `enabled`.
-      if ('enabled' in plan.changes) {
-        try {
-          const profile = await adminFindProfileByEmail(email);
-          if (profile && !!profile.tracking_enabled !== !!row?.enabled) await adminUpdateProfile(profile.id, { tracking_enabled: !!row?.enabled });
-        } catch (err) { console.error('[tracking/settings] profile flag sync failed:', err); }
-      }
       try {
         await pbAdminFetch('/api/collections/hr_tracking_settings_log/records', {
           method: 'POST',
@@ -69,7 +68,7 @@ export async function POST(request: Request) {
       } catch { /* log collection may not exist yet, or a transient error — never block the change */ }
     }
 
-    return NextResponse.json({ settings: row });
+    return NextResponse.json({ settings: row, profileSynced });
   } catch (err) {
     console.error('[tracking/settings] error:', err);
     return NextResponse.json({ error: 'Could not reach the database. Nothing was changed.' }, { status: 502 });
