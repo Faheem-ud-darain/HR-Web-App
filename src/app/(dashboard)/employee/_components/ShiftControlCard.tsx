@@ -11,11 +11,14 @@ import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
 import { STANDARD_SHIFT_MINUTES } from '@/lib/core/payroll';
 import { checkTracker, notifyShift } from '@/lib/hr/shiftActions';
 import { Button } from '@/components/ui/Button';
+import { Capacitor } from '@capacitor/core';
+import { openLocationSettings } from '@/lib/backgroundGeolocation';
+import type { GeoPermission } from '@/lib/useGeofenceShift';
 
 interface ShiftControlCardProps {
   shiftActive: boolean;
   userProfile: Profile | null;
-  geoPermission: "idle" | "requesting" | "granted" | "denied" | "unsupported";
+  geoPermission: GeoPermission;
   liveDistance: { meters: number; warehouseName: string; isInside: boolean; } | null;
   isTrackingLiveFor: (emp: Profile) => boolean;
   setPingingTracker: React.Dispatch<React.SetStateAction<boolean>>;
@@ -30,10 +33,12 @@ interface ShiftControlCardProps {
   pingingTracker: boolean;
   allTimesheets: TimesheetEntry[] | undefined;
   geoErrorMsg: string;
+  /** Turns automatic check-in on (asks the phone for location). */
+  onEnableLocation: () => void;
   trackerHeartbeat: TrackerHeartbeat | null;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, trackerHeartbeat }: ShiftControlCardProps) {
   // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
   const isMobileApp = isMobileDevice();
   return (
@@ -194,16 +199,16 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               <p className="text-caption text-slate-400 italic">No warehouses assigned by HR yet — geofenced check-in will activate once a warehouse is assigned to your profile.</p>
             ) : geoPermission === 'unsupported' ? (
               <p className="text-caption text-rose-600 font-semibold leading-relaxed">Your browser/device does not support GPS location. Automatic geofenced check-in is unavailable here — please use a modern mobile or desktop browser.</p>
+            ) : geoPermission === 'declined' ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-caption text-amber-700 font-semibold leading-relaxed">Automatic check-in is off, so your shift will not start or end by itself.</p>
+                <Button variant="primary" size="sm" onClick={onEnableLocation} className="shrink-0">Turn on</Button>
+              </div>
             ) : geoPermission === 'denied' ? (
               <div className="flex items-center justify-between gap-2">
                 <p className="text-caption text-rose-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => window.location.reload()}
-                  className="shrink-0"
-                >
-                  Retry
+                <Button variant="danger" size="sm" onClick={() => { void openLocationSettings().then(opened => { if (!opened) window.location.reload(); }); }} className="shrink-0">
+                  {Capacitor.isNativePlatform() ? 'Open Settings' : 'Retry'}
                 </Button>
               </div>
             ) : (

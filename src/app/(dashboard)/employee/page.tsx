@@ -8,8 +8,8 @@ import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehous
 import { Modal } from '@/components/ui/Modal';
 import { WarningIcon as AlertTriangle, WifiSlashIcon as WifiOff, DeviceMobileIcon as Smartphone } from '@/components/ui/icons';
 import { TRACKER_MIN_VERSION } from '@/lib/trackerSetup';
-import { checkGeofence } from '@/lib/geofence';
-import { watchLocation, GeoPoint, GeoWatchHandle } from '@/lib/backgroundGeolocation';
+import { useGeofenceShift } from '@/lib/useGeofenceShift';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useRouter } from 'next/navigation';
 import { TimesheetReviewModal } from "@/app/(dashboard)/employee/_components/TimesheetReviewModal";
 import { DashboardGreeting } from './_components/DashboardGreeting';
@@ -21,7 +21,6 @@ import { TeamCard } from './_components/TeamCard';
 import { TeamMonitorCard } from './_components/TeamMonitorCard';
 import { ReferralCard } from './_components/ReferralCard';
 import { ShiftControlCard } from "@/app/(dashboard)/employee/_components/ShiftControlCard";
-import { notifyShift } from '@/lib/hr/shiftActions';
 import type { StartBlock } from '@/lib/core/shiftStart';
 import { useNow } from '@/lib/useNow';
 import { useSessionEmail } from '@/lib/useSession';
@@ -96,13 +95,6 @@ export default function EmployeeDashboard() {
   
   // Geofencing states
   const [shiftActive, setShiftActive] = useState(false);
-  // What the device reported ('requesting' = USA employee, GPS answer not in yet; 'idle' = not applicable).
-  const [geoResult, setGeoPermission] = useState<'granted' | 'denied' | 'unsupported' | null>(null);
-  const geoPermission: 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' =
-    geoResult ?? (userProfile?.region === 'USA' ? 'requesting' : 'idle');
-  const [geoErrorMsg, setGeoErrorMsg] = useState('');
-  const [liveDistance, setLiveDistance] = useState<{ meters: number; warehouseName: string; isInside: boolean } | null>(null);
-
   // Tracker-connection gate for manually-started shifts (Pakistan/remote
   // employees). If HR/Admin has screen tracking enabled for this employee,
   // they must have the desktop tracker app actually running/connected
@@ -156,9 +148,7 @@ export default function EmployeeDashboard() {
   const [shiftStopReason, setShiftStopReason] = useState<'tracker_closed' | 'inactivity_absence'>('tracker_closed');
 
   const profileRef = useRef<Profile | null>(null);
-  const warehousesRef = useRef<Warehouse[]>([]);
   const shiftActiveRef = useRef(false);
-  const geoWatchRef = useRef<GeoWatchHandle | null>(null);
   // Current open shift's id + clockIn timestamp, kept current for the
   // pagehide beacon below (manual/non-USA shifts only) — a pagehide handler
   // can't afford to await a fresh getOpenShift() lookup as the tab is
@@ -248,13 +238,11 @@ export default function EmployeeDashboard() {
   // Keep refs in sync so the long-lived geolocation callback always reads
   // fresh data without needing to be re-registered on every render.
   useEffect(() => { profileRef.current = userProfile; }, [userProfile]);
-  useEffect(() => { warehousesRef.current = warehouses; }, [warehouses]);
   useEffect(() => { shiftActiveRef.current = shiftActive; }, [shiftActive]);
   // The long-lived timers below depend only on who is signed in (their email/region), so they
   // aren't torn down and restarted whenever the profile object is re-created. They read the
   // newest profile / tracking check through these refs instead.
   const userEmail = userProfile?.email;
-  const userRegion = userProfile?.region;
   const isTrackingLiveForRef = useRef(isTrackingLiveFor);
   useEffect(() => { isTrackingLiveForRef.current = isTrackingLiveFor; });
 
@@ -351,8 +339,8 @@ export default function EmployeeDashboard() {
   // starts the instant shiftActive flips true (whether from clicking Start
   // Shift just now, or from discovering an already-open shift on load that
   // passed the stale-shift check below) and stops the moment it flips
-  // false. USA employees are governed by GPS geofencing instead and don't
-  // need this at all.
+  // false. USA employees need it too: it is how the server knows their phone is
+  // still running the app, so a shift is not left open all night if the app is closed.
   //
   // Also re-touches immediately on `visibilitychange` -> visible, not just
   // every 20s: while backgrounded, mobile OSes commonly throttle/suspend JS
@@ -361,7 +349,7 @@ export default function EmployeeDashboard() {
   // Belt-and-suspenders with the loosened SHIFT_TAB_HEARTBEAT_STALE_MS
   // above — see the comment there for the bug this pair of changes fixes.
   useEffect(() => {
-    if (!userProfile?.email || userProfile.region === 'USA' || !shiftActive) return;
+    if (!userProfile?.email || !shiftActive) return;
     const touch = () => { hrActions.touchShiftTabHeartbeat(userProfile.email); };
     touch();
     const interval = setInterval(touch, 20000);
@@ -440,91 +428,8 @@ export default function EmployeeDashboard() {
   //   return () => window.removeEventListener('pagehide', handlePageHide);
   // }, [userProfile?.email, userProfile?.region]);
 
-  // Real GPS-based geofencing — USA employees only. Automatically starts/ends
-  // the shift as the employee's device enters or leaves the radius of any
-  // warehouse assigned to them. Remote (Pakistan) employees use manual
-  // Start/End Shift controls instead (rendered further below) and never
-  // trigger this effect.
-  //
-  // watchLocation() (src/lib/backgroundGeolocation.ts) keeps this firing
-  // even while the app is backgrounded/locked on native iOS/Android (via
-  // @capgo/background-geolocation) — required so an employee who leaves a
-  // warehouse without the app open still gets auto clocked-out. On plain
-  // web it falls back to the browser's foreground-only geolocation, same as
-  // before.
-  useEffect(() => {
-    if (!userEmail || userRegion !== 'USA') return;
-
-    let cancelled = false;
-
-    const handleSuccess = async (point: GeoPoint) => {
-      if (cancelled) return;
-      setGeoPermission('granted');
-      setGeoErrorMsg('');
-
-      const profile = profileRef.current;
-      if (!profile) return;
-
-      const assigned = warehousesRef.current.filter(w => profile.assignedWarehouses?.includes(w.id));
-      if (assigned.length === 0) {
-        setLiveDistance(null);
-        return;
-      }
-
-      const { isInside, nearestWarehouse, distanceMeters } = checkGeofence(
-        point.latitude,
-        point.longitude,
-        assigned
-      );
-
-      if (nearestWarehouse && distanceMeters !== null) {
-        setLiveDistance({ meters: Math.round(distanceMeters), warehouseName: nearestWarehouse.name, isInside });
-      }
-
-      if (isInside && !shiftActiveRef.current && nearestWarehouse) {
-        shiftActiveRef.current = true;
-        setShiftActive(true);
-        await hrActions.clockIn(profile.email, 'gps');
-        await refetchTimesheets();
-        await notifyShift(profile, `Auto Shift ON: Checked-in at ${nearestWarehouse.name} via GPS geofencing.`, name => `${name} checked-in at ${nearestWarehouse.name} via geofencing.`);
-      } else if (!isInside && shiftActiveRef.current) {
-        const whName = nearestWarehouse ? nearestWarehouse.name : 'the warehouse';
-        shiftActiveRef.current = false;
-        setShiftActive(false);
-        await hrActions.clockOut(profile.email);
-        await refetchTimesheets();
-        await notifyShift(profile, `Auto Shift OFF: Left the geofence at ${whName}.`, name => `${name} checked-out (left warehouse geofence at ${whName}).`);
-      }
-    };
-
-    const handleError = (message: string, code?: string) => {
-      if (cancelled) return;
-      if (code === 'UNSUPPORTED') {
-        setGeoPermission('unsupported');
-        return;
-      }
-      setGeoPermission('denied');
-      setGeoErrorMsg(
-        code === 'NOT_AUTHORIZED'
-          ? 'Location access denied. Enable "Always" location permission for Delcargo Internal in your device settings to allow automatic warehouse check-in.'
-          : (message || 'Unable to determine your location.')
-      );
-    };
-
-    watchLocation(handleSuccess, handleError).then((handle) => {
-      if (cancelled) {
-        handle.stop();
-        return;
-      }
-      geoWatchRef.current = handle;
-    });
-
-    return () => {
-      cancelled = true;
-      geoWatchRef.current?.stop();
-      geoWatchRef.current = null;
-    };
-  }, [userEmail, userRegion, refetchTimesheets]);
+  // USA employees: the phone's location starts and ends the shift (rules in core/geofence.ts, wiring in useGeofenceShift).
+  const geo = useGeofenceShift({ profile: userProfile, warehouses, shiftActiveRef, setShiftActive, refetchTimesheets });
 
   const [isUpdatingTaskStatus, setIsUpdatingTaskStatus] = useState(false);
   const handleUpdateTaskStatus = async (taskId: string, nextStatus: Task['status']) => {
@@ -578,7 +483,7 @@ export default function EmployeeDashboard() {
 
       {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
           unmissable full-width place above everything else. */}
-      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geoPermission} liveDistance={liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onUnderEight={setUnder8HourDetails} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geoErrorMsg} trackerHeartbeat={trackerHeartbeat} />
+      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onUnderEight={setUnder8HourDetails} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} trackerHeartbeat={trackerHeartbeat} />
 
 
       <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />
@@ -651,6 +556,11 @@ export default function EmployeeDashboard() {
           <TimesheetReviewModal selectedReviewEmp={selectedReviewEmp} userProfile={userProfile} reviewEntries={reviewEntries} setSelectedReviewEmp={setSelectedReviewEmp} />
         </Modal>
       )}
+      <ConfirmDialog
+        isOpen={geo.consentPending} onClose={geo.decline} onConfirm={geo.accept} variant="warning" confirmLabel="Continue" cancelLabel="Not now"
+        title="Turn on automatic check-in?"
+        message={'Delcargo Internal uses your phone\'s location to start your shift when you arrive at your assigned warehouse and end it when you leave. This works while the app is closed or your phone is locked, so your phone will ask for "Always" location access. Your location is only compared with your warehouse: it is not stored or shared, and never used for advertising. You can change this any time in your phone settings.'}
+      />
       {under8HourDetails && (
         <UnderEightHoursModal workedMinutes={under8HourDetails.workedMinutes} remainingMinutes={under8HourDetails.remainingMinutes} onClose={() => setUnder8HourDetails(null)} />
       )}
