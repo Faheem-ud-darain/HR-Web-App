@@ -3,9 +3,7 @@
 //      stop moving, so a late leave or absence record cannot change a salary that is about to be paid.
 //   2. INCREMENTS: once that month is frozen, anyone whose work anniversary has just taken effect
 //      gets the raise on their base salary automatically. Nobody adds increments by hand.
-import { getMissedIncrementEventsForPayrollMonth, type IncrementInput } from '../incrementMath';
-
-export const INCREMENT_PER_EVENT = { USA: 100, Pakistan: 10000 } as const;
+import { getMissedIncrementEventsForPayrollMonth, incrementPerEvent, type IncrementInput } from '../incrementMath';
 
 const monthIndex = (key: string): number => {
   const [y, m] = key.split('-').map(Number);
@@ -43,6 +41,6 @@ export function decideIncrement(profile: IncrementInput, payMonth: string): Incr
   if (monthIndex(anniversaryMonth) !== monthIndex(payMonth) - 1) {
     return { status: 'skipped', reason: `the raise for ${anniversaryMonth} was missed (older ones are never back-filled)` };
   }
-  const perEvent = profile.region === 'USA' ? INCREMENT_PER_EVENT.USA : INCREMENT_PER_EVENT.Pakistan;
+  const perEvent = incrementPerEvent(profile.region);
   return { status: 'apply', perEvent, newBaseSalary: profile.baseSalary + perEvent, processedThroughYear: eventYear, anniversaryMonth };
 }
