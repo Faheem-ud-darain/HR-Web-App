@@ -339,8 +339,8 @@ export default function EmployeeDashboard() {
   // starts the instant shiftActive flips true (whether from clicking Start
   // Shift just now, or from discovering an already-open shift on load that
   // passed the stale-shift check below) and stops the moment it flips
-  // false. USA employees need it too: it is how the server knows their phone is
-  // still running the app, so a shift is not left open all night if the app is closed.
+  // false. USA employees are governed by GPS geofencing instead (useGeofenceShift keeps their
+  // heartbeat, from the one phone that owns attendance).
   //
   // Also re-touches immediately on `visibilitychange` -> visible, not just
   // every 20s: while backgrounded, mobile OSes commonly throttle/suspend JS
@@ -349,7 +349,7 @@ export default function EmployeeDashboard() {
   // Belt-and-suspenders with the loosened SHIFT_TAB_HEARTBEAT_STALE_MS
   // above — see the comment there for the bug this pair of changes fixes.
   useEffect(() => {
-    if (!userProfile?.email || !shiftActive) return;
+    if (!userProfile?.email || userProfile.region === 'USA' || !shiftActive) return;
     const touch = () => { hrActions.touchShiftTabHeartbeat(userProfile.email); };
     touch();
     const interval = setInterval(touch, 20000);
@@ -483,7 +483,7 @@ export default function EmployeeDashboard() {
 
       {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
           unmissable full-width place above everything else. */}
-      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onUnderEight={setUnder8HourDetails} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} trackerHeartbeat={trackerHeartbeat} />
+      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onUnderEight={setUnder8HourDetails} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} />
 
 
       <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />

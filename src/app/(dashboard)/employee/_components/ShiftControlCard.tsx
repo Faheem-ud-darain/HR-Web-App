@@ -35,10 +35,12 @@ interface ShiftControlCardProps {
   geoErrorMsg: string;
   /** Turns automatic check-in on (asks the phone for location). */
   onEnableLocation: () => void;
+  /** A second phone takes over attendance from the one that has it. */
+  onUseThisDevice: () => void;
   trackerHeartbeat: TrackerHeartbeat | null;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
   // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
   const isMobileApp = isMobileDevice();
   return (
@@ -58,8 +60,8 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               </div>
               <p className="text-xs text-slate-500 font-semibold mt-0.5 truncate">
                 {userProfile?.region === 'USA'
-                  ? (geoPermission === 'unsupported' || geoPermission === 'denied'
-                      ? 'Automatic GPS check-in unavailable — see details below'
+                  ? (geoPermission === 'unsupported' || geoPermission === 'denied' || geoPermission === 'desktop' || geoPermission === 'other_device'
+                      ? 'Automatic GPS check-in is not running on this device — see details below'
                       : liveDistance
                         ? `${liveDistance.isInside ? 'Inside' : `${liveDistance.meters}m from`} ${liveDistance.warehouseName} · auto check-in`
                         : 'Waiting for GPS signal to auto check-in…')
@@ -199,6 +201,13 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               <p className="text-caption text-slate-400 italic">No warehouses assigned by HR yet — geofenced check-in will activate once a warehouse is assigned to your profile.</p>
             ) : geoPermission === 'unsupported' ? (
               <p className="text-caption text-rose-600 font-semibold leading-relaxed">Your browser/device does not support GPS location. Automatic geofenced check-in is unavailable here — please use a modern mobile or desktop browser.</p>
+            ) : geoPermission === 'desktop' ? (
+              <p className="text-caption text-slate-500 font-semibold leading-relaxed">Attendance is marked from your phone. Open the Delcargo app on your phone at the warehouse; this screen only shows your shift.</p>
+            ) : geoPermission === 'other_device' ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-caption text-amber-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
+                <Button variant="primary" size="sm" onClick={onUseThisDevice} className="shrink-0">Use this device</Button>
+              </div>
             ) : geoPermission === 'declined' ? (
               <div className="flex items-center justify-between gap-2">
                 <p className="text-caption text-amber-700 font-semibold leading-relaxed">Automatic check-in is off, so your shift will not start or end by itself.</p>

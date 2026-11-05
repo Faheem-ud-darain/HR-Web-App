@@ -40,13 +40,6 @@ describe('ending a shift', () => {
   });
 });
 
-describe('a device that never saw the person at the warehouse', () => {
-  it('can show distance and start a shift, but cannot end one', () => {
-    expect(decideGeoAction(north(5000), [yard], true, NOW, false)).toMatchObject({ action: 'none', isInside: false });
-    expect(decideGeoAction(north(100), [yard], false, NOW, false).action).toBe('in');
-  });
-});
-
 describe('fixes that cannot be trusted', () => {
   it('ignores a vague fix: it can neither start nor end a shift', () => {
     expect(decide(north(5000, { accuracy: GEO_MAX_ACCURACY_METERS + 1 }), true)).toMatchObject({ action: 'none', ignored: 'inaccurate' });

@@ -1,18 +1,19 @@
 'use client';
-// USA employees: the phone's location starts and ends the shift at their assigned warehouses (rules: core/geofence.ts).
+// USA employees: the phone's location starts and ends the shift at their assigned warehouses (rules: core/geofence.ts). Only a phone or tablet marks
+// attendance, and only one of them at a time (core/attendanceDevice.ts): desktops just show the status, a second phone is told which device has it.
 // Owns the permission explanation, the location watch, and the clock-in/out calls. A failed clock-in/out is rolled back and
 // retried, so the screen can never claim a shift the server does not have.
-import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { hrActions, type Profile, type Warehouse } from '@/lib/hrData';
 import { notifyShift } from '@/lib/hr/shiftActions';
 import { decideGeoAction, type GeoFix } from '@/lib/core/geofence';
 import { watchLocation, type GeoPoint } from '@/lib/backgroundGeolocation';
-import { Capacitor } from '@capacitor/core';
+import { isMobileDevice } from '@/lib/trackerSetup';
 
-export type GeoPermission = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'declined';
+export type GeoPermission = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'declined' | 'desktop' | 'other_device';
 export interface LiveDistance { meters: number; warehouseName: string; isInside: boolean }
 
-const RETRY_MS = 60 * 1000; // a phone that has not moved sends no new fix, so the last one is re-checked this often
+const RETRY_MS = 60 * 1000; // a phone that has not moved sends no new fix, so the last one is re-checked this often; the same tick refreshes this phone's claim and its shift heartbeat
 const RESUME_GAP_MS = 30 * 1000; // coming back to the app refreshes the location, at most this often
 const consentKey = (email: string) => `geo_consent_v1:${email.toLowerCase()}`;
 // '1' = said yes, '0' = said "Not now". A "Not now" is remembered, so the question is not asked again on every launch; the shift card offers "Turn on".
@@ -31,6 +32,7 @@ export function useGeofenceShift(args: {
   const { profile, warehouses, shiftActiveRef, setShiftActive, refetchTimesheets } = args;
   const email = profile?.email;
   const isUsa = profile?.region === 'USA';
+  const phone = isUsa && isMobileDevice();
   const [consent, setConsent] = useState<'checking' | 'ask' | 'granted' | 'declined'>('checking');
   const [state, setState] = useState<{ permission: 'granted' | 'denied' | 'unsupported' | null; error: string }>({ permission: null, error: '' });
   const [liveDistance, setLiveDistance] = useState<LiveDistance | null>(null);
@@ -38,34 +40,44 @@ export function useGeofenceShift(args: {
   const latest = useRef({ profile, warehouses, refetchTimesheets });
   useEffect(() => { latest.current = { profile, warehouses, refetchTimesheets }; });
   const lastFix = useRef<GeoFix | null>(null);
-  // The phone app may always end a shift. A browser may only after it has itself seen the person inside, so a laptop left open at home cannot end a shift the phone started at the warehouse.
-  const sawInside = useRef(false);
+  const owner = useRef(false);
+  const [blockedBy, setBlockedBy] = useState<string | null>(null);
+  // Asks the server whether this phone is the one that marks attendance. If the server cannot be reached, the last answer stands.
+  const claim = useCallback(async (force = false): Promise<boolean> => {
+    try {
+      const r = await hrActions.claimAttendanceDevice(force);
+      owner.current = r.owner;
+      setBlockedBy(r.owner ? null : r.ownerLabel || 'another device');
+    } catch { /* keep the last answer */ }
+    return owner.current;
+  }, []);
 
   // Ask before the system prompt, once per person on this device (Apple and Google both require saying why first).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (email && isUsa) setConsent(storedConsent(email));
-  }, [email, isUsa]);
+    if (email && phone) setConsent(storedConsent(email));
+  }, [email, phone]);
   /* eslint-enable react-hooks/set-state-in-effect */
   const accept = () => { if (email) saveConsent(email, true); setConsent('granted'); setRestartKey(k => k + 1); };
   const decline = () => { if (email) saveConsent(email, false); setConsent('declined'); };
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!email || !isUsa || consent !== 'granted') return;
+    if (!email || !phone || consent !== 'granted') return;
     let cancelled = false;
+    void claim();
     let handle: { stop: () => void } | null = null;
 
     const evaluate = async (fix: GeoFix) => {
       const { profile: p, warehouses: all, refetchTimesheets: refetch } = latest.current;
       if (cancelled || !p) return;
       const assigned = all.filter(w => p.assignedWarehouses?.includes(w.id));
-      const d = decideGeoAction(fix, assigned, shiftActiveRef.current, Date.now(), Capacitor.isNativePlatform() || sawInside.current);
-      if (d.isInside) sawInside.current = true;
+      const d = decideGeoAction(fix, assigned, shiftActiveRef.current);
       if (d.ignored === 'no_warehouse') { setLiveDistance(null); return; }
       if (d.ignored || !d.nearest || d.distanceMeters === null) return;
       lastFix.current = fix;
       setLiveDistance({ meters: Math.round(d.distanceMeters), warehouseName: d.nearest.name, isInside: d.isInside });
-      if (d.action === 'none') return;
+      if (d.action === 'none' || !(await claim())) return; // another phone owns attendance: show the distance, change nothing
 
       const starting = d.action === 'in';
       shiftActiveRef.current = starting; // set first so two quick fixes cannot both act
@@ -102,21 +114,30 @@ export function useGeofenceShift(args: {
       });
     };
 
+    // Right after (re)starting, or taking attendance over from another phone, re-check the last known position instead of waiting for the next fix.
+    void claim().then(() => { if (lastFix.current) void evaluate({ ...lastFix.current, time: null }); });
     watchLocation(onFix, onError).then(h => { if (cancelled) h.stop(); else handle = h; });
     // The last position is still right while the phone has not moved; re-check it so a failed save is retried.
-    const retry = setInterval(() => { if (lastFix.current) void evaluate({ ...lastFix.current, time: null }); }, RETRY_MS);
+    const retry = setInterval(async () => {
+      if (!(await claim())) { void latest.current.refetchTimesheets(); return; } // not the owner: keep showing the owner's shift
+      if (shiftActiveRef.current) void hrActions.touchShiftTabHeartbeat(latest.current.profile?.email || ''); // tells the server this phone is still reporting
+      if (lastFix.current) void evaluate({ ...lastFix.current, time: null });
+    }, RETRY_MS);
     return () => { cancelled = true; clearInterval(retry); handle?.stop(); };
-  }, [email, isUsa, consent, restartKey, shiftActiveRef, setShiftActive]);
+  }, [email, phone, consent, restartKey, shiftActiveRef, setShiftActive, claim]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Back in the app after it was in the background: ask for a fresh position straight away.
   useEffect(() => {
-    if (!isUsa || consent !== 'granted') return;
+    if (!phone || consent !== 'granted') return;
     let last = 0;
     const onVisible = () => { if (document.visibilityState === 'visible' && Date.now() - last > RESUME_GAP_MS) { last = Date.now(); setRestartKey(k => k + 1); } };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [isUsa, consent]);
+  }, [phone, consent]);
 
-  const permission: GeoPermission = !isUsa ? 'idle' : consent === 'declined' ? 'declined' : state.permission ?? 'requesting';
-  return { permission, error: state.error, liveDistance, consentPending: consent === 'ask', accept, decline };
+  const permission: GeoPermission = !isUsa ? 'idle' : !phone ? 'desktop' : consent === 'declined' ? 'declined' : blockedBy ? 'other_device' : state.permission ?? 'requesting';
+  const error = permission === 'other_device' ? `Attendance is being marked on ${blockedBy}, so this device will not start or end your shift.` : state.error;
+  const useThisDevice = async () => { await claim(true); setRestartKey(k => k + 1); };
+  return { permission, error, liveDistance, consentPending: consent === 'ask', accept, decline, useThisDevice };
 }

@@ -21,7 +21,7 @@ import {
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
 import { coalesce, invalidateCache } from '../requestCache';
-import { getSessionEmail, getSessionRole, getAuthToken } from '../session';
+import { getSessionEmail, getSessionRole, getAuthToken, getOrCreateDeviceId, getDeviceLabel } from '../session';
 import { API_BASE } from '../apiBase';
 import { isStaffRole } from '../core/profiles';
 import { isTrackingOn } from '../core/trackingSettings';
@@ -241,6 +241,18 @@ export const timesheetActions = {
     invalidateCache('tset:');
     const row = data.settings as TrackingSettings;
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
+  },
+  // Asks the server whether THIS phone is the one that marks the person's attendance (see core/attendanceDevice). force = "Use this device".
+  claimAttendanceDevice: async (force = false): Promise<{ owner: boolean; ownerLabel: string }> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not signed in.');
+    const res = await fetch(`${API_BASE}/api/attendance/device`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ deviceId: await getOrCreateDeviceId(), label: getDeviceLabel(), force }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not check which device marks attendance.');
+    return { owner: !!data.owner, ownerLabel: String(data.ownerLabel || '') };
   },
   regenerateAgentToken: async (email: string): Promise<string> => {
     const token = `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
