@@ -31,6 +31,7 @@
 // harmless no-op there.
 
 import { Capacitor } from '@capacitor/core';
+import { describeDevice } from './core/communicationAudit';
 import { clearPersistedCache } from './persistedCache';
 
 const EMAIL_KEY = 'user_email';
@@ -181,13 +182,7 @@ export function generateSessionToken(): string {
 // who gets blocked from logging in because another session is still live —
 // mirrors the tracker agent's own device_label concept (agent_gui.py).
 export function getDeviceLabel(): string {
-  if (typeof navigator === 'undefined') return 'another device';
-  const ua = navigator.userAgent;
-  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome'
-    : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'a browser';
-  const os = /Windows/.test(ua) ? 'Windows' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS/.test(ua) ? 'Mac' : /Android/.test(ua) ? 'Android'
-    : /Linux/.test(ua) ? 'Linux' : '';
-  return [browser, os].filter(Boolean).join(' on ') || 'another device';
+  return typeof navigator === 'undefined' ? 'another device' : describeDevice(navigator.userAgent);
 }
 
 // Separate from the main session on purpose: this survives an explicit

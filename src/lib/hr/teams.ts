@@ -21,6 +21,7 @@ import { POLL_MS, POLL_OPTIONS } from './polling';
 import { every } from '../idle';
 import { touchActivity } from './activity';
 import { chatScope } from '../core/activity';
+import { recordCommunication } from './audit';
 import type { PbRow } from '@/lib/pbTypes';
 
 // Read receipts for regular Team Chat messages — same shape again (message
@@ -177,6 +178,7 @@ export const teamActions = {
   // readable/writable, same as the rest of this app pre-production.
   sendMessage: async (teamId: string, senderEmail: string, senderName: string, text: string, file?: File, isAnnouncement?: boolean): Promise<void> => {
     if (!text.trim() && !file) return;
+    let messageId = '';
     if (file) {
       const form = new FormData();
       form.append('team_id', teamId);
@@ -193,12 +195,14 @@ export const teamActions = {
         body: form,
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+      messageId = String((await res.json().catch(() => ({}))).id || '');
     } else {
-      await pbCreate('hr_messages', {
+      messageId = String((await pbCreate('hr_messages', {
         team_id: teamId, sender_email: senderEmail, sender_name: senderName, text: text.trim(),
         is_announcement: !!isAnnouncement,
-      });
+      })).id || '');
     }
+    recordCommunication({ kind: 'team_chat', refId: teamId, messageId, claimedSender: senderEmail });
     // Light the Team Chat dot for everyone else in this channel (the scope's single
     // activity row is overwritten, so only the newest event is kept).
     void touchActivity([chatScope(teamId)], senderEmail);
@@ -271,6 +275,7 @@ export const teamActions = {
     if (!attachmentCopied) {
       await pbCreate('hr_messages', baseFields);
     }
+    recordCommunication({ kind: 'team_chat', refId: HR_ADMIN_LINE_TEAM_ID, claimedSender: senderEmail });
     void touchActivity([chatScope(HR_ADMIN_LINE_TEAM_ID)], senderEmail); // the HR & Admin line's nav dot
 
     // Notify the OTHER role — see the header comment above. Always fires:
