@@ -8,7 +8,7 @@ import { FlagIcon as Flag, CrosshairIcon as LocateFixed, DeviceMobileIcon as Sma
 import { hrActions, TrackerHeartbeat, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
 import { isMobileDevice } from '@/lib/trackerSetup';
 import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
-import { STANDARD_SHIFT_MINUTES } from '@/lib/core/payroll';
+import { requiredDayMinutes } from '@/lib/core/workDay';
 import { checkTracker, notifyShift } from '@/lib/hr/shiftActions';
 import { Button } from '@/components/ui/Button';
 import { Capacitor } from '@capacitor/core';
@@ -26,7 +26,7 @@ interface ShiftControlCardProps {
   /** Starting is not allowed right now, and why (the page shows the matching prompt). */
   onStartBlocked: (block: StartBlock) => void;
   /** The shift ended with less than the 8-hour day worked (a heads-up, never a gate). */
-  onUnderEight: (details: { workedMinutes: number; remainingMinutes: number }) => void;
+  onShortShift: (details: { workedMinutes: number; remainingMinutes: number; requiredMinutes: number }) => void;
   setShiftActive: React.Dispatch<React.SetStateAction<boolean>>;
   openShiftRef: React.RefObject<{ id: string; clockIn: string; } | null>;
   refetchTimesheets: (options?: RefetchOptions) => Promise<QueryObserverResult<TimesheetEntry[], Error>>;
@@ -40,7 +40,7 @@ interface ShiftControlCardProps {
   trackerHeartbeat: TrackerHeartbeat | null;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onShortShift, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
   // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
   const isMobileApp = isMobileDevice();
   return (
@@ -180,8 +180,9 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   // left open waiting on this.
                   await doClockOut();
     
-                  if (totalWorkedMins < STANDARD_SHIFT_MINUTES) {
-                    onUnderEight({ workedMinutes: totalWorkedMins, remainingMinutes: STANDARD_SHIFT_MINUTES - totalWorkedMins });
+                  const requiredMinutes = requiredDayMinutes(userProfile);
+                  if (totalWorkedMins < requiredMinutes) {
+                    onShortShift({ workedMinutes: totalWorkedMins, remainingMinutes: requiredMinutes - totalWorkedMins, requiredMinutes });
                   }
                 }}
                 disabled={!shiftActive}

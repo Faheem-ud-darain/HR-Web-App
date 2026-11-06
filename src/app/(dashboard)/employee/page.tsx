@@ -2,7 +2,7 @@
 
 import { NoticeModal } from '@/components/ui/NoticeModal';
 import { TaskDetailModal } from './_components/TaskDetailModal';
-import { UnderEightHoursModal } from './_components/UnderEightHoursModal';
+import { ShortShiftModal } from './_components/ShortShiftModal';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useProfiles, useMyProfile, useTimesheets, useAnnouncements, useWarehouses, useLeaves, useMyTasks, useTrackingSettings, hrActions, LeaveApplication, Profile, Task, Warehouse, Announcement, TimesheetEntry, TrackerHeartbeat, isAnnouncementForProfile, TRACKER_HEARTBEAT_GRACE_MS, usePayrollSelf } from '@/lib/hrData';
 import { Modal } from '@/components/ui/Modal';
@@ -133,7 +133,7 @@ export default function EmployeeDashboard() {
   const [heartbeatFirstDeadAt, setHeartbeatFirstDeadAt] = useState<number | null>(null);
   // True while the ping/pong pre-flight handshake for Start Shift is running.
   const [pingingTracker, setPingingTracker] = useState(false);
-  const [under8HourDetails, setUnder8HourDetails] = useState<{ workedMinutes: number; remainingMinutes: number } | null>(null);
+  const [shortShift, setShortShift] = useState<{ workedMinutes: number; remainingMinutes: number; requiredMinutes: number } | null>(null);
 
   // Popped up the moment the desktop tracker app tells the server it just
   // auto-ended this employee's shift because it was closed mid-shift (see
@@ -483,7 +483,7 @@ export default function EmployeeDashboard() {
 
       {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
           unmissable full-width place above everything else. */}
-      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onUnderEight={setUnder8HourDetails} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} />
+      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onShortShift={setShortShift} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} />
 
 
       <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />
@@ -561,8 +561,8 @@ export default function EmployeeDashboard() {
         title="Turn on automatic check-in?"
         message={'Delcargo Internal uses your phone\'s location to start your shift when you arrive at your assigned warehouse and end it when you leave. This works while the app is closed or your phone is locked, so your phone will ask for "Always" location access. Your location is only compared with your warehouse: it is not stored or shared, and never used for advertising. You can change this any time in your phone settings.'}
       />
-      {under8HourDetails && (
-        <UnderEightHoursModal workedMinutes={under8HourDetails.workedMinutes} remainingMinutes={under8HourDetails.remainingMinutes} onClose={() => setUnder8HourDetails(null)} />
+      {shortShift && (
+        <ShortShiftModal workedMinutes={shortShift.workedMinutes} remainingMinutes={shortShift.remainingMinutes} requiredMinutes={shortShift.requiredMinutes} onClose={() => setShortShift(null)} />
       )}
     </div>
   );

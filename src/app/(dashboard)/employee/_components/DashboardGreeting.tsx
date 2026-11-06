@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/Avatar';
+import { PartTimeBadge } from '@/components/ui/PartTime';
 import { Badge } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -23,7 +24,7 @@ export function DashboardGreeting({ profile, now }: { profile: Profile | null; n
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 truncate">{greeting(now)}, {first}</h1>
             <p className="text-xs md:text-sm font-semibold text-slate-500 truncate">
-              {profile?.jobTitle || 'Team Member'} · <span className="font-bold text-orange-600">{profile?.region === 'USA' ? 'USA Operations' : 'Pakistan (Remote)'}</span>
+              {profile?.jobTitle || 'Team Member'} · <span className="font-bold text-orange-600">{profile?.region === 'USA' ? 'USA Operations' : 'Pakistan (Remote)'}</span> <PartTimeBadge partTime={profile?.partTime} email={profile?.email || ''} className="ml-1" />
             </p>
           </div>
         </div>

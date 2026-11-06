@@ -36,6 +36,8 @@ export interface Profile {
   // part-time employees, contractors, or anyone whose schedule means the
   // "no clock-in on a weekday" rule does not apply to them.
   exemptFromAbsenceCheck?: boolean;
+  /** Part-time employee: a full day is 5 hours, not 8 (core/workDay.ts). Set by HR/Admin only. */
+  partTime?: boolean;
   offboarded?: boolean;
   offboardDate?: string;
   offboardingStatus?: {
@@ -455,6 +457,7 @@ export interface PayrollSelf {
   joinedDate: string;
   lastIncrementProcessedYear?: number;
   region?: 'USA' | 'Pakistan';
+  partTime?: boolean;
   pendingIncrement: number;
   // Reserved-balance fields (item 3/8) — see /api/payroll/me's comment.
   reservedSalaryBalance?: number;

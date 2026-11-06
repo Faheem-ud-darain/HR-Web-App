@@ -3,7 +3,8 @@
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import { getNYDateString } from '../timezone';
 import type { Profile, LeaveApplication, TimesheetEntry, PayrollRecord, AbsenceRecord, DeductionItem } from '../hr/types';
-import { absenceDayCharge, absenceReasonLabel, hoursMinutes, MIN_REQUIRED_WORK_MINUTES } from './absences';
+import { absenceDayCharge, absenceReasonLabel, hoursMinutes } from './absences';
+import { absenceFloorMinutes, hoursText, requiredDayMinutes } from './workDay';
 import { getWeekdaysInMonth, isWeekday } from './dates';
 import {
   getApprovedLeaveOnDate, isApprovedLeaveOnDate, getApprovedLeaveDaysInMonth,
@@ -12,12 +13,6 @@ import {
 import { getPendingIncrementForPayrollMonth } from '../incrementMath';
 import { elapsedMinutes } from './timesheets';
 import { monthLabel } from './payrollView';
-
-// Standard full shift length — a day worked for this many minutes (8h)
-// earns the full daily rate; less than this (but at/above the 4h absent
-// floor) earns a proportional fraction. Mirrors employee/page.tsx's own
-// REQUIRED_SHIFT_MINUTES constant for the "End Shift" under-8-hours notice.
-export const STANDARD_SHIFT_MINUTES = 8 * 60;
 
 export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[], now: Date = new Date()): number {
   const remainingDays = getRemainingPTO(leaves, profile.fullName, getPTOAccrualDate(profile), now);
@@ -88,7 +83,7 @@ export function getAbsenceDeductionForMonth(
 // previously cost nothing at all (only a full no-show/under-4h day did,
 // via the flat 2-day absence penalty below/runAbsenceCheck). This closes
 // that gap: for each such partial day this month, deduct the proportional
-// shortfall — dailyRate * (1 - workedMinutes/480) — from pay. Deliberately
+// shortfall — dailyRate * (1 - workedMinutes/fullDay) — from pay (fullDay = 8h, or 5h for part-time: core/workDay.ts). Deliberately
 // scoped identically to runAbsenceCheck (Pakistan region only, not exempt,
 // weekdays only, on/after joinedDate, skipped on approved-leave days) and
 // deliberately SKIPS any date that already has an AbsenceRecord (that
@@ -104,7 +99,7 @@ export function getShortShiftDays(
   timesheets: TimesheetEntry[],
   absenceRecords: AbsenceRecord[],
   leaves: LeaveApplication[],
-  profile: Pick<Profile, 'fullName' | 'email' | 'region' | 'joinedDate' | 'exemptFromAbsenceCheck'>,
+  profile: Pick<Profile, 'fullName' | 'email' | 'region' | 'joinedDate' | 'exemptFromAbsenceCheck' | 'partTime'>,
   currentBaseSalary: number,
   monthKey: string,
   today: Date = new Date()
@@ -136,6 +131,8 @@ export function getShortShiftDays(
   }
 
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
+  const fullDay = requiredDayMinutes(profile); // 8 hours, or 5 for a part-time employee
+  const floor = absenceFloorMinutes(profile);
   const days: ShortShiftDay[] = [];
 
   for (const [dateStr, mins] of minutesByDate) {
@@ -143,10 +140,10 @@ export function getShortShiftDays(
     if (joinedStr && dateStr < joinedStr) continue;
     if (!isWeekday(dateStr)) continue;
     if (absentDates.has(dateStr)) continue; // already flat-penalized by runAbsenceCheck — never double-charge
-    if (mins < MIN_REQUIRED_WORK_MINUTES) continue; // that's runAbsenceCheck's job, not this function's
-    if (mins >= STANDARD_SHIFT_MINUTES) continue; // full (or over) shift — no shortfall
+    if (mins < floor) continue; // that's runAbsenceCheck's job, not this function's
+    if (mins >= fullDay) continue; // full (or over) shift — no shortfall
     if (isApprovedLeaveOnDate(leaves, profile.fullName, dateStr)) continue;
-    days.push({ date: dateStr, minutes: mins, amount: dailyRate * (1 - mins / STANDARD_SHIFT_MINUTES) });
+    days.push({ date: dateStr, minutes: mins, amount: dailyRate * (1 - mins / fullDay) });
   }
   return days.sort((x, y) => x.date.localeCompare(y.date));
 }
@@ -155,7 +152,7 @@ export function getShiftShortfallDeduction(
   timesheets: TimesheetEntry[],
   absenceRecords: AbsenceRecord[],
   leaves: LeaveApplication[],
-  profile: Pick<Profile, 'fullName' | 'email' | 'region' | 'joinedDate' | 'exemptFromAbsenceCheck'>,
+  profile: Pick<Profile, 'fullName' | 'email' | 'region' | 'joinedDate' | 'exemptFromAbsenceCheck' | 'partTime'>,
   currentBaseSalary: number,
   monthKey: string,
   today: Date = new Date()
@@ -437,12 +434,12 @@ export function computePayrollForMonth(employees: Profile[], existingPayroll: Pa
       if (absenceDeduction > 0) {
         const days = getChargedAbsenceDays(absenceRecords, emp.email, targetMonthKey, leaves);
         const parts = apportion(absenceDeduction, days.map(() => 1));
-        days.forEach((d, i) => deductionBreakdown.push({ label: `Absence — ${absenceReasonLabel(d)}`, amount: parts[i], date: d.date }));
+        days.forEach((d, i) => deductionBreakdown.push({ label: `Absence — ${absenceReasonLabel(d, absenceFloorMinutes(emp))}`, amount: parts[i], date: d.date }));
       }
       if (shiftShortfallDeduction > 0) {
         const days = getShortShiftDays(timesheets, absenceRecords, leaves, emp, emp.baseSalary, targetMonthKey, today);
         const parts = apportion(shiftShortfallDeduction, days.map(d => d.amount));
-        days.forEach((d, i) => deductionBreakdown.push({ label: `Partial Shifts — worked ${hoursMinutes(d.minutes)} of ${STANDARD_SHIFT_MINUTES / 60}h`, amount: parts[i], date: d.date }));
+        days.forEach((d, i) => deductionBreakdown.push({ label: `Partial Shifts — worked ${hoursMinutes(d.minutes)} of ${hoursText(requiredDayMinutes(emp))}h`, amount: parts[i], date: d.date }));
       }
       if (onboardingPenalty > 0) deductionBreakdown.push({ label: 'Onboarding Not Completed', amount: onboardingPenalty });
       if (deferredThisMonth > 0) deductionBreakdown.push({ label: `Part-month pay — paid with the ${monthLabel(addMonths(targetMonthKey, 2))} salary`, amount: deferredThisMonth });

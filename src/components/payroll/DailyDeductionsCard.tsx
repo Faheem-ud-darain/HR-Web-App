@@ -15,15 +15,15 @@ import { getNYDateString } from '@/lib/timezone';
 // Pay taken off for missed days, day by day: a switch between the months that have any (this month first), the month's
 // total and number of days, and one line per day with what happened and what was charged. A day an approved leave now
 // covers stays on the list but is not charged.
-export function DailyDeductionsCard({ records, leaves, fullName, region, monthlyPay }: { records: MyAbsenceRecord[]; leaves: LeaveApplication[]; fullName?: string; region?: Profile['region']; monthlyPay: number }) {
+export function DailyDeductionsCard({ records, leaves, fullName, region, monthlyPay, floorMinutes }: { records: MyAbsenceRecord[]; leaves: LeaveApplication[]; fullName?: string; region?: Profile['region']; monthlyPay: number; floorMinutes?: number }) {
   const currentMonth = getNYDateString(new Date()).slice(0, 7);
   const months = useMemo(() => deductionMonths(records, currentMonth), [records, currentMonth]);
   const [picked, setPicked] = useState<string | null>(null);
   const month = picked && months.includes(picked) ? picked : currentMonth;
 
   const lines = useMemo(
-    () => deductionLines(records.filter(r => r.date.startsWith(month)), date => (fullName ? getApprovedLeaveOnDate(leaves, fullName, date) : null), monthlyPay),
-    [records, leaves, fullName, month, monthlyPay],
+    () => deductionLines(records.filter(r => r.date.startsWith(month)), date => (fullName ? getApprovedLeaveOnDate(leaves, fullName, date) : null), monthlyPay, floorMinutes),
+    [records, leaves, fullName, month, monthlyPay, floorMinutes],
   );
   const charged = lines.filter(l => !l.covered && l.amount > 0);
   const capped = lines.some(l => l.shortBy > 0);

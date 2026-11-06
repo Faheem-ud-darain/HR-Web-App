@@ -27,7 +27,7 @@ export function profileAccess(viewerRole: ViewerRole, profile: Pick<Profile, 'ro
 export interface EditForm {
   fullName: string; email: string; password: string; jobTitle: string; baseSalary: string;
   region: 'USA' | 'Pakistan'; gender: 'male' | 'female'; role: Profile['role'];
-  joinedDate: string; salaryStartDate: string; accountCreationDate: string; alias: string; assignedWarehouses: string[];
+  joinedDate: string; salaryStartDate: string; accountCreationDate: string; alias: string; assignedWarehouses: string[]; partTime: boolean;
 }
 
 // The edit form's starting values. The password starts blank: a stored pbkdf2 hash must never be shown, and a blank
@@ -40,7 +40,7 @@ export function editFormFrom(p: Profile, today: string): EditForm {
     jobTitle: p.jobTitle || 'Staff', baseSalary: p.baseSalary.toString(),
     region: p.region || 'Pakistan', gender: p.gender || 'male', role: p.role,
     joinedDate: joined, salaryStartDate: p.salaryStartDate || joined, accountCreationDate: p.accountCreationDate || joined,
-    alias: p.alias || '', assignedWarehouses: p.assignedWarehouses || [],
+    alias: p.alias || '', assignedWarehouses: p.assignedWarehouses || [], partTime: !!p.partTime,
   };
 }
 

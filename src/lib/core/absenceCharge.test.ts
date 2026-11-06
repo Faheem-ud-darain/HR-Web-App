@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AbsenceRecord } from '../hr/types';
-import { ABSENCE_PENALTY_DAYS, MIN_REQUIRED_WORK_MINUTES, absenceDayCharge } from './absences';
-import { FIRST_MONTH_CUTOFF_DAY, STANDARD_SHIFT_MINUTES, getAbsenceDeductionForMonth } from './payroll';
+import { ABSENCE_PENALTY_DAYS, absenceDayCharge } from './absences';
+import { FIRST_MONTH_CUTOFF_DAY, getAbsenceDeductionForMonth } from './payroll';
+import { FULL_DAY_MINUTES, absenceFloorMinutes } from './workDay';
 import { getWeekdaysInMonth } from './dates';
 
 const rec = (date: string): AbsenceRecord => ({ id: date, employeeEmail: 'a@x.com', employeeName: 'A', date, reason: 'no_clock_in', deductionAmount: 99999, createdAt: '', acknowledged: false } as unknown as AbsenceRecord);
@@ -30,6 +31,6 @@ describe('the absence charge', () => {
 
 describe('shared work-day rules', () => {
   it('are defined once', () => {
-    expect([MIN_REQUIRED_WORK_MINUTES, STANDARD_SHIFT_MINUTES, FIRST_MONTH_CUTOFF_DAY]).toEqual([240, 480, 5]);
+    expect([absenceFloorMinutes(null), FULL_DAY_MINUTES, FIRST_MONTH_CUTOFF_DAY]).toEqual([240, 480, 5]);
   });
 });

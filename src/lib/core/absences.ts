@@ -6,12 +6,11 @@ import type { AbsenceRecord, MyAbsenceRecord, Profile, TimesheetEntry, LeaveAppl
 import { getWeekdaysInMonth, isWeekday, localShiftDate, addDays, eachDay } from './dates';
 import { isApprovedLeaveOnDate } from './leaves';
 import { elapsedMinutes } from './timesheets';
+import { absenceFloorMinutes, hoursText } from './workDay';
 
 // A single continuous mouse-inactivity run this long (37 min) during a
 // shift flags the whole day as 'inactivity' — same penalty as no-show.
 export const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
-// Under 4 hours on shift in a day = absent, 4h or more = present.
-export const MIN_REQUIRED_WORK_MINUTES = 4 * 60;
 // A day marked absent costs this many days' pay.
 export const ABSENCE_PENALTY_DAYS = 2;
 /** What one absent day costs at this salary, in the pay month of `date` ("YYYY-MM-DD"). The one place the charge is worked out: detection, payroll and every screen use it. */
@@ -99,17 +98,17 @@ export function findPreJoinAbsenceRecords(records: AbsenceRecord[], employees: P
 }
 
 // Wording shared by the HR/Admin and employee absence notifications.
-export function describeAbsence(reason: AbsenceCandidate['reason'], dateStr: string, inactivityMinutes?: number, workedMinutes?: number): { reasonText: string; empReasonDetail: string } {
+export function describeAbsence(reason: AbsenceCandidate['reason'], dateStr: string, inactivityMinutes?: number, workedMinutes?: number, floorMinutes: number = absenceFloorMinutes(null)): { reasonText: string; empReasonDetail: string } {
   const worked = `${Math.floor((workedMinutes || 0) / 60)}h ${(workedMinutes || 0) % 60}m`;
   const reasonText = reason === 'inactivity'
     ? `was inactive for ${inactivityMinutes} minutes during their shift on ${dateStr}`
     : reason === 'under_4_hours'
-    ? `worked less than 4 hours (${worked}) on ${dateStr}`
+    ? `worked less than ${hoursText(floorMinutes)} hours (${worked}) on ${dateStr}`
     : `did not start a shift on ${dateStr}`;
   const empReasonDetail = reason === 'inactivity'
     ? `${inactivityMinutes} min inactivity during shift`
     : reason === 'under_4_hours'
-    ? `worked only ${worked} (under 4 hours minimum)`
+    ? `worked only ${worked} (under ${hoursText(floorMinutes)} hours minimum)`
     : 'not starting a shift';
   return { reasonText, empReasonDetail };
 }
@@ -128,11 +127,12 @@ export interface DeductionLine {
 export const hoursMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${Math.round(minutes) % 60}m`;
 
 /** What happened on an absence day, in plain words. */
-export function absenceReasonLabel(r: Pick<AbsenceRecord, 'reason' | 'workedMinutes' | 'inactivityMinutes'>): string {
+/** `floorMinutes` is the employee's own absence floor (core/workDay.ts); the default is the full-time one. */
+export function absenceReasonLabel(r: Pick<AbsenceRecord, 'reason' | 'workedMinutes' | 'inactivityMinutes'>, floorMinutes: number = absenceFloorMinutes(null)): string {
   return r.reason === 'no_clock_in'
     ? "Didn't start a shift that day"
     : r.reason === 'under_4_hours'
-      ? `Only ${hoursMinutes(r.workedMinutes || 0)} worked (the minimum is ${MIN_REQUIRED_WORK_MINUTES / 60} hours)`
+      ? `Only ${hoursMinutes(r.workedMinutes || 0)} worked (the minimum is ${hoursText(floorMinutes)} hours)`
       : `Mouse inactive for ${Math.round(r.inactivityMinutes || INACTIVITY_THRESHOLD_SECONDS / 60)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})`;
 }
 
@@ -142,11 +142,11 @@ export function absenceReasonLabel(r: Pick<AbsenceRecord, 'reason' | 'workedMinu
  * `leaveOn` finds the approved leave covering a date, if any. `payAvailable` is the most that can be taken in total (the
  * month's pay): deductions never push pay below zero.
  */
-export function deductionLines(records: MyAbsenceRecord[], leaveOn: (date: string) => LeaveApplication | null, payAvailable: number = Infinity): DeductionLine[] {
+export function deductionLines(records: MyAbsenceRecord[], leaveOn: (date: string) => LeaveApplication | null, payAvailable: number = Infinity, floorMinutes?: number): DeductionLine[] {
   const lines = [...records].sort((a, b) => b.date.localeCompare(a.date)).map((r): DeductionLine => {
     const leave = leaveOn(r.date);
     if (leave) return { id: r.id, date: r.date, label: `On ${leave.type} leave (approved after this was recorded)`, amount: 0, covered: true, shortBy: 0 };
-    const label = absenceReasonLabel(r);
+    const label = absenceReasonLabel(r, floorMinutes);
     return { id: r.id, date: r.date, label, amount: r.deductionAmount, covered: false, shortBy: 0 };
   });
   // Pay can be taken down to zero but never past it: the oldest days use it up first, and a day that comes after the pay
@@ -286,7 +286,7 @@ export function detectAbsences(input: {
       let workedMinutes: number | undefined;
 
   
-      if (totalWorkedMins < MIN_REQUIRED_WORK_MINUTES) {
+      if (totalWorkedMins < absenceFloorMinutes(emp)) {
         if (!onLeave) {
           if (totalWorkedMins === 0) {
             reason = 'no_clock_in';

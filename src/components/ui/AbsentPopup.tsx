@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { WarningOctagonIcon as AlertOctagon } from '@/components/ui/icons';
 import { AcknowledgeModal } from '@/components/ui/AcknowledgeModal';
 import { INACTIVITY_THRESHOLD_SECONDS } from '@/lib/core/absences';
-import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate } from '@/lib/hrData';
+import { hrActions, AbsenceRecord, LeaveApplication, formatMoney, useLeaves, getApprovedLeaveOnDate, useProfiles } from '@/lib/hrData';
+import { absenceFloorMinutes, hoursText } from '@/lib/core/workDay';
 
 interface AbsentPopupProps {
   email: string | null;
@@ -25,6 +26,7 @@ interface AbsentPopupProps {
 // Admin see every employee's absences on the dedicated Absent Details page
 // instead (they're never the subject of this popup).
 export function AbsentPopup({ email }: AbsentPopupProps) {
+  const { data: profiles = [] } = useProfiles();
   const [records, setRecords] = useState<AbsenceRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [acking, setAcking] = useState(false);
@@ -56,6 +58,7 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
   const pending = records.filter(r => !r.acknowledged).sort((a, b) => a.date.localeCompare(b.date));
   if (pending.length === 0) return null;
   const current = pending[0];
+  const floor = absenceFloorMinutes(profiles.find(p => p.email.toLowerCase() === email.toLowerCase())); // 4 hours, or 2.5 for part-time
 
   const handleAcknowledge = async () => {
     if (acking) return;
@@ -75,7 +78,7 @@ export function AbsentPopup({ email }: AbsentPopupProps) {
     : current.reason === 'inactivity'
     ? `Our tracker recorded ${current.inactivityMinutes} minute(s) of continuous mouse inactivity during your shift that day, which crosses the ${INACTIVITY_THRESHOLD_SECONDS / 60}-minute limit.`
     : current.reason === 'under_4_hours'
-    ? `Your total shift time was under the required 4-hour minimum (${Math.floor((current.workedMinutes || 0) / 60)}h ${(current.workedMinutes || 0) % 60}m recorded) on this day.`
+    ? `Your total shift time was under the required ${hoursText(floor)}-hour minimum (${Math.floor((current.workedMinutes || 0) / 60)}h ${(current.workedMinutes || 0) % 60}m recorded) on this day.`
     : `You did not start a shift on this day and there was no approved leave covering it.`;
 
   return (

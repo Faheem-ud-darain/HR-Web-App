@@ -4,6 +4,7 @@ import React from 'react';
 import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { hoursText } from '@/lib/core/workDay';
 
 const hoursMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 
@@ -11,16 +12,17 @@ const hoursMinutes = (minutes: number) => `${Math.floor(minutes / 60)}h ${minute
 // It used to be a confirmation GATE that blocked the clock-out until a second click, which let shifts silently stay
 // open for up to 16 hours when an employee did not click through it. Never add a button here that the
 // shift-ending action depends on.
-export function UnderEightHoursModal({ workedMinutes, remainingMinutes, onClose }: { workedMinutes: number; remainingMinutes: number; onClose: () => void }) {
+export function ShortShiftModal({ workedMinutes, remainingMinutes, requiredMinutes, onClose }: { workedMinutes: number; remainingMinutes: number; requiredMinutes: number; onClose: () => void }) {
+  const hours = hoursText(requiredMinutes); // the employee's own full day: 8, or 5 for part-time
   return (
-    <Modal isOpen onClose={onClose} title="Shift Ended Under 8 Hours">
+    <Modal isOpen onClose={onClose} title={`Shift Ended Under ${hours} Hours`}>
       <div className="space-y-4 font-sans text-xs">
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-bold text-sm">Your shift has been ended.</p>
             <p className="text-amber-800 leading-relaxed font-medium">
-              It was under the required <strong>8 hours</strong> of total shift time for today — this may affect your pay for today. HR/Admin has also been notified.
+              It was under the required <strong>{hours} hours</strong> of total shift time for today — this may affect your pay for today. HR/Admin has also been notified.
             </p>
           </div>
         </div>

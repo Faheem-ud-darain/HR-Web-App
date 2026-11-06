@@ -27,6 +27,7 @@ import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useNow } from '@/lib/useNow';
 import { useQuery } from '@tanstack/react-query';
 import { shiftMinutes } from '@/lib/core/timesheets';
+import { absenceFloorMinutes, hoursText } from '@/lib/core/workDay';
 
 
 interface AbsenceDetailsViewProps {
@@ -399,7 +400,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         ) : r.reason === 'under_4_hours' ? (
           <>
             <Clock className="h-3.5 w-3.5 text-rose-500" />
-            <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
+            <span>Worked under {hoursText(absenceFloorMinutes(allProfiles.find(p => p.email.toLowerCase() === r.employeeEmail.toLowerCase())))} hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
           </>
         ) : (
           <>
