@@ -122,3 +122,6 @@ scratch.mjs
 /skills-lock.json
 /.impeccable/
 /.claude/
+
+# Planning notes — local only, not app code
+/plans/
