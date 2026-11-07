@@ -238,8 +238,7 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
     });
 
     // ── Pass 2: abandoned manual shifts (mirrors closeStaleManualShiftIfAbandoned)
-    // — non-USA/manual-shift employees only (USA is GPS-geofenced and has no
-    // tab-heartbeat concept). If the portal tab hasn't heartbeated in 15
+    // — manual-shift employees, plus USA GPS shifts whose app went silent (see the USA branch below). If the portal tab hasn't heartbeated in 15
     // minutes AND the tracker (if any) isn't live either, nothing is actually
     // watching this shift anymore — treat it as abandoned.
     dao.findRecordsByFilter("hr_timesheets", 'clock_out = ""', "", 500, 0, {}).forEach((shift) => {
@@ -250,7 +249,22 @@ cronAdd("auto_close_stale_shifts", "*/15 * * * *", () => {
         if (isNaN(clockInMs) || now - clockInMs < MIN_SHIFT_AGE_MS) return;
 
         const profile = findProfileByEmail(dao, email);
-        if (!profile || profile.get("region") === "USA") return; // GPS-governed — no tab heartbeat to check
+        if (!profile) return;
+        if (profile.get("region") === "USA") {
+          // GPS-governed. Newer app builds touch the portal heartbeat every 20 s while a GPS shift is open, so a heartbeat that
+          // started after clock-in and then went silent for 30+ minutes means the app was closed or the phone lost its signal:
+          // close at the last heartbeat, never "now". No heartbeat during this shift (an older app build that never writes one)
+          // is ambiguous, so it is left alone — the 16-hour cap below still catches it.
+          const row = findRowByEmail(dao, "hr_shift_tab_heartbeats", email);
+          const lastSeenMs = row ? parseMs(row.getString("last_seen_at")) : NaN;
+          if (isNaN(lastSeenMs) || lastSeenMs <= clockInMs || now - lastSeenMs < ORPHAN_SHIFT_GRACE_MS) return;
+          closeShift(dao, shift, new Date(lastSeenMs).toISOString());
+          const gpsName = displayNameFor(profile, email);
+          addNotification(dao, email, "employee", "Your shift was automatically ended because the Delcargo app stopped reporting your location for 30 minutes. It was credited up to the last time the app was active. If you were still working, open the app again and contact HR.", "shift");
+          addNotification(dao, "all", "hr", `${gpsName}'s shift was auto-closed — the app stopped reporting for 30 minutes (app closed or no signal).`, "shift", gpsName, email);
+          addNotification(dao, "all", "admin", `${gpsName}'s shift was auto-closed — the app stopped reporting for 30 minutes (app closed or no signal).`, undefined, undefined, email);
+          return;
+        }
 
         // BUGFIX 2026-09-07: this pass used to run for every non-USA open
         // shift regardless of whether the employee has tracker-based

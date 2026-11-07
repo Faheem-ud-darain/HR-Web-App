@@ -21,14 +21,14 @@ import {
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
 import { coalesce, invalidateCache } from '../requestCache';
-import { getSessionEmail, getSessionRole, getAuthToken } from '../session';
+import { getSessionEmail, getSessionRole, getAuthToken, getOrCreateDeviceId, getDeviceLabel } from '../session';
 import { API_BASE } from '../apiBase';
 import { isStaffRole } from '../core/profiles';
 import { isTrackingOn } from '../core/trackingSettings';
 import { isMobileDevice } from '../trackerSetup';
 import {
   hasStaleTrackerToken, getCaptureHealth, getCaptureGap, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
-  TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
+  TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS, ORPHAN_SHIFT_GRACE_MS, MIN_SHIFT_AGE_MS, MAX_SHIFT_DURATION_MS,
 } from '../core/timesheets';
 import { every } from '../idle';
 import type { PbRow } from '@/lib/pbTypes';
@@ -242,6 +242,18 @@ export const timesheetActions = {
     const row = data.settings as TrackingSettings;
     return { employeeEmail: row.employeeEmail, enabled: !!row.enabled, intervalMinutes: row.intervalMinutes, excludeFromAutoDelete: !!row.excludeFromAutoDelete, agentToken: row.agentToken, id: row.id };
   },
+  // Asks the server whether THIS phone is the one that marks the person's attendance (see core/attendanceDevice). force = "Use this device".
+  claimAttendanceDevice: async (force = false): Promise<{ owner: boolean; ownerLabel: string }> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Not signed in.');
+    const res = await fetch(`${API_BASE}/api/attendance/device`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ deviceId: await getOrCreateDeviceId(), label: getDeviceLabel(), force }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not check which device marks attendance.');
+    return { owner: !!data.owner, ownerLabel: String(data.ownerLabel || '') };
+  },
   regenerateAgentToken: async (email: string): Promise<string> => {
     const token = `agt_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
     await hrActions.updateTrackingSettings(email, { agentToken: token });
@@ -259,7 +271,7 @@ export const timesheetActions = {
   // doesn't re-trigger the modal on every poll.
   getShiftStopSignal: (email: string): Promise<ShiftStopSignal | null> =>
     pbGetTrackerSignal(email, 'shift_stop_signal'),
-  isHeartbeatLive: (hb: TrackerHeartbeat | null, intervalMinutes: number = 3): boolean => isHeartbeatLive(hb, intervalMinutes),
+  isHeartbeatLive: (hb: TrackerHeartbeat | null): boolean => isHeartbeatLive(hb),
 
   // ── 5-Signal System — new hrActions (Signals 2–5) ────────────────────────
 
@@ -466,8 +478,6 @@ export const timesheetActions = {
   // so they're left to the existing closeStaleManualShiftIfAbandoned safety
   // net instead.
   autoCloseOrphanTrackedShifts: async (timesheets: TimesheetEntry[]): Promise<void> => {
-    const ORPHAN_SHIFT_GRACE_MS = 30 * 60 * 1000; // reverted to 30 min on 2026-09-07 — see MIN_SHIFT_AGE_MS note
-    const MIN_SHIFT_AGE_MS = 45 * 60 * 1000; // reverted to 45 min on 2026-09-07 — the 25-min value caused false auto-closes for employees who were still actively working (confirmed via camila@delcargo.us). 45 min keeps enough margin above the 13-min tracker / 15-min tab heartbeat tolerances that a normal brief connectivity blip can't trigger a close.
     const now = Date.now();
     const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
 
@@ -560,7 +570,6 @@ export const timesheetActions = {
   // heartbeat when one exists and falls within the cap window (most
   // accurate), otherwise at the hard cap itself.
   autoCloseStaleOpenShifts: async (timesheets: TimesheetEntry[], employees: Profile[]): Promise<void> => {
-    const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000; // no legitimate single shift runs longer than this
     const now = Date.now();
     const openShifts = timesheets.filter(t => !t.clockOut && t.clockIn);
 

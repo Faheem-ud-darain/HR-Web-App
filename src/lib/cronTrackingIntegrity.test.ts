@@ -35,7 +35,7 @@ const diagnosis: TrackerDiagnosis = { email: 'zara@x.com', state: 'tracking_off'
 afterEach(() => { vi.useRealTimers(); });
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers(); vi.setSystemTime(0); // the repair order rotates with the clock, so tests pin it
   db.state = null; db.notifications = []; db.saves = 0; db.failRead = false; db.failNotify = false; db.syncs = []; db.syncResult = true;
   db.health = { findings: [], diagnoses: [] };
   process.env.CRON_SECRET = SECRET;

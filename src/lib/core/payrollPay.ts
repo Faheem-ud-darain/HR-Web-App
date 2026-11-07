@@ -11,7 +11,7 @@
 //   4. PAID: mark the record paid.
 // If anything fails the month stays frozen and unpaid; pressing Pay again picks up where it stopped.
 import { getNYDateString } from '../timezone';
-import { getMissedIncrementEventsForPayrollMonth } from '../incrementMath';
+import { getMissedIncrementEventsForPayrollMonth, incrementPerEvent } from '../incrementMath';
 import type { PayrollRecord, Profile } from '../hr/types';
 import { addMonths, computePayrollForMonth } from './payroll';
 import type { SelfPayrollInputs } from './payrollSelf';
@@ -33,14 +33,12 @@ export class PayError extends Error {
   constructor(message: string, readonly status: 400 | 404 | 409 = 400) { super(message); }
 }
 
-const perEvent = (region?: string) => (region === 'USA' ? 100 : 10000);
-
 /** What paying this record has to do besides marking it paid. Nothing is planned for a step that has already happened. */
 export function planPayment(profile: Profile, record: PayrollRecord, reservedBankedMonths: string[]): { raise: Raise | null; reserve: number } {
   const start = /^(\d{4})/.exec(profile.salaryStartDate || profile.joinedDate || '');
   const events = getMissedIncrementEventsForPayrollMonth(profile, record.month || '');
   const raise = start && record.incrementAmount > 0 && events > 0
-    ? { newBaseSalary: profile.baseSalary + events * perEvent(profile.region), processedThroughYear: (profile.lastIncrementProcessedYear || Number(start[1])) + events }
+    ? { newBaseSalary: profile.baseSalary + events * incrementPerEvent(profile.region), processedThroughYear: (profile.lastIncrementProcessedYear || Number(start[1])) + events }
     : null;
   const reserve = record.reservedThisMonth > 0 && !reservedBankedMonths.includes(record.month || '') ? record.reservedThisMonth : 0;
   return { raise, reserve };

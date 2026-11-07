@@ -7,6 +7,7 @@
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
+import { DEFAULT_PB_URL } from '../pbUrl';
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
@@ -20,6 +21,7 @@ import { POLL_MS, POLL_OPTIONS } from './polling';
 import { every } from '../idle';
 import { touchActivity } from './activity';
 import { chatScope } from '../core/activity';
+import { recordCommunication } from './audit';
 import type { PbRow } from '@/lib/pbTypes';
 
 // Read receipts for regular Team Chat messages — same shape again (message
@@ -176,6 +178,7 @@ export const teamActions = {
   // readable/writable, same as the rest of this app pre-production.
   sendMessage: async (teamId: string, senderEmail: string, senderName: string, text: string, file?: File, isAnnouncement?: boolean): Promise<void> => {
     if (!text.trim() && !file) return;
+    let messageId = '';
     if (file) {
       const form = new FormData();
       form.append('team_id', teamId);
@@ -187,17 +190,19 @@ export const teamActions = {
       form.append('attachment_size', String(file.size));
       if (isAnnouncement) form.append('is_announcement', 'true');
       // Bypass Vercel proxy for large file uploads (same as uploadTeamDocument)
-      const res = await fetch('https://pb.delcargo.us/api/collections/hr_messages/records', {
+      const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_messages/records`, {
         method: 'POST',
         body: form,
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+      messageId = String((await res.json().catch(() => ({}))).id || '');
     } else {
-      await pbCreate('hr_messages', {
+      messageId = String((await pbCreate('hr_messages', {
         team_id: teamId, sender_email: senderEmail, sender_name: senderName, text: text.trim(),
         is_announcement: !!isAnnouncement,
-      });
+      })).id || '');
     }
+    recordCommunication({ kind: 'team_chat', refId: teamId, messageId, claimedSender: senderEmail });
     // Light the Team Chat dot for everyone else in this channel (the scope's single
     // activity row is overwritten, so only the newest event is kept).
     void touchActivity([chatScope(teamId)], senderEmail);
@@ -257,7 +262,7 @@ export const teamActions = {
         form.append('attachment_name', file.name);
         form.append('attachment_size', String(file.size));
         // Bypass Vercel proxy for large file uploads (same as sendMessage/uploadTeamDocument)
-        const res = await fetch('https://pb.delcargo.us/api/collections/hr_messages/records', { method: 'POST', body: form });
+        const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_messages/records`, { method: 'POST', body: form });
         if (!res.ok) throw new Error(`Forward failed: ${res.status} ${await res.text()}`);
         attachmentCopied = true;
       } catch (err) {
@@ -270,6 +275,7 @@ export const teamActions = {
     if (!attachmentCopied) {
       await pbCreate('hr_messages', baseFields);
     }
+    recordCommunication({ kind: 'team_chat', refId: HR_ADMIN_LINE_TEAM_ID, claimedSender: senderEmail });
     void touchActivity([chatScope(HR_ADMIN_LINE_TEAM_ID)], senderEmail); // the HR & Admin line's nav dot
 
     // Notify the OTHER role — see the header comment above. Always fires:
@@ -327,7 +333,7 @@ export const teamActions = {
     form.append('uploaded_by_role', uploaderRole);
     // Bypass the Vercel proxy (/api/pb) for large file uploads to avoid Vercel's
     // strict 4.5MB Serverless Function payload limit, which would block videos.
-    const res = await fetch('https://pb.delcargo.us/api/collections/hr_team_documents/records', {
+    const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_team_documents/records`, {
       method: 'POST',
       body: form,
     });

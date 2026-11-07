@@ -20,6 +20,7 @@ import { POLL_MS, POLL_OPTIONS } from './polling';
 import { every } from '../idle';
 import { touchActivity } from './activity';
 import { ticketEventScopes } from '../core/activity';
+import { recordCommunication } from './audit';
 import type { PbRow } from '@/lib/pbTypes';
 import { TICKET_LIGHT_FIELDS, ticketsNeedingReplies, appendReplyWithRetry, type ReplyCacheEntry } from './ticketSync';
 
@@ -180,6 +181,7 @@ export const ticketActions = {
       employee_email: ticket.employeeEmail, employee_name: ticket.employeeName, subject: ticket.title,
       description: ticket.description, department: ticket.department, status: 'open', priority: 'medium', category: 'general', assigned_to: '', resolution: '', replies: [],
     });
+    recordCommunication({ kind: 'ticket_create', refId: created.id, claimedSender: ticket.employeeEmail });
     // Admin also has a Tickets queue (admin/tickets) — this previously only
     // notified 'hr', same gap as leave requests.
     if (ticket.department === 'hr') {
@@ -215,6 +217,7 @@ export const ticketActions = {
       readUpdated: async () => (await pb.collection('hr_tickets').getOne(ticket.id, { requestKey: null, fields: 'id,updated' })).updated,
       write: async replies => { await pbUpdate('hr_tickets', ticket.id, { replies }); },
     }, newReply);
+    recordCommunication({ kind: 'ticket_reply', refId: ticket.id, messageId: newReply.id, claimedSender: reply.senderEmail });
     // Newest event for this ticket's scopes: the owner's own dot, the staff dot, the tech queue.
     void touchActivity(ticketEventScopes(ticket), reply.senderEmail || '');
     if (reply.senderRole === 'hr' || reply.senderRole === 'admin' || (ticket.department === 'technical' && reply.senderRole !== 'employee')) {
@@ -253,6 +256,7 @@ export const ticketActions = {
     } else {
       await pbUpdate('hr_tickets', ticket.id, { status });
     }
+    recordCommunication({ kind: status === 'closed' ? 'ticket_closed' : 'ticket_reopened', refId: ticket.id, messageId: event?.id, claimedSender: actor?.email });
     void touchActivity(ticketEventScopes(ticket), actor?.email || '');
     const by = actor ? ` by ${actor.name} (${actor.role === 'team_lead' ? 'employee' : actor.role === 'hr' ? 'HR' : actor.role === 'admin' ? 'Admin' : 'employee'})` : '';
     await hrActions.addNotification(ticket.employeeEmail, 'employee', `Support ticket "${ticket.title}" was marked as ${status}${by}.`, 'ticket', ticket.title, undefined, buildNotificationLink('employee', 'ticket', ticket.id));

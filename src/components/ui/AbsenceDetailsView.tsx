@@ -9,6 +9,7 @@ import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, u
 import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
+import { absenceDayCharge } from '@/lib/core/absences';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { NoticeModal } from '@/components/ui/NoticeModal';
@@ -25,6 +26,8 @@ import { Input } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useNow } from '@/lib/useNow';
 import { useQuery } from '@tanstack/react-query';
+import { shiftMinutes } from '@/lib/core/timesheets';
+import { absenceFloorMinutes, hoursText } from '@/lib/core/workDay';
 
 
 interface AbsenceDetailsViewProps {
@@ -204,9 +207,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         const m = mMatch ? parseInt(mMatch[1], 10) : 0;
         shiftMins = h * 60 + m;
       } else if (t.clockIn) {
-        const start = new Date(t.clockIn).getTime();
-        const end = t.clockOut ? new Date(t.clockOut).getTime() : (now || start);
-        shiftMins = Math.max(0, Math.floor((end - start) / 60000));
+        shiftMins = shiftMinutes(t.clockIn, t.clockOut, now);
       }
 
       const existing = groupedMap.get(groupKey);
@@ -274,8 +275,12 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   // so every "$X deducted" total on this page needs to skip it too, or
   // this audit page would show money being taken that payroll never
   // actually takes.
-  const effectiveDeductionAmount = (r: AbsenceRecord): number =>
-    getApprovedLeaveOnDate(leaves, r.employeeName, r.date) ? 0 : r.deductionAmount;
+  // The charge is worked out from today's salary, the same way payroll does it, so this page and the pay slip agree after a salary correction.
+  const effectiveDeductionAmount = (r: AbsenceRecord): number => {
+    if (getApprovedLeaveOnDate(leaves, r.employeeName, r.date)) return 0;
+    const salary = allProfiles.find(p => p.email.toLowerCase() === r.employeeEmail.toLowerCase())?.baseSalary || 0;
+    return salary > 0 ? absenceDayCharge(salary, r.date) : r.deductionAmount;
+  };
 
   const totalDeducted = filteredAbsences.reduce((acc, r) => acc + effectiveDeductionAmount(r), 0);
 
@@ -395,7 +400,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         ) : r.reason === 'under_4_hours' ? (
           <>
             <Clock className="h-3.5 w-3.5 text-rose-500" />
-            <span>Worked under 4 hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
+            <span>Worked under {hoursText(absenceFloorMinutes(allProfiles.find(p => p.email.toLowerCase() === r.employeeEmail.toLowerCase())))} hours ({Math.floor((r.workedMinutes || 0) / 60)}h {(r.workedMinutes || 0) % 60}m)</span>
           </>
         ) : (
           <>

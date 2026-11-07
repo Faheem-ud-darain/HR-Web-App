@@ -24,11 +24,11 @@
 
 import { formatDateNY, formatTimeNY } from '@/lib/timezone';
 import { pbFilter } from '@/lib/pbFilter';
+import { PB_URL } from '@/lib/pbUrl';
 import { sanitizeForWrite } from './sanitize';
 import type { PbRow, PbJson } from '@/lib/pbTypes';
 import { hasDocs, legacyDocsKey, parseLegacyDocs, type ProfileDocs } from '@/lib/core/profileDocs';
 
-const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
 // Cached in a module-level variable — on Cloudflare's Edge runtime this can
 // persist across requests within the same warm isolate, which saves a

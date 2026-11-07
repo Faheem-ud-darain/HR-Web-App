@@ -32,6 +32,7 @@ import {
   netPay, payrollFlags, summarizePayroll, monthLabel, payPeriod, groupOfRegion, type PayrollGroup,
 } from '@/lib/core/payrollView';
 import { correctionsFor, outstandingTotals } from '@/lib/core/payrollCorrections';
+import { PartTimeBadge } from '@/components/ui/PartTime';
 import { PaySlipDialog } from './PaySlipDialog';
 import { usePayrollView } from '@/hooks/usePayrollView';
 import { downloadCsv } from '@/lib/csv';
@@ -343,7 +344,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                         ) : visible.map(r => (
                           <Tr key={r.employeeId}>
                             <Td>
-                              <div className="font-semibold text-slate-900">{r.name}</div>
+                              <div className="font-semibold text-slate-900">{r.name}<PartTimeBadge partTime={profileById.get(r.employeeId)?.partTime} email={profileById.get(r.employeeId)?.email ?? ""} className="ml-2" /></div>
                               <div className="mt-0.5 text-xs text-slate-500">{r.role}</div>
                               {flagChips(r)}
                             </Td>
@@ -366,7 +367,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                   <button key={r.employeeId} type="button" onClick={() => setSlipFor(r.employeeId)} className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">{r.name}</p>
+                        <p className="truncate text-sm font-bold text-slate-900">{r.name}<PartTimeBadge partTime={profileById.get(r.employeeId)?.partTime} email={profileById.get(r.employeeId)?.email ?? ""} className="ml-2" /></p>
                         <p className="text-xs text-slate-500">{r.role}</p>
                       </div>
                       {statusBadge(r)}
@@ -451,7 +452,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                   <ul className="divide-y divide-slate-100">
                     {rows.map(h => (
                       <li key={h.profile.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                        <span className="font-semibold text-slate-900">{h.profile.fullName}</span>
+                        <span className="font-semibold text-slate-900">{h.profile.fullName}<PartTimeBadge partTime={h.profile.partTime} email={h.profile.email} className="ml-2" /></span>
                         <span className="font-bold text-indigo-700">{formatMoney(h.amount, GROUP_REGION[g])}</span>
                       </li>
                     ))}
@@ -483,7 +484,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
                     <TBody>
                       {pastRows.length === 0 ? <EmptyState as="td" colSpan={3}>Nothing was saved for this month.</EmptyState> : pastRows.map(r => (
                         <Tr key={r.id || r.employeeId}>
-                          <Td><div className="font-semibold text-slate-900">{r.name}</div><div className="text-xs text-slate-500">{r.role}</div></Td>
+                          <Td><div className="font-semibold text-slate-900">{r.name}<PartTimeBadge partTime={profileById.get(r.employeeId)?.partTime} email={profileById.get(r.employeeId)?.email ?? ""} className="ml-2" /></div><div className="text-xs text-slate-500">{r.role}</div></Td>
                           <Td align="right"><span className="font-semibold text-slate-900">{formatMoney(netPay(r), r.region)}</span></Td>
                           <Td align="center">{statusBadge(r)}</Td>
                           {isAdmin && (

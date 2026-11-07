@@ -9,6 +9,7 @@ import { Button } from '../Button';
 import { FieldLabel } from '../FieldLabel';
 import { FormField } from '../FormField';
 import { Input, Select } from '../Input';
+import { PartTimeField } from '../PartTime';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -96,6 +97,8 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
         <Input type="date" required {...bind('accountCreationDate')} fieldSize="sm" className={pointer} />
         <p className="text-caption text-slate-400 font-semibold">PTO accrual is calculated from this date, not the joining date.</p>
       </FormField>
+
+      <PartTimeField checked={form.partTime} onChange={partTime => setForm(f => ({ ...f, partTime }))} />
 
       <div className="space-y-1.5">
         <FieldLabel size="plain">Assigned Warehouses</FieldLabel>

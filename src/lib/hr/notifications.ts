@@ -6,6 +6,7 @@
 // See plans/014-split-hrdata-monolith.md.
 
 'use client';
+import { recordCommunication } from './audit';
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import { formatTimeNY, formatDateNY } from '../timezone';
@@ -319,7 +320,7 @@ export const notificationActions = {
       title, content, created_by: createdBy, target: encodeAnnouncementTarget(target),
       target_role: typeof target === 'string' ? target : 'all', author: createdBy, author_role: '', pinned: important,
       timestamp: formatTimeNY(new Date()) + ' ' + formatDateNY(new Date()),
-    }),
+    }).then(created => { recordCommunication({ kind: 'announcement', refId: created.id, claimedSender: createdBy }); return created; }),
   getAnnouncementReadMap: (scope: ReadScope = 'own'): Promise<AnnouncementReadMap> => pbGetIdSetMap('hr_announcement_reads', 'read_ids', scope),
   isAnnouncementRead: (ann: Announcement, email: string, readMap: AnnouncementReadMap): boolean =>
     (readMap[ann.id] || []).map(e => e.toLowerCase()).includes(email.toLowerCase()),

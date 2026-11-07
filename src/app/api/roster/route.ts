@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { PB_URL } from '@/lib/pbUrl';
 import { requireSession } from '@/lib/serverAuth';
 import { pbAdminFetch, adminListAllProfiles } from '@/lib/pbAdmin';
 import { mapProfileRecord, scopeProfileForViewer } from '@/lib/core/profiles';
@@ -12,7 +13,6 @@ export const runtime = 'edge';
 // directory fields of colleagues. Replaces the browser reading hr_profiles +
 // hr_profile_extras straight from PocketBase, which handed every employee
 // everyone's salary, bank details and password hash.
-const PB_URL = process.env.NEXT_PUBLIC_PB_URL || 'https://pb.delcargo.us';
 
 export async function GET(request: Request) {
   const session = await requireSession(request);

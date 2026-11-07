@@ -132,19 +132,32 @@ export const SHIFT_TAB_HEARTBEAT_STALE_MS = 15 * 60 * 1000;
 // dead with no quit signal, the shift is treated as a crash and ended.
 export const TRACKER_HEARTBEAT_GRACE_MS = 15 * 60 * 1000;
 
-// True when the desktop agent has written a heartbeat recently enough to be
-// considered running. Tolerance is (interval + 10) minutes, floor 3 — the
-// extra 8 min buffer absorbs transient PocketBase timeouts (screenshot
-// uploads blocking heartbeat writes) so a slow server never falsely
-// appears as "tracker gone".
-export function isHeartbeatLive(hb: TrackerHeartbeat | null, intervalMinutes: number = 3, now: number = Date.now()): boolean {
+// True when a tracker has written a heartbeat recently enough to be considered running. The window is fixed, not tied to the screenshot
+// interval: the Windows/Mac tracker reports about once a minute (up to every two minutes while retrying) and the Chromebook extension every
+// 15 seconds, whatever interval HR chose. 13 minutes absorbs slow uploads and short network drops; the server's auto-close hook uses the same window.
+export function isHeartbeatLive(hb: TrackerHeartbeat | null, now: number = Date.now()): boolean {
   if (!hb?.lastSeenAt) return false;
-  const toleranceMs = (Math.max(3, intervalMinutes) + 10) * 60 * 1000;
-  return (now - new Date(hb.lastSeenAt).getTime()) < toleranceMs;
+  return (now - new Date(hb.lastSeenAt).getTime()) < TRACKER_HEARTBEAT_LIVE_DEFAULT_MS;
 }
 
 export function isShiftTabHeartbeatLive(hb: ShiftTabHeartbeat | null, now: number = Date.now()): boolean {
   return !!hb?.lastSeenAt && (now - new Date(hb.lastSeenAt).getTime()) < SHIFT_TAB_HEARTBEAT_STALE_MS;
+}
+
+// The auto-close windows. pb_hooks/auto_close_stale_shifts.pb.js runs the same rules on the server and cannot import this file, so it repeats
+// these numbers; src/lib/pbHookConstants.test.ts fails if the two ever differ.
+export const ORPHAN_SHIFT_GRACE_MS = 30 * 60 * 1000; // a tracked shift is orphaned when its tracker was last seen this long ago
+export const MIN_SHIFT_AGE_MS = 45 * 60 * 1000; // and only once the shift is at least this old (a brief sleep or wifi blip must not close it)
+export const MAX_SHIFT_DURATION_MS = 16 * 60 * 60 * 1000; // no legitimate single shift runs longer than this
+/** How long a tracker heartbeat counts as live: 13 minutes, the same window the server hook uses. */
+export const TRACKER_HEARTBEAT_LIVE_DEFAULT_MS = (3 + 10) * 60 * 1000;
+
+/** A shift's length in minutes, rounded the same way the saved "Xh Ym" text is, so reports, the absence page and the saved text agree. (Payroll uses elapsedMinutes below, which rounds down, for its hour rules.) */
+export function shiftMinutes(clockIn: string | undefined | null, clockOut: string | undefined | null, openShiftEndMs?: number): number {
+  if (!clockIn) return 0;
+  const start = new Date(clockIn).getTime();
+  const end = clockOut ? new Date(clockOut).getTime() : openShiftEndMs ?? start;
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.round((end - start) / 60000)) : 0;
 }
 
 // Whole minutes between a shift's clock-in and clock-out. An open shift

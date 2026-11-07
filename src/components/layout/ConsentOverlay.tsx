@@ -5,6 +5,7 @@ import { CheckCircleIcon as CheckCircle2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { Profile } from '@/lib/hrData';
+import { INCREMENT_PER_EVENT } from '@/lib/incrementMath';
 
 // The "HR Consent & Data Agreement" popup (GPS disclosure, salary reserve, leave and increment rules).
 // It used to live inline in the dashboard layout AFTER the onboarding early-return, so a new employee
@@ -39,7 +40,7 @@ export function ConsentOverlay({ profile, onAccept }: { profile: Profile | null;
               <li>Cashed out at the end of the year.</li>
             </ul>
           </li>
-          <li>An annual anniversary increment will be applied on your work anniversary month (PKR 10,000 for Pakistan-based staff, $100 for USA-based staff).</li>
+          <li>An annual anniversary increment will be applied on your work anniversary month (PKR {INCREMENT_PER_EVENT.Pakistan.toLocaleString('en-US')} for Pakistan-based staff, ${INCREMENT_PER_EVENT.USA} for USA-based staff).</li>
           <li>Salary details are confidential. Please do not disclose your salary to other employees. If someone asks or insists, report it to HR immediately.</li>
         </ol>
 

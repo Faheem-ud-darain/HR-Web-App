@@ -5,6 +5,7 @@
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
+import { absenceFloorMinutes } from '../core/workDay';
 import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
@@ -253,7 +254,7 @@ export const absenceActions = {
 
     // Send notifications only for records this call actually created.
     await Promise.all(Array.from(pendingNotifications.values()).map(({ emp, dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount, name }) => {
-      const { reasonText, empReasonDetail } = describeAbsence(reason, dateStr, inactivityMinutes, workedMinutes);
+      const { reasonText, empReasonDetail } = describeAbsence(reason, dateStr, inactivityMinutes, workedMinutes, absenceFloorMinutes(emp));
       return Promise.all([
         hrActions.addNotification('all', 'hr', `${name} ${reasonText} and was marked absent — ${formatMoney(deductionAmount, emp.region)} deducted (2 days' pay).`, 'leave_task', name, emp.email),
         // Dashboard-only for Admin — HR already got the pushable copy above,

@@ -10,6 +10,7 @@ import { mapProfileRecord } from '../core/profiles';
 import { toLeave, toAbsenceRecord } from '../core/payrollMappers';
 import { toTimesheet, elapsedMinutes } from '../core/timesheets';
 import { getShortShiftDays } from '../core/payroll';
+import { requiredDayMinutes } from '../core/workDay';
 import { getLeaveRange, eachLeaveDay } from '../core/leaves';
 import { isWeekday, getWeekdaysInMonth } from '../core/dates';
 import { explainPay, payrollOverviewFacts, reservedFacts, money, type PayInputs } from '../core/payrollExplain';
@@ -234,7 +235,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       const longest = inactRows.reduce((best, r) => ((Number(r.duration_seconds) || 0) > best.s ? { s: Number(r.duration_seconds) || 0, at: String(r.start_at || '').slice(0, 10) } : best), { s: 0, at: '' });
       return {
         employee: who.aliasName, month: monthLabel(month), working_days_in_month: total,
-        worked: `${hm(worked)} over ${byDate.size} day(s)`, expected_so_far: hm(expectedDays * 480),
+        worked: `${hm(worked)} over ${byDate.size} day(s)`, expected_so_far: hm(expectedDays * requiredDayMinutes(who.p)),
         absent_days: abs.map(r => shortDate(r.date)).sort(),
         short_shifts: shorts.map(d => `${shortDate(d.date)} (${hm(d.minutes)})`),
         inactivity: inactRows.length ? `${hm(inactSecs / 60)} in ${inactRows.length} period(s); longest ${hm(longest.s / 60)}${longest.at ? ` on ${shortDate(longest.at)}` : ''}` : 'none recorded',

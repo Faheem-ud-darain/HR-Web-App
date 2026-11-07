@@ -1,5 +1,6 @@
 'use client';
 
+import { PartTimeBadge } from '@/components/ui/PartTime';
 import { Button } from '@/components/ui/Button';
 import React from 'react';
 import { BuildingsIcon as Building2, StarIcon as Star, UsersIcon as Users } from '@/components/ui/icons';
@@ -31,6 +32,7 @@ function EmployeeCard({ emp, teams, onOpenProfile, onStartDrag, onToggleLead, on
           <div>
             <div className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
               {displayName(emp, 'hr')}
+              <PartTimeBadge partTime={emp.partTime} email={emp.email} />
               {lead && <span title={`Lead of: ${emp.leadTeams?.join(', ')}`} className="text-amber-500"><Star weight="fill" className="h-3.5 w-3.5" /></span>}
               {isWarehouseManager(emp) && (
                 <span title="Warehouse Manager" className="text-purple-700 font-bold text-xs flex items-center gap-0.5 cursor-help"><Building2 className="h-3.5 w-3.5" /> Manager</span>

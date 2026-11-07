@@ -67,10 +67,14 @@ export function getMissedIncrementEvents(profile: IncrementInput): number {
 // Total pending increment amount, including any back-filled/missed years —
 // flat per-event amount (region-dependent), non-compounding, multiplied by
 // however many anniversary events haven't been processed yet.
+/** The one place the yearly raise amount lives: a flat amount per anniversary, by region. */
+export const INCREMENT_PER_EVENT = { USA: 100, Pakistan: 10000 } as const;
+export const incrementPerEvent = (region?: string): number => (region === 'USA' ? INCREMENT_PER_EVENT.USA : INCREMENT_PER_EVENT.Pakistan);
+
 export function getPendingIncrement(profile: IncrementInput): number {
   const missedEvents = getMissedIncrementEvents(profile);
   if (missedEvents <= 0) return 0;
-  const perEvent = profile.region === 'USA' ? 100 : 10000;
+  const perEvent = incrementPerEvent(profile.region);
   return missedEvents * perEvent;
 }
 
@@ -117,7 +121,7 @@ export function getMissedIncrementEventsForPayrollMonth(profile: IncrementInput,
 export function getPendingIncrementForPayrollMonth(profile: IncrementInput, targetMonthKey: string): number {
   const missedEvents = getMissedIncrementEventsForPayrollMonth(profile, targetMonthKey);
   if (missedEvents <= 0) return 0;
-  const perEvent = profile.region === 'USA' ? 100 : 10000;
+  const perEvent = incrementPerEvent(profile.region);
   return missedEvents * perEvent;
 }
 
@@ -132,7 +136,7 @@ export function getPendingIncrementForPayrollMonth(profile: IncrementInput, targ
 // never manually edited outside the increment system in between. Treat
 // this as a best-effort breakdown, not an audited ledger.
 export function getIncrementHistory(profile: IncrementInput): { originalBaseSalary: number; events: IncrementEvent[] } {
-  const perEvent = profile.region === 'USA' ? 100 : 10000;
+  const perEvent = incrementPerEvent(profile.region);
   const start = parseYmd(profile.salaryStartDate || profile.joinedDate);
   if (!start) return { originalBaseSalary: profile.baseSalary, events: [] };
 

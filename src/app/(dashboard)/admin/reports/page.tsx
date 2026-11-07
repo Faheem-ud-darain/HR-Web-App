@@ -1,5 +1,6 @@
 'use client';
 
+import { ShiftStatusBadge } from '@/components/ui/StatusBadges';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Tabs } from '@/components/ui/Tabs';
 import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
@@ -352,9 +353,7 @@ export default function ReportsPage() {
                           <Td className="text-slate-600 font-medium font-mono text-caption">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                           <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                           <Td align="right">
-                            <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
-                              {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                            </Badge>
+                            <ShiftStatusBadge status={entry.status} />
                           </Td>
                         </Tr>
                       ))}
@@ -374,9 +373,7 @@ export default function ReportsPage() {
                     <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col gap-2">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-slate-700 text-xs">{localShiftDate(entry.clockIn, entry.date)}</span>
-                        <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'} className="text-caption">
-                          {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                        </Badge>
+                        <ShiftStatusBadge status={entry.status} className="text-caption" />
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-caption">
                         <div>

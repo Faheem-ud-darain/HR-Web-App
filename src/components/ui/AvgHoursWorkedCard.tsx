@@ -9,6 +9,7 @@ import { Profile, TimesheetEntry, displayName, localShiftDate } from '@/lib/hrDa
 import { Sparkline } from '@/components/ui/Sparkline';
 import { APP_TIMEZONE } from '@/lib/timezone';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { shiftMinutes } from '@/lib/core/timesheets';
 
 interface AvgHoursWorkedCardProps {
   employees: Profile[];
@@ -27,10 +28,7 @@ interface AvgHoursWorkedCardProps {
 // overstate the real average depending on when you happen to look, so it's
 // excluded the same way ActiveEmployeesCard keeps "currently on shift" and
 // "shift history" as separate concerns.
-function minutesBetween(startISO: string, endISO: string): number {
-  const ms = new Date(endISO).getTime() - new Date(startISO).getTime();
-  return Math.max(0, Math.round(ms / 60000));
-}
+const minutesBetween = (startISO: string, endISO: string): number => shiftMinutes(startISO, endISO);
 
 function formatHoursShort(totalMinutes: number): string {
   const h = Math.floor(totalMinutes / 60);

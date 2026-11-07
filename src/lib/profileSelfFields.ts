@@ -24,7 +24,7 @@ export const HR_CONTROLLED_KEYS = [
   'jobTitle', 'gender', 'alias', 'accountCreationDate', 'lastIncrementProcessedYear', 'mustChangePassword',
   'reservedSalaryBalance', 'manualReservedAmount', 'manualReservedNote',
   'offboarded', 'offboardDate', 'offboardingStatus',
-  'exemptFromAbsenceCheck', 'trackingEnabled', 'id',
+  'exemptFromAbsenceCheck', 'partTime', 'trackingEnabled', 'id',
 ] as const;
 
 export type SelfPatchResult =

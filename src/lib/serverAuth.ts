@@ -27,6 +27,7 @@
 // genuinely supported on both Node and Edge/Workers with no Node built-in
 // imports at all. Stored format: `pbkdf2$<iterations>$<salt-b64>$<hash-b64>`.
 import { SignJWT, jwtVerify } from 'jose';
+import { currentRole } from './server/liveSession';
 
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_HASH_BYTES = 32;
@@ -121,7 +122,11 @@ export async function verifySessionToken(token: string | null | undefined): Prom
 export async function requireSession(request: Request): Promise<SessionPayload | null> {
   const auth = request.headers.get('authorization') || request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return null;
-  return verifySessionToken(auth.slice('Bearer '.length).trim());
+  const session = await verifySessionToken(auth.slice('Bearer '.length).trim());
+  if (!session) return null;
+  // The token's role is a copy from sign-in time: use the live one, and refuse accounts that were offboarded or removed since.
+  const role = await currentRole(session.email, session.role);
+  return role ? { email: session.email, role } : null;
 }
 
 const PBKDF2_HASH_RE = /^pbkdf2\$(\d+)\$([A-Za-z0-9+/=]+)\$([A-Za-z0-9+/=]+)$/;

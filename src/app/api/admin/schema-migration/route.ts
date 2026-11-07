@@ -847,6 +847,31 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
     }
+    if (body.action === 'ensureCommunicationAudit') {
+      // The permanent trail of every ticket, chat message and announcement: who (the verified account), from which address and device.
+      // See src/app/api/audit/communication/route.ts and lib/core/communicationAudit.ts. Append-only and hidden: every rule is null
+      // (admin-only), so only that route can add an entry and nothing in the app can read, change or delete one except the HR/Admin read
+      // route. Additive only. Defaults to a dry run: pass { dryRun: false } to create.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_communication_audit';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string) => ({ name: n, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: ['kind', 'ref_id', 'message_id', 'actor', 'actor_role', 'claimed_sender', 'ip', 'country', 'device', 'user_agent', 'device_id', 'occurred_at'].map(text),
+            indexes: [
+              'CREATE INDEX idx_hr_communication_audit_ref ON hr_communication_audit (ref_id)',
+              'CREATE INDEX idx_hr_communication_audit_actor ON hr_communication_audit (actor)',
+            ],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
     if (body.action === 'ensurePayrollCorrections') {
       // Corrections after payment (see src/app/api/admin/payroll/corrections/route.ts and
       // lib/core/payrollCorrections.ts): one row per correction, admin-only (rules null) because the

@@ -115,9 +115,9 @@ describe('timesheets', () => {
   it('heartbeat liveness uses an injectable clock', () => {
     const now = Date.parse('2026-09-11T16:00:00Z');
     const seen = (mins: number) => ({ employeeEmail: 'a', deviceId: 'd', connectedAt: '', lastSeenAt: new Date(now - mins * 60000).toISOString() });
-    expect(isHeartbeatLive(seen(12), 3, now)).toBe(true);
-    expect(isHeartbeatLive(seen(14), 3, now)).toBe(false);
-    expect(isHeartbeatLive(null, 3, now)).toBe(false);
+    expect(isHeartbeatLive(seen(12), now)).toBe(true);
+    expect(isHeartbeatLive(seen(14), now)).toBe(false);
+    expect(isHeartbeatLive(null, now)).toBe(false);
     expect(isShiftTabHeartbeatLive({ employeeEmail: 'a', lastSeenAt: new Date(now - 5 * 60000).toISOString() }, now)).toBe(true);
     expect(isShiftTabHeartbeatLive({ employeeEmail: 'a', lastSeenAt: new Date(now - 20 * 60000).toISOString() }, now)).toBe(false);
   });

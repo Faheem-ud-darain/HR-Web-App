@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { CheckCircleIcon as CheckCircle2, CopyIcon as Copy, BankIcon as Landmark, ReceiptIcon as ReceiptText, WarningIcon as AlertTriangle, CheckIcon as Check } from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { PartTimeBadge } from '@/components/ui/PartTime';
 import { Button } from '@/components/ui/Button';
 import { FormError } from '@/components/ui/FormError';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -73,7 +74,7 @@ export function PaySlipDialog({ record, profile, isAdmin, isOpen, onClose, onSav
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
           <p className="text-caption font-bold uppercase tracking-wider text-emerald-700">Amount to pay</p>
           <p className="mt-1 text-2xl font-black text-emerald-900">{money(net)}</p>
-          <div className="mt-2">{record.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Not paid yet</Badge>}</div>
+          <div className="mt-2 flex items-center justify-center gap-2">{record.processed ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Not paid yet</Badge>}<PartTimeBadge partTime={profile?.partTime} email={profile?.email ?? ""} /></div>
           <p className="mt-2 text-caption font-semibold text-emerald-800">Salary for {payPeriod(record.month).salaryMonth} · paid at the start of {payPeriod(record.month).paidMonth}</p>
         </div>
 

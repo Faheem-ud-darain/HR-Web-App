@@ -1,5 +1,6 @@
 'use client';
 
+import { GEO_MIN_RADIUS_METERS } from '@/lib/core/geofence';
 import { IconButton } from '@/components/ui/IconButton';
 import React, { useState } from 'react';
 import { PencilSimpleLineIcon as Edit, MapPinIcon as MapPin, TrashIcon as Trash } from '@/components/ui/icons';
@@ -26,7 +27,7 @@ function validate({ name, lat, lon, radius }: WhForm): string | null {
   const [la, lo, r] = [Number(lat), Number(lon), Number(radius)];
   if (Number.isNaN(la) || la < -90 || la > 90) return 'Latitude must be a number between -90 and 90.';
   if (Number.isNaN(lo) || lo < -180 || lo > 180) return 'Longitude must be a number between -180 and 180.';
-  if (Number.isNaN(r) || r <= 0) return 'Geofence radius must be a positive number of meters.';
+  if (Number.isNaN(r) || r < GEO_MIN_RADIUS_METERS) return `Geofence radius must be at least ${GEO_MIN_RADIUS_METERS} meters (phone GPS is not accurate enough for a smaller area).`;
   return null;
 }
 

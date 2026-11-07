@@ -6,6 +6,7 @@ import { CalendarBlankIcon as Calendar, CurrencyDollarIcon as DollarSign, BankIc
 import { formatMoney, updateProfileAdmin, type Profile, type Warehouse } from '@/lib/hrData';
 import type { ViewerRole } from '@/lib/core/userProfile';
 import { Badge } from '../Badge';
+import { PartTimeBadge } from '../PartTime';
 import { OffboardingSummary } from './OffboardingSummary';
 import { PendingIncrement } from './PendingIncrement';
 import { ProfileField } from './ProfileField';
@@ -39,7 +40,7 @@ export function ProfileDetails({ profile, viewerRole, warehouses, canManage, onC
         <ProfileField label="Email Address" icon={Mail}>{profile.email}</ProfileField>
         <ProfileField label="Own Number" icon={Phone}>{profile.personalPhone || '—'}</ProfileField>
         <ProfileField label="Company Allocated Number" icon={Phone}>{profile.companyPhone || 'Not applicable'}</ProfileField>
-        <ProfileField label="System Role" icon={Shield}>{profile.role}</ProfileField>
+        <ProfileField label="System Role" icon={Shield}>{profile.role} <PartTimeBadge partTime={profile.partTime} email={profile.email} className="ml-1" /></ProfileField>
         <div>
           <ProfileField label="Base Salary" icon={DollarSign}>{formatMoney(profile.baseSalary, profile.region)}</ProfileField>
           {staff && <PendingIncrement profile={profile} onChanged={onChanged} />}

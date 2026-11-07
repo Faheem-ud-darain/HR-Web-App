@@ -46,6 +46,7 @@ export async function GET(request: Request) {
       joinedDate: profile.joinedDate,
       lastIncrementProcessedYear: profile.lastIncrementProcessedYear || undefined,
       region: profile.region,
+      partTime: !!profile.partTime,
       reservedSalaryBalance: Number(profile.reservedSalaryBalance) || 0,
       manualReservedAmount: Number(profile.manualReservedAmount) || 0,
     };

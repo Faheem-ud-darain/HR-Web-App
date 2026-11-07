@@ -23,6 +23,17 @@ import { Capacitor } from '@capacitor/core';
 export interface GeoPoint {
   latitude: number;
   longitude: number;
+  /** Error radius in meters, and when the position was produced (ms since epoch). The rules in core/geofence.ts use both. */
+  accuracy?: number | null;
+  time?: number | null;
+}
+
+/** Opens the phone's settings for this app (native), so a person who said "Don't Allow" can switch location on without hunting for it. Returns false on the web, where only the browser's own site settings can do it. */
+export async function openLocationSettings(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
+  await BackgroundGeolocation.openSettings();
+  return true;
 }
 
 export interface GeoWatchHandle {
@@ -63,7 +74,7 @@ export async function watchLocation(
           return;
         }
         if (location) {
-          onSuccess({ latitude: location.latitude, longitude: location.longitude });
+          onSuccess({ latitude: location.latitude, longitude: location.longitude, accuracy: location.accuracy, time: location.time });
         }
       }
     );
@@ -82,7 +93,7 @@ export async function watchLocation(
   }
 
   const watchId = navigator.geolocation.watchPosition(
-    (position) => onSuccess({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+    (position) => onSuccess({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, time: position.timestamp }),
     (err) =>
       onError(
         err.message || 'Unable to determine your location.',

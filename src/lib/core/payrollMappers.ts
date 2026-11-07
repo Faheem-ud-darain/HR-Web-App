@@ -3,6 +3,7 @@
 import type { LeaveApplication, AbsenceRecord, PayrollRecord, DeductionItem } from '../hr/types';
 import type { PbRow } from '../pbTypes';
 import { parseLeaveDateStrings } from './leaves';
+import { netPayBeforeFloor } from './payrollView';
 
 export function toLeave(l: PbRow): LeaveApplication {
   const stored = l.start_date && l.end_date ? { start: String(l.start_date).slice(0, 10), end: String(l.end_date).slice(0, 10) } : null;
@@ -35,7 +36,7 @@ export function toPayrollRecordFromRow(p: PbRow, extra?: PbRow): PayrollRecord {
   // A month paid before breakdowns were stored has no "why" row. The part-month pay added to it is
   // still recoverable: net_pay was saved as base + bonus - deductions + increment + earlier pay.
   const net = Number(p.net_pay);
-  const impliedEarlier = processed && !useStored && Number.isFinite(net) ? Math.round((net - (baseSalary + bonus - deductions + incrementAmount)) * 100) / 100 : 0;
+  const impliedEarlier = processed && !useStored && Number.isFinite(net) ? Math.round((net - netPayBeforeFloor({ baseSalary, bonus, deductions, incrementAmount })) * 100) / 100 : 0;
   const earlierPay = useStored ? Number(extra!.earlierPay) || 0 : impliedEarlier > 0 ? impliedEarlier : 0;
   const stored = useStored && Array.isArray(extra!.deductionBreakdown) ? (extra!.deductionBreakdown as DeductionItem[]) : null;
   return {
@@ -64,7 +65,7 @@ export function toPayrollRowFields(record: PbRow, todayISO: string): PbRow {
     unpaid_leaves: record.unpaidLeaves,
     bonus: record.bonus,
     deductions: record.deductions,
-    net_pay: record.baseSalary + record.bonus - record.deductions + record.incrementAmount + (Number(record.earlierPay) || 0),
+    net_pay: netPayBeforeFloor(record as Parameters<typeof netPayBeforeFloor>[0]), // the exact sum (can be negative): see netPayBeforeFloor
     increment_amount: record.incrementAmount,
     processed: record.processed,
     status: record.processed ? 'paid' : 'pending',

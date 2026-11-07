@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { PbRow } from '@/lib/pbTypes';
 import { getNYDateString } from '@/lib/timezone';
-import { pbAdminFetch, adminFindByField, adminUpsertByField, adminAddNotification, rememberAdminUpsertId } from '@/lib/pbAdmin';
+import { pbAdminFetch, adminFindByField, adminUpsertByField, adminAddNotification } from '@/lib/pbAdmin';
+import { applyRaise } from '@/lib/server/applyRaise';
 import { toPayrollRowFields } from '@/lib/core/payrollMappers';
 import { loadPayrollInputs, breakdownKey } from '@/lib/server/payrollInputs';
 import { computePayrollView } from '@/lib/core/payroll';
@@ -141,23 +142,8 @@ export async function POST(request: Request) {
     for (const { profile, decision } of batch) {
       if (decision.status !== 'apply') continue;
       try {
-        // Re-read this one row right before writing: only raise it if it is still exactly what we planned from.
-        const fresh = await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`);
-        if (Number(fresh?.base_salary) !== profile.baseSalary) throw new Error('salary changed while the job ran');
-        // Write "this anniversary is done" FIRST, then the raise. If the raise then fails we put the marker back,
-        // and if even that fails the person is left un-raised (visible in the response and fixable by hand)
-        // rather than raised again on the next 10-minute run — a missed raise is safer than a double one.
-        const extrasRowNow = await adminFindByField('hr_profile_extras', 'profile_id', profile.id);
-        const extrasNow = (extrasRowNow?.data || {}) as PbRow;
-        if (extrasRowNow) rememberAdminUpsertId('hr_profile_extras', 'profile_id', profile.id, extrasRowNow.id);
-        if (extrasNow.lastIncrementProcessedYear === decision.processedThroughYear) continue; // a previous run already did this one
-        await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, { ...extrasNow, lastIncrementProcessedYear: decision.processedThroughYear });
-        try {
-          await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`, { method: 'PATCH', body: JSON.stringify({ base_salary: decision.newBaseSalary }) });
-        } catch (err) {
-          await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, extrasNow).catch(() => { /* left marked: see above */ });
-          throw err;
-        }
+        // Only raised if the salary is still exactly what we planned from; the same function Admin "Pay" uses.
+        if (await applyRaise(profile, decision) === 'already_done') continue; // a previous run already did this one
         log.push({ at: now.toISOString(), email: profile.email, payMonth, anniversaryMonth: decision.anniversaryMonth, from: profile.baseSalary, to: decision.newBaseSalary });
         await adminAddNotification(profile.email, 'employee', `Your annual salary increment has been added to your base salary. It applies to the ${monthLabel(payMonth)} salary.`, 'internal');
         applied++;

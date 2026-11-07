@@ -8,13 +8,17 @@ import { FlagIcon as Flag, CrosshairIcon as LocateFixed, DeviceMobileIcon as Sma
 import { hrActions, TrackerHeartbeat, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
 import { isMobileDevice } from '@/lib/trackerSetup';
 import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
+import { requiredDayMinutes } from '@/lib/core/workDay';
 import { checkTracker, notifyShift } from '@/lib/hr/shiftActions';
 import { Button } from '@/components/ui/Button';
+import { Capacitor } from '@capacitor/core';
+import { openLocationSettings } from '@/lib/backgroundGeolocation';
+import type { GeoPermission } from '@/lib/useGeofenceShift';
 
 interface ShiftControlCardProps {
   shiftActive: boolean;
   userProfile: Profile | null;
-  geoPermission: "idle" | "requesting" | "granted" | "denied" | "unsupported";
+  geoPermission: GeoPermission;
   liveDistance: { meters: number; warehouseName: string; isInside: boolean; } | null;
   isTrackingLiveFor: (emp: Profile) => boolean;
   setPingingTracker: React.Dispatch<React.SetStateAction<boolean>>;
@@ -22,17 +26,21 @@ interface ShiftControlCardProps {
   /** Starting is not allowed right now, and why (the page shows the matching prompt). */
   onStartBlocked: (block: StartBlock) => void;
   /** The shift ended with less than the 8-hour day worked (a heads-up, never a gate). */
-  onUnderEight: (details: { workedMinutes: number; remainingMinutes: number }) => void;
+  onShortShift: (details: { workedMinutes: number; remainingMinutes: number; requiredMinutes: number }) => void;
   setShiftActive: React.Dispatch<React.SetStateAction<boolean>>;
   openShiftRef: React.RefObject<{ id: string; clockIn: string; } | null>;
   refetchTimesheets: (options?: RefetchOptions) => Promise<QueryObserverResult<TimesheetEntry[], Error>>;
   pingingTracker: boolean;
   allTimesheets: TimesheetEntry[] | undefined;
   geoErrorMsg: string;
+  /** Turns automatic check-in on (asks the phone for location). */
+  onEnableLocation: () => void;
+  /** A second phone takes over attendance from the one that has it. */
+  onUseThisDevice: () => void;
   trackerHeartbeat: TrackerHeartbeat | null;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onUnderEight, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onShortShift, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
   // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
   const isMobileApp = isMobileDevice();
   return (
@@ -52,8 +60,8 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               </div>
               <p className="text-xs text-slate-500 font-semibold mt-0.5 truncate">
                 {userProfile?.region === 'USA'
-                  ? (geoPermission === 'unsupported' || geoPermission === 'denied'
-                      ? 'Automatic GPS check-in unavailable — see details below'
+                  ? (geoPermission === 'unsupported' || geoPermission === 'denied' || geoPermission === 'desktop' || geoPermission === 'other_device'
+                      ? 'Automatic GPS check-in is not running on this device — see details below'
                       : liveDistance
                         ? `${liveDistance.isInside ? 'Inside' : `${liveDistance.meters}m from`} ${liveDistance.warehouseName} · auto check-in`
                         : 'Waiting for GPS signal to auto check-in…')
@@ -165,7 +173,6 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   }
     
                   const totalWorkedMins = Math.floor(totalWorkedMs / 60000);
-                  const REQUIRED_SHIFT_MINUTES = 8 * 60; // 480 minutes
     
                   // End the shift first — always — then, separately,
                   // surface the under-8-hour heads-up as a plain
@@ -173,8 +180,9 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                   // left open waiting on this.
                   await doClockOut();
     
-                  if (totalWorkedMins < REQUIRED_SHIFT_MINUTES) {
-                    onUnderEight({ workedMinutes: totalWorkedMins, remainingMinutes: REQUIRED_SHIFT_MINUTES - totalWorkedMins });
+                  const requiredMinutes = requiredDayMinutes(userProfile);
+                  if (totalWorkedMins < requiredMinutes) {
+                    onShortShift({ workedMinutes: totalWorkedMins, remainingMinutes: requiredMinutes - totalWorkedMins, requiredMinutes });
                   }
                 }}
                 disabled={!shiftActive}
@@ -194,16 +202,23 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               <p className="text-caption text-slate-400 italic">No warehouses assigned by HR yet — geofenced check-in will activate once a warehouse is assigned to your profile.</p>
             ) : geoPermission === 'unsupported' ? (
               <p className="text-caption text-rose-600 font-semibold leading-relaxed">Your browser/device does not support GPS location. Automatic geofenced check-in is unavailable here — please use a modern mobile or desktop browser.</p>
+            ) : geoPermission === 'desktop' ? (
+              <p className="text-caption text-slate-500 font-semibold leading-relaxed">Attendance is marked from your phone. Open the Delcargo app on your phone at the warehouse; this screen only shows your shift.</p>
+            ) : geoPermission === 'other_device' ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-caption text-amber-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
+                <Button variant="primary" size="sm" onClick={onUseThisDevice} className="shrink-0">Use this device</Button>
+              </div>
+            ) : geoPermission === 'declined' ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-caption text-amber-700 font-semibold leading-relaxed">Automatic check-in is off, so your shift will not start or end by itself.</p>
+                <Button variant="primary" size="sm" onClick={onEnableLocation} className="shrink-0">Turn on</Button>
+              </div>
             ) : geoPermission === 'denied' ? (
               <div className="flex items-center justify-between gap-2">
                 <p className="text-caption text-rose-700 font-semibold leading-relaxed">{geoErrorMsg}</p>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => window.location.reload()}
-                  className="shrink-0"
-                >
-                  Retry
+                <Button variant="danger" size="sm" onClick={() => { void openLocationSettings().then(opened => { if (!opened) window.location.reload(); }); }} className="shrink-0">
+                  {Capacitor.isNativePlatform() ? 'Open Settings' : 'Retry'}
                 </Button>
               </div>
             ) : (

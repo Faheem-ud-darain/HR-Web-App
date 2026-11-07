@@ -2,17 +2,14 @@
 // Every write here is built so a second run after a failure does not do anything twice.
 import type { PbRow } from '../pbTypes';
 import { getNYDateString } from '../timezone';
-import { adminFindByField, adminListPayrollForEmployee, adminUpsertByField, pbAdminFetch, rememberAdminUpsertId } from '../pbAdmin';
+import { adminListPayrollForEmployee, adminUpsertByField, pbAdminFetch } from '../pbAdmin';
 import { mapProfileRecord } from '../core/profiles';
 import { toPayrollRowFields } from '../core/payrollMappers';
 import { PayError, type PayStore } from '../core/payrollPay';
+import { applyRaise, loadProfileExtras, SalaryChangedError } from './applyRaise';
 import { breakdownKey, loadPayrollInputsFor } from './payrollInputs';
 
-const extrasOf = async (profileId: string) => {
-  const row = await adminFindByField('hr_profile_extras', 'profile_id', profileId);
-  if (row) rememberAdminUpsertId('hr_profile_extras', 'profile_id', profileId, row.id);
-  return (row?.data || {}) as PbRow;
-};
+const extrasOf = loadProfileExtras;
 
 export function pocketBasePayStore(): PayStore {
   return {
@@ -62,19 +59,8 @@ export function pocketBasePayStore(): PayStore {
     },
 
     async raiseSalary(profile, raise) {
-      // Same care as the monthly job: only raise the salary we planned from, write "this anniversary is done" FIRST, then the
-      // raise, and put the marker back if the raise fails. A missed raise is visible and fixable; a double one is not.
-      const fresh = await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`);
-      if (Number(fresh?.base_salary) !== profile.baseSalary) throw new PayError('The salary changed while this was running. Press Pay again.', 409);
-      const extras = await extrasOf(profile.id);
-      if (Number(extras.lastIncrementProcessedYear) >= raise.processedThroughYear) return; // a previous try already did this one
-      await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, { ...extras, lastIncrementProcessedYear: raise.processedThroughYear });
-      try {
-        await pbAdminFetch(`/api/collections/hr_profiles/records/${profile.id}`, { method: 'PATCH', body: JSON.stringify({ base_salary: raise.newBaseSalary }) });
-      } catch (err) {
-        await adminUpsertByField('hr_profile_extras', 'profile_id', profile.id, extras).catch(() => { /* left marked: see above */ });
-        throw err;
-      }
+      try { await applyRaise(profile, raise); }
+      catch (err) { throw err instanceof SalaryChangedError ? new PayError('The salary changed while this was running. Press Pay again.', 409) : err; }
     },
 
     async bankReserve(profile, add, month) {

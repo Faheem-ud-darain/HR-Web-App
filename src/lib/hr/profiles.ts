@@ -7,7 +7,7 @@
 // hrData.ts monolith (plan 014). See plans/014-split-hrdata-monolith.md.
 
 'use client';
-import { OVERLAY_KEYS, PROFILE_DOC_KEYS } from '../profileFields';
+import { OVERLAY_KEYS, PROFILE_DOC_KEYS, fromProfileFields } from '../profileFields';
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import { getOrCreateDeviceId, getAuthToken, getSessionEmail } from '../session';
@@ -115,45 +115,8 @@ function toProfile(p: PbRow, extras: Partial<Profile> = {}): Profile {
   return mapProfileRecord(p, extras, pictureUrl);
 }
 
-function fromProfileFields(p: Partial<Profile>): PbRow {
-  const fields: PbRow = {};
-  if (p.fullName !== undefined) fields.full_name = p.fullName;
-  // Normalize to lowercase on write — every downstream lookup (timesheets,
-  // tasks, tickets, tracking settings, absence records, etc.) assumes a
-  // lowercase employeeEmail and either does a case-insensitive `~` filter
-  // with a client-side re-check, or (in a few older/simpler call sites) a
-  // plain exact `=` filter that silently fails to match a mixed-case email.
-  // Normalizing here, once, at the source is safer than trying to make
-  // every one of those call sites case-insensitive.
-  if (p.email !== undefined) fields.email = p.email.toLowerCase();
-  if (p.role !== undefined) fields.role = p.role;
-  if (p.joinedDate !== undefined) fields.joined_date = p.joinedDate;
-  if (p.onboardingCompleted !== undefined) fields.onboarding_completed = p.onboardingCompleted;
-  if (p.baseSalary !== undefined) fields.base_salary = p.baseSalary;
-  if (p.teams !== undefined) fields.teams = p.teams;
-  if (p.password !== undefined) fields.password = p.password;
-  if (p.isTeamLead !== undefined) fields.is_team_lead = String(!!p.isTeamLead);
-  if (p.leadTeams !== undefined) fields.lead_teams = p.leadTeams;
-  if (p.isWarehouseLead !== undefined) fields.is_warehouse_lead = p.isWarehouseLead;
-  if (p.managedWarehouses !== undefined) fields.managed_warehouses = p.managedWarehouses;
-  if (p.jobTitle !== undefined) fields.job_title = p.jobTitle;
-  if (p.gender !== undefined) fields.gender = p.gender;
-  if (p.bankName !== undefined) fields.bank_name = p.bankName;
-  if (p.accountNumber !== undefined) fields.account_number = p.accountNumber;
-  if (p.iban !== undefined) fields.iban = p.iban;
-  // profilePicture is deliberately NOT mapped here — it never goes through
-  // this plain-JSON path anymore. updateProfileDetails below strips it out
-  // of `real` and routes it through uploadProfilePicture() instead, which
-  // uploads it as an actual file (multipart) to profile_picture_file rather
-  // than writing a giant base64 string into a text column.
-  if (p.region !== undefined) fields.region = p.region;
-  if (p.assignedWarehouses !== undefined) fields.assigned_warehouses = p.assignedWarehouses;
-  if (p.trackingEnabled !== undefined) fields.tracking_enabled = p.trackingEnabled;
-  if (p.salaryStartDate !== undefined) fields.salary_start_date = p.salaryStartDate;
-  return fields;
-}
-
-
+// Writing a profile uses the same field map as the server route (fromProfileFields in ../profileFields): one list of columns.
+// profilePicture is deliberately not in it: updateProfileDetails sends the photo as a file upload instead.
 
 // ---------------------------------------------------------------------------
 // QUERY HOOKS — the only supported way to read data. In-memory cache only.

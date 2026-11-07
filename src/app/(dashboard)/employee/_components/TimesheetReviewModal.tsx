@@ -1,5 +1,6 @@
 'use client';
 
+import { ShiftStatusBadge } from '@/components/ui/StatusBadges';
 import React from 'react';
 import { displayName, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
 import { Badge } from '@/components/ui/Badge';
@@ -52,9 +53,7 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
                     <Td className="text-slate-600 font-medium font-mono text-caption">{entry.clockOut ? formatTimeNY(entry.clockOut) : '—'}</Td>
                     <Td align="right" className="font-bold text-slate-900">{entry.duration || '—'}</Td>
                     <Td align="right">
-                      <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
-                        {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                      </Badge>
+                      <ShiftStatusBadge status={entry.status} />
                     </Td>
                   </Tr>
                 ))}
@@ -72,9 +71,7 @@ export function TimesheetReviewModal({ selectedReviewEmp, userProfile, reviewEnt
               <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold text-slate-900">{localShiftDate(entry.clockIn, entry.date)}</p>
-                  <Badge variant={entry.status === 'in_progress' ? 'warning' : 'success'}>
-                    {entry.status === 'in_progress' ? 'On Shift' : 'Completed'}
-                  </Badge>
+                  <ShiftStatusBadge status={entry.status} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
