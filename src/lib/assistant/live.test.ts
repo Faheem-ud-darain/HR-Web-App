@@ -105,9 +105,9 @@ describe('nicknames (the alias field)', () => {
 });
 
 describe('e-mail addresses typed into a question', () => {
-  const m = new AliasMap([{ id: 'p1', name: 'Anain Malik', alias: 'Anien', email: 'anain@delcargo.us' }, { id: 'p2', name: 'Sara Khan', email: 'sara@delcargo.us' }]);
+  const m = new AliasMap([{ id: 'p1', name: 'Anain Malik', alias: 'Anien', email: 'anna@delcargo.us' }, { id: 'p2', name: 'Sara Khan', email: 'sara@delcargo.us' }]);
   it('a known person\'s address becomes their alias, as a whole', () => {
-    const out = m.redact('check anain@delcargo.us and Sara@Delcargo.us please');
+    const out = m.redact('check anna@delcargo.us and Sara@Delcargo.us please');
     expect(out).not.toMatch(/@|delcargo|anain|sara/i);
     expect(out).toContain(m.aliasOf('p1')); expect(out).toContain(m.aliasOf('p2'));
   });

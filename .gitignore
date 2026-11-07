@@ -116,3 +116,9 @@ reports/
 logcat*.txt
 *.diff
 scratch.mjs
+
+# AI-assistant tooling (skills, locks, local launch config) — not app code
+/.agents/
+/skills-lock.json
+/.impeccable/
+/.claude/
