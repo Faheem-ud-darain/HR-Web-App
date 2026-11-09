@@ -155,6 +155,11 @@ export function isNativeMobileApp(): boolean {
 // disallowed from ANY mobile device (browser or native app), regardless
 // of whether screen tracking is even enabled for that employee — not
 // just when a desktop tracker would otherwise be required.
+/** Automatic GPS attendance is iPhone/iPad only for now (Android has not been tested on real phones). Remove this one check to switch Android on. */
+export function isAndroidDevice(): boolean {
+  return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent || '');
+}
+
 export function isMobileDevice(): boolean {
   if (typeof window === 'undefined') return false;
   if (isNativeMobileApp()) return true;

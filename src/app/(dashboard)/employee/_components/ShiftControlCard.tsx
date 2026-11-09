@@ -1,10 +1,10 @@
 'use client';
 
-import { StatusDot } from '@/components/ui/StatusDot';
+import { ShiftStatusIcon } from '@/components/ui/ShiftStatusIcon';
 import React from 'react';
 import type { RefetchOptions, QueryObserverResult } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/Card';
-import { FlagIcon as Flag, CrosshairIcon as LocateFixed, DeviceMobileIcon as Smartphone, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff } from '@/components/ui/icons';
+import { CrosshairIcon as LocateFixed, DeviceMobileIcon as Smartphone, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff } from '@/components/ui/icons';
 import { hrActions, TrackerHeartbeat, localShiftDate, Profile, TimesheetEntry } from '@/lib/hrData';
 import { isMobileDevice } from '@/lib/trackerSetup';
 import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
@@ -20,6 +20,8 @@ interface ShiftControlCardProps {
   userProfile: Profile | null;
   geoPermission: GeoPermission;
   liveDistance: { meters: number; warehouseName: string; isInside: boolean; } | null;
+  /** Why the last location was skipped (weak or old), shown instead of a silent wait. */
+  gpsNote?: string;
   isTrackingLiveFor: (emp: Profile) => boolean;
   setPingingTracker: React.Dispatch<React.SetStateAction<boolean>>;
   setTrackerHeartbeat: React.Dispatch<React.SetStateAction<TrackerHeartbeat | null>>;
@@ -40,7 +42,7 @@ interface ShiftControlCardProps {
   trackerHeartbeat: TrackerHeartbeat | null;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onShortShift, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, gpsNote, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onShortShift, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
   // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
   const isMobileApp = isMobileDevice();
   return (
@@ -48,23 +50,22 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
       <CardContent className="p-4 md:p-5">
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${shiftActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-              <Flag className="h-5 w-5" />
-            </div>
+            <ShiftStatusIcon active={shiftActive} gps={userProfile?.region === 'USA'} />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <StatusDot tone={shiftActive ? 'emerald' : 'slate'} size="sm" pulse={shiftActive} />
                 <p className={`font-display font-bold text-lg tracking-tight ${shiftActive ? 'text-emerald-700' : 'text-slate-700'}`}>
                   {shiftActive ? 'On Shift' : 'Off Shift'}
                 </p>
               </div>
               <p className="text-xs text-slate-500 font-semibold mt-0.5 truncate">
                 {userProfile?.region === 'USA'
-                  ? (geoPermission === 'unsupported' || geoPermission === 'denied' || geoPermission === 'desktop' || geoPermission === 'other_device'
+                  ? (geoPermission === 'unsupported' || geoPermission === 'denied' || geoPermission === 'desktop' || geoPermission === 'android' || geoPermission === 'other_device'
                       ? 'Automatic GPS check-in is not running on this device — see details below'
-                      : liveDistance
-                        ? `${liveDistance.isInside ? 'Inside' : `${liveDistance.meters}m from`} ${liveDistance.warehouseName} · auto check-in`
-                        : 'Waiting for GPS signal to auto check-in…')
+                      : gpsNote
+                        ? gpsNote
+                        : liveDistance
+                          ? `${liveDistance.isInside ? 'Inside' : `${liveDistance.meters}m from`} ${liveDistance.warehouseName} · auto check-in`
+                          : 'Waiting for GPS signal to auto check-in…')
                   : 'Manual shift control — start and end your shift below'}
               </p>
             </div>
@@ -202,6 +203,8 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               <p className="text-caption text-slate-400 italic">No warehouses assigned by HR yet — geofenced check-in will activate once a warehouse is assigned to your profile.</p>
             ) : geoPermission === 'unsupported' ? (
               <p className="text-caption text-rose-600 font-semibold leading-relaxed">Your browser/device does not support GPS location. Automatic geofenced check-in is unavailable here — please use a modern mobile or desktop browser.</p>
+            ) : geoPermission === 'android' ? (
+              <p className="text-caption text-slate-500 font-semibold leading-relaxed">Automatic attendance is available on iPhone for now. Android is coming soon. Please use an iPhone, or ask HR.</p>
             ) : geoPermission === 'desktop' ? (
               <p className="text-caption text-slate-500 font-semibold leading-relaxed">Attendance is marked from your phone. Open the Delcargo app on your phone at the warehouse; this screen only shows your shift.</p>
             ) : geoPermission === 'other_device' ? (

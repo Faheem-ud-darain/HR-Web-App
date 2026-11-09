@@ -483,7 +483,7 @@ export default function EmployeeDashboard() {
 
       {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
           unmissable full-width place above everything else. */}
-      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onShortShift={setShortShift} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} />
+      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} gpsNote={geo.gpsNote} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onShortShift={setShortShift} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} />
 
 
       <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />

@@ -13,6 +13,8 @@ export function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2
 export const GEO_MAX_ACCURACY_METERS = 100;
 /** Smallest fence radius HR can set: phone GPS is rarely better than about 50 m, so a smaller fence would miss people who are inside. */
 export const GEO_MIN_RADIUS_METERS = 100;
+/** The server ends a USA shift whose phone has not reported for this long (app closed or no signal), at the phone's last report. The hook keeps its own copy of this number. */
+export const GEO_SHIFT_SILENCE_MS = 10 * 60 * 1000;
 /** A fix older than this is a cached position, not where the phone is now. */
 export const GEO_MAX_FIX_AGE_MS = 2 * 60 * 1000;
 /** Shift ends only once the phone is this far beyond the fence edge, so GPS wobble at the edge cannot clock someone in and out repeatedly. */

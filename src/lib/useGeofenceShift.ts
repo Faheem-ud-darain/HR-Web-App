@@ -8,9 +8,9 @@ import { hrActions, type Profile, type Warehouse } from '@/lib/hrData';
 import { notifyShift } from '@/lib/hr/shiftActions';
 import { decideGeoAction, type GeoFix } from '@/lib/core/geofence';
 import { watchLocation, type GeoPoint } from '@/lib/backgroundGeolocation';
-import { isMobileDevice } from '@/lib/trackerSetup';
+import { isAndroidDevice, isMobileDevice } from '@/lib/trackerSetup';
 
-export type GeoPermission = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'declined' | 'desktop' | 'other_device';
+export type GeoPermission = 'idle' | 'requesting' | 'granted' | 'denied' | 'unsupported' | 'declined' | 'desktop' | 'android' | 'other_device';
 export interface LiveDistance { meters: number; warehouseName: string; isInside: boolean }
 
 const RETRY_MS = 60 * 1000; // a phone that has not moved sends no new fix, so the last one is re-checked this often; the same tick refreshes this phone's claim and its shift heartbeat
@@ -32,10 +32,12 @@ export function useGeofenceShift(args: {
   const { profile, warehouses, shiftActiveRef, setShiftActive, refetchTimesheets } = args;
   const email = profile?.email;
   const isUsa = profile?.region === 'USA';
-  const phone = isUsa && isMobileDevice();
+  const android = isUsa && isAndroidDevice();
+  const phone = isUsa && isMobileDevice() && !android;
   const [consent, setConsent] = useState<'checking' | 'ask' | 'granted' | 'declined'>('checking');
   const [state, setState] = useState<{ permission: 'granted' | 'denied' | 'unsupported' | null; error: string }>({ permission: null, error: '' });
   const [liveDistance, setLiveDistance] = useState<LiveDistance | null>(null);
+  const [gpsNote, setGpsNote] = useState('');
   const [restartKey, setRestartKey] = useState(0);
   const latest = useRef({ profile, warehouses, refetchTimesheets });
   useEffect(() => { latest.current = { profile, warehouses, refetchTimesheets }; });
@@ -74,6 +76,8 @@ export function useGeofenceShift(args: {
       const assigned = all.filter(w => p.assignedWarehouses?.includes(w.id));
       const d = decideGeoAction(fix, assigned, shiftActiveRef.current);
       if (d.ignored === 'no_warehouse') { setLiveDistance(null); return; }
+      // A fix that is too weak or too old is skipped on purpose; say so on the card, so a shift that is not ending is never a silent mystery.
+      setGpsNote(d.ignored === 'inaccurate' ? `Weak GPS signal (about ${Math.round(fix.accuracy ?? 0)} m off) — step outside or near a window` : d.ignored === 'stale' ? 'Waiting for a fresh location…' : '');
       if (d.ignored || !d.nearest || d.distanceMeters === null) return;
       lastFix.current = fix;
       setLiveDistance({ meters: Math.round(d.distanceMeters), warehouseName: d.nearest.name, isInside: d.isInside });
@@ -83,7 +87,10 @@ export function useGeofenceShift(args: {
       shiftActiveRef.current = starting; // set first so two quick fixes cannot both act
       setShiftActive(starting);
       try {
-        if (starting) await hrActions.clockIn(p.email, 'gps'); else await hrActions.clockOut(p.email);
+        if (starting) {
+          await hrActions.clockIn(p.email, 'gps');
+          void hrActions.touchShiftTabHeartbeat(p.email); // reporting starts now, so a phone closed within the first minute is still caught by the server's 10-minute check
+        } else await hrActions.clockOut(p.email);
       } catch (err) {
         console.error('[geofence] could not save the shift change, will retry:', err);
         shiftActiveRef.current = !starting;
@@ -136,8 +143,8 @@ export function useGeofenceShift(args: {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [phone, consent]);
 
-  const permission: GeoPermission = !isUsa ? 'idle' : !phone ? 'desktop' : consent === 'declined' ? 'declined' : blockedBy ? 'other_device' : state.permission ?? 'requesting';
+  const permission: GeoPermission = !isUsa ? 'idle' : android ? 'android' : !phone ? 'desktop' : consent === 'declined' ? 'declined' : blockedBy ? 'other_device' : state.permission ?? 'requesting';
   const error = permission === 'other_device' ? `Attendance is being marked on ${blockedBy}, so this device will not start or end your shift.` : state.error;
   const useThisDevice = async () => { await claim(true); setRestartKey(k => k + 1); };
-  return { permission, error, liveDistance, consentPending: consent === 'ask', accept, decline, useThisDevice };
+  return { permission, error, liveDistance, gpsNote, consentPending: consent === 'ask', accept, decline, useThisDevice };
 }
