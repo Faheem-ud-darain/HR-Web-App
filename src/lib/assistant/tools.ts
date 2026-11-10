@@ -74,7 +74,7 @@ export function normalizeActions(raw: unknown, role: AssistantRole): AssistantAc
  */
 export function defaultActions(calls: { name: string; result: Record<string, unknown> }[], role: AssistantRole): AssistantAction[] {
   const who = (r: Record<string, unknown>) => (typeof r.employee === 'string' ? r.employee : typeof r.from === 'string' ? r.from : '');
-  const last = [...calls].reverse().find(c => ['explain_pay', 'leave_summary', 'get_ticket', 'tracker_health', 'reserved_overview', 'payroll_overview', 'activity_facts', 'leave_overview', 'absence_overview'].includes(c.name));
+  const last = [...calls].reverse().find(c => ['explain_pay', 'leave_summary', 'get_ticket', 'tracker_health', 'reserved_overview', 'payroll_overview', 'activity_facts', 'leave_overview', 'absence_overview', 'list_tickets', 'ticket_trail', 'attendance_day', 'absence_details', 'leave_balance'].includes(c.name));
   if (!last) return [];
   const name = who(last.result);
   const raw: unknown[] = [];
@@ -89,6 +89,9 @@ export function defaultActions(calls: { name: string; result: Record<string, unk
       raw.push({ type: 'open_page', label: 'Open tickets', page: 'tickets' });
       if (name) raw.push({ type: 'ask_followup', label: `Check ${name}'s tracker`, text: `Check the tracker health for ${name}` });
       break;
+    case 'list_tickets': case 'ticket_trail': raw.push({ type: 'open_page', label: 'Open tickets', page: 'tickets' }); break;
+    case 'attendance_day': case 'absence_details': raw.push({ type: 'open_page', label: name ? `Open absences for ${name}` : 'Open absences', page: 'absences', search: name }); break;
+    case 'leave_balance': raw.push({ type: 'open_page', label: name ? `Open leaves for ${name}` : 'Open leaves', page: 'leaves', search: name }); break;
     case 'activity_facts': if (name) raw.push({ type: 'ask_followup', label: `${name}'s pay this month`, text: `Why does ${name} have deductions this month?` }); break;
   }
   return normalizeActions(raw, role);
