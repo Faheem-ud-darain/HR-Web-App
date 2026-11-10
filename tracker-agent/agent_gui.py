@@ -48,14 +48,12 @@ in this same folder — so employees never need to install Python themselves.
 
 import base64
 import binascii
-import calendar
 import ctypes
 import hashlib
 import io
 import json
 import logging
 import logging.handlers
-import math
 import os
 import platform
 import plistlib
@@ -136,8 +134,8 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-# v26 (2026-11-10): the 37-minute inactivity absence records and announces the same amount payroll takes (salary / weekdays in the
-# month, not / 22), in the right currency, and now also tells the employee, HR and Admin. Compatible with v25.
+# v26 (2026-11-10): the tracker no longer reads or shows any pay (the 37-minute popup and notices carry no amount); the inactivity absence
+# now also tells the employee, HR and Admin; idle time is reported only for the part inside the open shift. Compatible with v25.
 APP_VERSION = "26"  # Bumped 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
 # MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
 #   Lighter server load: realtime subscription scoped to this employee's own
@@ -1786,42 +1784,33 @@ def _get_ny_date_string():
         return (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%d")
 
 
-def _fetch_profile_for_deduction(base_url, employee_email):
-    """Best-effort fetch of full_name, base_salary and region, so the deduction shown to the
-    employee/HR is the one the web app and payroll work out (see _absence_day_charge). Returns
-    (email, 0, "") if the fetch fails: the absence is then not recorded with a made-up amount."""
+def _fetch_employee_name(base_url, employee_email):
+    """The employee's display name, for the notices HR and Admin receive. Only the name is asked for: the tracker never reads, works
+    out or shows pay. What a day costs is decided by the web app and payroll alone."""
     try:
         url = f"{base_url}/api/collections/hr_profiles/records"
-        # `~` + exact case-insensitive re-check, not a plain `=` — same
-        # mixed-case-email footgun as auto_clock_out above.
-        params = {"filter": f'(email~"{employee_email}")', "perPage": 10}
+        params = {"filter": f'(email~"{employee_email}")', "perPage": 10, "fields": "email,full_name"}
         resp = _http.get(url, params=params, timeout=15)
         resp.raise_for_status()
         items = [i for i in resp.json().get("items", []) if (i.get("email") or "").lower() == employee_email.lower()]
-        if not items:
-            return employee_email, 0, ""
-        row = items[0]
-        return (row.get("full_name") or employee_email), float(row.get("base_salary") or 0), (row.get("region") or "")
+        return (items[0].get("full_name") if items else "") or employee_email
     except Exception as e:
-        print(f"[warn] _fetch_profile_for_deduction failed: {e}")
-        return employee_email, 0, ""
+        print(f"[warn] _fetch_employee_name failed: {e}")
+        return employee_email
 
 
-def _weekdays_in_month(year, month):
-    """Monday-to-Friday days in a calendar month: the divisor the web app uses (getWeekdaysInMonth)."""
-    return sum(1 for d in range(1, calendar.monthrange(year, month)[1] + 1) if calendar.weekday(year, month, d) < 5)
+SHIFT_SEEN_GRACE_SECONDS = 180  # a shift the agent last saw open longer ago than this is not trusted (the server could not be reached)
 
 
-def _absence_day_charge(base_salary, date_str):
-    """What one absent day costs: 2 days' pay, at salary / weekdays in that month. The same sum as absenceDayCharge in
-    src/lib/core/absences.ts, so the amount told here is the amount payroll takes. Rounds half up, as JavaScript does."""
-    year, month = int(date_str[:4]), int(date_str[5:7])
-    return int(math.floor(2 * float(base_salary or 0) / _weekdays_in_month(year, month) + 0.5))
-
-
-def _format_money(amount, region):
-    """"PKR 4,286" for Pakistan, "$4,286" otherwise: the same wording as formatMoney in the web app."""
-    return f"PKR {amount:,}" if region == "Pakistan" else f"${amount:,}"
+def clip_idle_to_shift(start, end, shift_since, shift_seen_at):
+    """The part of an idle stretch that sits inside the shift, as far as this agent knows it: from when it saw the shift open to
+    the last time it saw it still open (plus a short grace). Returns (start, end), or None when none of the stretch was in the
+    shift. Idle time before a shift began, or after it ended while the server could not be reached, is never reported."""
+    if shift_since is None or shift_seen_at is None:
+        return (start, end)
+    lo = max(start, shift_since)
+    hi = min(end, shift_seen_at + timedelta(seconds=SHIFT_SEEN_GRACE_SECONDS))
+    return (lo, hi) if hi > lo else None
 
 
 def _pb_quote(value):
@@ -1829,7 +1818,7 @@ def _pb_quote(value):
     return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
 
 
-def create_inactivity_absence_record(base_url, employee_email, employee_name, inactivity_minutes, deduction_amount):
+def create_inactivity_absence_record(base_url, employee_email, employee_name, inactivity_minutes):
     """Creates the AbsenceRecord (one row per employee per day in the
     hr_absence_records collection — see absenceActions in src/lib/hr/absences.ts)
     for a real-time inactivity-triggered absence. This mirrors what the web
@@ -1867,7 +1856,7 @@ def create_inactivity_absence_record(base_url, employee_email, employee_name, in
         "reason": "inactivity",
         "inactivityMinutes": inactivity_minutes,
         "workedMinutes": 0,
-        "deductionAmount": deduction_amount,
+        "deductionAmount": 0,  # the tracker knows no pay; every screen and payroll work the amount out from the salary
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "acknowledged": False,
         "deleted": False,
@@ -1915,7 +1904,7 @@ def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
     than once per stretch). Ends the shift immediately, records why (both
     server-side for HR/Admin/the Absent Details pages, and via the existing
     shift-stop-signal the web dashboard already polls every 10s), and
-    returns the (employee_name, inactivity_minutes, deduction_amount) tuple
+    returns the (employee_name, inactivity_minutes) pair
     so the caller can show a local popup with the same numbers."""
     inactivity_minutes = round(elapsed_seconds / 60)
 
@@ -1924,21 +1913,18 @@ def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
     except Exception as e:
         print(f"[warn] auto_clock_out (inactivity) failed: {e}")
 
-    full_name, base_salary, region = _fetch_profile_for_deduction(base_url, employee_email)
+    full_name = _fetch_employee_name(base_url, employee_email)
     date_str = _get_ny_date_string()
-    deduction_amount = _absence_day_charge(base_salary, date_str) if base_salary else 0
-    money = _format_money(deduction_amount, region) if deduction_amount else ""
 
     created = False
-    if deduction_amount > 0:  # no salary on file: the shift still ends, but there is nothing to deduct, record or announce
-        try:
-            created = create_inactivity_absence_record(base_url, employee_email, full_name, inactivity_minutes, deduction_amount)
-        except Exception as e:
-            print(f"[warn] create_inactivity_absence_record failed: {e}")
-    if created:  # same three notices the web check sends, so the employee, HR and Admin hear about it
+    try:
+        created = create_inactivity_absence_record(base_url, employee_email, full_name, inactivity_minutes)
+    except Exception as e:
+        print(f"[warn] create_inactivity_absence_record failed: {e}")
+    if created:  # the same three notices the web check sends, without any amount: the tracker is not where pay is shown
         create_notification(base_url, employee_email, "employee",
-                            f"You were marked absent for {date_str} ({inactivity_minutes} min inactivity during shift). A {money} deduction (2 days' pay) has been applied.")
-        hr_note = f"{full_name} was inactive for {inactivity_minutes} minutes during their shift on {date_str} and was marked absent — {money} deducted (2 days' pay)."
+                            f"You were marked absent for {date_str} ({inactivity_minutes} min inactivity during shift). Two days' pay will be deducted for it.")
+        hr_note = f"{full_name} was inactive for {inactivity_minutes} minutes during their shift on {date_str} and was marked absent (2 days' pay)."
         create_notification(base_url, "all", "hr", hr_note)
         create_notification(base_url, "all", "admin", hr_note)
 
@@ -1947,7 +1933,7 @@ def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
     except Exception as e:
         print(f"[warn] notify_shift_auto_stopped (inactivity) failed: {e}")
 
-    return full_name, inactivity_minutes, money
+    return full_name, inactivity_minutes
 
 
 # ─────────────────────────────── tray icon image ─────────────────────────────
@@ -3338,6 +3324,11 @@ class TrackerApp:
             # this max() is just a safety net for any older saved settings.
             interval_minutes = max(1.0, float(settings.get("intervalMinutes", 15)))
             with self.state_lock:
+                seen_now = datetime.now(timezone.utc)
+                if shift_active and not self.state.get("shift_active"):
+                    self.state["shift_since"] = seen_now  # a new shift: idle time before this moment is not part of it
+                if shift_active:
+                    self.state["shift_seen_at"] = seen_now
                 self.state["enabled"] = enabled
                 self.state["enabled_by_hr"] = enabled_by_hr
                 self.state["shift_active"] = shift_active
@@ -3708,7 +3699,7 @@ class TrackerApp:
                     if last_idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
                         end_wall = datetime.now(timezone.utc)
                         start_wall = end_wall - timedelta(seconds=last_idle_seconds)
-                        submit_inactivity(cfg, employee_email, start_wall, end_wall)
+                        self._submit_idle_in_shift(cfg, employee_email, start_wall, end_wall)
                     auto_absent_fired = False  # activity resumed — a fresh idle stretch starts from here
 
                 last_idle_seconds = idle_seconds
@@ -3735,7 +3726,7 @@ class TrackerApp:
                     if idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
                         end_wall = datetime.now(timezone.utc)
                         start_wall = end_wall - timedelta(seconds=idle_seconds)
-                        submit_inactivity(cfg, employee_email, start_wall, end_wall)
+                        self._submit_idle_in_shift(cfg, employee_email, start_wall, end_wall)
                     last_pos = pos
                     last_move_time = now
                     auto_absent_fired = False  # mouse moved — a fresh idle stretch starts from here
@@ -3746,10 +3737,10 @@ class TrackerApp:
             # Checked on every poll (not just when activity eventually
             # resumes) so this can trigger DURING the idle stretch instead of
             # waiting for it to end.
-            if current_idle_seconds >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
+            if self._idle_seconds_in_shift(current_idle_seconds) >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
                 auto_absent_fired = True
                 try:
-                    full_name, inactivity_minutes, money = handle_inactivity_auto_absence(
+                    full_name, inactivity_minutes = handle_inactivity_auto_absence(
                         cfg["url"], employee_email, current_idle_seconds
                     )
                     # Tkinter widgets/dialogs must run on the main thread —
@@ -3757,7 +3748,7 @@ class TrackerApp:
                     # actual popup call is marshaled via self.root.after(0,
                     # ...), same pattern used elsewhere in this file (see
                     # e.g. _connect_and_save).
-                    self.root.after(0, lambda m=inactivity_minutes, d=money: self._show_inactivity_absence_popup(m, d))
+                    self.root.after(0, lambda m=inactivity_minutes: self._show_inactivity_absence_popup(m))
                 except Exception as e:
                     with self.state_lock:
                         self.state["last_error"] = _short_error(f"Inactivity auto-absence failed: {e}")
@@ -3813,7 +3804,28 @@ class TrackerApp:
                     pass
         self.root.after(2000, self._tick)
 
-    def _show_inactivity_absence_popup(self, inactivity_minutes, money):
+    def _shift_marks(self):
+        with self.state_lock:
+            return self.state.get("shift_since"), self.state.get("shift_seen_at")
+
+    def _idle_seconds_in_shift(self, idle_seconds):
+        """How much of the current idle stretch is inside the open shift: 0 when the shift was not seen open recently."""
+        since, seen = self._shift_marks()
+        if since is None or seen is None:
+            return idle_seconds
+        now = datetime.now(timezone.utc)
+        if (now - seen).total_seconds() > SHIFT_SEEN_GRACE_SECONDS:
+            return 0
+        return min(idle_seconds, (now - since).total_seconds())
+
+    def _submit_idle_in_shift(self, cfg, employee_email, start_wall, end_wall):
+        """Reports an idle stretch, cut down to the part inside the shift; one that ends up shorter than the logging limit is dropped."""
+        since, seen = self._shift_marks()
+        clipped = clip_idle_to_shift(start_wall, end_wall, since, seen)
+        if clipped and (clipped[1] - clipped[0]).total_seconds() >= INACTIVITY_THRESHOLD_SECONDS:
+            submit_inactivity(cfg, employee_email, clipped[0], clipped[1])
+
+    def _show_inactivity_absence_popup(self, inactivity_minutes):
         """Native desktop popup shown the moment the agent auto-ends a shift
         for inactivity (see handle_inactivity_auto_absence /
         _inactivity_loop) — runs on the main/Tk thread via self.root.after,
@@ -3823,12 +3835,11 @@ class TrackerApp:
         helps if a browser tab happens to be open) — this is the one
         guaranteed-to-be-seen notice, since it's the same machine the
         employee was just idle on."""
-        deducted = f"— {money} has been deducted from your pay.\n\n" if money else "\n\n"
         messagebox.showwarning(
             APP_NAME,
             f"Your shift has been ended automatically.\n\n"
             f"You were inactive for over {inactivity_minutes} minutes and have been marked absent for today "
-            f"{deducted}"
+            f"— a day's deduction applies.\n\n"
             f"If you believe this is a mistake, contact HR.",
         )
 

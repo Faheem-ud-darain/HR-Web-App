@@ -5,6 +5,7 @@ import { getNYDateString } from '../timezone';
 import type { AbsenceRecord, MyAbsenceRecord, Profile, TimesheetEntry, LeaveApplication, InactivityLog } from '../hr/types';
 import { getWeekdaysInMonth, isWeekday, localShiftDate, addDays, eachDay } from './dates';
 import { getLeaveRange, isApprovedLeaveOnDate } from './leaves';
+import { secondsInsideShifts } from './inactivity';
 import { elapsedMinutes } from './timesheets';
 import { absenceFloorMinutes, hoursText } from './workDay';
 
@@ -230,7 +231,6 @@ export function detectAbsences(input: {
       const shiftDate = getNYDateString(d);
       shiftDatesWithShift.add(shiftDate);
 
-      const inTime = d.getTime();
       // BUGFIX 2026-09-11: an OPEN shift (no clock_out yet) used to skip
       // the inactivity check entirely — logsForShift/maxSingleInactiveSecs
       // were only ever computed inside the `if (t.clockOut)` branch below,
@@ -247,21 +247,17 @@ export function detectAbsences(input: {
       // can't change today's own status (the caller's date loop always
       // skips `dateStr >= nyTodayStr`), it only fixes a PAST day whose
       // shift is still sitting open.
-      const outTime = t.clockOut ? new Date(t.clockOut).getTime() : now.getTime();
       const shiftMins = elapsedMinutes(t.clockIn, t.clockOut, now.getTime());
 
       // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
       // not by summing up multiple smaller inactive periods across the shift.
-      const logsForShift = empInactivity.filter(l => {
-        const lt = new Date(l.startAt).getTime();
-        return lt >= inTime && lt <= outTime;
-      });
+      // Only the part of a stretch that sits inside THIS shift counts: a log the tracker saved late, or that started before the shift or
+      // ran past its end, must not flag the day for time the person was not on a shift.
+      const thisShift = [{ clockIn: t.clockIn, clockOut: t.clockOut }];
       let maxSingleInactiveSecs = 0;
-      for (const l of logsForShift) {
-        const duration = l.durationSeconds || 0;
-        if (duration > maxSingleInactiveSecs) {
-          maxSingleInactiveSecs = duration;
-        }
+      for (const l of empInactivity) {
+        const inside = secondsInsideShifts(l, thisShift, now.getTime());
+        if (inside > maxSingleInactiveSecs) maxSingleInactiveSecs = inside;
       }
       const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
       shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));

@@ -30,3 +30,44 @@ describe('detectAbsences with no salary', () => {
     expect(run(emp(0))).toEqual([]);
   });
 });
+
+// Idle time outside a shift: Emily's 5 Nov 2026 saved 6h24m of idle logs for a 3h13m of shifts, most of it after her shifts had ended.
+import { clipLogsToShifts, secondsInsideShifts } from './inactivity';
+import type { InactivityLog, TimesheetEntry } from '../hr/types';
+
+describe('idle time counts only inside a shift', () => {
+  const shift = (clockIn: string, clockOut: string): TimesheetEntry => ({ id: clockIn, employeeEmail: 'e@delcargo.us', date: '', clockIn, clockOut, status: 'completed', approvalStatus: 'pending' });
+  const log = (startAt: string, endAt: string): InactivityLog => ({ id: startAt, employeeEmail: 'e@delcargo.us', startAt, endAt, durationSeconds: (Date.parse(endAt) - Date.parse(startAt)) / 1000 });
+  const shifts = [shift('2026-11-05T14:44:00Z', '2026-11-05T16:54:00Z'), shift('2026-11-05T20:24:00Z', '2026-11-05T20:50:00Z')];
+
+  it('cuts a log to its overlap with the shifts', () => {
+    expect(secondsInsideShifts(log('2026-11-05T16:49:00Z', '2026-11-05T18:12:00Z'), shifts)).toBe(5 * 60); // 82 minutes saved, 5 inside the shift
+    expect(secondsInsideShifts(log('2026-11-05T18:14:00Z', '2026-11-05T20:23:00Z'), shifts)).toBe(0); // entirely between shifts
+    expect(secondsInsideShifts(log('2026-11-05T15:00:00Z', '2026-11-05T15:20:00Z'), shifts)).toBe(20 * 60); // fully inside: unchanged
+  });
+  it('counts a log that spans two shifts only where each shift is open', () => {
+    expect(secondsInsideShifts(log('2026-11-05T16:00:00Z', '2026-11-05T20:30:00Z'), shifts)).toBe((54 + 6) * 60);
+  });
+  it('runs an open shift until now', () => {
+    const open = [{ clockIn: '2026-11-05T14:00:00Z', clockOut: undefined }];
+    expect(secondsInsideShifts(log('2026-11-05T14:10:00Z', '2026-11-05T14:50:00Z'), open, Date.parse('2026-11-05T14:30:00Z'))).toBe(20 * 60);
+  });
+  it('drops logs with nothing inside a shift', () => {
+    const kept = clipLogsToShifts([log('2026-11-05T18:14:00Z', '2026-11-05T20:23:00Z'), log('2026-11-05T16:49:00Z', '2026-11-05T18:12:00Z')], shifts);
+    expect(kept.map(l => l.durationSeconds)).toEqual([300]);
+  });
+});
+
+describe('the absence check ignores idle time outside the shift', () => {
+  const NOW = new Date('2026-11-07T16:00:00Z'); // 5 Nov is inside the check's 5-day look-back
+  const emp = { id: 'p', fullName: 'Emily', email: 'emily@delcargo.us', role: 'employee', joinedDate: '2020-01-01', onboardingCompleted: true, baseSalary: 45000, teams: [], region: 'Pakistan' } as Profile;
+  const day = { id: 't', employeeEmail: 'emily@delcargo.us', date: '2026-11-05', clockIn: '2026-11-05T14:44:00Z', clockOut: '2026-11-05T22:54:00Z', status: 'completed', approvalStatus: 'pending' } as TimesheetEntry; // 8h10m shift
+  const run = (logs: InactivityLog[]) => detectAbsences({ employees: [emp], timesheets: [day], leaves: [], inactivityLogs: logs, ignoredKeys: new Set(), now: NOW }).filter(c => c.date === '2026-11-05');
+  const mk = (a: string, b: string): InactivityLog => ({ id: a, employeeEmail: 'emily@delcargo.us', startAt: a, endAt: b, durationSeconds: (Date.parse(b) - Date.parse(a)) / 1000 });
+  it('flags a real 40-minute idle stretch inside the shift', () => {
+    expect(run([mk('2026-11-05T16:00:00Z', '2026-11-05T16:40:00Z')]).map(c => c.reason)).toEqual(['inactivity']);
+  });
+  it('does not flag a long log that only touches the shift for a few minutes', () => {
+    expect(run([mk('2026-11-05T22:50:00Z', '2026-11-06T01:00:00Z')])).toEqual([]); // starts 4 minutes before the shift ends
+  });
+});
