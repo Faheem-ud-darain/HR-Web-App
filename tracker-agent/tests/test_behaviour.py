@@ -149,3 +149,47 @@ def test_wait_for_pid_exit_returns_when_process_dies(agent):
     started = time.monotonic()
     agent._wait_for_pid_exit(p.pid, timeout_seconds=10)
     assert 0.3 < time.monotonic() - started < 5
+
+
+# ── the inactivity auto-absence: same amount as payroll, right currency, and everyone told ──
+def test_absence_day_charge_matches_the_web_app(agent):
+    # 2 days' pay over the weekdays of that month: November 2026 has 21, October 2026 has 22.
+    assert agent._weekdays_in_month(2026, 11) == 21 and agent._weekdays_in_month(2026, 10) == 22
+    assert agent._absence_day_charge(45000, "2026-11-09") == 4286
+    assert agent._absence_day_charge(45000, "2026-10-09") == 4091
+    assert agent._absence_day_charge(0, "2026-11-09") == 0
+
+
+def test_money_is_written_with_the_regions_currency(agent):
+    assert agent._format_money(4286, "Pakistan") == "PKR 4,286"
+    assert agent._format_money(4286, "USA") == "$4,286"
+
+
+def _auto_absence(agent, monkeypatch, salary, created=True):
+    sent = []
+    monkeypatch.setattr(agent, "auto_clock_out", lambda *_: True)
+    monkeypatch.setattr(agent, "_fetch_profile_for_deduction", lambda *_: ("Emily", salary, "Pakistan"))
+    monkeypatch.setattr(agent, "_get_ny_date_string", lambda: "2026-11-09")
+    monkeypatch.setattr(agent, "create_inactivity_absence_record", lambda *a: sent.append(("record", a[3], a[4])) or created)
+    monkeypatch.setattr(agent, "create_notification", lambda base, to, role, msg, category="leave_task": sent.append((role, to, msg)))
+    monkeypatch.setattr(agent, "notify_shift_auto_stopped", lambda *a, **k: None)
+    return agent.handle_inactivity_auto_absence("http://x", "emily@delcargo.us", 37 * 60), sent
+
+
+def test_auto_absence_records_the_payroll_amount_and_tells_everyone(agent, monkeypatch):
+    (name, minutes, money), sent = _auto_absence(agent, monkeypatch, 45000)
+    assert (name, minutes, money) == ("Emily", 37, "PKR 4,286")
+    assert ("record", 37, 4286) in sent
+    notes = {role: msg for role, _to, msg in [s for s in sent if s[0] != "record"]}
+    assert "PKR 4,286" in notes["employee"] and "2026-11-09" in notes["employee"]
+    assert set(notes) == {"employee", "hr", "admin"}
+
+
+def test_auto_absence_with_no_salary_ends_the_shift_but_records_and_announces_nothing(agent, monkeypatch):
+    (_name, _minutes, money), sent = _auto_absence(agent, monkeypatch, 0)
+    assert money == "" and sent == []
+
+
+def test_auto_absence_does_not_announce_twice_when_the_record_already_exists(agent, monkeypatch):
+    (_n, _m, _money), sent = _auto_absence(agent, monkeypatch, 45000, created=False)
+    assert [s for s in sent if s[0] != "record"] == []

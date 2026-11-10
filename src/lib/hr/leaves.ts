@@ -7,6 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import type { LeaveApplication } from './types';
+import { hrActions } from '../hrData';
 import { pbList, pbCreate, pbUpdate, pbDelete } from './shared';
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
@@ -107,8 +108,12 @@ export const leaveActions = {
       start_date: leave.startDate || parseLeaveDateStrings(leave.duration)?.start || '',
       end_date: leave.endDate || parseLeaveDateStrings(leave.duration)?.end || '',
     }),
-  updateLeaveStatus: (id: string, status: LeaveApplication['status']) =>
-    pbUpdate('hr_leaves', id, { status }),
+  updateLeaveStatus: async (id: string, status: LeaveApplication['status']) => {
+    const saved = await pbUpdate('hr_leaves', id, { status });
+    // Final approval covers the leave's days: withdraw any absence already recorded for them. The approval itself never fails because of this.
+    if (status === 'approved') await hrActions.retireAbsencesCoveredByLeave(id).catch(() => { /* payroll skips those days anyway; the next check can retry */ });
+    return saved;
+  },
   // Lets an employee withdraw their OWN leave request, but only while it's
   // still sitting untouched at 'pending' — the instant HR takes any action
   // (moves it to 'hr_approved' en route to CEO sign-off, or straight to

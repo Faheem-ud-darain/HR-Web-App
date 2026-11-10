@@ -4,7 +4,7 @@
 import { getNYDateString } from '../timezone';
 import type { AbsenceRecord, MyAbsenceRecord, Profile, TimesheetEntry, LeaveApplication, InactivityLog } from '../hr/types';
 import { getWeekdaysInMonth, isWeekday, localShiftDate, addDays, eachDay } from './dates';
-import { isApprovedLeaveOnDate } from './leaves';
+import { getLeaveRange, isApprovedLeaveOnDate } from './leaves';
 import { elapsedMinutes } from './timesheets';
 import { absenceFloorMinutes, hoursText } from './workDay';
 
@@ -305,9 +305,17 @@ export function detectAbsences(input: {
       if (!reason) continue; // present and accounted for (worked >= 4h without excessive inactivity)
 
       const deductionAmount = absenceDayCharge(emp.baseSalary, dateStr);
+      if (deductionAmount <= 0) continue; // nothing to deduct (no salary set), so there is nothing to record or announce
 
       candidates.push({ employee: emp, date: dateStr, reason, inactivityMinutes, workedMinutes, deductionAmount });
     }
   }
   return candidates;
+}
+
+/** The active absence records of this person that fall inside a leave's dates: once the leave is finally approved those days are charged as leave, so the absence is withdrawn. */
+export function absencesCoveredByLeave(records: AbsenceRecord[], leave: LeaveApplication): AbsenceRecord[] {
+  const range = getLeaveRange(leave);
+  if (!range) return [];
+  return records.filter(r => !r.deleted && r.employeeName === leave.employeeName && r.date >= range.start && r.date <= range.end);
 }

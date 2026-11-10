@@ -48,12 +48,14 @@ in this same folder — so employees never need to install Python themselves.
 
 import base64
 import binascii
+import calendar
 import ctypes
 import hashlib
 import io
 import json
 import logging
 import logging.handlers
+import math
 import os
 import platform
 import plistlib
@@ -134,7 +136,9 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
-APP_VERSION = "25"  # Bumped 24 -> 25 (2026-10-14). Fully compatible with v24, so
+# v26 (2026-11-10): the 37-minute inactivity absence records and announces the same amount payroll takes (salary / weekdays in the
+# month, not / 22), in the right currency, and now also tells the employee, HR and Admin. Compatible with v25.
+APP_VERSION = "26"  # Bumped 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
 # MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
 #   Lighter server load: realtime subscription scoped to this employee's own
 #   hr_tracker_signals row; cached row id (heartbeat = 2 requests, not 3); idle
@@ -1783,14 +1787,9 @@ def _get_ny_date_string():
 
 
 def _fetch_profile_for_deduction(base_url, employee_email):
-    """Best-effort fetch of full_name + base_salary so the deduction amount
-    shown to the employee/HR matches what computePayrollView would compute
-    server-side (2 days' pay at base_salary/22/day). Returns (full_name, 0)
-    if the fetch fails or the field isn't present with this agent's public
-    read access — a 0 base salary means create_inactivity_absence_record
-    still records the absence itself (with reason + date), just with
-    deductionAmount 0 rather than guessing wrong; HR can correct it on the
-    Absent Details / Payroll pages if this ever happens."""
+    """Best-effort fetch of full_name, base_salary and region, so the deduction shown to the
+    employee/HR is the one the web app and payroll work out (see _absence_day_charge). Returns
+    (email, 0, "") if the fetch fails: the absence is then not recorded with a made-up amount."""
     try:
         url = f"{base_url}/api/collections/hr_profiles/records"
         # `~` + exact case-insensitive re-check, not a plain `=` — same
@@ -1800,12 +1799,29 @@ def _fetch_profile_for_deduction(base_url, employee_email):
         resp.raise_for_status()
         items = [i for i in resp.json().get("items", []) if (i.get("email") or "").lower() == employee_email.lower()]
         if not items:
-            return employee_email, 0
+            return employee_email, 0, ""
         row = items[0]
-        return (row.get("full_name") or employee_email), float(row.get("base_salary") or 0)
+        return (row.get("full_name") or employee_email), float(row.get("base_salary") or 0), (row.get("region") or "")
     except Exception as e:
         print(f"[warn] _fetch_profile_for_deduction failed: {e}")
-        return employee_email, 0
+        return employee_email, 0, ""
+
+
+def _weekdays_in_month(year, month):
+    """Monday-to-Friday days in a calendar month: the divisor the web app uses (getWeekdaysInMonth)."""
+    return sum(1 for d in range(1, calendar.monthrange(year, month)[1] + 1) if calendar.weekday(year, month, d) < 5)
+
+
+def _absence_day_charge(base_salary, date_str):
+    """What one absent day costs: 2 days' pay, at salary / weekdays in that month. The same sum as absenceDayCharge in
+    src/lib/core/absences.ts, so the amount told here is the amount payroll takes. Rounds half up, as JavaScript does."""
+    year, month = int(date_str[:4]), int(date_str[5:7])
+    return int(math.floor(2 * float(base_salary or 0) / _weekdays_in_month(year, month) + 0.5))
+
+
+def _format_money(amount, region):
+    """"PKR 4,286" for Pakistan, "$4,286" otherwise: the same wording as formatMoney in the web app."""
+    return f"PKR {amount:,}" if region == "Pakistan" else f"${amount:,}"
 
 
 def _pb_quote(value):
@@ -1908,21 +1924,30 @@ def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
     except Exception as e:
         print(f"[warn] auto_clock_out (inactivity) failed: {e}")
 
-    full_name, base_salary = _fetch_profile_for_deduction(base_url, employee_email)
-    daily_rate = (base_salary / 22) if base_salary else 0
-    deduction_amount = round(2 * daily_rate) if daily_rate else 0
+    full_name, base_salary, region = _fetch_profile_for_deduction(base_url, employee_email)
+    date_str = _get_ny_date_string()
+    deduction_amount = _absence_day_charge(base_salary, date_str) if base_salary else 0
+    money = _format_money(deduction_amount, region) if deduction_amount else ""
 
-    try:
-        create_inactivity_absence_record(base_url, employee_email, full_name, inactivity_minutes, deduction_amount)
-    except Exception as e:
-        print(f"[warn] create_inactivity_absence_record failed: {e}")
+    created = False
+    if deduction_amount > 0:  # no salary on file: the shift still ends, but there is nothing to deduct, record or announce
+        try:
+            created = create_inactivity_absence_record(base_url, employee_email, full_name, inactivity_minutes, deduction_amount)
+        except Exception as e:
+            print(f"[warn] create_inactivity_absence_record failed: {e}")
+    if created:  # same three notices the web check sends, so the employee, HR and Admin hear about it
+        create_notification(base_url, employee_email, "employee",
+                            f"You were marked absent for {date_str} ({inactivity_minutes} min inactivity during shift). A {money} deduction (2 days' pay) has been applied.")
+        hr_note = f"{full_name} was inactive for {inactivity_minutes} minutes during their shift on {date_str} and was marked absent — {money} deducted (2 days' pay)."
+        create_notification(base_url, "all", "hr", hr_note)
+        create_notification(base_url, "all", "admin", hr_note)
 
     try:
         notify_shift_auto_stopped(base_url, employee_email, reason="inactivity_absence")
     except Exception as e:
         print(f"[warn] notify_shift_auto_stopped (inactivity) failed: {e}")
 
-    return full_name, inactivity_minutes, deduction_amount
+    return full_name, inactivity_minutes, money
 
 
 # ─────────────────────────────── tray icon image ─────────────────────────────
@@ -3724,7 +3749,7 @@ class TrackerApp:
             if current_idle_seconds >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
                 auto_absent_fired = True
                 try:
-                    full_name, inactivity_minutes, deduction_amount = handle_inactivity_auto_absence(
+                    full_name, inactivity_minutes, money = handle_inactivity_auto_absence(
                         cfg["url"], employee_email, current_idle_seconds
                     )
                     # Tkinter widgets/dialogs must run on the main thread —
@@ -3732,7 +3757,7 @@ class TrackerApp:
                     # actual popup call is marshaled via self.root.after(0,
                     # ...), same pattern used elsewhere in this file (see
                     # e.g. _connect_and_save).
-                    self.root.after(0, lambda m=inactivity_minutes, d=deduction_amount: self._show_inactivity_absence_popup(m, d))
+                    self.root.after(0, lambda m=inactivity_minutes, d=money: self._show_inactivity_absence_popup(m, d))
                 except Exception as e:
                     with self.state_lock:
                         self.state["last_error"] = _short_error(f"Inactivity auto-absence failed: {e}")
@@ -3788,7 +3813,7 @@ class TrackerApp:
                     pass
         self.root.after(2000, self._tick)
 
-    def _show_inactivity_absence_popup(self, inactivity_minutes, deduction_amount):
+    def _show_inactivity_absence_popup(self, inactivity_minutes, money):
         """Native desktop popup shown the moment the agent auto-ends a shift
         for inactivity (see handle_inactivity_auto_absence /
         _inactivity_loop) — runs on the main/Tk thread via self.root.after,
@@ -3798,12 +3823,12 @@ class TrackerApp:
         helps if a browser tab happens to be open) — this is the one
         guaranteed-to-be-seen notice, since it's the same machine the
         employee was just idle on."""
-        deduction_text = f"${deduction_amount}" if deduction_amount else "a 2-day pay penalty"
+        deducted = f"— {money} has been deducted from your pay.\n\n" if money else "\n\n"
         messagebox.showwarning(
             APP_NAME,
             f"Your shift has been ended automatically.\n\n"
             f"You were inactive for over {inactivity_minutes} minutes and have been marked absent for today "
-            f"— {deduction_text} has been deducted from your pay.\n\n"
+            f"{deducted}"
             f"If you believe this is a mistake, contact HR.",
         )
 
