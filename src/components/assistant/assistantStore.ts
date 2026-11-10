@@ -6,9 +6,11 @@
 import { useSyncExternalStore } from 'react';
 import { getAuthToken } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
+import type { SavedUsage } from '@/lib/assistant/history';
+import { ageText, findEarlierAnswer, repeatNote } from '@/lib/assistant/repeatQuestion';
 
 export interface AssistantAction { type: 'open_page' | 'ask_followup'; label: string; page?: string; search?: string; text?: string }
-export interface AssistantMessage { id: string; role: 'user' | 'assistant'; content: string; toolsUsed?: string[]; actions?: AssistantAction[]; demo?: boolean; error?: boolean }
+export interface AssistantMessage { id: string; role: 'user' | 'assistant'; content: string; toolsUsed?: string[]; actions?: AssistantAction[]; usage?: SavedUsage; at?: number; repeatOf?: string; demo?: boolean; error?: boolean }
 interface State { messages: AssistantMessage[]; loading: boolean; chatId?: string }
 export interface SavedChatRow { id: string; title: string; updated: string }
 
@@ -112,16 +114,27 @@ export async function deleteSavedChat(id: string): Promise<boolean> {
   return true;
 }
 
-export async function sendAssistantMessage(text: string): Promise<void> {
+export async function sendAssistantMessage(text: string, opts: { fresh?: boolean } = {}): Promise<void> {
   const content = text.trim();
   load();
   if (!content || state.loading) return;
-  const withUser: AssistantMessage[] = [...state.messages, { id: newId(), role: 'user', content: content.slice(0, 2000) }];
+  // The same question again in this chat: point to the answer already given instead of working it out again (costs no tokens).
+  const earlier = opts.fresh ? null : findEarlierAnswer(state.messages, content);
+  if (earlier) {
+    const at = Date.now();
+    set({ ...state, messages: [...state.messages,
+      { id: newId(), role: 'user', content: content.slice(0, 2000), at, repeatOf: earlier.answer.id },
+      { id: newId(), role: 'assistant', content: repeatNote(ageText(earlier.answer.at, at)), at, repeatOf: earlier.answer.id },
+    ] });
+    queueSave();
+    return;
+  }
+  const withUser: AssistantMessage[] = [...state.messages, { id: newId(), role: 'user', content: content.slice(0, 2000), at: Date.now() }];
   set({ ...state, messages: withUser, loading: true });
   const at = epoch;
   try {
     const token = getAuthToken();
-    const history = withUser.filter(m => !m.error).map(m => ({ role: m.role, content: m.content }));
+    const history = withUser.filter(m => !m.error && !m.repeatOf).map(m => ({ role: m.role, content: m.content })); // a "you asked this earlier" note is not part of the conversation the model needs
     // Give up after 70 seconds instead of showing "Thinking…" forever if the request gets stuck.
     const res = await fetch(`${API_BASE}/api/assistant`, {
       method: 'POST',
@@ -129,10 +142,10 @@ export async function sendAssistantMessage(text: string): Promise<void> {
       body: JSON.stringify({ messages: history }),
       signal: AbortSignal.timeout(70_000),
     });
-    const data = await res.json().catch(() => ({})) as { answer?: string; toolsUsed?: string[]; actions?: AssistantAction[]; demo?: boolean; error?: string };
+    const data = await res.json().catch(() => ({})) as { answer?: string; toolsUsed?: string[]; actions?: AssistantAction[]; usage?: SavedUsage; demo?: boolean; error?: string };
     if (!res.ok || !data.answer) throw new Error(data.error || 'The assistant could not answer.');
     if (at !== epoch) return; // the chat was replaced while this was being answered
-    set({ ...state, messages: [...state.messages, { id: newId(), role: 'assistant', content: data.answer, toolsUsed: data.toolsUsed, actions: data.actions, demo: data.demo }], loading: false });
+    set({ ...state, messages: [...state.messages, { id: newId(), role: 'assistant', content: data.answer, toolsUsed: data.toolsUsed, actions: data.actions, usage: data.usage, at: Date.now(), demo: data.demo }], loading: false });
     queueSave();
   } catch (err) {
     if (at !== epoch) return;

@@ -170,6 +170,10 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed', optio
 }
 
 export const ticketActions = {
+  // One ticket with its replies, for read-only popups (Del's answers link to tickets that may be far older than the list's 50).
+  getTicket: async (id: string): Promise<Ticket | null> => {
+    try { return toTicket(await pb.collection('hr_tickets').getOne(id, { requestKey: null })); } catch { return null; }
+  },
   // ── Tickets ───────────────────────────────────────────────────────────
   // Returns the created Ticket (previously void) so callers can immediately
   // attach a file to it via addTicketReply — hr_tickets itself has no file

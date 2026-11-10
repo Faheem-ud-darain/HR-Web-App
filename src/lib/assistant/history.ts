@@ -8,7 +8,8 @@ const MAX_CONTENT = 8000;
 const MAX_ACTIONS = 6;
 
 export interface SavedAction { type: 'open_page' | 'ask_followup'; label: string; page?: string; search?: string; text?: string }
-export interface SavedMessage { id: string; role: 'user' | 'assistant'; content: string; toolsUsed?: string[]; actions?: SavedAction[]; error?: boolean }
+export interface SavedUsage { promptTokens: number; completionTokens: number; totalTokens: number; steps: number; estimated?: boolean }
+export interface SavedMessage { id: string; role: 'user' | 'assistant'; content: string; toolsUsed?: string[]; actions?: SavedAction[]; usage?: SavedUsage; at?: number; repeatOf?: string; error?: boolean }
 
 // An IBAN, or any run of 10+ digits (spaces/hyphens allowed between them). Calendar dates such as
 // 2026-10-26 are left alone. Only the last four digits stay visible.
@@ -40,6 +41,13 @@ export function cleanChatForSave(input: unknown): SavedMessage[] | null {
       content: maskBankNumbers(m.content.slice(0, MAX_CONTENT)),
     };
     if (m.error === true) msg.error = true;
+    if (typeof m.at === 'number' && Number.isFinite(m.at) && m.at > 0) msg.at = Math.round(m.at);
+    if (typeof m.repeatOf === 'string') msg.repeatOf = m.repeatOf.slice(0, 20);
+    if (m.usage && typeof m.usage === 'object') {
+      const u = m.usage as Record<string, unknown>;
+      const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), 1_000_000) : 0);
+      msg.usage = { promptTokens: n(u.promptTokens), completionTokens: n(u.completionTokens), totalTokens: n(u.totalTokens), steps: n(u.steps), ...(u.estimated === true ? { estimated: true } : {}) };
+    }
     if (Array.isArray(m.toolsUsed)) msg.toolsUsed = m.toolsUsed.filter((t): t is string => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 40));
     if (Array.isArray(m.actions)) {
       msg.actions = m.actions.slice(0, MAX_ACTIONS).flatMap((a): SavedAction[] => {

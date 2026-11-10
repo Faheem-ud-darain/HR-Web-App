@@ -23,6 +23,7 @@ import type { PbRow } from '../pbTypes';
 import type { Profile, LeaveApplication } from '../hr/types';
 import { AliasMap } from './aliases';
 import { redactText } from './redact';
+import { markTickets, markersToLinks, marker } from './delLinks';
 import { TOOL_DEFS, type ToolDef } from './tools';
 import type { ToolRunner } from './runner';
 import type { ChatMessage } from './chat';
@@ -55,6 +56,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
     const profiles = rows.map(p => mapProfileRecord(p, (ex.get(p.id)?.data || {}) as Partial<Profile>));
     return { profiles, alias: new AliasMap(profiles.map(p => ({ id: p.id, name: p.fullName, alias: p.alias, email: p.email }))) };
   })());
+  const seenTickets = new Map<string, string>(); // ticket id -> its title as the person will read it, for the links in the answer
   const inputsCache = new Map<string, Promise<PayrollInputs>>();
   const inputs = (sinceMonth: string) => {
     if (!inputsCache.has(sinceMonth)) inputsCache.set(sinceMonth, loadPayrollInputs(now, sinceMonth));
@@ -328,7 +330,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       const byEmail = new Map(profiles.map(p => [(p.email || '').toLowerCase(), p]));
       return {
         status, matching: found.length, shown: Math.min(15, found.length),
-        tickets: found.slice(0, 15).map(t => { const f = ticketFacts(t, now.getTime()); const p = byEmail.get(t.employeeEmail.toLowerCase()); return { id: t.id, from: p ? alias.aliasOf(p.id) : alias.redact(t.employeeName), title: redactText(alias.redact(clip(t.subject, 120)), []), department: t.department, status: t.status, age_days: f.ageDays, replies: f.replies, last_reply_from: f.lastReplyFrom ?? 'none yet', waiting_on: f.waitingOn ?? 'closed', quiet_for_days: f.quietDays }; }),
+        tickets: found.slice(0, 15).map(t => { const f = ticketFacts(t, now.getTime()); const p = byEmail.get(t.employeeEmail.toLowerCase()); const title = redactText(alias.redact(clip(t.subject, 120)), []); seenTickets.set(t.id, alias.restore(title)); return { id: t.id, from: p ? alias.aliasOf(p.id) : alias.redact(t.employeeName), title, department: t.department, status: t.status, age_days: f.ageDays, replies: f.replies, last_reply_from: f.lastReplyFrom ?? 'none yet', waiting_on: f.waitingOn ?? 'closed', quiet_for_days: f.quietDays }; }),
         note: 'Looks at the 200 newest tickets that match the status.',
       };
     },
@@ -341,6 +343,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       const names = [String(t.employee_name || '')];
       const scrub = (s: unknown, n: number) => redactText(alias.redact(clip(s, n)), names, alias.aliasOf(profiles.find(p => (p.email || '').toLowerCase() === String(t.employee_email || '').toLowerCase())?.id || ''));
       const replies = (Array.isArray(t.replies) ? t.replies : []) as { senderRole?: string; message?: string; event?: string }[];
+      seenTickets.set(id, alias.restore(scrub(t.subject, 160)));
       return {
         id: t.id, from: alias.redact(names[0]), title: scrub(t.subject, 160), department: t.department || 'hr', status: t.status,
         employee_message: scrub(t.description, 1500),
@@ -358,6 +361,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
         rows = list?.items || [];
         first = (await pbAdminFetch('/api/collections/hr_communication_audit/records?perPage=1&sort=created&fields=created'))?.items?.[0];
       } catch { return { error: 'The communication trail has not been switched on yet, so there is no record to read.' }; }
+      if (!seenTickets.has(id)) seenTickets.set(id, '');
       const byEmail = new Map(profiles.map(p => [(p.email || '').toLowerCase(), p]));
       const whoIs = (email: string) => { const p = byEmail.get((email || '').toLowerCase()); return p ? alias.aliasOf(p.id) : 'an account that is not an employee profile'; };
       const out = summariseTrail(rows.map(r => ({ kind: String(r.kind), actor: String(r.actor), actor_role: String(r.actor_role), claimed_sender: String(r.claimed_sender || ''), ip: String(r.ip || ''), country: String(r.country || ''), device: redactText(String(r.device || ''), []), occurred_at: String(r.occurred_at || r.created || '') } as TrailRow)), whoIs);
@@ -407,6 +411,15 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
 
   const BANK = /\[\[BANK:(Employee \d{1,3})\]\]/g;
 
+  const withBank = async (answer: string) => {
+    const { profiles, alias } = await roster();
+    return answer.replace(BANK, (_m, a: string) => {
+      const m = alias.fromAlias(a); const p = m ? profiles.find(x => x.id === m.id) : undefined;
+      if (!p || !(p.bankName && (p.accountNumber || p.iban))) return '(no bank details on file)';
+      return [p.bankName, p.accountNumber ? `account ${p.accountNumber}` : '', p.iban ? `IBAN ${p.iban}` : ''].filter(Boolean).join(' — ');
+    });
+  };
+
   return {
     mode: 'live',
     defs: LIVE_DEFS,
@@ -421,13 +434,14 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       try { return await fn(args); } catch (err) { console.error('[assistant] tool failed:', name, err instanceof Error ? err.message : 'error'); return { error: 'That information could not be read right now.' }; }
     },
     async finish(answer: string) {
-      const { profiles, alias } = await roster();
-      const withBank = answer.replace(BANK, (_m, a: string) => {
-        const m = alias.fromAlias(a); const p = m ? profiles.find(x => x.id === m.id) : undefined;
-        if (!p || !(p.bankName && (p.accountNumber || p.iban))) return '(no bank details on file)';
-        return [p.bankName, p.accountNumber ? `account ${p.accountNumber}` : '', p.iban ? `IBAN ${p.iban}` : ''].filter(Boolean).join(' — ');
-      });
-      return alias.restore(withBank);
+      const { alias } = await roster();
+      return alias.restore(await withBank(answer));
+    },
+    // The answer on screen: real names, bank details, and every person and ticket made clickable (see delLinks.ts).
+    async finishAnswer(answer: string) {
+      const { alias } = await roster();
+      const text = alias.restoreWith(await withBank(answer), (p, label) => marker('employee', p.id, label));
+      return markersToLinks(markTickets(text, seenTickets));
     },
   };
 }
