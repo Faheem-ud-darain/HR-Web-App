@@ -5,12 +5,13 @@
 importScripts('capture-health.js'); // buildHeartbeat / afterCapture / CAPTURE_REASONS (globalThis.CaptureHealth)
 
 const DEFAULT_SERVER_URL = 'https://pb.delcargo.us';
+const IDLE_DETECTION_SECONDS = 180; // Chrome reports "idle" only after this long without input, so a stretch really began this long before the report
 const INACTIVITY_REPORT_SECONDS = 180; // 3 minutes — loggable idle threshold
 const AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60; // 37 minutes — continuous idle auto clock-out
 
 // Initial Alarm Setup (Default: 1 minute screenshot interval)
 try {
-  chrome.idle.setDetectionInterval(180);
+  chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
   chrome.alarms.create('tracker_heartbeat', { periodInMinutes: 0.25 }); // every 15 sec
   chrome.alarms.create('tracker_screenshot', { periodInMinutes: 1 });  // 1 min default
 } catch (e) {
@@ -412,7 +413,9 @@ async function handleHeartbeatTick() {
     const clockInIso = openShiftRecord.clock_in || nowIso;
     chrome.storage.local.set({
       shiftActive: true,
-      shiftStartTime: clockInIso
+      shiftStartTime: clockInIso,
+      // A shift that has just opened must not inherit an idle stretch from before it.
+      ...(data.shiftActive ? {} : { idleStartTimestamp: null, autoAbsentFired: false })
     });
 
     // 3. Fetch this device's real tracking settings (hr_tracking_settings,
@@ -484,14 +487,14 @@ async function handleHeartbeatTick() {
     }
 
     // 4. Live continuous 37+ minutes idle check (only during active shift)
-    chrome.idle.queryState(180, async (state) => {
+    chrome.idle.queryState(IDLE_DETECTION_SECONDS, async (state) => {
       if (state === 'idle' || state === 'locked') {
-        const idleStart = data.idleStartTimestamp || Date.now();
+        const idleStart = idleStretchStart(data.idleStartTimestamp, data.shiftStartTime, Date.now());
         const continuousIdleSec = Math.floor((Date.now() - idleStart) / 1000);
 
         if (continuousIdleSec >= AUTO_ABSENT_INACTIVITY_SECONDS && !data.autoAbsentFired) {
           chrome.storage.local.set({ autoAbsentFired: true });
-          await autoClockOut(serverUrl, email, 'inactivity_absence');
+          await autoClockOut(serverUrl, email, 'inactivity_absence', Math.round(continuousIdleSec / 60));
         }
       }
     });
@@ -499,13 +502,53 @@ async function handleHeartbeatTick() {
   } else {
     // Shift is not open (shift ended or not started yet) -> pause active shift flag
     if (data.shiftActive) {
-      chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false });
+      chrome.storage.local.set({ shiftActive: false, autoAbsentFired: false, idleStartTimestamp: null });
     }
   }
 }
 
+// When the current idle stretch began, as far as this device can tell: the saved start (kept from the first idle or lock report, so locking
+// the screen does not restart the clock), or, if none was saved, the moment Chrome's own detection delay puts it. Never before the shift began.
+function idleStretchStart(savedStart, shiftStartIso, now) {
+  const start = savedStart || (now - IDLE_DETECTION_SECONDS * 1000);
+  const shiftStart = Date.parse(shiftStartIso || '');
+  return Number.isFinite(shiftStart) ? Math.max(start, shiftStart) : start;
+}
+
+// The same three notices and the same absence record the desktop tracker writes when it ends a shift for 37 idle minutes. No amount
+// anywhere: this extension knows no pay; what a day costs is worked out by the web app and payroll.
+async function recordInactivityAbsence(cleanUrl, email, minutes) {
+  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const json = { 'Content-Type': 'application/json' };
+  const quote = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  let name = email;
+  try {
+    const r = await fetch(`${cleanUrl}/api/collections/hr_profiles/records?perPage=10&fields=email,full_name&filter=${encodeURIComponent(`(email~"${quote(email)}")`)}`);
+    const row = ((await r.json()).items || []).find(i => (i.email || '').toLowerCase() === email.toLowerCase());
+    if (row && row.full_name) name = row.full_name;
+    // Already recorded for today (possibly soft-deleted by HR): never record it twice or bring it back.
+    const dup = await fetch(`${cleanUrl}/api/collections/hr_absence_records/records?perPage=20&fields=id,employeeEmail&filter=${encodeURIComponent(`(employeeEmail~"${quote(email)}" && date="${date}")`)}`);
+    if (((await dup.json()).items || []).some(i => (i.employeeEmail || '').toLowerCase() === email.toLowerCase())) return;
+  } catch (e) { /* cannot tell: record it; the table's unique index rejects a real duplicate */ }
+  const created = await fetch(`${cleanUrl}/api/collections/hr_absence_records/records`, {
+    method: 'POST', headers: json,
+    body: JSON.stringify({ employeeEmail: email, employeeName: name, date, reason: 'inactivity', inactivityMinutes: minutes, workedMinutes: 0, deductionAmount: 0, createdAt: new Date().toISOString(), acknowledged: false, deleted: false })
+  });
+  if (!created.ok) return; // lost a race, or a real write error: the shift is already ended; do not announce an absence that was not recorded
+  const notify = (to, role, message) => fetch(`${cleanUrl}/api/collections/hr_notifications/records`, {
+    method: 'POST', headers: json,
+    body: JSON.stringify({ recipient_email: to, recipient_role: role, message, read: false, category: 'leave_task', push_title: '', sender_email: '', link: '', timestamp: new Date().toISOString() })
+  }).catch(() => {});
+  const forStaff = `${name} was inactive for ${minutes} minutes during their shift on ${date} and was marked absent (2 days' pay).`;
+  await Promise.all([
+    notify(email, 'employee', `You were marked absent for ${date} (${minutes} min inactivity during shift). Two days' pay will be deducted for it.`),
+    notify('all', 'hr', forStaff),
+    notify('all', 'admin', forStaff)
+  ]);
+}
+
 // ── Auto Clock Out / Shift Stop ───────────────────────────────────────────
-async function autoClockOut(serverUrl, email, reason = 'tracker_closed') {
+async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleMinutes = 0) {
   try {
     const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
     console.log(`[Delcargo Tracker] Auto clock-out triggered. Reason: ${reason}`);
@@ -519,6 +562,7 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed') {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clock_out: nowIso, status: 'Completed' })
       });
+      if (reason === 'inactivity_absence') await recordInactivityAbsence(cleanUrl, email, idleMinutes).catch(e => console.warn('[Delcargo Tracker] Absence record failed:', e));
     }
 
     // 2. Write shift_stop_signal for live web dashboard notification
@@ -548,16 +592,21 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed') {
 // ── Idle State Changed Listener ───────────────────────────────────────────
 chrome.idle.onStateChanged.addListener(async (newState) => {
   const data = await getStorageData();
-  if (!data.shiftActive || !data.employeeEmail) return;
+  if (!data.shiftActive || !data.employeeEmail) {
+    if (data.idleStartTimestamp) chrome.storage.local.set({ idleStartTimestamp: null }); // no shift: nothing to count, and nothing to carry into the next one
+    return;
+  }
 
   const serverUrl = (data.serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
   const email = data.employeeEmail.trim().toLowerCase();
   const now = Date.now();
 
   if (newState === 'idle' || newState === 'locked') {
-    chrome.storage.local.set({ idleStartTimestamp: now });
+    // Keep the FIRST start: an idle stretch that ends in a screen lock is one stretch, not two. Chrome says "idle" only after its detection
+    // delay, so the stretch began that long ago; a lock with no earlier idle began now.
+    if (!data.idleStartTimestamp) chrome.storage.local.set({ idleStartTimestamp: newState === 'idle' ? now - IDLE_DETECTION_SECONDS * 1000 : now });
   } else if (newState === 'active') {
-    const idleStart = data.idleStartTimestamp;
+    const idleStart = data.idleStartTimestamp ? idleStretchStart(data.idleStartTimestamp, data.shiftStartTime, now) : null;
     chrome.storage.local.set({ idleStartTimestamp: null, autoAbsentFired: false });
 
     if (idleStart) {
