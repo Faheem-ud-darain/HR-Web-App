@@ -50,11 +50,11 @@ def test_absence_record_created_in_collection(agent, monkeypatch):
     http.get.return_value = Resp(200, {"items": []})
     http.post.return_value = Resp(200, {"id": "n"})
     monkeypatch.setattr(agent, "_http", http)
-    assert agent.create_inactivity_absence_record("http://x", "Josh@delcargo.us", "Josh", 41, 5000) is True
+    assert agent.create_inactivity_absence_record("http://x", "Josh@delcargo.us", "Josh", 41) is True
     url = http.post.call_args[0][0]
     body = json.loads(http.post.call_args[1]["data"])
     assert url.endswith("/api/collections/hr_absence_records/records")
-    assert body["reason"] == "inactivity" and body["inactivityMinutes"] == 41 and body["deductionAmount"] == 5000
+    assert body["reason"] == "inactivity" and body["inactivityMinutes"] == 41 and body["deductionAmount"] == 0
     assert body["deleted"] is False and body["employeeEmail"] == "Josh@delcargo.us"
 
 
@@ -62,7 +62,7 @@ def test_absence_not_duplicated_even_if_soft_deleted(agent, monkeypatch):
     http = MagicMock()
     http.get.return_value = Resp(200, {"items": [{"id": "1", "employeeEmail": "JOSH@delcargo.us"}]})
     monkeypatch.setattr(agent, "_http", http)
-    assert agent.create_inactivity_absence_record("http://x", "josh@delcargo.us", "Josh", 41, 0) is False
+    assert agent.create_inactivity_absence_record("http://x", "josh@delcargo.us", "Josh", 41) is False
     http.post.assert_not_called()
 
 
@@ -71,7 +71,7 @@ def test_absence_unique_index_conflict_is_not_an_error(agent, monkeypatch):
     http.get.return_value = Resp(200, {"items": []})
     http.post.return_value = Resp(400, text="unique")
     monkeypatch.setattr(agent, "_http", http)
-    assert agent.create_inactivity_absence_record("http://x", "a@b.us", "A", 40, 0) is False
+    assert agent.create_inactivity_absence_record("http://x", "a@b.us", "A", 40) is False
 
 
 # ── reliable inactivity upload ─────────────────────────────────────────────
@@ -149,3 +149,47 @@ def test_wait_for_pid_exit_returns_when_process_dies(agent):
     started = time.monotonic()
     agent._wait_for_pid_exit(p.pid, timeout_seconds=10)
     assert 0.3 < time.monotonic() - started < 5
+
+
+# ── the inactivity auto-absence: records and tells everyone, and never shows or reads pay ──
+def _auto_absence(agent, monkeypatch, created=True):
+    sent = []
+    monkeypatch.setattr(agent, "auto_clock_out", lambda *_: True)
+    monkeypatch.setattr(agent, "_fetch_employee_name", lambda *_: "Emily")
+    monkeypatch.setattr(agent, "_get_ny_date_string", lambda: "2026-11-09")
+    monkeypatch.setattr(agent, "create_inactivity_absence_record", lambda *a: sent.append(("record", a[3])) or created)
+    monkeypatch.setattr(agent, "create_notification", lambda base, to, role, msg, category="leave_task": sent.append((role, to, msg)))
+    monkeypatch.setattr(agent, "notify_shift_auto_stopped", lambda *a, **k: None)
+    return agent.handle_inactivity_auto_absence("http://x", "emily@delcargo.us", 37 * 60), sent
+
+
+def test_auto_absence_records_it_and_tells_the_employee_hr_and_admin(agent, monkeypatch):
+    result, sent = _auto_absence(agent, monkeypatch)
+    assert result == ("Emily", 37)
+    notes = {role: msg for role, _to, msg in [s for s in sent if s[0] != "record"]}
+    assert ("record", 37) in sent and set(notes) == {"employee", "hr", "admin"}
+    assert "2026-11-09" in notes["employee"] and "37 min" in notes["employee"]
+
+
+def test_the_tracker_never_shows_or_reads_pay(agent, monkeypatch):
+    import re
+    _result, sent = _auto_absence(agent, monkeypatch)
+    for _role, _to, msg in [s for s in sent if s[0] != "record"]:
+        assert not re.search(r"PKR|\$|\d,\d{3}", msg), msg  # no amount, no currency
+    source = open(agent.__file__, encoding="utf-8").read()
+    assert "base_salary" not in source and "baseSalary" not in source
+
+
+def test_auto_absence_does_not_announce_twice_when_the_record_already_exists(agent, monkeypatch):
+    _result, sent = _auto_absence(agent, monkeypatch, created=False)
+    assert [s for s in sent if s[0] != "record"] == []
+
+
+# ── idle time is only reported for the part inside the open shift ──
+def test_idle_is_cut_to_the_shift(agent):
+    t = lambda m: datetime(2026, 11, 5, 16, 0, tzinfo=timezone.utc) + timedelta(minutes=m)
+    # a shift seen open from minute 0 and last seen open at minute 5 (grace of 3 more minutes)
+    assert agent.clip_idle_to_shift(t(-30), t(60), t(0), t(5)) == (t(0), t(5) + timedelta(seconds=agent.SHIFT_SEEN_GRACE_SECONDS))
+    assert agent.clip_idle_to_shift(t(20), t(60), t(0), t(5)) is None  # began after the shift was last seen
+    assert agent.clip_idle_to_shift(t(1), t(4), t(0), t(5)) == (t(1), t(4))  # fully inside: unchanged
+    assert agent.clip_idle_to_shift(t(1), t(4), None, None) == (t(1), t(4))  # nothing known yet: unchanged

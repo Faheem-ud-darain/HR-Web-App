@@ -10,9 +10,11 @@ import { useQuery } from '@tanstack/react-query';
 import { getAuthToken } from '../session';
 import { API_BASE } from '../apiBase';
 import {
-  countAbsentWeekdays, detectAbsences, describeAbsence, findWeekendAbsenceRecords, findPreJoinAbsenceRecords,
+  absencesCoveredByLeave, countAbsentWeekdays, detectAbsences, describeAbsence, findWeekendAbsenceRecords, findPreJoinAbsenceRecords,
 } from '../core/absences';
+import { getLeaveRange } from '../core/leaves';
 import type { AbsenceRecord, MyAbsenceRecord, InactivityLog, Profile, TimesheetEntry, LeaveApplication } from './types';
+import { pb } from '../pocketbase';
 import { pbList, pbListStrict, pbCreate, pbUpdate, formatMoney } from './shared';
 import { hrActions, fetchTimesheetsFresh, displayName } from '../hrData';
 
@@ -20,7 +22,7 @@ export { countAbsentWeekdays };
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
 import type { PbRow } from '@/lib/pbTypes';
-import { toAbsenceRecord } from '../core/payrollMappers';
+import { toAbsenceRecord, toLeave } from '../core/payrollMappers';
 
 // Columns toAbsenceRecord reads — keeps each fetched row small.
 const ABSENCE_FIELDS = 'id,employeeEmail,employeeName,date,reason,inactivityMinutes,workedMinutes,deductionAmount,createdAt,created,acknowledged,deleted,deletedAt';
@@ -265,6 +267,25 @@ export const absenceActions = {
     }));
   },
 
+
+  // A leave that has just been finally approved covers its days, so an absence already recorded for them (made while the request was
+  // still waiting) is withdrawn and the people involved are told. Payroll already skips those days; this clears the record and the notice.
+  retireAbsencesCoveredByLeave: async (leaveId: string): Promise<void> => {
+    const leave = toLeave(await pb.collection('hr_leaves').getOne(leaveId, { requestKey: null }));
+    const range = getLeaveRange(leave);
+    if (!range) return;
+    const covered = absencesCoveredByLeave(await hrActions.getAbsenceRecords({ sinceDate: range.start }), leave);
+    if (covered.length === 0) return;
+    await hrActions.bulkDeleteAbsenceRecords(covered.map(r => r.id));
+    await Promise.all(covered.map(rec => {
+      const note = `${rec.employeeName}'s absence deduction for ${rec.date} was reversed — that day is covered by an approved leave.`;
+      return Promise.all([
+        hrActions.addNotification('all', 'hr', note, undefined, undefined, rec.employeeEmail),
+        hrActions.addNotification('all', 'admin', note, undefined, undefined, rec.employeeEmail),
+        hrActions.addNotification(rec.employeeEmail, 'employee', `Your absence deduction for ${rec.date} has been reversed — that day is covered by your approved leave.`),
+      ]);
+    }));
+  },
 
   // ── Mouse inactivity logs (hr_inactivity_logs — see
   // migration_data/create_inactivity_logs_collection.py) ──────────────────

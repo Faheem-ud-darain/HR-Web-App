@@ -28,6 +28,7 @@ import { StatusDot } from '@/components/ui/StatusDot';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { hrActions, InactivityLog, TimesheetEntry } from '@/lib/hrData';
+import { clipLogsToShifts } from '@/lib/core/inactivity';
 import { getNYDateString, getNYMidnight, formatShortDateNY, formatTimeNY } from '@/lib/timezone';
 import { PulseIcon as Activity, CursorClickIcon as MousePointerClick, TableIcon as Table2, ChartBarIcon as BarChart3, ClockIcon as Clock } from '@/components/ui/icons';
 import { Table, TableScroll, THead, TBody, Th, Td } from '@/components/ui/Table';
@@ -100,7 +101,8 @@ export function EmployeeActivityInsights({ employeeEmail, timesheets }: Employee
       return hrActions.getInactivityLogs({ employeeEmail, sinceISO: since.toISOString(), untilISO: until.toISOString() });
     },
   });
-  const logs: InactivityLog[] | null = fetchedLogs ?? null; // null = not fetched yet
+  // Only the part of each idle stretch that sits inside a shift counts, so the day's inactive time can never exceed its shift time.
+  const logs: InactivityLog[] | null = useMemo(() => (fetchedLogs ? clipLogsToShifts(fetchedLogs, timesheets) : null), [fetchedLogs, timesheets]); // null = not fetched yet
   const error = isError ? "Couldn't load your activity data right now. Try again shortly." : '';
 
   // Trigger the bar-grow animation one tick after data actually lands, so bars
