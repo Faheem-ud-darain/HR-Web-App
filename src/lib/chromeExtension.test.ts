@@ -11,7 +11,7 @@ const { buildHeartbeat, afterCapture, CAPTURE_REASONS } = require('../../chrome-
   CAPTURE_REASONS: { noFrame: string; noConnection: string; uploadRejected: (status: number) => string };
 };
 
-const base = { email: 'grace@x.com', deviceId: 'chromebook_grace', connectedAt: '2026-11-02T08:00:00.000Z', nowIso: '2026-11-02T12:00:00.000Z', version: '1.0.16' };
+const base = { email: 'grace@x.com', deviceId: 'chromebook_grace', connectedAt: '2026-11-02T08:00:00.000Z', nowIso: '2026-11-02T12:00:00.000Z', version: '1.0.17' };
 const NOW = Date.parse('2026-11-02T12:00:00.000Z');
 
 describe('buildHeartbeat', () => {
@@ -19,7 +19,7 @@ describe('buildHeartbeat', () => {
     const hb = buildHeartbeat({ ...base, stored: { shiftActive: true, lastUploadedAt: NOW - 5 * 60 * 1000 } });
     expect(hb.lastCaptureAt).toBe(new Date(NOW - 5 * 60 * 1000).toISOString());
     expect(hb.captureEnabled).toBe(true);
-    expect(hb.agentVersion).toBe('1.0.16');
+    expect(hb.agentVersion).toBe('1.0.17');
     expect(hb.deviceLabel).toBe('Chromebook / Chrome OS');
   });
 

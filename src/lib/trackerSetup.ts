@@ -61,7 +61,7 @@ export const TRACKER_MIN_VERSION = '24';
 // "version" in chrome-extension/manifest.json). Raise TRACKER_MIN_VERSION (and the agent's MIN_SUPPORTED_VERSION) only once nearly
 // everyone is on the new build, because that forces the rest to stop and update.
 export const TRACKER_LATEST_VERSION = '25';
-export const TRACKER_LATEST_EXTENSION_VERSION = '1.0.16';
+export const TRACKER_LATEST_EXTENSION_VERSION = '1.0.17';
 
 // Device label the Chromebook/Chrome extension reports in its heartbeat
 // (see chrome-extension/background.js's handleHeartbeatTick) — used below

@@ -14,8 +14,8 @@ const EMAIL = 'grace@x.com';
 const OPEN_SHIFT = { id: 's1', employee_id: EMAIL, clock_in: new Date(Date.now() - 3 * 3600 * 1000).toISOString() };
 type Call = { url: string; method: string; body: Record<string, unknown> | null };
 
-interface World { store: Record<string, unknown>; calls: Call[]; settings: Record<string, unknown> | null; uploadStatus: number | null; frame: Record<string, unknown> | null }
-const world: World = { store: {}, calls: [], settings: null, uploadStatus: 200, frame: null };
+interface World { store: Record<string, unknown>; calls: Call[]; settings: Record<string, unknown> | null; uploadStatus: number | null; frame: Record<string, unknown> | null; idleListener: ((state: string) => Promise<void>) | null; idleState: string; absenceExists: boolean }
+const world: World = { store: {}, calls: [], settings: null, uploadStatus: 200, frame: null, idleListener: null, idleState: 'active', absenceExists: false };
 
 function loadExtension() {
   const store = world.store; // this extension's own storage: work it leaves running after its test ends cannot write into the next test's
@@ -31,7 +31,8 @@ function loadExtension() {
         clear() { /* */ },
       },
     },
-    runtime: lenient({ getManifest: () => ({ version: '1.0.16' }), sendMessage: (_m: unknown, cb: (r: unknown) => void) => cb(world.frame), lastError: undefined }),
+    runtime: lenient({ getManifest: () => ({ version: '1.0.17' }), sendMessage: (_m: unknown, cb: (r: unknown) => void) => cb(world.frame), lastError: undefined }),
+    idle: { setDetectionInterval() { /* */ }, queryState: (_s: number, cb: (state: string) => void) => cb(world.idleState), onStateChanged: { addListener: (fn: (state: string) => Promise<void>) => { world.idleListener = fn; } } },
     tabs: lenient({ query: (_q: unknown, cb: (t: unknown[]) => void) => cb([]), captureVisibleTab: (_w: unknown, _o: unknown, cb: (u?: string) => void) => cb(undefined) }),
   });
 
@@ -42,6 +43,8 @@ function loadExtension() {
     world.calls.push({ url, method, body });
     if (url.includes('/hr_timesheets/')) return respond({ items: [OPEN_SHIFT] });
     if (url.includes('/hr_tracking_settings/')) return respond({ items: world.settings ? [world.settings] : [] });
+    if (url.includes('/hr_profiles/')) return respond({ items: [{ email: EMAIL, full_name: 'Grace Test' }] });
+    if (url.includes('/hr_absence_records/') && method === 'GET') return respond({ items: world.absenceExists ? [{ id: 'a1', employeeEmail: EMAIL }] : [] });
     if (url.includes('/hr_screenshots/')) return world.uploadStatus === null ? Promise.reject(new Error('offline')) : respond({}, world.uploadStatus < 400, world.uploadStatus);
     return respond({ items: [] }); // hr_tracker_signals: no existing row, no ping, no command
   };
@@ -54,7 +57,7 @@ function loadExtension() {
   for (const k of Object.keys(store)) delete store[k];
   vm.runInContext(read('background.js'), ctx);
   Object.assign(store, configured);
-  return ctx as unknown as { handleHeartbeatTick: () => Promise<void>; handleScreenshotTick: () => Promise<void> };
+  return ctx as unknown as { handleHeartbeatTick: () => Promise<void>; handleScreenshotTick: () => Promise<void>; autoClockOut: (url: string, email: string, reason?: string, minutes?: number) => Promise<void>; idleStretchStart: (saved: number | null, shiftIso: string | null, now: number) => number };
 }
 
 // The tick finishes its heartbeat upload first; later steps may wait on Chrome APIs the fake does not answer, so do not wait for them.
@@ -67,7 +70,7 @@ const heartbeatSent = (): TrackerHeartbeat => {
 
 beforeEach(() => {
   world.store = { employeeEmail: EMAIL, agentToken: 'tok', serverUrl: 'https://pb.test', deviceId: 'd1', shiftActive: true };
-  world.calls = []; world.settings = { enabled: true, intervalMinutes: 15 }; world.uploadStatus = 200; world.frame = null;
+  world.calls = []; world.settings = { enabled: true, intervalMinutes: 15 }; world.uploadStatus = 200; world.frame = null; world.idleListener = null; world.idleState = 'active'; world.absenceExists = false;
 });
 
 describe('the Chromebook extension as it actually runs', () => {
@@ -78,7 +81,7 @@ describe('the Chromebook extension as it actually runs', () => {
     const hb = heartbeatSent();
     expect(hb.lastCaptureAt).toBe(new Date(lastUploadedAt).toISOString());
     expect(hb.captureEnabled).toBe(true);
-    expect(hb.agentVersion).toBe('1.0.16');
+    expect(hb.agentVersion).toBe('1.0.17');
     expect(getCaptureHealth(hb).status).toBe('ok');
   });
 
@@ -140,5 +143,68 @@ describe('the Chromebook extension as it actually runs', () => {
     await vi.waitFor(() => expect(world.store.captureFailures).toBe(0));
     expect(world.store.lastCaptureError).toBeNull();
     expect(typeof world.store.lastUploadedAt).toBe('number');
+  });
+});
+
+// Idle time and the 37-minute absence, as the extension really runs them.
+describe('the Chromebook extension: idle time and the 37-minute absence', () => {
+  const MIN = 60 * 1000;
+  const posts = (part: string) => world.calls.filter(c => c.method === 'POST' && c.url.includes(part));
+
+  it('starts an idle stretch when the input stopped (Chrome reports idle 3 minutes late), and a lock does not restart it', async () => {
+    loadExtension();
+    await world.idleListener!('idle');
+    const first = world.store.idleStartTimestamp as number;
+    expect(Date.now() - first).toBeGreaterThanOrEqual(3 * MIN - 50);
+    expect(Date.now() - first).toBeLessThan(3 * MIN + 2000);
+    await world.idleListener!('locked');
+    expect(world.store.idleStartTimestamp).toBe(first);
+  });
+
+  it('reports a finished stretch from the real start, and only the part inside the shift', async () => {
+    loadExtension();
+    Object.assign(world.store, { idleStartTimestamp: Date.now() - 60 * MIN, shiftStartTime: new Date(Date.now() - 20 * MIN).toISOString() });
+    await world.idleListener!('active');
+    const [log] = posts('/hr_inactivity_logs/');
+    expect(Number(log.body!.duration_seconds)).toBeGreaterThanOrEqual(20 * 60 - 2);
+    expect(Number(log.body!.duration_seconds)).toBeLessThanOrEqual(20 * 60 + 2); // not the 60 minutes, which began before the shift
+    expect(world.store.idleStartTimestamp).toBeNull();
+  });
+
+  it('forgets an idle stretch when there is no open shift, so the next shift cannot inherit it', async () => {
+    loadExtension();
+    Object.assign(world.store, { shiftActive: false, idleStartTimestamp: Date.now() - 90 * MIN });
+    await world.idleListener!('active');
+    expect(world.store.idleStartTimestamp).toBeNull();
+    expect(posts('/hr_inactivity_logs/')).toHaveLength(0);
+  });
+
+  it('works out where a stretch began: the saved start, else 3 minutes ago, never before the shift', () => {
+    const ext = loadExtension();
+    const now = 1_000_000_000_000;
+    expect(ext.idleStretchStart(now - 30 * MIN, null, now)).toBe(now - 30 * MIN);
+    expect(ext.idleStretchStart(null, null, now)).toBe(now - 3 * MIN);
+    expect(ext.idleStretchStart(now - 60 * MIN, new Date(now - 20 * MIN).toISOString(), now)).toBe(now - 20 * MIN);
+  });
+
+  it('ending a shift for 37 idle minutes records the absence and tells the employee, HR and Admin, with no amount anywhere', async () => {
+    await loadExtension().autoClockOut('https://pb.test', EMAIL, 'inactivity_absence', 37);
+    const [record] = posts('/hr_absence_records/');
+    expect(record.body).toMatchObject({ employeeEmail: EMAIL, employeeName: 'Grace Test', reason: 'inactivity', inactivityMinutes: 37, deductionAmount: 0, deleted: false });
+    const notes = posts('/hr_notifications/').map(c => c.body as { recipient_role: string; message: string });
+    expect(notes.map(n => n.recipient_role).sort()).toEqual(['admin', 'employee', 'hr']);
+    for (const n of notes) expect(n.message).not.toMatch(/PKR|\$|\d,\d{3}/);
+  });
+
+  it('does not record or announce an absence that already exists for the day', async () => {
+    world.absenceExists = true;
+    await loadExtension().autoClockOut('https://pb.test', EMAIL, 'inactivity_absence', 37);
+    expect(posts('/hr_absence_records/')).toHaveLength(0);
+    expect(posts('/hr_notifications/')).toHaveLength(0);
+  });
+
+  it('a shift ended for any other reason is not recorded as an absence', async () => {
+    await loadExtension().autoClockOut('https://pb.test', EMAIL, 'tracker_closed');
+    expect(posts('/hr_absence_records/')).toHaveLength(0);
   });
 });
