@@ -41,18 +41,18 @@ const profile = (email: string, region: string) => new Rec('hr_profiles', { emai
 const beat = (email: string, minAgo: number) => new Rec('hr_shift_tab_heartbeats', { email, last_seen_at: ago(minAgo) });
 
 describe('auto-close hook: USA GPS shifts', () => {
-  it('closes at the last heartbeat when the app has been silent for 30+ minutes, and tells the employee, HR and Admin', () => {
+  it('closes at the last heartbeat when the app has been silent for 10+ minutes, and tells the employee, HR and Admin', () => {
     const s = shift('usa@x.com', 180);
-    const { saved, notes } = runHook({ shifts: [s], profiles: [profile('usa@x.com', 'USA')], heartbeats: [beat('usa@x.com', 40)] });
+    const { saved, notes } = runHook({ shifts: [s], profiles: [profile('usa@x.com', 'USA')], heartbeats: [beat('usa@x.com', 15)] });
     expect(saved).toHaveLength(1);
-    expect(s.get('clock_out')).toBe(ago(40));
-    expect(s.get('duration')).toBe('2h 20m');
+    expect(s.get('clock_out')).toBe(ago(15));
+    expect(s.get('duration')).toBe('2h 45m');
     expect(notes.map(n => n.get('recipient_role')).sort()).toEqual(['admin', 'employee', 'hr']);
   });
 
   it('leaves a shift alone while the app is still reporting', () => {
     const s = shift('usa@x.com', 180);
-    runHook({ shifts: [s], profiles: [profile('usa@x.com', 'USA')], heartbeats: [beat('usa@x.com', 10)] });
+    runHook({ shifts: [s], profiles: [profile('usa@x.com', 'USA')], heartbeats: [beat('usa@x.com', 5)] });
     expect(s.get('clock_out')).toBe('');
   });
 
@@ -65,10 +65,10 @@ describe('auto-close hook: USA GPS shifts', () => {
     expect(before.get('clock_out')).toBe('');
   });
 
-  it('does not touch a shift younger than 45 minutes', () => {
-    const young = shift('usa@x.com', 40);
-    runHook({ shifts: [young], profiles: [profile('usa@x.com', 'USA')], heartbeats: [beat('usa@x.com', 35)] });
-    expect(young.get('clock_out')).toBe('');
+  it('closes a young shift too: a phone closed right after clock-in is not left open until the 45-minute age', () => {
+    const young = shift('usa@x.com', 20);
+    runHook({ shifts: [young], profiles: [profile('usa@x.com', 'USA')], heartbeats: [beat('usa@x.com', 12)] });
+    expect(young.get('clock_out')).toBe(ago(12));
   });
 });
 

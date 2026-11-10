@@ -309,6 +309,16 @@ button:active {
   }
 }
 
+/* Shift card GPS icon (ShiftStatusIcon): the AirDrop-style arcs light up one after another from the centre. */
+@keyframes airdrop-arc {
+  0%, 100% { opacity: 0.25; }
+  35% { opacity: 1; }
+}
+.airdrop-arc { animation: airdrop-arc 2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .airdrop-arc { animation: none; opacity: 1; }
+}
+
 /* Popover/dropdown/banner entrance (improve-animations plan 001) — replaces
    dead `animate-in fade-in slide-in-from-top-* duration-150` classNames that
    compiled to nothing since tailwindcss-animate is not installed in this

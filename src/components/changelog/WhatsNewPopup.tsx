@@ -17,7 +17,7 @@ const writeSeen = (email: string) => { try { localStorage.setItem(seenKey(email)
 
 // For every role, after an update, once per person: the new entries one at a time on a small floating card (1/3, Next), each
 // with a Read More to the whole changelog. It waits for any blocking popup (a forced password change, an important announcement)
-// to be dealt with first, and closing it, however, marks everything as seen.
+// to be dealt with first, and closing it, or Skip all, marks everything as seen.
 export function WhatsNewPopup({ email }: { email: string | null }) {
   const router = useRouter();
   const anyModalOpen = useAnyModalOpen();
@@ -47,7 +47,10 @@ export function WhatsNewPopup({ email }: { email: string | null }) {
       >
         <div className="flex items-center justify-between pt-2">
           <span className="text-sm font-bold text-slate-400">{index + 1}/{entries.length}</span>
-          <Button variant="ghost" size="sm" onClick={last ? close : () => setIndex(index + 1)}>{last ? 'Done' : <>Next <ArrowRight className="ml-1 h-4 w-4" /></>}</Button>
+          <div className="flex items-center gap-1">
+            {!last && <Button variant="ghost" size="sm" onClick={close}>Skip all</Button>}
+            <Button variant="ghost" size="sm" onClick={last ? close : () => setIndex(index + 1)}>{last ? 'Done' : <>Next <ArrowRight className="ml-1 h-4 w-4" /></>}</Button>
+          </div>
         </div>
       </ChangelogCard>
     </PopupCard>

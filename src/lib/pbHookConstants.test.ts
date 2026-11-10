@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_SHIFT_DURATION_MS, MIN_SHIFT_AGE_MS, ORPHAN_SHIFT_GRACE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_LIVE_DEFAULT_MS, isHeartbeatLive, shiftMinutes,
 } from './core/timesheets';
+import { GEO_SHIFT_SILENCE_MS } from './core/geofence';
 import { OVERLAY_KEYS } from './profileFields';
 import { fromProfileFields } from './profileFields';
 import { mapProfileRecord } from './core/profiles';
@@ -19,6 +20,7 @@ describe('pb_hooks/auto_close_stale_shifts.pb.js matches the app', () => {
   it('uses the same windows', () => {
     expect(hookMs('SHIFT_TAB_HEARTBEAT_STALE_MS')).toBe(SHIFT_TAB_HEARTBEAT_STALE_MS);
     expect(hookMs('ORPHAN_SHIFT_GRACE_MS')).toBe(ORPHAN_SHIFT_GRACE_MS);
+    expect(hookMs('GEO_SHIFT_SILENCE_MS')).toBe(GEO_SHIFT_SILENCE_MS);
     expect(hookMs('MIN_SHIFT_AGE_MS')).toBe(MIN_SHIFT_AGE_MS);
     expect(hookMs('MAX_SHIFT_DURATION_MS')).toBe(MAX_SHIFT_DURATION_MS);
   });
