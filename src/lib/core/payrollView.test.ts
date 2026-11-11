@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod } from './payrollView';
+import { deductionLimitedBy, netPay, groupDeductions, payrollFlags, hasBankDetails, summarizePayroll, monthLabel, groupOfRegion, payPeriod, slipDeductionSummary } from './payrollView';
 import type { PayrollRecord } from '../hr/types';
 
 function rec(over: Partial<PayrollRecord> = {}): PayrollRecord {
@@ -123,5 +123,18 @@ describe('netPayBeforeFloor and the stored net_pay', () => {
     const row = toPayrollRowFields({ employeeId: 'e', name: 'Z', baseSalary: 10000, bonus: 0, deductions: 50000, incrementAmount: 0, earlierPay: 3000, processed: true, month: '2026-09' }, '2026-10-01');
     expect(row.net_pay).toBe(-37000);
     expect(toPayrollRecordFromRow({ ...row, id: 'p' }).earlierPay).toBe(3000);
+  });
+});
+
+describe('slipDeductionSummary', () => {
+  it('is the slip\'s own total, and counts the days that cost pay across absences and short hours', () => {
+    const breakdown = [
+      { label: 'Absence — Mouse inactive', amount: 4286, date: '2026-11-05' },
+      { label: 'Partial Shifts — worked 6h 9m of 8h', amount: 700, date: '2026-11-03' },
+      { label: 'Partial Shifts — worked 4h 52m of 8h', amount: 813, date: '2026-11-05' },
+      { label: 'Onboarding Not Completed', amount: 0 },
+    ];
+    expect(slipDeductionSummary({ deductions: 5799, deductionBreakdown: breakdown })).toEqual({ total: 5799, days: 2 });
+    expect(slipDeductionSummary({ deductions: 0, deductionBreakdown: [] })).toEqual({ total: 0, days: 0 });
   });
 });
