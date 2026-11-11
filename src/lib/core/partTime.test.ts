@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile, TimesheetEntry } from '../hr/types';
-import { absenceReasonLabel, detectAbsences, deductionLines } from './absences';
+import { absenceReasonLabel, detectAbsences, deductionLines, recordsOfCurrentEmployees } from './absences';
 import { getShiftShortfallDeduction, getShortShiftDays } from './payroll';
 import { FULL_DAY_MINUTES, PART_TIME_DAY_MINUTES, absenceFloorMinutes, canSeePartTime, hoursText, requiredDayMinutes } from './workDay';
 import { classifySelfProfilePatch } from '../profileSelfFields';
@@ -95,5 +95,13 @@ describe('inactivity label', () => {
   it('shows the real minutes when saved and does not invent 37 when they are missing', () => {
     expect(absenceReasonLabel({ reason: 'inactivity', inactivityMinutes: 52 })).toContain('52 minutes');
     expect(absenceReasonLabel({ reason: 'inactivity' })).not.toMatch(/for \d+ minutes/);
+  });
+});
+
+describe('records of deleted employees', () => {
+  it('drops absence records whose employee no longer has a profile', () => {
+    const records = [{ employeeEmail: 'Nova@x.com', id: 1 }, { employeeEmail: 'here@x.com', id: 2 }];
+    expect(recordsOfCurrentEmployees(records, [{ email: 'here@x.com' }]).map(r => r.id)).toEqual([2]);
+    expect(recordsOfCurrentEmployees(records, [{ email: 'nova@x.com' }]).map(r => r.id)).toEqual([1]);
   });
 });

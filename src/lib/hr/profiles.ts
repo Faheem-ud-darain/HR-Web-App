@@ -469,6 +469,14 @@ export const profileActions = {
         pbListByEmailField('hr_tickets', 'employee_email', email)
           .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_tickets', r.id)))),
         deleteCareerApplicationsForEmailAdmin(email),
+        // Absence records (with the deductions they carry), mouse-idle logs and the shift-tab heartbeat: all keyed by this email, and
+        // all used to survive the deletion, so a removed employee kept showing (and counting) on the Absence Deductions screen.
+        pbListByEmailField('hr_absence_records', 'employeeEmail', email)
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_absence_records', r.id)))),
+        pbListByEmailField('hr_inactivity_logs', 'employee_email', email)
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_inactivity_logs', r.id)))),
+        pbListByEmailField('hr_shift_tab_heartbeats', 'email', email)
+          .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_shift_tab_heartbeats', r.id)))),
         pbListByEmailField('hr_notifications', 'recipient_email', email)
           .then(rows => Promise.allSettled(rows.map((r: PbRow) => pbDelete('hr_notifications', r.id)))),
       );
@@ -503,6 +511,8 @@ export const profileActions = {
           pbDeleteByField('hr_announcement_reads', 'email', lower),
           pbDeleteByField('hr_message_reads', 'email', lower),
           pbDeleteByField('hr_notification_prefs', 'email', lower),
+          pbDeleteByField('hr_user_sessions', 'email', lower),
+          pbDeleteByField('hr_activity_seen', 'email', lower),
         ]);
       })());
     }
