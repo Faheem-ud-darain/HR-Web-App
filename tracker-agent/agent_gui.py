@@ -3696,7 +3696,7 @@ class TrackerApp:
                     # Idle time dropped — mouse OR keyboard activity happened
                     # since the last poll, ending whatever stretch had been
                     # building.
-                    if last_idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
+                    if last_idle_seconds >= INACTIVITY_THRESHOLD_SECONDS and not auto_absent_fired:  # a stretch that ended the shift was already logged when the absence fired
                         end_wall = datetime.now(timezone.utc)
                         start_wall = end_wall - timedelta(seconds=last_idle_seconds)
                         self._submit_idle_in_shift(cfg, employee_email, start_wall, end_wall)
@@ -3723,7 +3723,7 @@ class TrackerApp:
 
                 if pos != last_pos:
                     idle_seconds = now - last_move_time
-                    if idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
+                    if idle_seconds >= INACTIVITY_THRESHOLD_SECONDS and not auto_absent_fired:  # same: already logged when the absence fired
                         end_wall = datetime.now(timezone.utc)
                         start_wall = end_wall - timedelta(seconds=idle_seconds)
                         self._submit_idle_in_shift(cfg, employee_email, start_wall, end_wall)
@@ -3739,6 +3739,10 @@ class TrackerApp:
             # waiting for it to end.
             if self._idle_seconds_in_shift(current_idle_seconds) >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
                 auto_absent_fired = True
+                # The stretch that ends the shift is logged now, while the shift is still open: once it ends, tracking is off and
+                # nothing would report it, so HR saw an absence with no idle record behind it.
+                end_wall = datetime.now(timezone.utc)
+                self._submit_idle_in_shift(cfg, employee_email, end_wall - timedelta(seconds=current_idle_seconds), end_wall)
                 try:
                     full_name, inactivity_minutes = handle_inactivity_auto_absence(
                         cfg["url"], employee_email, current_idle_seconds

@@ -90,3 +90,10 @@ describe('who can see that someone is part-time', () => {
     expect(classifySelfProfilePatch({ partTime: true })).toMatchObject({ ok: false, status: 403 });
   });
 });
+
+describe('inactivity label', () => {
+  it('shows the real minutes when saved and does not invent 37 when they are missing', () => {
+    expect(absenceReasonLabel({ reason: 'inactivity', inactivityMinutes: 52 })).toContain('52 minutes');
+    expect(absenceReasonLabel({ reason: 'inactivity' })).not.toMatch(/for \d+ minutes/);
+  });
+});
