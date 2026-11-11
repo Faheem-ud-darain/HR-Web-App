@@ -176,7 +176,7 @@ export default function EmployeeSalaryPage() {
         </div>
       )}
 
-      <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} floorMinutes={absenceFloorMinutes(userProfile)} monthlyPay={baseSalary} />
+      <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} floorMinutes={absenceFloorMinutes(userProfile)} monthlyPay={baseSalary} slip={payrollRecord?.month ? { month: payrollRecord.month, deductions: payrollRecord.deductions, deductionBreakdown: payrollRecord.deductionBreakdown || [] } : null} />
 
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Historical Pay slips</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">

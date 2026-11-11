@@ -67,6 +67,11 @@ export function groupDeductions(breakdown: DeductionItem[]): DeductionGroup[] {
   return GROUP_ORDER.filter(k => byKey.has(k)).map(k => byKey.get(k)!);
 }
 
+/** A month's deductions as payroll worked them out (the same figures the pay slip shows): what was charged, and how many days cost pay. */
+export function slipDeductionSummary(slip: { deductions: number; deductionBreakdown: DeductionItem[] }): { total: number; days: number } {
+  return { total: slip.deductions, days: new Set((slip.deductionBreakdown || []).filter(i => i.date && i.amount > 0).map(i => i.date)).size };
+}
+
 export type PayrollFlagKind = 'no_bank' | 'arrears' | 'zero_net' | 'big_deduction';
 export interface PayrollFlag { kind: PayrollFlagKind; label: string; detail: string }
 

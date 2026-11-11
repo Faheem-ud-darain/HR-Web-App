@@ -8,14 +8,19 @@ import { SectionCard } from '@/components/ui/SectionCard';
 import { StatCard } from '@/components/ui/StatCard';
 import { Tabs } from '@/components/ui/Tabs';
 import { deductionLines, deductionMonths } from '@/lib/core/absences';
-import { dayLabel, monthLabel } from '@/lib/core/payrollView';
+import { dayLabel, monthLabel, slipDeductionSummary } from '@/lib/core/payrollView';
+import { DeductionBreakdown } from '@/components/payroll/DeductionBreakdown';
+import type { DeductionItem } from '@/lib/hr/types';
 import { getApprovedLeaveOnDate, formatMoney, type LeaveApplication, type MyAbsenceRecord, type Profile } from '@/lib/hrData';
 import { getNYDateString } from '@/lib/timezone';
 
 // Pay taken off for missed days, day by day: a switch between the months that have any (this month first), the month's
 // total and number of days, and one line per day with what happened and what was charged. A day an approved leave now
 // covers stays on the list but is not charged.
-export function DailyDeductionsCard({ records, leaves, fullName, region, monthlyPay, floorMinutes }: { records: MyAbsenceRecord[]; leaves: LeaveApplication[]; fullName?: string; region?: Profile['region']; monthlyPay: number; floorMinutes?: number }) {
+// For the month the pay slip covers, the total, the days and the reasons ARE the slip's own figures (`slip`, from the payroll
+// calculation), so this card can never disagree with the slip: short hours, leave and the rest count here too. Earlier months have
+// no slip, so they still list the absence records.
+export function DailyDeductionsCard({ records, leaves, fullName, region, monthlyPay, floorMinutes, slip }: { records: MyAbsenceRecord[]; leaves: LeaveApplication[]; fullName?: string; region?: Profile['region']; monthlyPay: number; floorMinutes?: number; slip?: { month: string; deductions: number; deductionBreakdown: DeductionItem[] } | null }) {
   const currentMonth = getNYDateString(new Date()).slice(0, 7);
   const months = useMemo(() => deductionMonths(records, currentMonth), [records, currentMonth]);
   const [picked, setPicked] = useState<string | null>(null);
@@ -27,7 +32,10 @@ export function DailyDeductionsCard({ records, leaves, fullName, region, monthly
   );
   const charged = lines.filter(l => !l.covered && l.amount > 0);
   const capped = lines.some(l => l.shortBy > 0);
-  const total = charged.reduce((sum, l) => sum + l.amount, 0);
+  const fromSlip = !!slip && slip.month === month;
+  const slipSummary = fromSlip ? slipDeductionSummary(slip) : null;
+  const total = slipSummary ? slipSummary.total : charged.reduce((sum, l) => sum + l.amount, 0);
+  const daysCharged = slipSummary ? slipSummary.days : charged.length;
 
   return (
     <SectionCard title="Daily Deductions" subtitle="Pay taken off for days you missed, shown day by day.">
@@ -38,10 +46,14 @@ export function DailyDeductionsCard({ records, leaves, fullName, region, monthly
 
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Total deducted" size="md" valueTone={total > 0 ? 'danger' : 'default'} value={total > 0 ? `-${formatMoney(total, region)}` : formatMoney(0, region)} sub={capped ? 'Pay can go down to zero, not below. Nothing carries over to next month.' : undefined} />
-          <StatCard label="Days charged" size="md" value={charged.length} />
+          <StatCard label="Days charged" size="md" value={daysCharged} />
         </div>
 
-        {lines.length === 0 ? <EmptyState py={6} size="xs">No deductions recorded in {monthLabel(month)}.</EmptyState> : (
+        {fromSlip ? (
+          <div className="space-y-2 text-sm">
+            <DeductionBreakdown breakdown={slip.deductionBreakdown} deducted={slip.deductions} money={n => formatMoney(n, region)} />
+          </div>
+        ) : lines.length === 0 ? <EmptyState py={6} size="xs">No deductions recorded in {monthLabel(month)}.</EmptyState> : (
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
             {lines.map(line => (
               <li key={line.id} className="flex items-center justify-between gap-3 bg-card px-4 py-3">
