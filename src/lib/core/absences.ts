@@ -14,6 +14,11 @@ import { absenceFloorMinutes, hoursText } from './workDay';
 export const INACTIVITY_THRESHOLD_SECONDS = 37 * 60;
 // A day marked absent costs this many days' pay.
 export const ABSENCE_PENALTY_DAYS = 2;
+/** Absence records of people who still have a profile. A removed employee's leftover records are not shown or counted: with no profile there is no salary to charge, and the page used to fall back to the amount stored on the record. */
+export const recordsOfCurrentEmployees = <T extends { employeeEmail: string }>(records: T[], profiles: Pick<Profile, 'email'>[]): T[] => {
+  const known = new Set(profiles.map(p => p.email.toLowerCase()));
+  return records.filter(r => known.has(r.employeeEmail.toLowerCase()));
+};
 /** What one absent day costs at this salary, in the pay month of `date` ("YYYY-MM-DD"). The one place the charge is worked out: detection, payroll and every screen use it. */
 export const absenceDayCharge = (baseSalary: number, date: string): number => {
   const charge = Math.round(ABSENCE_PENALTY_DAYS * (Number(baseSalary) || 0) / getWeekdaysInMonth(date.slice(0, 7)));
@@ -134,7 +139,7 @@ export function absenceReasonLabel(r: Pick<AbsenceRecord, 'reason' | 'workedMinu
     ? "Didn't start a shift that day"
     : r.reason === 'under_4_hours'
       ? `Only ${hoursMinutes(r.workedMinutes || 0)} worked (the minimum is ${hoursText(floorMinutes)} hours)`
-      : `Mouse inactive for ${Math.round(r.inactivityMinutes || INACTIVITY_THRESHOLD_SECONDS / 60)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})`;
+      : r.inactivityMinutes ? `Mouse inactive for ${Math.round(r.inactivityMinutes)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})` : `Mouse inactive during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60} minutes)`;
 }
 
 /**

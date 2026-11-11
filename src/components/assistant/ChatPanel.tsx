@@ -6,7 +6,9 @@ import { AssistantOrb } from './AssistantOrb';
 import { ArrowUpIcon as ArrowUp, CaretLeftIcon as ChevronLeft, CheckIcon as Check, CopyIcon as Copy, ArrowSquareOutIcon as ExternalLink, ClockCounterClockwiseIcon as History, ArrowsOutIcon as Maximize2, ArrowsInIcon as Minimize2, ChatCircleIcon as MessageCircle, PlusIcon as Plus, NotePencilIcon as SquarePen, TrashIcon as Trash2, XIcon as X } from '@/components/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useAutoGrow } from '@/lib/useAutoGrow';
-import { Markdown } from './Markdown';
+import { Markdown, type DelTarget } from './Markdown';
+import { DelDetailPopup } from './DelDetailPopup';
+import { stripDelLinks } from '@/lib/assistant/delLinks';
 import { personaFor } from '@/lib/assistant/persona';
 import { clearAssistantChat, deleteSavedChat, listSavedChats, openSavedChat, type SavedChatRow, ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, sendAssistantMessage, useAssistantChat, type AssistantAction } from './assistantStore';
 
@@ -34,6 +36,7 @@ const SUGGESTIONS = [
 const TOOL_LABEL: Record<string, string> = {
   find_employee: 'employee lookup', explain_pay: 'pay', leave_summary: 'leave', reserved_overview: 'reserved salary',
   activity_facts: 'work activity', bank_details: 'bank details', get_ticket: 'ticket', tracker_health: 'trackers', payroll_overview: 'payroll',
+  list_tickets: 'tickets', ticket_trail: 'communication trail', attendance_day: 'attendance', absence_details: 'absences', leave_balance: 'leave balance', leave_overview: 'leave', absence_overview: 'absences', active_now: 'who is working', activity_now: 'activity now',
 };
 
 interface Props { variant: 'window' | 'page'; role: 'hr' | 'admin'; onExpand?: () => void; onMinimise?: () => void; onClose?: () => void }
@@ -45,7 +48,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={async () => {
-        try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
+        try { await navigator.clipboard.writeText(stripDelLinks(text)); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
       }}
       aria-label="Copy this answer"
       className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-caption font-medium text-slate-400 hover:bg-slate-200/60 hover:text-slate-700"
@@ -110,6 +113,8 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
   const reduced = useReducedMotion();
   const [draft, setDraft] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [target, setTarget] = useState<DelTarget | null>(null); // the name, ticket id or title the person clicked in an answer
+  const [flashId, setFlashId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(inputRef, draft, 160);
@@ -126,6 +131,15 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
       if (a.search) setTimeout(() => window.dispatchEvent(new CustomEvent('globalSearch', { detail: a.search })), 900);
     }
   };
+
+  // Shows an earlier answer again (the same question asked twice in a chat): scroll to it and highlight it for a moment.
+  const showAnswer = (id: string) => {
+    document.getElementById(`del-msg-${id}`)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+    setFlashId(id);
+    setTimeout(() => setFlashId(null), 1600);
+  };
+  // The question that was answered at `answerId`: the message just before it.
+  const questionAt = (answerId: string) => { const i = messages.findIndex(x => x.id === answerId); return i > 0 ? messages[i - 1].content : ''; };
 
   const submit = (text: string) => {
     if (!text.trim() || loading) return;
@@ -184,12 +198,18 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
           </div>
         )}
         {messages.map(m => (
-          <div key={m.id} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+          <div key={m.id} id={`del-msg-${m.id}`} className={`${m.role === 'user' ? 'flex justify-end' : 'flex justify-start'} ${flashId === m.id ? 'rounded-2xl ring-2 ring-orange-300 ring-offset-2 transition' : ''}`}>
             {m.role === 'user' ? (
               <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-slate-900 px-3.5 py-2 text-sm text-white">{m.content}</div>
             ) : (
               <div className={`max-w-[95%] rounded-2xl rounded-bl-md border px-3.5 py-2.5 ${m.error ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
-                {m.error ? <p className="text-sm text-rose-700">{m.content}</p> : <Markdown text={m.content} />}
+                {m.error ? <p className="text-sm text-rose-700">{m.content}</p> : <Markdown text={m.content} onOpen={setTarget} />}
+                {m.repeatOf && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    <button type="button" onClick={() => showAnswer(m.repeatOf!)} className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800 hover:border-orange-300">Show the answer</button>
+                    <button type="button" disabled={loading} onClick={() => { const q = questionAt(m.repeatOf!); if (q) void sendAssistantMessage(q, { fresh: true }); }} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-50">Look it up again</button>
+                  </div>
+                )}
                 {m.actions && m.actions.length > 0 && (
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {m.actions.map((a, i) => (
@@ -206,9 +226,16 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
                     ))}
                   </div>
                 )}
-                {!m.error && (
+                {!m.error && !m.repeatOf && (
                   <div className="mt-1.5 flex items-center justify-between gap-2">
-                    <p className="text-caption text-slate-400">{m.toolsUsed && m.toolsUsed.length > 0 ? `Checked: ${[...new Set(m.toolsUsed.map(t => TOOL_LABEL[t] ?? t))].join(', ')}` : ''}</p>
+                    <p className="text-caption text-slate-400">
+                      {m.toolsUsed && m.toolsUsed.length > 0 ? `Checked: ${[...new Set(m.toolsUsed.map(t => TOOL_LABEL[t] ?? t))].join(', ')}` : ''}
+                      {m.usage && m.usage.totalTokens > 0 && (
+                        <span title={`Sent to the model ${m.usage.promptTokens.toLocaleString()} · written back ${m.usage.completionTokens.toLocaleString()}${m.usage.estimated ? ' · counted by estimate' : ''}`}>
+                          {m.toolsUsed && m.toolsUsed.length > 0 ? ' · ' : ''}{m.usage.totalTokens.toLocaleString()} tokens{m.usage.estimated ? ' (est.)' : ''} · {m.usage.steps} {m.usage.steps === 1 ? 'step' : 'steps'}
+                        </span>
+                      )}
+                    </p>
                     <CopyButton text={m.content} />
                   </div>
                 )}
@@ -247,6 +274,7 @@ export function ChatPanel({ variant, role, onExpand, onMinimise, onClose }: Prop
         </div>
         <p className="mt-1.5 text-center text-caption text-slate-400">Del is an AI assistant and may make errors. Please verify the details before acting.</p>
       </form>
+      <DelDetailPopup target={target} role={role} onClose={() => setTarget(null)} />
     </div>
   );
 

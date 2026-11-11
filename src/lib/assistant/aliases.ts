@@ -106,7 +106,14 @@ export class AliasMap {
 
   /** Aliases -> real names (the person's full name). */
   restore(text: string): string {
-    const name = (n: string) => { const p = this.byAlias.get(`employee ${n}`); return p ? (p.alias ? `${p.name} (${p.alias})` : p.name) : undefined; };
+    return this.restoreWith(text, (_p, label) => label);
+  }
+
+  /** Like restore, but each person is passed through `wrap` (used to make a name a link). A list such as "Employees 4 and 9" wraps each name. */
+  restoreWith(text: string, wrap: (person: AliasPerson, label: string) => string): string {
+    const person = (n: string) => this.byAlias.get(`employee ${n}`);
+    const label = (p: AliasPerson) => (p.alias ? `${p.name} (${p.alias})` : p.name);
+    const name = (n: string) => { const p = person(n); return p ? wrap(p, label(p)) : undefined; };
     // "Employees 10 and 9" / "Employees 16, 4, 9" -> a list of real names.
     const plural = text.replace(/\bEmployees (\d{1,3}(?:(?:,\s*|\s+and\s+|\s*&\s*)\d{1,3})*)\b/g, (m, list: string) => {
       const names = list.split(/,\s*|\s+and\s+|\s*&\s*/).map(n => name(n));

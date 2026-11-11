@@ -170,6 +170,10 @@ export function useTickets(limit: number = 50, status?: 'open' | 'closed', optio
 }
 
 export const ticketActions = {
+  // One ticket with its replies, for read-only popups (Del's answers link to tickets that may be far older than the list's 50).
+  getTicket: async (id: string): Promise<Ticket | null> => {
+    try { return toTicket(await pb.collection('hr_tickets').getOne(id, { requestKey: null })); } catch { return null; }
+  },
   // ── Tickets ───────────────────────────────────────────────────────────
   // Returns the created Ticket (previously void) so callers can immediately
   // attach a file to it via addTicketReply — hr_tickets itself has no file
@@ -318,12 +322,17 @@ export const ticketActions = {
   },
 
   // ── Ticket "live" presence (see TicketPresence above) ───────────────────
+  // Presence is a convenience ("who is looking at this ticket"): a failed write (slow server, offline) is dropped and retried on the next beat, never thrown.
   touchTicketPresence: async (ticketId: string, email: string, role: string): Promise<void> => {
-    await pbUpsertByField('hr_ticket_presence', 'ticketId', ticketId, { email, role, lastSeenAt: new Date().toISOString() });
+    try {
+      await pbUpsertByField('hr_ticket_presence', 'ticketId', ticketId, { email, role, lastSeenAt: new Date().toISOString() });
+    } catch { /* retried on the next beat */ }
   },
   clearTicketPresence: async (ticketId: string): Promise<void> => {
-    const row = await pbFindByField('hr_ticket_presence', 'ticketId', ticketId);
-    if (row) await pbDelete('hr_ticket_presence', row.id);
+    try {
+      const row = await pbFindByField('hr_ticket_presence', 'ticketId', ticketId);
+      if (row) await pbDelete('hr_ticket_presence', row.id);
+    } catch { /* the row goes stale and is ignored */ }
   },
   getAllTicketPresences: async (): Promise<TicketPresence[]> =>
     (await pbList('hr_ticket_presence')) as TicketPresence[],

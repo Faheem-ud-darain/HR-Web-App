@@ -9,7 +9,7 @@ import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, u
 import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
-import { absenceDayCharge } from '@/lib/core/absences';
+import { absenceDayCharge, recordsOfCurrentEmployees } from '@/lib/core/absences';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { NoticeModal } from '@/components/ui/NoticeModal';
@@ -92,7 +92,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       return [...all].sort((a, b) => b.date.localeCompare(a.date));
     },
   });
-  const absenceRecords: AbsenceRecord[] = fetchedAbsences ?? NO_ABSENCES;
+  const fetchedRecords: AbsenceRecord[] = fetchedAbsences ?? NO_ABSENCES;
+  // People who have been deleted are not listed or counted (their profile, and so their salary, is gone). Waits for the profiles so nobody flashes away while loading.
+  const absenceRecords = useMemo(() => (role === 'employee' || allProfiles.length === 0 ? fetchedRecords : recordsOfCurrentEmployees(fetchedRecords, allProfiles)), [fetchedRecords, allProfiles, role]);
   const loadAbsenceRecords = () => { void refetchAbsences(); };
 
   // Filter absence records by date and query

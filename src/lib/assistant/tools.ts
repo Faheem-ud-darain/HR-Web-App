@@ -19,7 +19,6 @@ export const TOOL_DEFS: ToolDef[] = [
   { type: 'function', function: { name: 'bank_details', description: 'Bank details for an employee. Returns a placeholder to use verbatim in the answer.', parameters: { type: 'object', properties: { employee_ref: str('ref') }, required: ['employee_ref'] } } },
   { type: 'function', function: { name: 'get_ticket', description: 'Read one support ticket by number.', parameters: { type: 'object', properties: { ticket_id: { type: 'integer' } }, required: ['ticket_id'] } } },
   { type: 'function', function: { name: 'tracker_health', description: "Tracker status for one employee, or 'all' for everyone with a problem.", parameters: { type: 'object', properties: { employee_ref: str("ref, or 'all'") }, required: ['employee_ref'] } } },
-  { type: 'function', function: { name: 'suggest_actions', description: 'Show up to 3 buttons under your answer. open_page opens a page (optionally searching for a name); ask_followup asks a short follow-up question when clicked. Buttons only open pages or ask questions. Call it last, only when a clear next step exists.', parameters: { type: 'object', properties: { actions: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: ['open_page', 'ask_followup'] }, label: { type: 'string', description: 'Button text, max 40 chars' }, page: { type: 'string', description: 'payroll, leaves, absences, tickets, tracking, tasks, careers, reports, team-chats, policy, teams, onboarding, insights, warehouses' }, search: { type: 'string', description: 'Optional employee name to search for on that page' }, text: { type: 'string', description: 'For ask_followup: the question to ask' } }, required: ['type', 'label'] } } }, required: ['actions'] } } },
   { type: 'function', function: { name: 'activity_now', description: 'Whether ONE employee is active right now: clocked in on an open shift (since when), tracker connected, and when their last shift ended. Use for "is X active / online / working / on shift right now". Tolerates a slightly misspelt name.', parameters: { type: 'object', properties: { employee_ref: str('ref from find_employee, or the name as typed') }, required: ['employee_ref'] } } },
   { type: 'function', function: { name: 'active_now', description: 'Everyone who is clocked in on an open shift right now, with how long and whether their tracker is connected. Use for "who is active / online / working right now".', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'leave_overview', description: 'Company-wide LEAVE (planned time off that was requested: PTO, sick, urgent, normal, parental), ranked, with approved and pending working days. Use for "who took the most leave / time off / holiday". NOT for absences.', parameters: { type: 'object', properties: { month: str('YYYY-MM') }, required: ['month'] } } },
@@ -74,7 +73,7 @@ export function normalizeActions(raw: unknown, role: AssistantRole): AssistantAc
  */
 export function defaultActions(calls: { name: string; result: Record<string, unknown> }[], role: AssistantRole): AssistantAction[] {
   const who = (r: Record<string, unknown>) => (typeof r.employee === 'string' ? r.employee : typeof r.from === 'string' ? r.from : '');
-  const last = [...calls].reverse().find(c => ['explain_pay', 'leave_summary', 'get_ticket', 'tracker_health', 'reserved_overview', 'payroll_overview', 'activity_facts', 'leave_overview', 'absence_overview'].includes(c.name));
+  const last = [...calls].reverse().find(c => ['explain_pay', 'leave_summary', 'get_ticket', 'tracker_health', 'reserved_overview', 'payroll_overview', 'activity_facts', 'leave_overview', 'absence_overview', 'list_tickets', 'ticket_trail', 'attendance_day', 'absence_details', 'leave_balance'].includes(c.name));
   if (!last) return [];
   const name = who(last.result);
   const raw: unknown[] = [];
@@ -89,6 +88,9 @@ export function defaultActions(calls: { name: string; result: Record<string, unk
       raw.push({ type: 'open_page', label: 'Open tickets', page: 'tickets' });
       if (name) raw.push({ type: 'ask_followup', label: `Check ${name}'s tracker`, text: `Check the tracker health for ${name}` });
       break;
+    case 'list_tickets': case 'ticket_trail': raw.push({ type: 'open_page', label: 'Open tickets', page: 'tickets' }); break;
+    case 'attendance_day': case 'absence_details': raw.push({ type: 'open_page', label: name ? `Open absences for ${name}` : 'Open absences', page: 'absences', search: name }); break;
+    case 'leave_balance': raw.push({ type: 'open_page', label: name ? `Open leaves for ${name}` : 'Open leaves', page: 'leaves', search: name }); break;
     case 'activity_facts': if (name) raw.push({ type: 'ask_followup', label: `${name}'s pay this month`, text: `Why does ${name} have deductions this month?` }); break;
   }
   return normalizeActions(raw, role);

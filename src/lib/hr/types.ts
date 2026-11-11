@@ -365,9 +365,9 @@ export interface Notification {
   category?: NotificationCategory;
 }
 
-export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'maintenance' | 'hr_admin_line' | 'internal';
+export type NotificationCategory = 'announcement' | 'ticket' | 'chat_mention' | 'leave_task' | 'shift' | 'maintenance' | 'hr_admin_line' | 'tracker_alert' | 'internal';
 
-export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal' | 'maintenance' | 'hr_admin_line'>, boolean>;
+export type NotificationPrefs = Record<Exclude<NotificationCategory, 'internal' | 'maintenance' | 'hr_admin_line' | 'tracker_alert'>, boolean>;
 
 export interface CareerPosition {
   id: string; title: string; department: string; location: string; description: string; requirements: string[];

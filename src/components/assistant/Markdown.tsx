@@ -1,12 +1,19 @@
 import React from 'react';
+import { DEL_LINK_SPLIT, parseDelLink, type DelKind } from '@/lib/assistant/delLinks';
+
+export type DelTarget = { kind: DelKind; id: string };
 
 // A tiny, safe renderer for the assistant's answers: paragraphs, bullet and numbered lists, tables,
 // **bold**, *italic* and `code`. Everything becomes React text nodes (never raw HTML), so a reply can
 // never inject markup or scripts.
-function inline(text: string, keyBase: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g);
+function inline(text: string, keyBase: string, onOpen?: (t: DelTarget) => void): React.ReactNode[] {
+  const parts = text.split(DEL_LINK_SPLIT).flatMap((chunk, n) => (n % 2 ? [chunk] : chunk.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g)));
   return parts.map((p, i) => {
     const key = `${keyBase}-${i}`;
+    const link = parseDelLink(p);
+    if (link) return onOpen
+      ? <button key={key} type="button" onClick={() => onOpen({ kind: link.kind, id: link.id })} title={link.kind === 'ticket' ? 'Open this ticket' : 'Open this profile'} className="text-left font-semibold text-orange-600 underline decoration-dotted underline-offset-2 hover:text-orange-700">{link.label}</button>
+      : <React.Fragment key={key}>{link.label}</React.Fragment>;
     if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={key} className="font-semibold">{p.slice(2, -2)}</strong>;
     if (/^`[^`]+`$/.test(p)) return <code key={key} className="rounded bg-slate-100 px-1 py-0.5 text-[0.85em]">{p.slice(1, -1)}</code>;
     if (/^\*[^*\s][^*]*\*$/.test(p)) return <em key={key}>{p.slice(1, -1)}</em>;
@@ -18,7 +25,7 @@ const isTableRow = (l: string) => /^\s*\|.*\|\s*$/.test(l);
 const isDivider = (l: string) => /^\s*\|?[\s:|-]+\|?\s*$/.test(l) && l.includes('-');
 const cells = (l: string) => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, onOpen }: { text: string; onOpen?: (t: DelTarget) => void }) {
   const lines = text.replace(/\r/g, '').split('\n');
   const blocks: React.ReactNode[] = [];
   let i = 0;
@@ -34,8 +41,8 @@ export function Markdown({ text }: { text: string }) {
       blocks.push(
         <div key={`t${k++}`} className="my-2 overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600"><tr>{head.map((h, c) => <th key={c} className="px-1.5 py-1.5 align-bottom font-semibold">{inline(h, `h${c}`)}</th>)}</tr></thead>
-            <tbody>{rows.map((r, ri) => <tr key={ri} className="border-t border-slate-100">{r.map((c, ci) => <td key={ci} className="px-1.5 py-1.5 align-top [&:not(:first-child)]:whitespace-nowrap first:min-w-[6.5rem]">{inline(c, `c${ri}-${ci}`)}</td>)}</tr>)}</tbody>
+            <thead className="bg-slate-50 text-slate-600"><tr>{head.map((h, c) => <th key={c} className="px-1.5 py-1.5 align-bottom font-semibold">{inline(h, `h${c}`, onOpen)}</th>)}</tr></thead>
+            <tbody>{rows.map((r, ri) => <tr key={ri} className="border-t border-slate-100">{r.map((c, ci) => <td key={ci} className="px-1.5 py-1.5 align-top [&:not(:first-child)]:whitespace-nowrap first:min-w-[6.5rem]">{inline(c, `c${ri}-${ci}`, onOpen)}</td>)}</tr>)}</tbody>
           </table>
         </div>
       );
@@ -44,18 +51,18 @@ export function Markdown({ text }: { text: string }) {
     if (/^\s*[-*•]\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*•]\s+/, '')); i++; }
-      blocks.push(<ul key={`u${k++}`} className="my-1.5 list-disc space-y-0.5 pl-5">{items.map((it, n) => <li key={n}>{inline(it, `li${n}`)}</li>)}</ul>);
+      blocks.push(<ul key={`u${k++}`} className="my-1.5 list-disc space-y-0.5 pl-5">{items.map((it, n) => <li key={n}>{inline(it, `li${n}`, onOpen)}</li>)}</ul>);
       continue;
     }
     if (/^\s*\d+[.)]\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+[.)]\s+/, '')); i++; }
-      blocks.push(<ol key={`o${k++}`} className="my-1.5 list-decimal space-y-0.5 pl-5">{items.map((it, n) => <li key={n}>{inline(it, `ol${n}`)}</li>)}</ol>);
+      blocks.push(<ol key={`o${k++}`} className="my-1.5 list-decimal space-y-0.5 pl-5">{items.map((it, n) => <li key={n}>{inline(it, `ol${n}`, onOpen)}</li>)}</ol>);
       continue;
     }
     const para: string[] = [];
     while (i < lines.length && lines[i].trim() && !isTableRow(lines[i]) && !/^\s*([-*•]|\d+[.)])\s+/.test(lines[i])) { para.push(lines[i]); i++; }
-    blocks.push(<p key={`p${k++}`} className="my-1.5 first:mt-0 last:mb-0">{para.map((p, n) => <React.Fragment key={n}>{n > 0 && <br />}{inline(p, `p${n}`)}</React.Fragment>)}</p>);
+    blocks.push(<p key={`p${k++}`} className="my-1.5 first:mt-0 last:mb-0">{para.map((p, n) => <React.Fragment key={n}>{n > 0 && <br />}{inline(p, `p${n}`, onOpen)}</React.Fragment>)}</p>);
   }
   return <div className="text-sm leading-relaxed text-slate-800 break-words">{blocks}</div>;
 }

@@ -40,7 +40,7 @@ onRecordAfterCreateRequest((e) => {
     // category: it's HR and Admin's own direct line to each other, so
     // there's no opt-out toggle for it client-side either (see
     // NotificationPrefs in hrData.ts) — it gets the same bypass below.
-    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift", "maintenance", "hr_admin_line"];
+    const pushableCategories = ["ticket", "leave_task", "chat_mention", "shift", "maintenance", "hr_admin_line", "tracker_alert"];
     console.log("[push_notifications] fired, category=", category);
     if (pushableCategories.indexOf(category) === -1) {
       console.log("[push_notifications] category not pushable, skipping");
@@ -93,7 +93,7 @@ onRecordAfterCreateRequest((e) => {
     // entirely — see the comment on pushableCategories above. Every other
     // category still respects whatever the recipient set in
     // NotificationPreferencesCard.
-    const allowed = (category === "maintenance" || category === "hr_admin_line")
+    const allowed = (category === "maintenance" || category === "hr_admin_line" || category === "tracker_alert")
       ? emails
       : emails.filter((email) => {
           const p = prefsMap[email.toLowerCase()];
@@ -108,7 +108,7 @@ onRecordAfterCreateRequest((e) => {
       // hrData.ts), falling back to a generic per-category label if it's
       // missing (e.g. notifications created before this field existed, or
       // system actions with no natural "contact").
-      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update", maintenance: "System Maintenance", hr_admin_line: "HR & Admin" };
+      const fallbackTitles = { ticket: "Support Ticket", leave_task: "Leave & Tasks", chat_mention: "Team Chat", shift: "Shift Update", maintenance: "System Maintenance", hr_admin_line: "HR & Admin", tracker_alert: "Tracker" };
       const title = pushTitle || fallbackTitles[category] || "Delcargo Internal";
 
       // Resolve the sender's profile picture (if we have their email) to

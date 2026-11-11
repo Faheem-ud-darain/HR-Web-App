@@ -12,6 +12,8 @@ export interface ToolRunner {
   run(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
   /** Final answer as the person may see it (names and bank details put back). */
   finish(answer: string): Promise<string>;
+  /** The answer text itself (not a button label): like finish, and where the runner can, with names and tickets made clickable. */
+  finishAnswer?(answer: string): Promise<string>;
 }
 
 export const demoRunner: ToolRunner = {
