@@ -847,6 +847,26 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
     }
+    if (body.action === 'ensureTrackerDisconnects') {
+      // One row per tracker outage during a shift (written only by pb_hooks/tracker_disconnect_notices.pb.js): when it dropped, why,
+      // when it came back. Admin-only rules (null); the app reads it through its own route. Additive only. Defaults to a dry run.
+      const dryRun = body.dryRun !== false;
+      const name = 'hr_tracker_disconnects';
+      if (await collectionExists(name)) return NextResponse.json({ ok: true, dryRun, results: { [name]: 'already exists' } });
+      if (!dryRun) {
+        const text = (n: string) => ({ name: n, type: 'text', required: false, unique: false, options: { min: null, max: null, pattern: '' } });
+        await pbAdminFetch('/api/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, type: 'base',
+            schema: ['employee_id', 'shift_id', 'status', 'disconnected_at', 'detected_at', 'reason_code', 'reason', 'reconnected_at', 'duration'].map(text),
+            indexes: ['CREATE INDEX idx_hr_tracker_disconnects_emp ON hr_tracker_disconnects (employee_id, status)'],
+            listRule: null, viewRule: null, createRule: null, updateRule: null, deleteRule: null,
+          }),
+        });
+      }
+      return NextResponse.json({ ok: true, dryRun, results: { [name]: dryRun ? 'would create' : 'created' } });
+    }
     if (body.action === 'ensureCommunicationAudit') {
       // The permanent trail of every ticket, chat message and announcement: who (the verified account), from which address and device.
       // See src/app/api/audit/communication/route.ts and lib/core/communicationAudit.ts. Append-only and hidden: every rule is null
