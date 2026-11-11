@@ -134,7 +134,7 @@ export function absenceReasonLabel(r: Pick<AbsenceRecord, 'reason' | 'workedMinu
     ? "Didn't start a shift that day"
     : r.reason === 'under_4_hours'
       ? `Only ${hoursMinutes(r.workedMinutes || 0)} worked (the minimum is ${hoursText(floorMinutes)} hours)`
-      : `Mouse inactive for ${Math.round(r.inactivityMinutes || INACTIVITY_THRESHOLD_SECONDS / 60)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})`;
+      : r.inactivityMinutes ? `Mouse inactive for ${Math.round(r.inactivityMinutes)} minutes during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60})` : `Mouse inactive during the shift (the limit is ${INACTIVITY_THRESHOLD_SECONDS / 60} minutes)`;
 }
 
 /**

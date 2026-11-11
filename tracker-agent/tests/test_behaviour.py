@@ -193,3 +193,10 @@ def test_idle_is_cut_to_the_shift(agent):
     assert agent.clip_idle_to_shift(t(20), t(60), t(0), t(5)) is None  # began after the shift was last seen
     assert agent.clip_idle_to_shift(t(1), t(4), t(0), t(5)) == (t(1), t(4))  # fully inside: unchanged
     assert agent.clip_idle_to_shift(t(1), t(4), None, None) == (t(1), t(4))  # nothing known yet: unchanged
+
+
+def test_the_stretch_that_ends_the_shift_is_logged_before_the_shift_ends(agent):
+    source = open(agent.__file__, encoding="utf-8").read()
+    block = source[source.index("auto_absent_fired = True\n                # The stretch that ends the shift"):]
+    assert block.index("self._submit_idle_in_shift(") < block.index("handle_inactivity_auto_absence(")  # once the shift ends, tracking is off and nothing would report it
+    assert source.count("INACTIVITY_THRESHOLD_SECONDS and not auto_absent_fired:") == 2  # and the resume path does not log the same stretch a second time
