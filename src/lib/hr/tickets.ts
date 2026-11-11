@@ -322,12 +322,17 @@ export const ticketActions = {
   },
 
   // ── Ticket "live" presence (see TicketPresence above) ───────────────────
+  // Presence is a convenience ("who is looking at this ticket"): a failed write (slow server, offline) is dropped and retried on the next beat, never thrown.
   touchTicketPresence: async (ticketId: string, email: string, role: string): Promise<void> => {
-    await pbUpsertByField('hr_ticket_presence', 'ticketId', ticketId, { email, role, lastSeenAt: new Date().toISOString() });
+    try {
+      await pbUpsertByField('hr_ticket_presence', 'ticketId', ticketId, { email, role, lastSeenAt: new Date().toISOString() });
+    } catch { /* retried on the next beat */ }
   },
   clearTicketPresence: async (ticketId: string): Promise<void> => {
-    const row = await pbFindByField('hr_ticket_presence', 'ticketId', ticketId);
-    if (row) await pbDelete('hr_ticket_presence', row.id);
+    try {
+      const row = await pbFindByField('hr_ticket_presence', 'ticketId', ticketId);
+      if (row) await pbDelete('hr_ticket_presence', row.id);
+    } catch { /* the row goes stale and is ignored */ }
   },
   getAllTicketPresences: async (): Promise<TicketPresence[]> =>
     (await pbList('hr_ticket_presence')) as TicketPresence[],
