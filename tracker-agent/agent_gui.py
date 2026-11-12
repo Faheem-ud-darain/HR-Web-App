@@ -134,11 +134,14 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
+# v28 (2026-11-12): fixes updating. The v26 and v27 installers were built with the version still set to 25 (setup.iss), so on a v25 PC they said
+# "already up to date" and quit, after the app had already closed itself to make room: the tracker vanished and nothing was installed. The
+# installer's version is now checked against this one by a test, and the app no longer closes if the installer quits straight away.
 # v27 (2026-11-12): the tracker no longer creates absence records or absence notices. It logs the idle stretch and ends the shift; the web
 # app's own check makes the absence from that log, so an absence can never exist without the logged inactivity behind it.
 # v26 (2026-11-10): the tracker no longer reads or shows any pay (the 37-minute popup and notices carry no amount); the inactivity absence
 # now also tells the employee, HR and Admin; idle time is reported only for the part inside the open shift. Compatible with v25.
-APP_VERSION = "27"  # Bumped 26 -> 27. Earlier: 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
+APP_VERSION = "28"  # Bumped 27 -> 28. Earlier: 26 -> 27, 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
 # MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
 #   Lighter server load: realtime subscription scoped to this employee's own
 #   hr_tracker_signals row; cached row id (heartbeat = 2 requests, not 3); idle
@@ -2076,6 +2079,7 @@ def relaunch_self():
 # open on the server and the relaunched tracker simply resumes it.
 UPDATE_CHECK_INTERVAL_SECONDS = 60 * 60          # unauthenticated GitHub API: stay far under 60 req/h per IP
 UPDATE_FIRST_CHECK_DELAY_SECONDS = (120, 300)    # let startup settle, and stagger machines
+INSTALLER_ABORT_WINDOW_SECONDS = 8                # an installer that exits within this did not update anything
 UPDATE_RESTART_DEADLINE_SECONDS = 5 * 60         # forced restart countdown once the update is staged
 
 
@@ -2147,11 +2151,17 @@ def launch_staged_update(staged_path, version):
             # Detached so the installer's own taskkill of the old process tree
             # can't take the installer down with it.
             flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
-            subprocess.Popen(
+            installer = subprocess.Popen(
                 [staged_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
                 close_fds=True, creationflags=flags,
             )
-            return True
+            # An installer that is really replacing us closes this app itself within moments. One that quits straight away did nothing
+            # (for example it judged this version current), so this app must NOT close: the caller then tells the person.
+            try:
+                installer.wait(timeout=INSTALLER_ABORT_WINDOW_SECONDS)
+            except subprocess.TimeoutExpired:
+                return True
+            return False
         if system == "Darwin" and getattr(sys, "frozen", False):
             app_bundle = os.path.abspath(sys.executable)
             while app_bundle and not app_bundle.endswith(".app"):
@@ -2392,31 +2402,39 @@ class TrackerApp:
 
     def _show_forced_update_dialog(self, version, staged_path):
         """Mandatory restart prompt: no close button, always on top, and it
-        restarts into the new version by itself when the countdown ends."""
+        restarts into the new version by itself when the countdown ends.
+        Sized by its own content, never a fixed pixel size: on a Windows screen
+        scaled to 125-150% the text grows but a fixed window does not, which
+        cut the text and the button off."""
         win = tk.Toplevel(self.root)
         win.title(APP_NAME)
-        win.geometry("380x200")
         win.resizable(False, False)
         win.configure(bg=BG)
         win.attributes("-topmost", True)
         win.protocol("WM_DELETE_WINDOW", lambda: None)  # can't be dismissed
-        tk.Label(win, text="Update ready", bg=BG, fg=INK, font=(FONT, 13, "bold")).pack(pady=(22, 6))
+        body = tk.Frame(win, bg=BG, padx=32, pady=24)
+        body.pack(fill="both", expand=True)
+        tk.Label(body, text="Update ready", bg=BG, fg=INK, font=(FONT, 13, "bold")).pack(pady=(0, 8))
         tk.Label(
-            win,
+            body,
             text=f"DelCargo Tracker v{version} has been downloaded.\n"
                  "Restart now to apply it — your shift keeps running.",
-            bg=BG, fg=MUTED, font=(FONT, 10), justify="center",
+            bg=BG, fg=MUTED, font=(FONT, 10), justify="center", wraplength=380,
         ).pack()
         remaining = [UPDATE_RESTART_DEADLINE_SECONDS]
         countdown = tk.StringVar()
-        tk.Label(win, textvariable=countdown, bg=BG, fg=INK, font=(FONT, 9)).pack(pady=(10, 8))
+        tk.Label(body, textvariable=countdown, bg=BG, fg=INK, font=(FONT, 9)).pack(pady=(12, 12))
+        applied = [False]
 
         def restart():
+            if applied[0]:
+                return  # a double click, or the countdown ending at the same moment, must not start the installer twice
+            applied[0] = True
             win.destroy()
             self._apply_staged_update(version, staged_path)
 
         tk.Button(
-            win, text="Restart & Update", command=restart, bg=ACCENT, fg="white",
+            body, text="Restart & Update", command=restart, bg=ACCENT, fg="white",
             activebackground=ACCENT_HOVER, activeforeground="white", relief="flat",
             font=(FONT, 10, "bold"), padx=18, pady=6, cursor="hand2",
         ).pack()
@@ -2433,6 +2451,10 @@ class TrackerApp:
             win.after(1000, tick)
 
         tick()
+        win.update_idletasks()  # the window now knows how big its content needs to be: centre that size on the screen
+        x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)
+        y = max(0, (win.winfo_screenheight() - win.winfo_reqheight()) // 3)
+        win.geometry(f"+{x}+{y}")
         win.lift()
         win.focus_force()
         try:

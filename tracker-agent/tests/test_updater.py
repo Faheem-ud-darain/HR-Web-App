@@ -1,6 +1,7 @@
 """Background update staging, checksum verification and apply hand-off."""
 import hashlib
 import os
+import re
 import subprocess
 import sys
 from unittest.mock import MagicMock
@@ -63,12 +64,35 @@ def test_checksum_fetch_failure_fails_closed(agent, monkeypatch):
     assert agent.stage_update_download("27") is None
 
 
-def test_windows_launch_is_silent_and_detached(agent, monkeypatch):
-    monkeypatch.setattr(agent.platform, "system", lambda: "Windows")
+def _installer(agent, monkeypatch, wait):
     popen = MagicMock()
+    popen.return_value.wait = wait
+    monkeypatch.setattr(agent.platform, "system", lambda: "Windows")
     monkeypatch.setattr(agent.subprocess, "Popen", popen)
+    return popen
+
+
+def _still_running(timeout):
+    raise subprocess.TimeoutExpired("setup.exe", timeout)
+
+
+def test_windows_launch_is_silent_and_detached(agent, monkeypatch):
+    popen = _installer(agent, monkeypatch, _still_running)
     assert agent.launch_staged_update("C:/tmp/setup.exe", "25") is True
     assert popen.call_args[0][0] == ["C:/tmp/setup.exe", "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
+
+
+def test_an_installer_that_quits_straight_away_does_not_close_the_app(agent, monkeypatch):
+    _installer(agent, monkeypatch, lambda timeout: 1)  # it exited at once: nothing was updated
+    assert agent.launch_staged_update("C:/tmp/setup.exe", "28") is False
+
+
+def test_the_installer_version_is_this_apps_version():
+    """The v26 and v27 installers said 25, so a v25 PC was told it was already up to date and was never updated."""
+    here = os.path.dirname(os.path.dirname(__file__))
+    iss = open(os.path.join(here, "setup.iss"), encoding="utf-8").read()
+    py = open(os.path.join(here, "agent_gui.py"), encoding="utf-8").read()
+    assert re.search(r'^#define AppVer "([\d.]+)"', iss, re.M).group(1) == re.search(r'^APP_VERSION = "([\d.]+)"', py, re.M).group(1)
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="runs the real macOS swap script")
@@ -112,3 +136,11 @@ def test_mac_swap_and_failure_recovery(agent, monkeypatch, tmp_path):
     assert (root / "delcargo_update_failed_v25").exists()
     monkeypatch.setattr(agent.platform, "system", lambda: "Darwin")
     assert agent.stage_update_download("25") is None
+
+
+def test_the_update_popup_sizes_itself_to_its_content(agent):
+    """A fixed 380x200 window cut the text and the button off on Windows screens scaled above 100%."""
+    source = open(agent.__file__, encoding="utf-8").read()
+    dialog = source[source.index("def _show_forced_update_dialog"):source.index("def _apply_staged_update")]
+    assert ".geometry(\"380x200\")" not in dialog and "winfo_reqwidth" in dialog
+    assert "applied[0]" in dialog  # restart() cannot run twice
