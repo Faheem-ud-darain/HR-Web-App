@@ -5,15 +5,30 @@ import { latestVersionIfBehind, needsTrackerUpdate } from '@/lib/trackerSetup';
 import type { TrackerHeartbeat } from '@/lib/hr/types';
 import type { PbRow } from '@/lib/pbTypes';
 
+const SCREENSHOT_LOOKUP_MAX_PAGES = 3;
+
 /**
  * When each person's newest screenshot was taken. A tracker that is closed has no heartbeat, which looks the same as one that never
- * connected; a screenshot is the proof it did. One single-row request per person, so ask only about people with no heartbeat.
+ * connected; a screenshot is the proof it did. Ask only about people with no heartbeat.
+ * The lookup matches the email as a substring (a screenshot of "joann@x" can come back for "ann@x"), so a page is searched until it holds
+ * an exact match instead of trusting the first row. A person whose lookup fails is left out (their state stays as it was): one failing
+ * request must never take down the whole health check and the alerts that depend on it.
  */
 export async function latestScreenshotByEmail(emails: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   await Promise.all(emails.map(async email => {
-    const [newest] = (await adminListScreenshotsPage({ employeeEmail: email }, 1, 1)).items;
-    if (newest?.captured_at) out.set(email.toLowerCase(), String(newest.captured_at).replace(' ', 'T')); // PocketBase dates use a space, which only some parsers accept
+    try {
+      for (let page = 1; page <= SCREENSHOT_LOOKUP_MAX_PAGES; page++) {
+        const found = await adminListScreenshotsPage({ employeeEmail: email }, page, 20); // already narrowed to the exact email
+        if (found.items[0]?.captured_at) {
+          out.set(email.toLowerCase(), String(found.items[0].captured_at).replace(' ', 'T')); // PocketBase dates use a space, which only some parsers accept
+          return;
+        }
+        if (page >= found.totalPages) return;
+      }
+    } catch (error) {
+      console.warn(`[tracking-health] screenshot lookup failed for one person: ${error instanceof Error ? error.message : error}`);
+    }
   }));
   return out;
 }
