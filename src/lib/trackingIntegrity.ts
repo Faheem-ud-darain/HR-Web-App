@@ -1,4 +1,4 @@
-import { pbAdminFetch } from '@/lib/pbAdmin';
+import { adminListScreenshotsPage, pbAdminFetch } from '@/lib/pbAdmin';
 import { buildIntegrityReport, type IntegrityFinding } from '@/lib/core/trackingSettings';
 import { diagnoseTracker, withDataFindings, type TrackerDiagnosis } from '@/lib/core/trackerDiagnosis';
 import { latestVersionIfBehind, needsTrackerUpdate } from '@/lib/trackerSetup';
@@ -24,13 +24,19 @@ export async function loadTrackingHealth(): Promise<{ findings: IntegrityFinding
   const findings = buildIntegrityReport({ profiles: profileRows, settings: settingRows, openShifts, heartbeats });
   const settingsBy = new Map(settingRows.map(s => [s.employeeEmail.toLowerCase(), s]));
   const shiftBy = new Map(openShifts.map(s => [s.employeeEmail.toLowerCase(), s]));
+  // A tracker that is closed has no heartbeat, which looks the same as one that never connected; its newest screenshot tells them apart.
+  const lastScreenshot = new Map<string, string>();
+  await Promise.all(settingRows.filter(s => s.enabled && !heartbeats[s.employeeEmail.toLowerCase()]).map(async s => {
+    const [newest] = (await adminListScreenshotsPage({ employeeEmail: s.employeeEmail }, 1, 1)).items;
+    if (newest?.captured_at) lastScreenshot.set(s.employeeEmail.toLowerCase(), String(newest.captured_at));
+  }));
   const diagnoses = withDataFindings(profileRows
     .filter(p => p.role === 'employee' || p.role === 'team_lead')
     .map(p => {
       const email = p.email.toLowerCase();
       const hb = heartbeats[email] || null;
       return diagnoseTracker({
-        email, settings: settingsBy.get(email) || null, heartbeat: hb, openShift: shiftBy.get(email) || null,
+        email, settings: settingsBy.get(email) || null, heartbeat: hb, openShift: shiftBy.get(email) || null, lastScreenshotAt: lastScreenshot.get(email) ?? null,
         updateRequired: needsTrackerUpdate(hb?.agentVersion, hb?.deviceLabel),
         updateAvailable: latestVersionIfBehind(hb?.agentVersion, hb?.deviceLabel),
       });

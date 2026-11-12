@@ -31,6 +31,13 @@ describe('diagnoseTracker', () => {
     expect(d.action).toContain('Switch tracking on');
   });
 
+  it('a closed tracker has no heartbeat, but its screenshots show it did connect: offline with the last screenshot, never "never connected"', () => {
+    const shot = new Date(NOW - 90 * 60000).toISOString();
+    expect(diagnose({ heartbeat: null, openShift: null, lastScreenshotAt: shot })).toMatchObject({ state: 'offline', severity: 'info', details: { lastCaptureAt: shot, lastSeenAt: shot } });
+    expect(diagnose({ heartbeat: null, lastScreenshotAt: shot }).cause).toContain('90 min');
+    expect(diagnose({ heartbeat: null, lastScreenshotAt: shot })).toMatchObject({ state: 'offline', severity: 'problem' }); // on shift with nothing running
+    expect(diagnose({ heartbeat: null, lastScreenshotAt: null })).toMatchObject({ state: 'not_installed' });
+  });
   it('tracking on but never connected is not installed, worse when on shift', () => {
     expect(diagnose({ heartbeat: null })).toMatchObject({ state: 'not_installed', severity: 'problem' });
     expect(diagnose({ heartbeat: null, openShift: null })).toMatchObject({ state: 'not_installed', severity: 'warn' });
