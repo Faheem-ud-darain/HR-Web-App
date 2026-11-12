@@ -147,6 +147,13 @@ describe('absences — detectAbsences (pure)', () => {
     const c = run([shift(emp.email, '2026-09-10T13:00:00Z', '2026-09-10T21:00:00Z')], { logs }).find(x => x.date === '2026-09-10');
     expect(c).toMatchObject({ reason: 'inactivity', inactivityMinutes: 40 });
   });
+  it('inactivity absences come only from the logged stretches: none logged near 37 minutes, no absence; the stretch that ends the shift counts', () => {
+    const log = (startAt: string, endAt: string, mins: number): InactivityLog => ({ id: startAt, employeeEmail: emp.email, startAt, endAt, durationSeconds: mins * 60 });
+    const fullDay = [shift(emp.email, '2026-09-10T13:00:00Z', '2026-09-10T21:00:00Z')];
+    expect(run(fullDay, { logs: [log('2026-09-10T16:00:00Z', '2026-09-10T16:14:00Z', 14), log('2026-09-10T17:00:00Z', '2026-09-10T17:06:00Z', 6)] }).find(c => c.date === '2026-09-10')).toBeUndefined();
+    const endsTheShift = [shift(emp.email, '2026-09-10T12:00:00Z', '2026-09-10T20:00:00Z')];
+    expect(run(endsTheShift, { logs: [log('2026-09-10T19:23:00Z', '2026-09-10T20:00:00Z', 37)] }).find(c => c.date === '2026-09-10')).toMatchObject({ reason: 'inactivity', inactivityMinutes: 37 });
+  });
   it('respects approved leave, already-recorded keys, exemptions, and non-Pakistan staff', () => {
     expect(run([], { leaves: [leave({ type: 'Normal', duration: 'Sep 10, 2026 - Sep 10, 2026' })] }).some(c => c.date === '2026-09-10')).toBe(false);
     expect(run([], { ignored: ['test@delcargo.us_2026-09-10'] }).some(c => c.date === '2026-09-10')).toBe(false);

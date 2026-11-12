@@ -134,9 +134,11 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
+# v27 (2026-11-12): the tracker no longer creates absence records or absence notices. It logs the idle stretch and ends the shift; the web
+# app's own check makes the absence from that log, so an absence can never exist without the logged inactivity behind it.
 # v26 (2026-11-10): the tracker no longer reads or shows any pay (the 37-minute popup and notices carry no amount); the inactivity absence
 # now also tells the employee, HR and Admin; idle time is reported only for the part inside the open shift. Compatible with v25.
-APP_VERSION = "26"  # Bumped 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
+APP_VERSION = "27"  # Bumped 26 -> 27. Earlier: 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
 # MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
 #   Lighter server load: realtime subscription scoped to this employee's own
 #   hr_tracker_signals row; cached row id (heartbeat = 2 requests, not 3); idle
@@ -240,13 +242,13 @@ INACTIVITY_THRESHOLD_SECONDS = 180  # 3 minutes — matches the HR/Admin-facing 
 
 # 37 minutes of CONTINUOUS idle time (mouse hasn't moved at all, checked
 # live while still idle — not the completed-interval log above, which only
-# gets written once the mouse moves again) auto-ends the shift and marks
-# the employee absent for the day, per explicit product decision. This is
+# gets written once the mouse moves again) auto-ends the shift; the stretch
+# goes to the inactivity log and the web app's check makes the absence from that log, per explicit product decision. This is
 # deliberately a separate constant from INACTIVITY_THRESHOLD_SECONDS above
 # (3 min) — that one is just the HR/Admin reporting threshold for what
 # counts as a loggable idle stretch at all; this one is the much longer
 # "you weren't actually working" cutoff that has a real payroll
-# consequence. See handle_inactivity_auto_absence() below.
+# consequence. See end_shift_for_inactivity() below.
 AUTO_ABSENT_INACTIVITY_SECONDS = 37 * 60
 
 MAX_ERROR_DISPLAY_LEN = 140  # see _short_error() below
@@ -1761,44 +1763,6 @@ def submit_inactivity(cfg, employee_email, start_dt, end_dt):
     ).start()
 
 
-# ── Real-time inactivity auto-absence ────────────────────────────────────
-# See AUTO_ABSENT_INACTIVITY_SECONDS above and _inactivity_loop below for
-# where this actually gets triggered. Everything here uses the same
-# no-auth/public-rule REST pattern as the rest of this file (see the
-# "PocketBase REST helpers" comment above pb_get_kv) — no new auth model
-# needed, hr_absence_records_v1 (inside hr_delcargo_store) and
-# hr_notifications both already have public createRule = "".
-
-def _get_ny_date_string():
-    """Calendar date (YYYY-MM-DD) in America/New_York — matches
-    getNYDateString() in src/lib/timezone.ts, so a record created here lands
-    on the exact same date the web app would compute. Requires the `tzdata`
-    package on Windows (Windows has no system IANA timezone database) — see
-    requirements.txt. Falls back to a fixed UTC-5 approximation if zoneinfo/
-    tzdata isn't available yet (e.g. an employee hasn't updated the agent),
-    which is correct except for the ~1 hour around a DST transition."""
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-    except Exception:
-        return (datetime.now(timezone.utc) - timedelta(hours=5)).strftime("%Y-%m-%d")
-
-
-def _fetch_employee_name(base_url, employee_email):
-    """The employee's display name, for the notices HR and Admin receive. Only the name is asked for: the tracker never reads, works
-    out or shows pay. What a day costs is decided by the web app and payroll alone."""
-    try:
-        url = f"{base_url}/api/collections/hr_profiles/records"
-        params = {"filter": f'(email~"{employee_email}")', "perPage": 10, "fields": "email,full_name"}
-        resp = _http.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        items = [i for i in resp.json().get("items", []) if (i.get("email") or "").lower() == employee_email.lower()]
-        return (items[0].get("full_name") if items else "") or employee_email
-    except Exception as e:
-        print(f"[warn] _fetch_employee_name failed: {e}")
-        return employee_email
-
-
 SHIFT_SEEN_GRACE_SECONDS = 180  # a shift the agent last saw open longer ago than this is not trusted (the server could not be reached)
 
 
@@ -1813,127 +1777,19 @@ def clip_idle_to_shift(start, end, shift_since, shift_seen_at):
     return (lo, hi) if hi > lo else None
 
 
-def _pb_quote(value):
-    """Escapes a value for use inside a double-quoted PocketBase filter string."""
-    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
-
-
-def create_inactivity_absence_record(base_url, employee_email, employee_name, inactivity_minutes):
-    """Creates the AbsenceRecord (one row per employee per day in the
-    hr_absence_records collection — see absenceActions in src/lib/hr/absences.ts)
-    for a real-time inactivity-triggered absence. This mirrors what the web
-    app's runAbsenceCheck() would eventually create from a completed
-    hr_inactivity_logs row, but fires immediately: only the agent can observe
-    "still idle right now"; the inactivity log only gets written once the
-    mouse moves again, which would be too late for a live stop.
-
-    v25: this used to append to the retired hr_absence_records_v1 KV blob in
-    hr_delcargo_store, which the portal no longer reads — the employee was told
-    they'd been marked absent but nothing reached the portal until a later
-    dashboard check. Returns True if a record was created, False if that
-    employee/day already has one (including a soft-deleted one HR removed —
-    never resurrect it, same rule as runAbsenceCheck)."""
-    date_str = _get_ny_date_string()
-    email = (employee_email or "").strip()
-    url = f"{base_url}/api/collections/hr_absence_records/records"
-    try:
-        resp = _http.get(url, params={
-            "filter": f'(employeeEmail~"{_pb_quote(email)}" && date="{date_str}")',
-            "perPage": 20, "fields": "id,employeeEmail",
-        }, timeout=15)
-        resp.raise_for_status()
-        for row in resp.json().get("items", []):
-            if (row.get("employeeEmail") or "").strip().lower() == email.lower():
-                return False  # already recorded for today (possibly soft-deleted) — don't duplicate
-    except Exception as e:
-        # Can't tell — better to risk a duplicate (the table's unique index on
-        # active rows rejects it below) than to skip recording the absence.
-        print(f"[warn] absence duplicate check failed, creating anyway: {e}")
-    payload = {
-        "employeeEmail": email,
-        "employeeName": employee_name or email,
-        "date": date_str,
-        "reason": "inactivity",
-        "inactivityMinutes": inactivity_minutes,
-        "workedMinutes": 0,
-        "deductionAmount": 0,  # the tracker knows no pay; every screen and payroll work the amount out from the salary
-        "createdAt": datetime.now(timezone.utc).isoformat(),
-        "acknowledged": False,
-        "deleted": False,
-    }
-    resp = _http.post(url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
-    if resp.status_code == 400:
-        # Unique (employeeEmail, date) index on active rows: someone else (the
-        # web app's own check) got there first — same outcome as "already recorded".
-        # Logged because a 400 can also mean a real schema mismatch worth seeing.
-        print(f"[info] absence record not created (400): {resp.text[:200]}")
-        return False
-    resp.raise_for_status()
-    return True
-
-
-def create_notification(base_url, recipient_email, recipient_role, message, category="leave_task"):
-    """Creates an hr_notifications row directly via the same public REST
-    pattern as everything else in this file — bypasses hrActions.
-    addNotification in the web app entirely, but PocketBase's
-    push_notifications.pb.js hook fires on record creation regardless of
-    which client created it, so OneSignal pushes still go out normally."""
-    try:
-        url = f"{base_url}/api/collections/hr_notifications/records"
-        payload = {
-            "recipient_email": recipient_email,
-            "recipient_role": recipient_role,
-            "message": message,
-            "read": False,
-            "category": category,
-            "push_title": "",
-            "sender_email": "",
-            "link": "",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        resp = _http.post(url, headers=JSON_HEADERS, data=json.dumps(payload), timeout=20)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"[warn] create_notification failed: {e}")
-
-
-def handle_inactivity_auto_absence(base_url, employee_email, elapsed_seconds):
-    """Called exactly once per idle stretch, the moment continuous mouse
-    inactivity crosses AUTO_ABSENT_INACTIVITY_SECONDS *while still idle*
-    (see the guard in _inactivity_loop below that prevents this firing more
-    than once per stretch). Ends the shift immediately, records why (both
-    server-side for HR/Admin/the Absent Details pages, and via the existing
-    shift-stop-signal the web dashboard already polls every 10s), and
-    returns the (employee_name, inactivity_minutes) pair
-    so the caller can show a local popup with the same numbers."""
-    inactivity_minutes = round(elapsed_seconds / 60)
-
+def end_shift_for_inactivity(base_url, employee_email):
+    """Ends the open shift (and tells the web dashboard through the shift-stop signal) once an idle stretch reaches
+    AUTO_ABSENT_INACTIVITY_SECONDS. That is all the tracker does about it: the stretch itself is reported to the inactivity log
+    first (see _inactivity_loop), and the absence is made from that log by the web app's own check, the one place that decides
+    absences. The tracker never creates an absence or an absence notice, so the two can never disagree."""
     try:
         auto_clock_out(base_url, employee_email)
     except Exception as e:
         print(f"[warn] auto_clock_out (inactivity) failed: {e}")
-
-    full_name = _fetch_employee_name(base_url, employee_email)
-    date_str = _get_ny_date_string()
-
-    created = False
-    try:
-        created = create_inactivity_absence_record(base_url, employee_email, full_name, inactivity_minutes)
-    except Exception as e:
-        print(f"[warn] create_inactivity_absence_record failed: {e}")
-    if created:  # the same three notices the web check sends, without any amount: the tracker is not where pay is shown
-        create_notification(base_url, employee_email, "employee",
-                            f"You were marked absent for {date_str} ({inactivity_minutes} min inactivity during shift). Two days' pay will be deducted for it.")
-        hr_note = f"{full_name} was inactive for {inactivity_minutes} minutes during their shift on {date_str} and was marked absent (2 days' pay)."
-        create_notification(base_url, "all", "hr", hr_note)
-        create_notification(base_url, "all", "admin", hr_note)
-
     try:
         notify_shift_auto_stopped(base_url, employee_email, reason="inactivity_absence")
     except Exception as e:
         print(f"[warn] notify_shift_auto_stopped (inactivity) failed: {e}")
-
-    return full_name, inactivity_minutes
 
 
 # ─────────────────────────────── tray icon image ─────────────────────────────
@@ -3619,7 +3475,7 @@ class TrackerApp:
         last_move_time = time.monotonic()
         last_tick = last_move_time
         was_enabled = False
-        # Guards handle_inactivity_auto_absence() from firing more than once
+        # Guards end_shift_for_inactivity() from firing more than once
         # for the same continuous idle stretch — reset to False whenever
         # activity resumes (a new stretch begins) or tracking/shift toggles
         # off. Deliberately separate from the >=INACTIVITY_THRESHOLD_SECONDS
@@ -3737,25 +3593,20 @@ class TrackerApp:
             # Checked on every poll (not just when activity eventually
             # resumes) so this can trigger DURING the idle stretch instead of
             # waiting for it to end.
-            if self._idle_seconds_in_shift(current_idle_seconds) >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
+            idle_in_shift = self._idle_seconds_in_shift(current_idle_seconds)
+            if idle_in_shift >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
                 auto_absent_fired = True
-                # The stretch that ends the shift is logged now, while the shift is still open: once it ends, tracking is off and
-                # nothing would report it, so HR saw an absence with no idle record behind it.
+                # The stretch is logged now, while the shift is still open: once it ends, tracking is off and nothing would report it.
+                # That log is the only record of it; the absence is made from it by the web app, never here.
                 end_wall = datetime.now(timezone.utc)
                 self._submit_idle_in_shift(cfg, employee_email, end_wall - timedelta(seconds=current_idle_seconds), end_wall)
                 try:
-                    full_name, inactivity_minutes = handle_inactivity_auto_absence(
-                        cfg["url"], employee_email, current_idle_seconds
-                    )
-                    # Tkinter widgets/dialogs must run on the main thread —
-                    # this loop runs on its own background thread, so the
-                    # actual popup call is marshaled via self.root.after(0,
-                    # ...), same pattern used elsewhere in this file (see
-                    # e.g. _connect_and_save).
-                    self.root.after(0, lambda m=inactivity_minutes: self._show_inactivity_absence_popup(m))
+                    end_shift_for_inactivity(cfg["url"], employee_email)
+                    # Tkinter dialogs must run on the main thread; this loop has its own thread, so the popup is marshaled via root.after.
+                    self.root.after(0, lambda m=round(idle_in_shift / 60): self._show_inactivity_absence_popup(m))
                 except Exception as e:
                     with self.state_lock:
-                        self.state["last_error"] = _short_error(f"Inactivity auto-absence failed: {e}")
+                        self.state["last_error"] = _short_error(f"Ending the shift for inactivity failed: {e}")
 
     # ---------- periodic UI refresh ----------
 
@@ -3831,7 +3682,7 @@ class TrackerApp:
 
     def _show_inactivity_absence_popup(self, inactivity_minutes):
         """Native desktop popup shown the moment the agent auto-ends a shift
-        for inactivity (see handle_inactivity_auto_absence /
+        for inactivity (see end_shift_for_inactivity /
         _inactivity_loop) — runs on the main/Tk thread via self.root.after,
         since this is called from a background thread. Shown regardless of
         whether the employee has the web dashboard open at all (unlike the
@@ -3842,7 +3693,7 @@ class TrackerApp:
         messagebox.showwarning(
             APP_NAME,
             f"Your shift has been ended automatically.\n\n"
-            f"You were inactive for over {inactivity_minutes} minutes and have been marked absent for today "
+            f"You were inactive for over {inactivity_minutes} minutes. A stretch this long counts as an absence for today "
             f"— a day's deduction applies.\n\n"
             f"If you believe this is a mistake, contact HR.",
         )
