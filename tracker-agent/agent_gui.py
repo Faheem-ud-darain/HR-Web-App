@@ -2402,31 +2402,39 @@ class TrackerApp:
 
     def _show_forced_update_dialog(self, version, staged_path):
         """Mandatory restart prompt: no close button, always on top, and it
-        restarts into the new version by itself when the countdown ends."""
+        restarts into the new version by itself when the countdown ends.
+        Sized by its own content, never a fixed pixel size: on a Windows screen
+        scaled to 125-150% the text grows but a fixed window does not, which
+        cut the text and the button off."""
         win = tk.Toplevel(self.root)
         win.title(APP_NAME)
-        win.geometry("380x200")
         win.resizable(False, False)
         win.configure(bg=BG)
         win.attributes("-topmost", True)
         win.protocol("WM_DELETE_WINDOW", lambda: None)  # can't be dismissed
-        tk.Label(win, text="Update ready", bg=BG, fg=INK, font=(FONT, 13, "bold")).pack(pady=(22, 6))
+        body = tk.Frame(win, bg=BG, padx=32, pady=24)
+        body.pack(fill="both", expand=True)
+        tk.Label(body, text="Update ready", bg=BG, fg=INK, font=(FONT, 13, "bold")).pack(pady=(0, 8))
         tk.Label(
-            win,
+            body,
             text=f"DelCargo Tracker v{version} has been downloaded.\n"
                  "Restart now to apply it — your shift keeps running.",
-            bg=BG, fg=MUTED, font=(FONT, 10), justify="center",
+            bg=BG, fg=MUTED, font=(FONT, 10), justify="center", wraplength=380,
         ).pack()
         remaining = [UPDATE_RESTART_DEADLINE_SECONDS]
         countdown = tk.StringVar()
-        tk.Label(win, textvariable=countdown, bg=BG, fg=INK, font=(FONT, 9)).pack(pady=(10, 8))
+        tk.Label(body, textvariable=countdown, bg=BG, fg=INK, font=(FONT, 9)).pack(pady=(12, 12))
+        applied = [False]
 
         def restart():
+            if applied[0]:
+                return  # a double click, or the countdown ending at the same moment, must not start the installer twice
+            applied[0] = True
             win.destroy()
             self._apply_staged_update(version, staged_path)
 
         tk.Button(
-            win, text="Restart & Update", command=restart, bg=ACCENT, fg="white",
+            body, text="Restart & Update", command=restart, bg=ACCENT, fg="white",
             activebackground=ACCENT_HOVER, activeforeground="white", relief="flat",
             font=(FONT, 10, "bold"), padx=18, pady=6, cursor="hand2",
         ).pack()
@@ -2443,6 +2451,10 @@ class TrackerApp:
             win.after(1000, tick)
 
         tick()
+        win.update_idletasks()  # the window now knows how big its content needs to be: centre that size on the screen
+        x = max(0, (win.winfo_screenwidth() - win.winfo_reqwidth()) // 2)
+        y = max(0, (win.winfo_screenheight() - win.winfo_reqheight()) // 3)
+        win.geometry(f"+{x}+{y}")
         win.lift()
         win.focus_force()
         try:

@@ -136,3 +136,11 @@ def test_mac_swap_and_failure_recovery(agent, monkeypatch, tmp_path):
     assert (root / "delcargo_update_failed_v25").exists()
     monkeypatch.setattr(agent.platform, "system", lambda: "Darwin")
     assert agent.stage_update_download("25") is None
+
+
+def test_the_update_popup_sizes_itself_to_its_content(agent):
+    """A fixed 380x200 window cut the text and the button off on Windows screens scaled above 100%."""
+    source = open(agent.__file__, encoding="utf-8").read()
+    dialog = source[source.index("def _show_forced_update_dialog"):source.index("def _apply_staged_update")]
+    assert ".geometry(\"380x200\")" not in dialog and "winfo_reqwidth" in dialog
+    assert "applied[0]" in dialog  # restart() cannot run twice
