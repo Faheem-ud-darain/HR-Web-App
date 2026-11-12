@@ -494,7 +494,10 @@ async function handleHeartbeatTick() {
 
         if (continuousIdleSec >= AUTO_ABSENT_INACTIVITY_SECONDS && !data.autoAbsentFired) {
           chrome.storage.local.set({ autoAbsentFired: true });
-          await autoClockOut(serverUrl, email, 'inactivity_absence', Math.round(continuousIdleSec / 60));
+          // The stretch goes to the inactivity log first, while the shift is still open: that log is the only record of it, and the web app
+          // makes the absence from it. This extension never creates an absence itself.
+          await uploadInactivityLog(serverUrl, email, new Date(idleStart).toISOString(), new Date().toISOString(), continuousIdleSec);
+          await autoClockOut(serverUrl, email, 'inactivity_absence');
         }
       }
     });
@@ -515,40 +518,8 @@ function idleStretchStart(savedStart, shiftStartIso, now) {
   return Number.isFinite(shiftStart) ? Math.max(start, shiftStart) : start;
 }
 
-// The same three notices and the same absence record the desktop tracker writes when it ends a shift for 37 idle minutes. No amount
-// anywhere: this extension knows no pay; what a day costs is worked out by the web app and payroll.
-async function recordInactivityAbsence(cleanUrl, email, minutes) {
-  const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const json = { 'Content-Type': 'application/json' };
-  const quote = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  let name = email;
-  try {
-    const r = await fetch(`${cleanUrl}/api/collections/hr_profiles/records?perPage=10&fields=email,full_name&filter=${encodeURIComponent(`(email~"${quote(email)}")`)}`);
-    const row = ((await r.json()).items || []).find(i => (i.email || '').toLowerCase() === email.toLowerCase());
-    if (row && row.full_name) name = row.full_name;
-    // Already recorded for today (possibly soft-deleted by HR): never record it twice or bring it back.
-    const dup = await fetch(`${cleanUrl}/api/collections/hr_absence_records/records?perPage=20&fields=id,employeeEmail&filter=${encodeURIComponent(`(employeeEmail~"${quote(email)}" && date="${date}")`)}`);
-    if (((await dup.json()).items || []).some(i => (i.employeeEmail || '').toLowerCase() === email.toLowerCase())) return;
-  } catch (e) { /* cannot tell: record it; the table's unique index rejects a real duplicate */ }
-  const created = await fetch(`${cleanUrl}/api/collections/hr_absence_records/records`, {
-    method: 'POST', headers: json,
-    body: JSON.stringify({ employeeEmail: email, employeeName: name, date, reason: 'inactivity', inactivityMinutes: minutes, workedMinutes: 0, deductionAmount: 0, createdAt: new Date().toISOString(), acknowledged: false, deleted: false })
-  });
-  if (!created.ok) return; // lost a race, or a real write error: the shift is already ended; do not announce an absence that was not recorded
-  const notify = (to, role, message) => fetch(`${cleanUrl}/api/collections/hr_notifications/records`, {
-    method: 'POST', headers: json,
-    body: JSON.stringify({ recipient_email: to, recipient_role: role, message, read: false, category: 'leave_task', push_title: '', sender_email: '', link: '', timestamp: new Date().toISOString() })
-  }).catch(() => {});
-  const forStaff = `${name} was inactive for ${minutes} minutes during their shift on ${date} and was marked absent (2 days' pay).`;
-  await Promise.all([
-    notify(email, 'employee', `You were marked absent for ${date} (${minutes} min inactivity during shift). Two days' pay will be deducted for it.`),
-    notify('all', 'hr', forStaff),
-    notify('all', 'admin', forStaff)
-  ]);
-}
-
 // ── Auto Clock Out / Shift Stop ───────────────────────────────────────────
-async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleMinutes = 0) {
+async function autoClockOut(serverUrl, email, reason = 'tracker_closed') {
   try {
     const cleanUrl = (serverUrl || DEFAULT_SERVER_URL).replace(/\/+$/, '');
     console.log(`[Delcargo Tracker] Auto clock-out triggered. Reason: ${reason}`);
@@ -562,7 +533,6 @@ async function autoClockOut(serverUrl, email, reason = 'tracker_closed', idleMin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clock_out: nowIso, status: 'Completed' })
       });
-      if (reason === 'inactivity_absence') await recordInactivityAbsence(cleanUrl, email, idleMinutes).catch(e => console.warn('[Delcargo Tracker] Absence record failed:', e));
     }
 
     // 2. Write shift_stop_signal for live web dashboard notification
