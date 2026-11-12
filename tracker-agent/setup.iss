@@ -1,7 +1,7 @@
-; Single source for this installer's version — keep in sync with APP_VERSION in
-; agent_gui.py. Used for AppVersion below AND for the "already up to date"
-; check in InitializeSetup (ISPP is part of the standard iscc).
-#define AppVer "25"
+; This installer's version: MUST equal APP_VERSION in agent_gui.py (a test in tracker-agent/tests/test_updater.py fails the build when it
+; does not). Used for AppVersion below AND for the "already up to date" check in InitializeSetup (ISPP is part of the standard iscc).
+; It was left at 25 for v26 and v27, so those installers called themselves "already up to date" on a v25 PC and quit without updating.
+#define AppVer "28"
 
 [Setup]
 AppId={{6C6F5E6E-2D6A-4C8E-9C7A-DELCARGOTRK01}
@@ -64,6 +64,10 @@ Name: "startupicon"; Description: "Start DelCargo Tracker automatically when I l
 
 [Run]
 Filename: "{app}\DelCargo Tracker.exe"; Description: "Launch DelCargo Tracker"; Flags: nowait postinstall
+
+[UninstallRun]
+; A running tracker holds its own .exe open, which made uninstalling fail until it was closed by hand in Task Manager.
+Filename: "taskkill.exe"; Parameters: "/F /IM ""DelCargo Tracker.exe"" /T"; Flags: runhidden; RunOnceId: "StopTracker"
 
 [UninstallDelete]
 ; Leaves the employee's saved setup code/config alone on uninstall by

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isMobileDevice, latestVersionIfBehind, TRACKER_LATEST_EXTENSION_VERSION, TRACKER_LATEST_VERSION, TRACKER_MIN_VERSION } from './trackerSetup';
 
@@ -73,5 +75,13 @@ describe('latestVersionIfBehind', () => {
 
   it('the latest build is never older than the minimum that is enforced', () => {
     expect(Number(TRACKER_LATEST_VERSION)).toBeGreaterThanOrEqual(Number(TRACKER_MIN_VERSION));
+  });
+
+  it('the "latest version" numbers are the versions that are really built (they were left behind at 25 for two releases)', () => {
+    const root = path.resolve(__dirname, '../..');
+    const agent = fs.readFileSync(path.join(root, 'tracker-agent/agent_gui.py'), 'utf8').match(/^APP_VERSION = "([\d.]+)"/m)![1];
+    const extension = JSON.parse(fs.readFileSync(path.join(root, 'chrome-extension/manifest.json'), 'utf8')).version;
+    expect(TRACKER_LATEST_VERSION).toBe(agent);
+    expect(TRACKER_LATEST_EXTENSION_VERSION).toBe(extension);
   });
 });
