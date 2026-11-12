@@ -5,6 +5,19 @@ import { latestVersionIfBehind, needsTrackerUpdate } from '@/lib/trackerSetup';
 import type { TrackerHeartbeat } from '@/lib/hr/types';
 import type { PbRow } from '@/lib/pbTypes';
 
+/**
+ * When each person's newest screenshot was taken. A tracker that is closed has no heartbeat, which looks the same as one that never
+ * connected; a screenshot is the proof it did. One single-row request per person, so ask only about people with no heartbeat.
+ */
+export async function latestScreenshotByEmail(emails: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  await Promise.all(emails.map(async email => {
+    const [newest] = (await adminListScreenshotsPage({ employeeEmail: email }, 1, 1)).items;
+    if (newest?.captured_at) out.set(email.toLowerCase(), String(newest.captured_at).replace(' ', 'T')); // PocketBase dates use a space, which only some parsers accept
+  }));
+  return out;
+}
+
 // Reads what the tracking health checks need and runs them. Shared by the on-demand report
 // (/api/admin/tracking-integrity) and the scheduled alert (/api/cron/tracking-integrity), so both always agree.
 // Throws if any read fails: a half-read check must never look like "everything is fine".
@@ -24,12 +37,7 @@ export async function loadTrackingHealth(): Promise<{ findings: IntegrityFinding
   const findings = buildIntegrityReport({ profiles: profileRows, settings: settingRows, openShifts, heartbeats });
   const settingsBy = new Map(settingRows.map(s => [s.employeeEmail.toLowerCase(), s]));
   const shiftBy = new Map(openShifts.map(s => [s.employeeEmail.toLowerCase(), s]));
-  // A tracker that is closed has no heartbeat, which looks the same as one that never connected; its newest screenshot tells them apart.
-  const lastScreenshot = new Map<string, string>();
-  await Promise.all(settingRows.filter(s => s.enabled && !heartbeats[s.employeeEmail.toLowerCase()]).map(async s => {
-    const [newest] = (await adminListScreenshotsPage({ employeeEmail: s.employeeEmail }, 1, 1)).items;
-    if (newest?.captured_at) lastScreenshot.set(s.employeeEmail.toLowerCase(), String(newest.captured_at));
-  }));
+  const lastScreenshot = await latestScreenshotByEmail(settingRows.filter(s => s.enabled && !heartbeats[s.employeeEmail.toLowerCase()]).map(s => s.employeeEmail));
   const diagnoses = withDataFindings(profileRows
     .filter(p => p.role === 'employee' || p.role === 'team_lead')
     .map(p => {

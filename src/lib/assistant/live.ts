@@ -15,6 +15,7 @@ import { getLeaveRange, eachLeaveDay } from '../core/leaves';
 import { isWeekday, getWeekdaysInMonth } from '../core/dates';
 import { explainPay, payrollOverviewFacts, reservedFacts, money, type PayInputs } from '../core/payrollExplain';
 import { buildIntegrityReport } from '../core/trackingSettings';
+import { latestScreenshotByEmail } from '../trackingIntegrity';
 import { absenceFacts, attendanceDay, filterTickets, leaveBalance, summariseTrail, ticketFacts, type TicketRow, type TrailRow } from '../core/assistantFacts';
 import { groupErrors, newestVersion, isBehind, explainTrackerError } from '../core/trackerErrors';
 import { loadPayrollInputs, loadPayrollInputsFor, type PayrollInputs } from '../server/payrollInputs';
@@ -126,12 +127,13 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       const agoMin = (iso?: string | null) => { const t = iso ? new Date(String(iso).replace(' ', 'T')).getTime() : NaN; return isNaN(t) ? null : Math.max(0, Math.round((now.getTime() - t) / 60000)); };
       const fmt = (m: number | null) => (m === null ? 'never' : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`);
       const nyTime = (iso: string) => new Date(String(iso).replace(' ', 'T')).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' New York time';
-      const seen = agoMin(h.lastSeenAt);
+      const shot = h.lastSeenAt ? null : (await latestScreenshotByEmail([email])).get(email) ?? null; // a closed tracker has no heartbeat, but its screenshots show it connected
+      const seen = agoMin(h.lastSeenAt ?? shot);
       return {
         employee: who.aliasName, ...(who.approximate ? { assumed_match: 'The name was typed approximately; state which person you took it to be.' } : {}),
         on_shift_now: !!open,
         ...(open ? { shift_started: nyTime(String(open.clock_in)), shift_length_so_far: hm(agoMin(String(open.clock_in)) ?? 0) } : last ? { last_shift_ended: fmt(agoMin(String(last.clock_out))) } : { last_shift: 'none in the last 3 days' }),
-        tracker_last_seen: fmt(seen), tracker_last_capture: fmt(agoMin(h.lastCaptureAt)),
+        tracker_last_seen: fmt(seen), tracker_last_capture: fmt(agoMin(h.lastCaptureAt ?? shot)),
         tracker_connected_now: seen !== null && seen <= 13,
         note: 'Active means clocked in on an open shift. USA staff use a geofence and have no tracker, so no tracker signal is expected for them.',
       };
@@ -287,9 +289,10 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
         const email = (target.p.email || '').toLowerCase();
         const h = hb[email] || {}; const d = diag[email]; const s = settingFor(email);
         const err = h.lastCaptureError || '';
+        const shot = h.lastSeenAt ? null : (await latestScreenshotByEmail([email])).get(email) ?? null; // see latestScreenshotByEmail
         return {
           employee: target.aliasName, tracking_enabled: !!s?.enabled, interval_minutes: s ? Number(s.intervalMinutes) || 15 : null,
-          last_seen: ago(h.lastSeenAt), last_capture: ago(h.lastCaptureAt), device: scrub(h.deviceLabel || 'unknown', 60),
+          last_seen: ago(h.lastSeenAt ?? shot), last_capture: ago(h.lastCaptureAt ?? shot), ...(shot ? { note: 'The tracker is closed or off (no signal now), but it did connect: this is its newest screenshot.' } : {}), device: scrub(h.deviceLabel || 'unknown', 60),
           version: h.agentVersion || 'unknown', ...(isBehind(h.agentVersion, allVersions) ? { newer_version_exists: true } : {}),
           screen_locked_at_last_capture: !!h.isLocked, consecutive_capture_failures: h.consecutiveCaptureFailures ?? 0,
           ...(err ? { error_reported_by_tracker: scrub(err, 160), what_it_means: explainTrackerError(err) } : { error_reported_by_tracker: 'none' }),
@@ -304,7 +307,8 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       }
 
       const people = settings.filter(s => s.enabled).map(s => { const email = String(s.employeeEmail).toLowerCase(); const p = byEmail.get(email); return p && (p.role === 'employee' || p.role === 'team_lead') ? { email, who: alias.aliasOf(p.id), h: hb[email] || {} } : null; }).filter((x): x is { email: string; who: string; h: HB } => !!x);
-      const silent = people.map(x => { const t = x.h.lastSeenAt ? new Date(x.h.lastSeenAt).getTime() : NaN; return { who: x.who, days: isNaN(t) ? null : Math.floor((now.getTime() - t) / 86400000) }; }).filter(x => x.days === null || x.days >= 2).sort((x, y) => (y.days ?? 999) - (x.days ?? 999)).slice(0, 20);
+      const shots = await latestScreenshotByEmail(people.filter(x => !x.h.lastSeenAt).map(x => x.email));
+      const silent = people.map(x => { const t = new Date(x.h.lastSeenAt ?? shots.get(x.email) ?? '').getTime(); return { who: x.who, days: isNaN(t) ? null : Math.floor((now.getTime() - t) / 86400000) }; }).filter(x => x.days === null || x.days >= 2).sort((x, y) => (y.days ?? 999) - (x.days ?? 999)).slice(0, 20);
       const errorGroups = groupErrors(people.map(x => ({ who: x.who, error: x.h.lastCaptureError }))).slice(0, 8).map(g => ({ error: scrub(g.error, 120), people: g.count, who: g.who, what_it_means: explainTrackerError(g.error) }));
       return {
         checked_people: people.length,
@@ -314,7 +318,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
         behind_on_version: people.filter(x => isBehind(x.h.agentVersion, allVersions)).map(x => ({ who: x.who, version: x.h.agentVersion })).slice(0, 15),
         newest_desktop_version_seen: newestVersion(allVersions.filter(v => /^\d+$/.test(String(v)))) || 'unknown',
         problems_found_by_checks: findings.slice(0, 20).map(f => ({ who: alias.aliasOf(byEmail.get(f.email.toLowerCase())?.id || ''), problem: f.detail })),
-        no_signal_for_2_days_or_more: silent.map(x => ({ who: x.who, last_seen: x.days === null ? 'never connected' : `${x.days} days ago` })),
+        no_signal_for_2_days_or_more: silent.map(x => ({ who: x.who, last_seen: x.days === null ? 'never connected (no signal and no screenshot)' : `${x.days} days ago` })),
       };
     },
 
