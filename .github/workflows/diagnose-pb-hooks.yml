@@ -57,11 +57,13 @@ jobs:
 
             echo ""
             echo "-- systemd service definition --"
-            systemctl cat pocketbase 2>/dev/null || echo "(no systemd unit named 'pocketbase' found)"
+            # The unit file holds secrets (Environment=...KEY=...) and this repository's Actions logs are PUBLIC, so the file is never printed:
+            # only fields that cannot carry a secret are asked for (this also covers quoted and continued Environment lines).
+            systemctl show pocketbase -p Description -p User -p WorkingDirectory -p ExecStart -p Restart -p RestartUSec 2>/dev/null || echo "(no systemd unit named 'pocketbase' found)"
 
             echo ""
-            echo "-- currently running process command line --"
-            ps aux | grep -i '[p]ocketbase'
+            echo "-- the running PocketBase process (name and usage only) --"
+            ps -eo pid,user,%cpu,%mem,rss,etime,comm | grep -i '[p]ocketbase'  # process name only: arguments can hold credentials
 
             echo ""
             echo "-- pb_hooks dir listing (deploy target) --"
@@ -81,3 +83,29 @@ jobs:
             echo ""
             echo "-- total log line count last 3 days (sanity check that logs exist at all) --"
             journalctl -u pocketbase --since "3 days ago" --no-pager 2>/dev/null | wc -l
+
+            echo ""
+            echo "-- server memory, swap and load (is the droplet starved?) --"
+            free -m
+            swapon --show 2>/dev/null || echo "(no swap)"
+            uptime
+            nproc
+
+            echo ""
+            echo "-- disk space and PocketBase data files (a huge logs.db or WAL slows every request) --"
+            df -h / 2>/dev/null
+            ls -la /root/pocketbase/pb_data 2>/dev/null | grep -E "\.db|wal|shm" || echo "(no pb_data listing)"
+
+            echo ""
+            echo "-- crashes and restarts: out-of-memory kills, and every time PocketBase (re)started, last 3 days --"
+            journalctl -k --since "3 days ago" --no-pager 2>/dev/null | grep -iE "out of memory|oom-kill|killed process" | tail -20 || true
+            journalctl -u pocketbase --since "3 days ago" --no-pager 2>/dev/null | grep -E "Started PocketBase|Main process exited|Failed with result|oom" | tail -30 || true
+            systemctl show pocketbase -p NRestarts -p ActiveEnterTimestamp 2>/dev/null
+
+            echo ""
+            echo "-- slowest recent activity: database errors and timeouts by hour, last 3 days --"
+            journalctl -u pocketbase -o short-iso --since "3 days ago" --no-pager 2>/dev/null | grep -iE "interrupted|context deadline|database is locked|timeout" | cut -c1-13 | sort | uniq -c | tail -72 || true
+
+            echo ""
+            echo "-- top memory users on the droplet --"
+            ps -eo pid,user,%mem,rss,etime,comm --sort=-%mem | head -8  # process names only, never arguments

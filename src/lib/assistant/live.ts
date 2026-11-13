@@ -8,7 +8,7 @@ import { getNYDateString } from '../timezone';
 import { adminListAll, adminListTrackingSettings, pbAdminFetch } from '../pbAdmin';
 import { mapProfileRecord } from '../core/profiles';
 import { toLeave, toAbsenceRecord } from '../core/payrollMappers';
-import { toTimesheet, elapsedMinutes } from '../core/timesheets';
+import { toTimesheet, workedMinutesByDate } from '../core/timesheets';
 import { getShortShiftDays } from '../core/payroll';
 import { requiredDayMinutes } from '../core/workDay';
 import { getLeaveRange, eachLeaveDay } from '../core/leaves';
@@ -229,8 +229,7 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       ]);
       const ts = tsRows.map(toTimesheet).filter(t => (t.employeeEmail || '').toLowerCase() === email);
       const abs = absRows.map(toAbsenceRecord).filter(r => r.employeeEmail.toLowerCase() === email);
-      const byDate = new Map<string, number>();
-      for (const t of ts) { const d = new Date(t.clockIn); if (isNaN(d.getTime())) continue; const key = getNYDateString(d); if (key.slice(0, 7) !== month) continue; byDate.set(key, (byDate.get(key) || 0) + elapsedMinutes(t.clockIn, t.clockOut)); }
+      const byDate = workedMinutesByDate(ts, month);
       const worked = [...byDate.values()].reduce((s, m) => s + m, 0);
       const weekend = [...byDate.entries()].filter(([d]) => !isWeekday(d)).sort();
       const today = getNYDateString(now);

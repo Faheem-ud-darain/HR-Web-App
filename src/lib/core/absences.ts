@@ -6,7 +6,7 @@ import type { AbsenceRecord, MyAbsenceRecord, Profile, TimesheetEntry, LeaveAppl
 import { getWeekdaysInMonth, isWeekday, localShiftDate, addDays, eachDay } from './dates';
 import { getLeaveRange, isApprovedLeaveOnDate } from './leaves';
 import { secondsInsideShifts } from './inactivity';
-import { elapsedMinutes } from './timesheets';
+import { elapsedMs, msToMinutes } from './timesheets';
 import { absenceFloorMinutes, hoursText } from './workDay';
 
 // A single continuous mouse-inactivity run this long (37 min) during a
@@ -221,7 +221,7 @@ export function detectAbsences(input: {
       : '';
 
     const shiftDatesWithShift = new Set<string>();
-    const shiftDatesWithTotalMinutes = new Map<string, number>();
+    const shiftDatesWithTotalMs = new Map<string, number>();
     const shiftDatesWithMaxSingleInactivity = new Map<string, number>();
 
     for (const t of empTimesheets) {
@@ -252,7 +252,7 @@ export function detectAbsences(input: {
       // can't change today's own status (the caller's date loop always
       // skips `dateStr >= nyTodayStr`), it only fixes a PAST day whose
       // shift is still sitting open.
-      const shiftMins = elapsedMinutes(t.clockIn, t.clockOut, now.getTime());
+      const shiftMs = elapsedMs(t.clockIn, t.clockOut, now.getTime()); // exact time: a day's shifts are added up first and rounded down once (see workedMinutesByDate)
 
       // Absence is only triggered if a SINGLE continuous inactivity run reaches 37+ mins (2220s),
       // not by summing up multiple smaller inactive periods across the shift.
@@ -267,8 +267,7 @@ export function detectAbsences(input: {
       const existingMax = shiftDatesWithMaxSingleInactivity.get(shiftDate) || 0;
       shiftDatesWithMaxSingleInactivity.set(shiftDate, Math.max(existingMax, maxSingleInactiveSecs));
 
-      const existingTotal = shiftDatesWithTotalMinutes.get(shiftDate) || 0;
-      shiftDatesWithTotalMinutes.set(shiftDate, existingTotal + shiftMins);
+      shiftDatesWithTotalMs.set(shiftDate, (shiftDatesWithTotalMs.get(shiftDate) || 0) + shiftMs);
     }
 
     for (const dateStr of eachDay(addDays(nyTodayStr, -ABSENCE_LOOKBACK_DAYS), addDays(nyTodayStr, -1))) {
@@ -279,7 +278,7 @@ export function detectAbsences(input: {
       const ignoreKey = `${emp.email.toLowerCase()}_${dateStr}`;
       if (ignoredKeys.has(ignoreKey)) continue;
 
-      const totalWorkedMins = shiftDatesWithTotalMinutes.get(dateStr) || 0;
+      const totalWorkedMins = msToMinutes(shiftDatesWithTotalMs.get(dateStr) || 0);
       const onLeave = isApprovedLeaveOnDate(leaves, emp.fullName, dateStr);
 
       let reason: AbsenceRecord['reason'] | null = null;

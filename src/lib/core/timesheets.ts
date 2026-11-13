@@ -2,6 +2,7 @@
 // import from the browser, Next route handlers and the Edge runtime alike.
 // Anything time-dependent takes an injectable `now` so it is unit-testable.
 import type { TimesheetEntry, TrackerHeartbeat, CaptureHealthStatus, ShiftTabHeartbeat } from '../hr/types';
+import { getNYDateString } from '../timezone';
 
 // longer matches any row in hr_tracking_settings — i.e. HR/Admin (or the
 // employee) regenerated the setup code, but this specific already-running
@@ -160,15 +161,40 @@ export function shiftMinutes(clockIn: string | undefined | null, clockOut: strin
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.round((end - start) / 60000)) : 0;
 }
 
-// Whole minutes between a shift's clock-in and clock-out. An open shift
-// (no clockOut) counts as 0 unless `openShiftEndMs` is given, in which case
-// it runs up to that instant. Unparseable / non-positive spans are 0.
-export function elapsedMinutes(clockIn: string | undefined | null, clockOut: string | undefined | null, openShiftEndMs?: number): number {
+// Exact milliseconds between a shift's clock-in and clock-out. An open shift (no clockOut) counts as 0 unless `openShiftEndMs` is
+// given, in which case it runs up to that instant. Unparseable / non-positive spans are 0.
+export function elapsedMs(clockIn: string | undefined | null, clockOut: string | undefined | null, openShiftEndMs?: number): number {
   if (!clockIn) return 0;
   const inTime = new Date(clockIn).getTime();
   const outTime = clockOut ? new Date(clockOut).getTime() : openShiftEndMs;
   if (isNaN(inTime) || outTime === undefined || isNaN(outTime) || outTime <= inTime) return 0;
-  return Math.floor((outTime - inTime) / 60000);
+  return outTime - inTime;
+}
+
+export const msToMinutes = (ms: number): number => Math.floor(ms / 60000);
+
+// Whole minutes between a shift's clock-in and clock-out (one shift). To add several shifts up, add their milliseconds and convert once
+// (workedMinutesByDate): rounding each shift down first loses up to a minute per shift.
+export function elapsedMinutes(clockIn: string | undefined | null, clockOut: string | undefined | null, openShiftEndMs?: number): number {
+  return msToMinutes(elapsedMs(clockIn, clockOut, openShiftEndMs));
+}
+
+/**
+ * Worked minutes per New York calendar day (the day each shift clocked in), for one month when `monthKey` is given. The exact time of all
+ * of a day's shifts is added up first and rounded down ONCE: rounding every shift first lost up to a minute per shift, so a day of three
+ * shifts that showed 8h 01m in the shift log was paid as 7h 59m and charged a short-hours deduction. Callers pass one person's shifts.
+ */
+export function workedMinutesByDate(shifts: TimesheetEntry[], monthKey?: string): Map<string, number> {
+  const ms = new Map<string, number>();
+  for (const t of shifts) {
+    if (!t.clockIn) continue;
+    const d = new Date(t.clockIn);
+    if (isNaN(d.getTime())) continue;
+    const date = getNYDateString(d);
+    if (monthKey && date.slice(0, 7) !== monthKey) continue;
+    ms.set(date, (ms.get(date) || 0) + elapsedMs(t.clockIn, t.clockOut));
+  }
+  return new Map([...ms].map(([date, total]) => [date, msToMinutes(total)]));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- raw PocketBase row
