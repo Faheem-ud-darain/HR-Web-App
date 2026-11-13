@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { getWeekdaysInMonth, isWeekday, localShiftDate } from './dates';
 import { getRemainingPTO, getAccruedPTOForDisplay, getApprovedLeaveDaysInMonth, getApprovedLeaveOnDate, parseLeaveDay, parseLeaveDateStrings, getLeaveRange, eachLeaveDay, leaveDayCount } from './leaves';
-import { elapsedMinutes, getCaptureHealth, getCaptureGap, hasStaleTrackerToken, isHeartbeatLive, isShiftTabHeartbeatLive } from './timesheets';
+import { elapsedMinutes, workedMinutesByDate, getCaptureHealth, getCaptureGap, hasStaleTrackerToken, isHeartbeatLive, isShiftTabHeartbeatLive } from './timesheets';
 import { detectAbsences, findWeekendAbsenceRecords, findPreJoinAbsenceRecords, describeAbsence, countAbsentWeekdays } from './absences';
 import { getAbsenceDeductionForMonth, getShiftShortfallDeduction, getFinalLeavePayout } from './payroll';
 import type { AbsenceRecord, InactivityLog, LeaveApplication, Profile, TimesheetEntry, TrackerHeartbeat } from '../hr/types';
@@ -102,6 +102,17 @@ describe('timesheets', () => {
     expect(elapsedMinutes('2026-09-10T15:00:00Z', '2026-09-10T13:00:00Z')).toBe(0);
     expect(elapsedMinutes('not a date', '2026-09-10T13:00:00Z')).toBe(0);
   });
+  it('a day of several shifts adds the exact time first and rounds down once (three shifts of 8h 01m were read as 7h 59m)', () => {
+    // 6h52m40s + 10m40s + 57m40s = exactly 8h 01m 00s; rounding each shift down first gives 412 + 10 + 57 = 479
+    const day = [
+      shift('a@x.com', '2026-09-01T13:00:00Z', '2026-09-01T19:52:40Z'),
+      shift('a@x.com', '2026-09-01T20:00:00Z', '2026-09-01T20:10:40Z'),
+      shift('a@x.com', '2026-09-01T20:30:00Z', '2026-09-01T21:27:40Z'),
+    ];
+    expect(day.reduce((sum, t) => sum + elapsedMinutes(t.clockIn, t.clockOut), 0)).toBe(479);
+    expect(workedMinutesByDate(day, '2026-09').get('2026-09-01')).toBe(481);
+    expect(workedMinutesByDate(day, '2026-10').size).toBe(0);
+  });
   it('classifies capture health', () => {
     const hb = (over: Partial<TrackerHeartbeat>): TrackerHeartbeat => ({ employeeEmail: 'a', deviceId: 'd', connectedAt: '', lastSeenAt: '', ...over });
     expect(getCaptureHealth(null).status).toBe('unknown');
@@ -193,6 +204,13 @@ describe('payroll helpers', () => {
     expect(getShiftShortfallDeduction([sixHours], [], [], profile({ region: 'USA' }), 22000, '2026-09', NOW)).toBe(0);
     const fullDay = shift(p.email, '2026-09-01T13:00:00Z', '2026-09-01T21:00:00Z');
     expect(getShiftShortfallDeduction([fullDay], [], [], p, 22000, '2026-09', NOW)).toBe(0);
+    // a full day split into three shifts whose exact total is 8h 01m is not short, however each shift rounds on its own
+    const split = [
+      shift(p.email, '2026-09-01T13:00:00Z', '2026-09-01T19:52:40Z'),
+      shift(p.email, '2026-09-01T20:00:00Z', '2026-09-01T20:10:40Z'),
+      shift(p.email, '2026-09-01T20:30:00Z', '2026-09-01T21:27:40Z'),
+    ];
+    expect(getShiftShortfallDeduction(split, [], [], p, 22000, '2026-09', NOW)).toBe(0);
   });
   it('final leave payout is 0 during the PTO freeze', () => {
     expect(getFinalLeavePayout(profile(), [], new Date('2026-09-15T12:00:00Z'))).toBe(0);
