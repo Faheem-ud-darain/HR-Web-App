@@ -43,6 +43,8 @@ export function diagnoseTracker(args: {
   updateRequired?: boolean;
   /** The newest version, when this tracker is on an older (but still allowed) one. */
   updateAvailable?: string | null;
+  /** When this person's newest screenshot was taken: proof the tracker has connected, which a closed tracker's missing heartbeat is not. */
+  lastScreenshotAt?: string | null;
   now?: number;
 }): TrackerDiagnosis {
   const { email, settings, heartbeat: hb, openShift } = args;
@@ -50,7 +52,7 @@ export function diagnoseTracker(args: {
   const onShift = !!openShift;
   const details: TrackerDetails = {
     trackingOn: settings ? settings.enabled : null, intervalMinutes: settings?.intervalMinutes ?? null, onShiftSince: openShift?.clockIn ?? null,
-    lastSeenAt: hb?.lastSeenAt ?? null, lastCaptureAt: hb?.lastCaptureAt ?? null, agentVersion: hb?.agentVersion ?? null, device: hb?.deviceLabel ?? null,
+    lastSeenAt: hb?.lastSeenAt ?? args.lastScreenshotAt ?? null, lastCaptureAt: hb?.lastCaptureAt ?? args.lastScreenshotAt ?? null, agentVersion: hb?.agentVersion ?? null, device: hb?.deviceLabel ?? null,
     lastError: hb?.lastCaptureError ?? null, failures: hb?.consecutiveCaptureFailures ?? 0,
   };
   const make = (state: DiagnosisState, severity: DiagnosisSeverity, cause: string, action = ''): TrackerDiagnosis => ({ email, state, severity, cause, action, details });
@@ -60,6 +62,11 @@ export function diagnoseTracker(args: {
     return onShift
       ? make('tracking_off', 'problem', 'On shift with tracking switched OFF, so nothing is being captured.', 'Switch tracking on for them in Tracking.')
       : make('tracking_off', 'info', 'Tracking is switched off for this person.');
+  }
+  if (!hb && args.lastScreenshotAt) {
+    // A tracker removes its heartbeat when it is closed, so no heartbeat only means it is not running now; its screenshots show it did connect.
+    const since = Math.max(0, Math.round((now - new Date(args.lastScreenshotAt).getTime()) / 60000));
+    return make('offline', onShift ? 'problem' : 'info', `The tracker is closed or off: there is no signal now, but it sent a screenshot ${since < 120 ? `${since} min` : `${Math.round(since / 60)} h`} ago.`, onShift ? 'Ask them to open the tracker and check their internet connection.' : '');
   }
   if (!hb) return make('not_installed', onShift ? 'problem' : 'warn', 'Tracking is on but their tracker has never connected.', 'Send them the tracker download and their setup code.');
   const minutesAgo = Math.max(0, Math.round((now - new Date(hb.lastSeenAt).getTime()) / 60000));
