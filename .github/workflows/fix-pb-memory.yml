@@ -79,5 +79,5 @@ jobs:
             free -m
             swapon --show || true
             systemctl show pocketbase -p NRestarts -p ActiveState
-            ps aux --sort=-%mem | head -6 | cut -c1-150
+            ps -eo pid,user,%mem,rss,etime,comm --sort=-%mem | head -6  # names only: arguments can hold credentials, and these logs are public
             curl -s -o /dev/null -m 30 -w "PocketBase health from the server itself: HTTP %{http_code} in %{time_total}s\n" http://127.0.0.1:8090/api/health || echo "health check did not answer"
