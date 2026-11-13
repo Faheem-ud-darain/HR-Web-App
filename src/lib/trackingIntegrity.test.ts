@@ -19,6 +19,13 @@ describe('latestScreenshotByEmail', () => {
     expect(listPage).toHaveBeenLastCalledWith({ employeeEmail: 'ann@x.com' }, 2, 20);
   });
 
+  it('keeps going past the third page: an older exact match behind 60+ screenshots of someone else (joann@x) is still found', async () => {
+    listPage.mockReset();
+    listPage.mockImplementation(async (_f: unknown, p: number) => (p === 4 ? page([{ captured_at: '2026-11-01 08:00:00.000Z' }], 5) : page([], 5)));
+    expect((await latestScreenshotByEmail(['ann@x.com'])).get('ann@x.com')).toBe('2026-11-01T08:00:00.000Z');
+    expect(listPage).toHaveBeenCalledTimes(4);
+  });
+
   it('reports nothing for someone who has no screenshot at all', async () => {
     listPage.mockResolvedValueOnce(page([]));
     expect((await latestScreenshotByEmail(['new@x.com'])).size).toBe(0);

@@ -5,20 +5,18 @@ import { latestVersionIfBehind, needsTrackerUpdate } from '@/lib/trackerSetup';
 import type { TrackerHeartbeat } from '@/lib/hr/types';
 import type { PbRow } from '@/lib/pbTypes';
 
-const SCREENSHOT_LOOKUP_MAX_PAGES = 3;
-
 /**
  * When each person's newest screenshot was taken. A tracker that is closed has no heartbeat, which looks the same as one that never
  * connected; a screenshot is the proof it did. Ask only about people with no heartbeat.
- * The lookup matches the email as a substring (a screenshot of "joann@x" can come back for "ann@x"), so a page is searched until it holds
- * an exact match instead of trusting the first row. A person whose lookup fails is left out (their state stays as it was): one failing
+ * The lookup matches the email as a substring (a screenshot of "joann@x" can come back for "ann@x"), so pages are searched until an exact match is
+ * found or none are left, never trusting the first row or a fixed number of pages. A person whose lookup fails is left out (their state stays as it was): one failing
  * request must never take down the whole health check and the alerts that depend on it.
  */
 export async function latestScreenshotByEmail(emails: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   await Promise.all(emails.map(async email => {
     try {
-      for (let page = 1; page <= SCREENSHOT_LOOKUP_MAX_PAGES; page++) {
+      for (let page = 1; ; page++) {
         const found = await adminListScreenshotsPage({ employeeEmail: email }, page, 20); // already narrowed to the exact email
         if (found.items[0]?.captured_at) {
           out.set(email.toLowerCase(), String(found.items[0].captured_at).replace(' ', 'T')); // PocketBase dates use a space, which only some parsers accept
