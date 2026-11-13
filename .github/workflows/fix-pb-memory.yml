@@ -1,0 +1,83 @@
+name: Fix PocketBase memory (swap, stop unused services, memory cap)
+
+# PocketBase is being killed by the kernel for running out of memory (458 MB droplet, no swap, 19 restarts in a day). This manual workflow
+# applies three free, reversible fixes over the same SSH access the deploy uses:
+#   1. a 1 GB swap file (spare disk space; no extra cost),
+#   2. stop and mask two services a single-disk virtual server does not need (fwupd, multipathd) - fwupd alone used up to 177 MB,
+#   3. a soft Go memory limit for PocketBase (GOMEMLIMIT) so it cleans up before it hits the kernel's limit; restarts PocketBase once (~3 s).
+# Safe to run more than once. It never prints the systemd unit or any Environment value (this repository's Actions logs are PUBLIC).
+#
+# Undo: swapoff /swapfile && rm /swapfile (and delete its /etc/fstab line); systemctl unmask fwupd fwupd-refresh.timer multipathd;
+#       rm /etc/systemd/system/pocketbase.service.d/memory.conf && systemctl daemon-reload && systemctl restart pocketbase.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PB_SSH_HOST }}
+          username: ${{ secrets.PB_SSH_USERNAME }}
+          key: ${{ secrets.PB_SSH_PRIVATE_KEY }}
+          command_timeout: 10m
+          script: |
+            set -u
+            echo "== BEFORE =="
+            free -m
+            swapon --show || true
+            systemctl show pocketbase -p NRestarts -p ActiveState
+
+            echo ""
+            echo "== 1. swap file (1 GB) =="
+            if swapon --show=NAME --noheadings | grep -q '^/swapfile'; then
+              echo "swap file already active"
+            else
+              if [ ! -f /swapfile ]; then
+                fallocate -l 1G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+                chmod 600 /swapfile
+                mkswap /swapfile
+              fi
+              swapon /swapfile
+              echo "swap file turned on"
+            fi
+            grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+            echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf
+            sysctl -w vm.swappiness=10
+
+            echo ""
+            echo "== 2. stop services this server does not need =="
+            systemctl disable --now fwupd.service fwupd-refresh.timer fwupd-refresh.service 2>&1 | tail -3 || true
+            systemctl mask fwupd.service fwupd-refresh.timer fwupd-refresh.service 2>&1 | tail -3 || true
+            if lsblk -no TYPE 2>/dev/null | grep -q mpath; then
+              echo "multipath devices are in use: leaving multipathd alone"
+            else
+              systemctl disable --now multipathd.service multipathd.socket 2>&1 | tail -3 || true
+              systemctl mask multipathd.service multipathd.socket 2>&1 | tail -3 || true
+            fi
+
+            echo ""
+            echo "== 3. PocketBase memory limit =="
+            DROPIN=/etc/systemd/system/pocketbase.service.d/memory.conf
+            mkdir -p /etc/systemd/system/pocketbase.service.d
+            WANT=$(printf '[Service]\nEnvironment=GOMEMLIMIT=220MiB\n')
+            if [ -f "$DROPIN" ] && [ "$(cat "$DROPIN")" = "$WANT" ]; then
+              echo "memory limit already set"
+            else
+              printf '%s\n' "$WANT" > "$DROPIN"
+              systemctl daemon-reload
+              systemctl restart pocketbase
+              echo "memory limit set; PocketBase restarted"
+              sleep 15
+            fi
+
+            echo ""
+            echo "== AFTER =="
+            free -m
+            swapon --show || true
+            systemctl show pocketbase -p NRestarts -p ActiveState
+            ps aux --sort=-%mem | head -6 | cut -c1-150
+            curl -s -o /dev/null -m 30 -w "PocketBase health from the server itself: HTTP %{http_code} in %{time_total}s\n" http://127.0.0.1:8090/api/health || echo "health check did not answer"
