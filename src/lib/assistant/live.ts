@@ -128,13 +128,14 @@ export function createLiveRunner(now: Date = new Date()): ToolRunner {
       const fmt = (m: number | null) => (m === null ? 'never' : m < 90 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`);
       const nyTime = (iso: string) => new Date(String(iso).replace(' ', 'T')).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' New York time';
       const shot = h.lastSeenAt ? null : (await latestScreenshotByEmail([email])).get(email) ?? null; // a closed tracker has no heartbeat, but its screenshots show it connected
-      const seen = agoMin(h.lastSeenAt ?? shot);
+      const live = agoMin(h.lastSeenAt); // connected NOW depends on the live heartbeat only; a screenshot is history
+      const seen = h.lastSeenAt ? live : agoMin(shot);
       return {
         employee: who.aliasName, ...(who.approximate ? { assumed_match: 'The name was typed approximately; state which person you took it to be.' } : {}),
         on_shift_now: !!open,
         ...(open ? { shift_started: nyTime(String(open.clock_in)), shift_length_so_far: hm(agoMin(String(open.clock_in)) ?? 0) } : last ? { last_shift_ended: fmt(agoMin(String(last.clock_out))) } : { last_shift: 'none in the last 3 days' }),
         tracker_last_seen: fmt(seen), tracker_last_capture: fmt(agoMin(h.lastCaptureAt ?? shot)),
-        tracker_connected_now: seen !== null && seen <= 13,
+        tracker_connected_now: live !== null && live <= 13,
         note: 'Active means clocked in on an open shift. USA staff use a geofence and have no tracker, so no tracker signal is expected for them.',
       };
     },
