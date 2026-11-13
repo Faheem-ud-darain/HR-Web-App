@@ -11,7 +11,7 @@ import {
   getRemainingPTO, getPTOAccrualDate,
 } from './leaves';
 import { getPendingIncrementForPayrollMonth } from '../incrementMath';
-import { elapsedMinutes } from './timesheets';
+import { workedMinutesByDate } from './timesheets';
 import { monthLabel } from './payrollView';
 
 export function getFinalLeavePayout(profile: Profile, leaves: LeaveApplication[], now: Date = new Date()): number {
@@ -116,19 +116,9 @@ export function getShortShiftDays(
     absenceRecords.filter(a => a.employeeEmail.toLowerCase() === email && !a.deleted).map(a => a.date)
   );
 
-  // Bucket every timesheet minute this employee worked by NY calendar day —
-  // same shiftDate bucketing runAbsenceCheck uses, just for the whole month
-  // instead of a 5-day lookback.
-  const minutesByDate = new Map<string, number>();
-  for (const t of timesheets) {
-    if (!t.employeeEmail || t.employeeEmail.toLowerCase() !== email || !t.clockIn) continue;
-    const d = new Date(t.clockIn);
-    if (isNaN(d.getTime())) continue;
-    const shiftDate = getNYDateString(d);
-    if (shiftDate.slice(0, 7) !== monthKey) continue;
-    const mins = elapsedMinutes(t.clockIn, t.clockOut);
-    minutesByDate.set(shiftDate, (minutesByDate.get(shiftDate) || 0) + mins);
-  }
+  // Every minute this employee worked, by NY calendar day: same bucketing runAbsenceCheck uses, just for the whole month instead of a
+  // 5-day lookback, and the same exact-time-then-round-once sum, so a day reads the same here as in the shift log.
+  const minutesByDate = workedMinutesByDate(timesheets.filter(t => (t.employeeEmail || '').toLowerCase() === email), monthKey);
 
   const dailyRate = currentBaseSalary / getWeekdaysInMonth(monthKey);
   const fullDay = requiredDayMinutes(profile); // 8 hours, or 5 for a part-time employee

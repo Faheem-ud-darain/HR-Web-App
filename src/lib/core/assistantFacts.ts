@@ -1,7 +1,7 @@
 import type { AbsenceRecord, LeaveApplication, Profile, TimesheetEntry } from '../hr/types';
 import { absenceReasonLabel } from './absences';
 import { calculatePTOAccrued, getAccruedPTOForDisplay, getApprovedLeaveDays, getLeaveRange, getPTOAccrualDate, getRemainingPTO, leaveDayCount } from './leaves';
-import { elapsedMinutes } from './timesheets';
+import { elapsedMinutes, elapsedMs, msToMinutes } from './timesheets';
 import { absenceFloorMinutes, requiredDayMinutes } from './workDay';
 import { getNYDateString } from '../timezone';
 import { isNameMismatch } from './communicationAudit';
@@ -119,7 +119,7 @@ export function attendanceDay(
   const time = (iso: string) => new Date(iso).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
   const absence = absences.find(r => !r.deleted && r.date === date);
   const onLeave = leaves.find(l => l.employeeName === p.fullName && l.status === 'approved' && (() => { const g = getLeaveRange(l); return !!g && date >= g.start && date <= g.end; })());
-  const total = mine.reduce((s, t) => s + elapsedMinutes(t.clockIn, t.clockOut, now), 0);
+  const total = msToMinutes(mine.reduce((s, t) => s + elapsedMs(t.clockIn, t.clockOut, now), 0));
   return {
     date,
     shifts: mine.map(t => {
