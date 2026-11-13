@@ -57,12 +57,13 @@ jobs:
 
             echo ""
             echo "-- systemd service definition --"
-            # The unit file holds secrets (Environment=...KEY=...), and this repository's Actions logs are PUBLIC: never print a value.
-            systemctl cat pocketbase 2>/dev/null | sed -E 's/^(Environment=[A-Za-z0-9_]+=).*/\1<hidden>/' || echo "(no systemd unit named 'pocketbase' found)"
+            # The unit file holds secrets (Environment=...KEY=...) and this repository's Actions logs are PUBLIC, so the file is never printed:
+            # only fields that cannot carry a secret are asked for (this also covers quoted and continued Environment lines).
+            systemctl show pocketbase -p Description -p User -p WorkingDirectory -p ExecStart -p Restart -p RestartUSec 2>/dev/null || echo "(no systemd unit named 'pocketbase' found)"
 
             echo ""
-            echo "-- currently running process command line --"
-            ps aux | grep -i '[p]ocketbase'
+            echo "-- the running PocketBase process (name and usage only) --"
+            ps -eo pid,user,%cpu,%mem,rss,etime,comm | grep -i '[p]ocketbase'  # process name only: arguments can hold credentials
 
             echo ""
             echo "-- pb_hooks dir listing (deploy target) --"
@@ -103,8 +104,8 @@ jobs:
 
             echo ""
             echo "-- slowest recent activity: database errors and timeouts by hour, last 3 days --"
-            journalctl -u pocketbase --since "3 days ago" --no-pager 2>/dev/null | grep -iE "interrupted|context deadline|database is locked|timeout" | cut -c1-13 | sort | uniq -c | tail -30 || true
+            journalctl -u pocketbase -o short-iso --since "3 days ago" --no-pager 2>/dev/null | grep -iE "interrupted|context deadline|database is locked|timeout" | cut -c1-13 | sort | uniq -c | tail -72 || true
 
             echo ""
             echo "-- top memory users on the droplet --"
-            ps aux --sort=-%mem | head -8 | cut -c1-160
+            ps -eo pid,user,%mem,rss,etime,comm --sort=-%mem | head -8  # process names only, never arguments
