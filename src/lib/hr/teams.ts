@@ -189,7 +189,7 @@ export const teamActions = {
       form.append('attachment_name', file.name);
       form.append('attachment_size', String(file.size));
       if (isAnnouncement) form.append('is_announcement', 'true');
-      // Bypass Vercel proxy for large file uploads (same as uploadTeamDocument)
+      // Upload large files straight to PocketBase (same as uploadTeamDocument)
       const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_messages/records`, {
         method: 'POST',
         body: form,
@@ -261,7 +261,7 @@ export const teamActions = {
         form.append('attachment', file);
         form.append('attachment_name', file.name);
         form.append('attachment_size', String(file.size));
-        // Bypass Vercel proxy for large file uploads (same as sendMessage/uploadTeamDocument)
+        // Upload large files straight to PocketBase (same as sendMessage/uploadTeamDocument)
         const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_messages/records`, { method: 'POST', body: form });
         if (!res.ok) throw new Error(`Forward failed: ${res.status} ${await res.text()}`);
         attachmentCopied = true;
@@ -331,8 +331,8 @@ export const teamActions = {
     form.append('uploaded_by_email', uploaderEmail);
     form.append('uploaded_by_name', uploaderName);
     form.append('uploaded_by_role', uploaderRole);
-    // Bypass the Vercel proxy (/api/pb) for large file uploads to avoid Vercel's
-    // strict 4.5MB Serverless Function payload limit, which would block videos.
+    // Upload straight to PocketBase, with no app proxy in between, so large files such as videos are not
+    // held to a serverless function's request size limit.
     const res = await fetch(`${DEFAULT_PB_URL}/api/collections/hr_team_documents/records`, {
       method: 'POST',
       body: form,
