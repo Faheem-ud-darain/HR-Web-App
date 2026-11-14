@@ -7,7 +7,7 @@ import { useProfiles, useTimesheets, hrActions, Profile, TimesheetEntry, Trackin
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
+import { encodeSetupCode, getPocketBaseConfig, TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MACS, TRACKER_MAC_CHIP_HINT, TRACKER_DOWNLOAD_CHROMEOS_URL, TRACKER_MIN_VERSION, needsTrackerUpdate, detectOS } from '@/lib/trackerSetup';
 import { TimerIcon as Timer, MonitorIcon as Monitor, ShieldWarningIcon as ShieldAlert, MapPinIcon as MapPin, DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiHighIcon as Wifi, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle, SlidersHorizontalIcon as Settings2, PulseIcon as Activity } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { EmployeeActivityInsights } from '@/components/ui/lazy';
@@ -356,12 +356,15 @@ export default function TrackerPage() {
                     >
                       <Download className="h-3.5 w-3.5" /> Download for Windows
                     </a>
-                    <a
-                      href={TRACKER_DOWNLOAD_MAC_URL}
-                      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex-1 justify-center ${detectedOS === 'mac' ? 'text-white bg-orange-600 hover:bg-orange-700' : 'text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
-                    >
-                      <Download className="h-3.5 w-3.5" /> Download for Mac
-                    </a>
+                    {TRACKER_DOWNLOAD_MACS.map(mac => (
+                      <a
+                        key={mac.url}
+                        href={mac.url}
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg active:scale-97 transition-colors transition-transform flex-1 justify-center ${detectedOS === 'mac' ? 'text-white bg-orange-600 hover:bg-orange-700' : 'text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200'}`}
+                      >
+                        <Download className="h-3.5 w-3.5" /> {mac.label}
+                      </a>
+                    ))}
                     <a
                       href={TRACKER_DOWNLOAD_CHROMEOS_URL}
                       download="Delcargo_Chromebook_Tracker.zip"
@@ -370,6 +373,7 @@ export default function TrackerPage() {
                       <Download className="h-3.5 w-3.5" /> Chrome OS Extension (.zip)
                     </a>
                   </div>
+                  <p className="text-caption text-slate-500">{TRACKER_MAC_CHIP_HINT}</p>
 
                   <div>
                     <p className="text-caption text-slate-500 font-semibold mb-1">Paste this code into the app when it first opens:</p>

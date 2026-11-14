@@ -134,6 +134,9 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # component-by-component via _parse_version below, not as plain text) is
 # the only thing the update check trusts against the tag GitHub reports as
 # latest.
+# v29 (2026-11-14): a Mac build for Intel processors (older Macs, up to macOS Monterey/Ventura) alongside the Apple Silicon one. The updater
+# now fetches the build that matches the Mac it runs on; an Intel app that fetched the Apple Silicon zip would replace itself with an app
+# that cannot open.
 # v28 (2026-11-12): fixes updating. The v26 and v27 installers were built with the version still set to 25 (setup.iss), so on a v25 PC they said
 # "already up to date" and quit, after the app had already closed itself to make room: the tracker vanished and nothing was installed. The
 # installer's version is now checked against this one by a test, and the app no longer closes if the installer quits straight away.
@@ -141,7 +144,7 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # app's own check makes the absence from that log, so an absence can never exist without the logged inactivity behind it.
 # v26 (2026-11-10): the tracker no longer reads or shows any pay (the 37-minute popup and notices carry no amount); the inactivity absence
 # now also tells the employee, HR and Admin; idle time is reported only for the part inside the open shift. Compatible with v25.
-APP_VERSION = "28"  # Bumped 27 -> 28. Earlier: 26 -> 27, 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
+APP_VERSION = "29"  # Bumped 28 -> 29. Earlier: 27 -> 28. Earlier: 26 -> 27, 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
 # MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
 #   Lighter server load: realtime subscription scoped to this employee's own
 #   hr_tracker_signals row; cached row id (heartbeat = 2 requests, not 3); idle
@@ -230,7 +233,14 @@ GITHUB_REPO = "Faheem-ud-darain/HR-Web-App"
 GITHUB_LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
 GITHUB_WINDOWS_INSTALLER_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/DelCargo_Tracker_Setup.exe"
-GITHUB_MAC_ZIP_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/DelCargo-Tracker-Mac.zip"
+GITHUB_MAC_ZIP_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/DelCargo-Tracker-Mac.zip"  # Apple Silicon
+GITHUB_MAC_INTEL_ZIP_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/DelCargo-Tracker-Mac-Intel.zip"
+
+
+def _mac_zip_url():
+    """The Mac download that matches this Mac's processor. platform.machine() is the architecture of the running app itself, so an Intel
+    build (also when it runs under Rosetta) always updates to the Intel build and an Apple Silicon build to the Apple Silicon one."""
+    return GITHUB_MAC_INTEL_ZIP_URL if platform.machine() == "x86_64" else GITHUB_MAC_ZIP_URL
 
 MAX_WIDTH = 1280
 WEBP_QUALITY = 80  # WebP at 80 looks visually equivalent to (often better than) JPEG
@@ -1927,7 +1937,7 @@ def _perform_update(root, latest_version):
         webbrowser.open(GITHUB_RELEASES_PAGE)
         return
 
-    url = GITHUB_WINDOWS_INSTALLER_URL if system == "Windows" else GITHUB_MAC_ZIP_URL
+    url = GITHUB_WINDOWS_INSTALLER_URL if system == "Windows" else _mac_zip_url()
     filename = "DelCargo_Tracker_Setup.exe" if system == "Windows" else "DelCargo-Tracker-Mac.zip"
     # macOS installers/downloads conventionally land in ~/Downloads, where
     # someone would expect to find one; Windows just needs any scratch
@@ -2112,7 +2122,7 @@ def stage_update_download(latest_version):
         if system == "Windows":
             url, stem, ext = GITHUB_WINDOWS_INSTALLER_URL, "DelCargo_Tracker_Setup", ".exe"
         elif system == "Darwin":
-            url, stem, ext = GITHUB_MAC_ZIP_URL, "DelCargo-Tracker-Mac", ".zip"
+            url, stem, ext = _mac_zip_url(), "DelCargo-Tracker-Mac", ".zip"
         else:
             return None
         tmp = tempfile.gettempdir()

@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { displayName, Profile, TrackingSettings, TrackerDiagnostics } from '@/lib/hrData';
-import { TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MAC_URL, TRACKER_DOWNLOAD_CHROMEOS_URL, encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL } from '@/lib/trackerSetup';
+import { TRACKER_DOWNLOAD_WINDOWS_URL, TRACKER_DOWNLOAD_MACS, TRACKER_MAC_CHIP_HINT, TRACKER_DOWNLOAD_CHROMEOS_URL, encodeSetupCode, getPocketBaseConfig, POCKETBASE_URL } from '@/lib/trackerSetup';
 import { DownloadSimpleIcon as Download, CopyIcon as Copy, ArrowsClockwiseIcon as RefreshCw, WifiSlashIcon as WifiOff, WarningIcon as AlertTriangle } from '@/components/ui/icons';
 import { formatDateTimeNY } from '@/lib/timezone';
 import { AGENT_SCRIPT_PATH } from '@/lib/core/trackingWindow';
@@ -52,9 +52,10 @@ export function TrackerSetupModal({ setupEmp, diagnosticsRequestIdRef, setSetupE
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <ButtonLink variant="primary" size="sm" href={TRACKER_DOWNLOAD_WINDOWS_URL}><Download className="h-3.5 w-3.5" /> Download for Windows</ButtonLink>
-                      <ButtonLink variant="primary" size="sm" href={TRACKER_DOWNLOAD_MAC_URL}><Download className="h-3.5 w-3.5" /> Download for Mac</ButtonLink>
+                      {TRACKER_DOWNLOAD_MACS.map(mac => <ButtonLink key={mac.url} variant="primary" size="sm" href={mac.url}><Download className="h-3.5 w-3.5" /> {mac.label}</ButtonLink>)}
                       <ButtonLink variant="softOrange" size="sm" href={TRACKER_DOWNLOAD_CHROMEOS_URL} download="Delcargo_Chromebook_Tracker.zip"><Download className="h-3.5 w-3.5" /> Chrome OS Extension (.zip)</ButtonLink>
                     </div>
+                    <p className="text-caption text-slate-500">{TRACKER_MAC_CHIP_HINT}</p>
                   </div>
     
                   <div className="space-y-2 border-t border-slate-200 pt-4">

@@ -144,3 +144,23 @@ def test_the_update_popup_sizes_itself_to_its_content(agent):
     dialog = source[source.index("def _show_forced_update_dialog"):source.index("def _apply_staged_update")]
     assert ".geometry(\"380x200\")" not in dialog and "winfo_reqwidth" in dialog
     assert "applied[0]" in dialog  # restart() cannot run twice
+
+
+@pytest.mark.parametrize("machine,expected", [("x86_64", "DelCargo-Tracker-Mac-Intel.zip"), ("arm64", "DelCargo-Tracker-Mac.zip")])
+def test_the_mac_updater_fetches_the_build_for_this_macs_processor(agent, monkeypatch, machine, expected):
+    """An Intel app that fetched the Apple Silicon zip would replace itself with an app that cannot open."""
+    monkeypatch.setattr(agent.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(agent.platform, "machine", lambda: machine)
+    urls = []
+    payload = b"x" * 2_000_000
+
+    def download(url, dest, cb=None):
+        urls.append(url)
+        with open(dest, "wb") as f:
+            f.write(payload)
+        return len(payload), len(payload)
+
+    monkeypatch.setattr(agent, "_download_with_progress", download)
+    fake_checksum(agent, monkeypatch, payload)
+    assert agent.stage_update_download("29")
+    assert urls[0].endswith("/" + expected)

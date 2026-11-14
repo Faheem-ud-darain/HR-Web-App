@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isMobileDevice, latestVersionIfBehind, TRACKER_LATEST_EXTENSION_VERSION, TRACKER_LATEST_VERSION, TRACKER_MIN_VERSION } from './trackerSetup';
+import { isMobileDevice, latestVersionIfBehind, TRACKER_DOWNLOAD_MACS, TRACKER_LATEST_EXTENSION_VERSION, TRACKER_LATEST_VERSION, TRACKER_MIN_VERSION } from './trackerSetup';
 
 type Env = { ua: string; platform?: string; touch?: number; coarse?: boolean; hover?: boolean; capacitor?: boolean };
 
@@ -83,5 +83,12 @@ describe('latestVersionIfBehind', () => {
     const extension = JSON.parse(fs.readFileSync(path.join(root, 'chrome-extension/manifest.json'), 'utf8')).version;
     expect(TRACKER_LATEST_VERSION).toBe(agent);
     expect(TRACKER_LATEST_EXTENSION_VERSION).toBe(extension);
+  });
+
+  it('every Mac download the portal offers is a file the build really publishes, one per processor type', () => {
+    const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/build-tracker-agent.yml'), 'utf8');
+    expect(TRACKER_DOWNLOAD_MACS.map(m => m.url.split('/').pop())).toEqual(['DelCargo_Tracker_Setup.dmg', 'DelCargo_Tracker_Setup-Intel.dmg']);
+    for (const mac of TRACKER_DOWNLOAD_MACS) expect(workflow).toContain(String(mac.url.split('/').pop()));
+    expect(workflow).toContain('macos-15-intel'); // the Intel build exists
   });
 });

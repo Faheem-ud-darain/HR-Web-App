@@ -22,7 +22,14 @@ export const TRACKER_RELEASES_URL = 'https://github.com/Faheem-ud-darain/HR-Web-
 // Filenames must stay in sync with that workflow's release asset names.
 export const TRACKER_DOWNLOAD_WINDOWS_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.exe';
 export const TRACKER_DOWNLOAD_MAC_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup.dmg';
+export const TRACKER_DOWNLOAD_MAC_INTEL_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo_Tracker_Setup-Intel.dmg';
 export const TRACKER_DOWNLOAD_MAC_ZIP_URL = 'https://github.com/Faheem-ud-darain/HR-Web-App/releases/latest/download/DelCargo-Tracker-Mac.zip';
+// The two Mac builds (the app cannot tell the browser's Mac apart: a browser reports an Intel Mac even on Apple Silicon), so both are offered.
+export const TRACKER_DOWNLOAD_MACS = [
+  { label: 'Download for Mac (Apple Silicon)', url: TRACKER_DOWNLOAD_MAC_URL },
+  { label: 'Download for Mac (Intel)', url: TRACKER_DOWNLOAD_MAC_INTEL_URL },
+] as const;
+export const TRACKER_MAC_CHIP_HINT = 'Not sure which Mac you have? Apple menu > About This Mac: "Chip: Apple M…" is Apple Silicon, "Processor: Intel…" is Intel. Works on macOS 12 (Monterey) or newer.';
 export const TRACKER_DOWNLOAD_CHROMEOS_URL = '/Delcargo_Chromebook_Tracker.zip';
 
 // The minimum agent build employees must be running. When an employee's
@@ -60,7 +67,7 @@ export const TRACKER_MIN_VERSION = '24';
 // page say who has not updated yet. Move it with each release (desktop agent: APP_VERSION in tracker-agent/agent_gui.py; Chromebook:
 // "version" in chrome-extension/manifest.json). Raise TRACKER_MIN_VERSION (and the agent's MIN_SUPPORTED_VERSION) only once nearly
 // everyone is on the new build, because that forces the rest to stop and update.
-export const TRACKER_LATEST_VERSION = '28';
+export const TRACKER_LATEST_VERSION = '29';
 export const TRACKER_LATEST_EXTENSION_VERSION = '1.0.18';
 
 // Device label the Chromebook/Chrome extension reports in its heartbeat
