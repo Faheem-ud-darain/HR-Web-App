@@ -2122,7 +2122,9 @@ def stage_update_download(latest_version):
         if system == "Windows":
             url, stem, ext = GITHUB_WINDOWS_INSTALLER_URL, "DelCargo_Tracker_Setup", ".exe"
         elif system == "Darwin":
-            url, stem, ext = _mac_zip_url(), "DelCargo-Tracker-Mac", ".zip"
+            # The staged file is named after the download itself, so an Intel update and an Apple Silicon one can never be mistaken for each other.
+            url = _mac_zip_url()
+            stem, ext = os.path.splitext(url.rsplit("/", 1)[-1])
         else:
             return None
         tmp = tempfile.gettempdir()

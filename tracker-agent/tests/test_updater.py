@@ -162,5 +162,27 @@ def test_the_mac_updater_fetches_the_build_for_this_macs_processor(agent, monkey
 
     monkeypatch.setattr(agent, "_download_with_progress", download)
     fake_checksum(agent, monkeypatch, payload)
-    assert agent.stage_update_download("29")
+    staged = agent.stage_update_download("29")
     assert urls[0].endswith("/" + expected)
+    assert os.path.basename(staged) == expected.replace(".zip", "_v29.zip")  # the staged file carries the build's own name
+
+
+def test_an_update_staged_for_one_chip_is_never_reused_for_the_other(agent, monkeypatch):
+    """An Intel app run under Rosetta stages an Intel zip; the native Apple Silicon app must fetch and verify its own, not reuse that file."""
+    monkeypatch.setattr(agent.platform, "system", lambda: "Darwin")
+    payload = b"x" * 2_000_000
+    urls = []
+
+    def download(url, dest, cb=None):
+        urls.append(url)
+        with open(dest, "wb") as f:
+            f.write(payload)
+        return len(payload), len(payload)
+
+    monkeypatch.setattr(agent, "_download_with_progress", download)
+    fake_checksum(agent, monkeypatch, payload)
+    monkeypatch.setattr(agent.platform, "machine", lambda: "x86_64")
+    intel = agent.stage_update_download("29")
+    monkeypatch.setattr(agent.platform, "machine", lambda: "arm64")
+    native = agent.stage_update_download("29")
+    assert intel != native and len(urls) == 2 and urls[1].endswith("/DelCargo-Tracker-Mac.zip")
