@@ -1,7 +1,7 @@
 ; This installer's version: MUST equal APP_VERSION in agent_gui.py (a test in tracker-agent/tests/test_updater.py fails the build when it
 ; does not). Used for AppVersion below AND for the "already up to date" check in InitializeSetup (ISPP is part of the standard iscc).
 ; It was left at 25 for v26 and v27, so those installers called themselves "already up to date" on a v25 PC and quit without updating.
-#define AppVer "28"
+#define AppVer "29"
 
 [Setup]
 AppId={{6C6F5E6E-2D6A-4C8E-9C7A-DELCARGOTRK01}

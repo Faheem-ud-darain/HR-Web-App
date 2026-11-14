@@ -144,3 +144,45 @@ def test_the_update_popup_sizes_itself_to_its_content(agent):
     dialog = source[source.index("def _show_forced_update_dialog"):source.index("def _apply_staged_update")]
     assert ".geometry(\"380x200\")" not in dialog and "winfo_reqwidth" in dialog
     assert "applied[0]" in dialog  # restart() cannot run twice
+
+
+@pytest.mark.parametrize("machine,expected", [("x86_64", "DelCargo-Tracker-Mac-Intel.zip"), ("arm64", "DelCargo-Tracker-Mac.zip")])
+def test_the_mac_updater_fetches_the_build_for_this_macs_processor(agent, monkeypatch, machine, expected):
+    """An Intel app that fetched the Apple Silicon zip would replace itself with an app that cannot open."""
+    monkeypatch.setattr(agent.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(agent.platform, "machine", lambda: machine)
+    urls = []
+    payload = b"x" * 2_000_000
+
+    def download(url, dest, cb=None):
+        urls.append(url)
+        with open(dest, "wb") as f:
+            f.write(payload)
+        return len(payload), len(payload)
+
+    monkeypatch.setattr(agent, "_download_with_progress", download)
+    fake_checksum(agent, monkeypatch, payload)
+    staged = agent.stage_update_download("29")
+    assert urls[0].endswith("/" + expected)
+    assert os.path.basename(staged) == expected.replace(".zip", "_v29.zip")  # the staged file carries the build's own name
+
+
+def test_an_update_staged_for_one_chip_is_never_reused_for_the_other(agent, monkeypatch):
+    """An Intel app run under Rosetta stages an Intel zip; the native Apple Silicon app must fetch and verify its own, not reuse that file."""
+    monkeypatch.setattr(agent.platform, "system", lambda: "Darwin")
+    payload = b"x" * 2_000_000
+    urls = []
+
+    def download(url, dest, cb=None):
+        urls.append(url)
+        with open(dest, "wb") as f:
+            f.write(payload)
+        return len(payload), len(payload)
+
+    monkeypatch.setattr(agent, "_download_with_progress", download)
+    fake_checksum(agent, monkeypatch, payload)
+    monkeypatch.setattr(agent.platform, "machine", lambda: "x86_64")
+    intel = agent.stage_update_download("29")
+    monkeypatch.setattr(agent.platform, "machine", lambda: "arm64")
+    native = agent.stage_update_download("29")
+    assert intel != native and len(urls) == 2 and urls[1].endswith("/DelCargo-Tracker-Mac.zip")
