@@ -16,7 +16,6 @@
 
 const EXACT_ORIGINS = new Set([
   'https://hub.delcargo.us',
-  'https://delcargo-io.vercel.app', // previous production host, may still be bookmarked/linked
   'capacitor://localhost',
   'ionic://localhost',
   'https://localhost',

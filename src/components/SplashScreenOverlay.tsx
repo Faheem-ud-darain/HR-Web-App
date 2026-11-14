@@ -5,7 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { syncThemeChrome } from '@/lib/theme';
 
 // Branded launch animation, shown once per app boot on every platform
-// (native Android/iOS *and* the plain web/Vercel site). It renders
+// (native Android/iOS *and* the plain web site). It renders
 // unconditionally from the very first paint (including the static-exported
 // HTML itself, before any JS has run) so there's no blank-white-page flash
 // while fonts/data/hydration catch up — then animates itself out on a fixed
