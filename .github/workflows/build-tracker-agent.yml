@@ -102,8 +102,10 @@ jobs:
           exe="dist/DelCargo Tracker.app/Contents/MacOS/DelCargo Tracker"
           lipo -info "$exe"
           lipo -archs "$exe" | grep -qw "${{ matrix.arch }}" || { echo "not a ${{ matrix.arch }} build"; exit 1; }
-          minos=$(xcrun vtool -show-build "$exe" | awk '/minos/ {print $2; exit}')
-          echo "app needs macOS $minos or newer"
+          # Newer files say "minos 11.0"; older Intel files say "version 10.13" (LC_VERSION_MIN_MACOSX). Read whichever is there, and fail if neither is.
+          minos=$(xcrun vtool -show-build "$exe" | awk '/minos/ {print $2; exit} /^ *version / {print $2; exit}')
+          echo "app needs macOS ${minos:-?} or newer"
+          [ -n "$minos" ] || { echo "could not read the minimum macOS version"; exit 1; }
           python3 -c "import sys; assert tuple(int(p) for p in '$minos'.split('.')) <= (12, 0), 'needs macOS $minos: newer than Monterey'"
       - name: Zip the .app bundle and build DMG installer
         run: |
