@@ -9,7 +9,7 @@ import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, u
 import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
-import { absenceDayCharge, absencesInScope, deductionMonths, recordsOfCurrentEmployees } from '@/lib/core/absences';
+import { absenceDayCharge, recordsInMonthScope, deductionMonths, recordsOfCurrentEmployees } from '@/lib/core/absences';
 import { monthLabel } from '@/lib/core/payrollView';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
@@ -102,10 +102,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const loadAbsenceRecords = () => { void refetchAbsences(); };
 
   // Filter absence records by month, date and query
-  const monthOptions = useMemo(() => deductionMonths(absenceRecords, currentMonth), [absenceRecords, currentMonth]);
   const filteredAbsences = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return absencesInScope(absenceRecords, { month: role === 'employee' ? currentMonth : selectedMonth, date: selectedDate, ownOnly: role === 'employee' })
+    return recordsInMonthScope(absenceRecords, { month: role === 'employee' ? currentMonth : selectedMonth, date: selectedDate, ownOnly: role === 'employee' })
       .filter(a => !q || a.employeeName.toLowerCase().includes(q) || a.employeeEmail.toLowerCase().includes(q));
   }, [absenceRecords, selectedMonth, currentMonth, selectedDate, searchQuery, role]);
 
@@ -181,7 +180,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   };
 
   // Group timesheets cumulatively per Employee + Date
-  const cumulativeAttendanceRows = useMemo(() => {
+  const allAttendanceRows = useMemo(() => {
     let list = allTimesheets;
     if (role === 'employee' && filterEmail) {
       list = list.filter(t => t.employeeEmail.toLowerCase() === filterEmail.toLowerCase());
@@ -273,6 +272,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
     return Array.from(groupedMap.values()).sort((a, b) => b.date.localeCompare(a.date));
   }, [allTimesheets, allProfiles, leaves, role, filterEmail, selectedDate, searchQuery, now]);
+
+  // The same month scope as the absence records: the running month by default, HR and Admin can pick another (the chips apply to both tabs).
+  const monthOptions = useMemo(() => deductionMonths([...absenceRecords, ...allAttendanceRows], currentMonth), [absenceRecords, allAttendanceRows, currentMonth]);
+  const cumulativeAttendanceRows = useMemo(
+    () => recordsInMonthScope(allAttendanceRows, { month: role === 'employee' ? currentMonth : selectedMonth, date: selectedDate, ownOnly: role === 'employee' }),
+    [allAttendanceRows, role, currentMonth, selectedMonth, selectedDate],
+  );
 
   // A record whose date turned out to be covered by an approved leave
   // (approved after runAbsenceCheck already scanned it, see
@@ -483,6 +489,20 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         noun="attendance & absences"
         onLoadMore={() => setHistoryDays(d => d + HISTORY_STEP_DAYS)}
       />
+
+      {/* Month chips: one choice for both tabs (HR and Admin only; an employee sees the running month) */}
+      {role !== 'employee' && (
+        <Tabs
+          variant="chips"
+          aria-label="Choose a month"
+          value={selectedMonth}
+          onChange={setSelectedMonth}
+          items={[
+            ...monthOptions.map(m => ({ value: m, label: m === currentMonth ? `${monthLabel(m)} (this month)` : monthLabel(m) })),
+            { value: 'all', label: 'All months' },
+          ]}
+        />
+      )}
 
       {/* ATTENDANCE TAB */}
       {activeTab === 'attendance' && (
@@ -730,18 +750,6 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       {/* ABSENCES TAB */}
       {activeTab === 'absences' && (
         <div className="space-y-4">
-          {role !== 'employee' && (
-            <Tabs
-              variant="chips"
-              aria-label="Choose a month"
-              value={selectedMonth}
-              onChange={setSelectedMonth}
-              items={[
-                ...monthOptions.map(m => ({ value: m, label: m === currentMonth ? `${monthLabel(m)} (this month)` : monthLabel(m) })),
-                { value: 'all', label: 'All months' },
-              ]}
-            />
-          )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
             <StatCard label="Total Absences" value={filteredAbsences.length} />
             <StatCard label="Total Deducted" value={formatMoney(totalDeducted, 'Pakistan')} valueTone="danger" />
