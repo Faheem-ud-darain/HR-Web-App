@@ -144,7 +144,7 @@ LOG_FILE = os.path.join(LOG_DIR, "tracker.log")
 # app's own check makes the absence from that log, so an absence can never exist without the logged inactivity behind it.
 # v26 (2026-11-10): the tracker no longer reads or shows any pay (the 37-minute popup and notices carry no amount); the inactivity absence
 # now also tells the employee, HR and Admin; idle time is reported only for the part inside the open shift. Compatible with v25.
-APP_VERSION = "29"  # Bumped 28 -> 29. Earlier: 27 -> 28. Earlier: 26 -> 27, 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
+APP_VERSION = "30"  # Bumped 29 -> 30 (screenshots taken while the server is unreachable are kept on disk and sent later). Earlier: 28 -> 29. Earlier: 27 -> 28. Earlier: 26 -> 27, 25 -> 26. Earlier: 24 -> 25 (2026-10-14). Fully compatible with v24, so
 # MIN_SUPPORTED_VERSION / TRACKER_MIN_VERSION are NOT bumped (soft rollout).
 #   Lighter server load: realtime subscription scoped to this employee's own
 #   hr_tracker_signals row; cached row id (heartbeat = 2 requests, not 3); idle
@@ -1610,13 +1610,13 @@ def capture_and_encode():
     return buf.getvalue(), w, h
 
 
-def upload_screenshot(base_url, employee_email, webp_bytes, width, height, device_id=None, device_label=None, agent_token=None):
+def upload_screenshot(base_url, employee_email, webp_bytes, width, height, device_id=None, device_label=None, agent_token=None, captured_at=None):
     """Uploads a screenshot as a real file into the hr_screenshots collection
     (multipart/form-data) — replaces the old approach of embedding a base64
     data URL inside a JSON row in hr_delcargo_store. See
     migration_data/create_screenshots_collection.py for the collection
     schema (mimeTypes there must include image/webp)."""
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = captured_at or datetime.now(timezone.utc).isoformat()  # a queued screenshot keeps the time it was really taken
     filename = f"scr_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}.webp"
     url = f"{base_url}/api/collections/hr_screenshots/records"
     data = {
@@ -1639,7 +1639,7 @@ def upload_screenshot(base_url, employee_email, webp_bytes, width, height, devic
 
 def upload_screenshot_with_retry(base_url, employee_email, webp_bytes, width, height,
                                   device_id=None, device_label=None, agent_token=None,
-                                  max_attempts=3, stop_event=None):
+                                  max_attempts=3, stop_event=None, captured_at=None):
     """Wraps upload_screenshot() with a small bounded retry for transient
     network failures (timeouts, momentary connection resets) — a single
     dropped upload previously meant losing that entire capture until the
@@ -1656,6 +1656,7 @@ def upload_screenshot_with_retry(base_url, employee_email, webp_bytes, width, he
             return upload_screenshot(
                 base_url, employee_email, webp_bytes, width, height,
                 device_id=device_id, device_label=device_label, agent_token=agent_token,
+                captured_at=captured_at,
             )
         except Exception as e:
             last_error = e
@@ -1688,6 +1689,89 @@ def upload_inactivity(base_url, employee_email, start_dt, end_dt, device_id=None
         data["agent_token"] = agent_token
     resp = _http.post(url, headers=JSON_HEADERS, data=json.dumps(data), timeout=20)
     resp.raise_for_status()
+
+
+# ── Offline screenshot queue (added v30) ────────────────────────────────────
+# When the server can't be reached, screenshots are kept in a small folder on
+# disk (named by capture time) and sent oldest-first once it answers again, with
+# their real capture time. The server uses them as proof the person kept working
+# through the outage. Bounded by count, size and age so it can never fill a disk.
+PENDING_SHOTS_DIR = os.path.join(APP_DIR, "pending_screenshots")
+PENDING_SHOTS_MAX = 40
+PENDING_SHOTS_MAX_BYTES = 60 * 1024 * 1024
+PENDING_SHOTS_MAX_AGE_SECONDS = 6 * 3600
+OFFLINE_CAPTURE_MAX_SECONDS = 3 * 3600  # keep capturing from the last known shift for at most this long without any server contact
+_pending_shots_lock = threading.Lock()
+
+
+def _pending_shot_files():
+    try:
+        return sorted(f for f in os.listdir(PENDING_SHOTS_DIR) if f.endswith(".webp"))
+    except Exception:
+        return []
+
+
+def park_screenshot(webp_bytes, width, height, captured_at):
+    """Keeps a screenshot on disk for later; trims the oldest beyond the caps."""
+    with _pending_shots_lock:
+        try:
+            os.makedirs(PENDING_SHOTS_DIR, exist_ok=True)
+            ms = int(datetime.fromisoformat(captured_at).timestamp() * 1000)
+            name = f"{ms:015d}__{width}x{height}__{uuid.uuid4().hex[:6]}.webp"
+            path = os.path.join(PENDING_SHOTS_DIR, name)
+            with open(path + ".tmp", "wb") as f:
+                f.write(webp_bytes)
+            os.replace(path + ".tmp", path)
+            files = _pending_shot_files()
+            total = sum(os.path.getsize(os.path.join(PENDING_SHOTS_DIR, f)) for f in files)
+            while files and (len(files) > PENDING_SHOTS_MAX or total > PENDING_SHOTS_MAX_BYTES):
+                oldest = os.path.join(PENDING_SHOTS_DIR, files.pop(0))
+                total -= os.path.getsize(oldest)
+                os.remove(oldest)
+            return True
+        except Exception as e:
+            print(f"[warn] Couldn't park screenshot: {e}")
+            return False
+
+
+def _parse_parked_name(name):
+    """File names are <capture time in ms>__<w>x<h>__<id>.webp (ms zero-padded so names sort by time)."""
+    ms, dims, _ = name[:-len(".webp")].split("__")
+    w, h = dims.split("x")
+    return datetime.fromtimestamp(int(ms) / 1000, timezone.utc).isoformat(), int(w), int(h)
+
+
+def flush_pending_screenshots(cfg, employee_email, stop_event=None, max_per_call=10):
+    """Sends parked screenshots oldest-first; stops at the first failure. Too-old ones are dropped."""
+    with _pending_shots_lock:
+        sent = 0
+        for name in _pending_shot_files():
+            if (stop_event and stop_event.is_set()) or sent >= max_per_call:
+                break
+            path = os.path.join(PENDING_SHOTS_DIR, name)
+            try:
+                captured, w, h = _parse_parked_name(name)
+                too_old = (datetime.now(timezone.utc) - datetime.fromisoformat(captured)).total_seconds() > PENDING_SHOTS_MAX_AGE_SECONDS
+                with open(path, "rb") as f:
+                    data = f.read()
+            except (ValueError, OSError):
+                too_old, data = True, None  # unreadable name/file: it can never be sent
+            if too_old:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+                continue
+            try:
+                upload_screenshot(
+                    cfg["url"], employee_email, data, w, h, device_id=cfg.get("device_id"),
+                    device_label=cfg.get("device_label"), agent_token=cfg.get("token"), captured_at=captured,
+                )
+            except Exception:
+                break  # server still unreachable: keep the rest for next time
+            os.remove(path)
+            sent += 1
+        return sent
 
 
 # ── Reliable inactivity-log delivery (added v25) ────────────────────────────
@@ -3151,6 +3235,23 @@ class TrackerApp:
                 backoff.reset()
                 stop_event.wait(random.uniform(54.0, 66.0))
 
+    def _offline_capture(self, cfg, offline):
+        """While the server can't be reached, keep taking screenshots on the usual schedule for as long as the last
+        successful poll said a shift was running (at most OFFLINE_CAPTURE_MAX_SECONDS), and park them on disk."""
+        try:
+            now = time.monotonic()
+            if offline["ok_at"] is None or now - offline["ok_at"] > OFFLINE_CAPTURE_MAX_SECONDS:
+                return
+            if now - offline["last_shot"] < offline["interval"] * 60:
+                return
+            if _is_session_locked():
+                return
+            webp_bytes, w, h = capture_and_encode()
+            offline["last_shot"] = now
+            park_screenshot(webp_bytes, w, h, datetime.now(timezone.utc).isoformat())
+        except Exception as e:
+            print(f"[warn] Offline capture failed: {e}")
+
     def _worker_loop(self, cfg, stop_event):
         # cfg and stop_event are captured as explicit arguments (a snapshot
         # at the moment this thread was started) rather than read live off
@@ -3172,6 +3273,8 @@ class TrackerApp:
         # to every loop iteration.
         was_capture_enabled = False
         server_backoff = _Backoff(SETTINGS_POLL_SECONDS)
+        # What the last successful poll said, so screenshots can keep being taken (and parked on disk) while the server can't be reached.
+        offline = {"ok_at": None, "interval": 15.0, "email": None, "last_shot": 0.0}
         while not stop_event.is_set():
             with self.state_lock:
                 superseded = (self.state.get("connection_status") == "superseded")
@@ -3186,6 +3289,7 @@ class TrackerApp:
             except Exception as e:
                 with self.state_lock:
                     self.state["last_error"] = _short_error(e)
+                self._offline_capture(cfg, offline)
                 stop_event.wait(server_backoff.next_delay())
                 continue
             server_backoff.reset()
@@ -3199,20 +3303,26 @@ class TrackerApp:
 
             enabled_by_hr = bool(settings.get("enabled"))
             employee_email = settings.get("employeeEmail")
-            
+            if _pending_shot_files():
+                flush_pending_screenshots(cfg, employee_email, stop_event)  # the server answered: send what was taken while it did not
+
             try:
                 shift_active = check_active_shift(cfg["url"], None, employee_email)
             except Exception as e:
                 with self.state_lock:
                     self.state["last_error"] = _short_error(f"Shift check failed: {e}")
+                self._offline_capture(cfg, offline)
                 stop_event.wait(server_backoff.next_delay())
                 continue
 
             enabled = enabled_by_hr and shift_active
+            offline["ok_at"] = time.monotonic() if enabled else None
+            offline["email"] = employee_email
             # 1 minute is the enforced floor (matches the minimum HR/Admin can
             # set on the dashboard — see TrackingView.tsx's interval input);
             # this max() is just a safety net for any older saved settings.
             interval_minutes = max(1.0, float(settings.get("intervalMinutes", 15)))
+            offline["interval"] = interval_minutes
             with self.state_lock:
                 seen_now = datetime.now(timezone.utc)
                 if shift_active and not self.state.get("shift_active"):
@@ -3269,11 +3379,18 @@ class TrackerApp:
                 else:
                     try:
                         webp_bytes, w, h = capture_and_encode()
-                        ts = upload_screenshot_with_retry(
-                            cfg["url"], settings.get("employeeEmail"), webp_bytes, w, h,
-                            device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                            agent_token=cfg.get("token"), stop_event=stop_event,
-                        )
+                        captured_at = datetime.now(timezone.utc).isoformat()
+                        offline["last_shot"] = time.monotonic()
+                        try:
+                            ts = upload_screenshot_with_retry(
+                                cfg["url"], settings.get("employeeEmail"), webp_bytes, w, h,
+                                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
+                                agent_token=cfg.get("token"), stop_event=stop_event, captured_at=captured_at,
+                            )
+                        except Exception:
+                            park_screenshot(webp_bytes, w, h, captured_at)  # keep it; it is sent when the server answers again
+                            raise
+                        flush_pending_screenshots(cfg, settings.get("employeeEmail"), stop_event)
                         with self.state_lock:
                             self.state["last_capture"] = ts
                             self.state["last_error"] = None

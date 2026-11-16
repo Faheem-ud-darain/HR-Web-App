@@ -148,3 +148,39 @@ def test_the_stretch_that_ends_the_shift_is_logged_before_the_shift_ends(agent):
     block = source[source.index("auto_absent_fired = True\n                # The stretch is logged now"):]
     assert block.index("self._submit_idle_in_shift(") < block.index("end_shift_for_inactivity(")  # once the shift ends, tracking is off and nothing would report it
     assert source.count("INACTIVITY_THRESHOLD_SECONDS and not auto_absent_fired:") == 2  # and the resume path does not log the same stretch a second time
+
+
+def test_screenshots_taken_offline_are_parked_and_sent_oldest_first_with_their_real_time(agent, monkeypatch, tmp_path):
+    monkeypatch.setattr(agent, "PENDING_SHOTS_DIR", str(tmp_path / "shots"))
+    now = datetime.now(timezone.utc)
+    first, second = (now - timedelta(minutes=30)).isoformat(), (now - timedelta(minutes=15)).isoformat()
+    assert agent.park_screenshot(b"two", 10, 5, second) and agent.park_screenshot(b"one", 10, 5, first)
+    sent = []
+    monkeypatch.setattr(agent, "upload_screenshot", lambda url, email, data, w, h, **kw: sent.append((data, kw["captured_at"])))
+    assert agent.flush_pending_screenshots(CFG, "a@b.us") == 2
+    assert [d for d, _ in sent] == [b"one", b"two"]
+    assert [round(datetime.fromisoformat(t).timestamp(), 2) for _, t in sent] == [round(datetime.fromisoformat(x).timestamp(), 2) for x in (first, second)]
+    assert agent._pending_shot_files() == []
+
+
+def test_parked_screenshots_stay_when_the_server_is_still_down_and_old_ones_are_dropped(agent, monkeypatch, tmp_path):
+    monkeypatch.setattr(agent, "PENDING_SHOTS_DIR", str(tmp_path / "shots"))
+    now = datetime.now(timezone.utc)
+    agent.park_screenshot(b"old", 1, 1, (now - timedelta(hours=7)).isoformat())
+    agent.park_screenshot(b"new", 1, 1, (now - timedelta(minutes=5)).isoformat())
+
+    def down(*a, **k):
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(agent, "upload_screenshot", down)
+    assert agent.flush_pending_screenshots(CFG, "a@b.us") == 0
+    assert len(agent._pending_shot_files()) == 1  # the too-old one is gone, the recent one waits
+
+
+def test_the_screenshot_queue_is_capped(agent, monkeypatch, tmp_path):
+    monkeypatch.setattr(agent, "PENDING_SHOTS_DIR", str(tmp_path / "shots"))
+    monkeypatch.setattr(agent, "PENDING_SHOTS_MAX", 3)
+    now = datetime.now(timezone.utc)
+    for i in range(6):
+        agent.park_screenshot(b"x", 1, 1, (now - timedelta(minutes=60 - i)).isoformat())
+    assert len(agent._pending_shot_files()) == 3
