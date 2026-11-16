@@ -3,7 +3,8 @@
 import { Button } from '@/components/ui/Button';
 import React from 'react';
 import { XIcon as X } from '@/components/ui/icons';
-import { Input, Select } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { SearchInput } from '@/components/ui/SearchInput';
 import type { FileTypeFilter, SizeFilter } from './chatHelpers';
 import type { useChatFilters } from './useChatFilters';
@@ -14,9 +15,9 @@ export function ChatFilterPanel({ filters }: { filters: ReturnType<typeof useCha
     <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3 shrink-0 space-y-2.5">
       <SearchInput fieldSize="sm" value={filters.searchQuery} onChange={filters.setSearchQuery} placeholder="Search messages, senders, or file names…" />
       <div className="flex flex-wrap gap-2 items-center">
-        <Input type="date" value={filters.dateFrom} onChange={e => filters.setDateFrom(e.target.value)} fieldSize="md" />
+        <DateInput value={filters.dateFrom} onChange={e => filters.setDateFrom(e.target.value)} fieldSize="md" />
         <span className="text-caption text-slate-500 font-bold">to</span>
-        <Input type="date" value={filters.dateTo} onChange={e => filters.setDateTo(e.target.value)} fieldSize="md" />
+        <DateInput value={filters.dateTo} onChange={e => filters.setDateTo(e.target.value)} fieldSize="md" />
 
         <Select value={filters.fileTypeFilter} onChange={e => filters.setFileTypeFilter(e.target.value as FileTypeFilter)} fieldSize="md">
           <option value="all">All types</option>

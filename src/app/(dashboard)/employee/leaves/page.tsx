@@ -15,6 +15,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { PlusCircleIcon as PlusCircle, WarningCircleIcon as AlertCircle, SealCheckIcon as BadgeCheck, TrashIcon as Trash2 } from '@/components/ui/icons';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, THead, TBody, Tr, Th, Td } from '@/components/ui/Table';
@@ -434,16 +435,14 @@ export default function EmployeeLeavesPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Start Date *" size="md">
-              <Input
-                type="date"
+              <DateInput
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 fieldSize="md"
               />
             </FormField>
             <FormField label="End Date *" size="md">
-              <Input
-                type="date"
+              <DateInput
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 fieldSize="md"

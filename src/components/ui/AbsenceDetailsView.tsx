@@ -22,7 +22,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
 import { daysAgoNYDateString } from '@/lib/timezone';
-import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useNow } from '@/lib/useNow';
 import { useQuery } from '@tanstack/react-query';
@@ -452,9 +452,8 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
             <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
               <Calendar className="h-4 w-4 text-slate-400" />
               <FieldLabel htmlFor="attendance-date-filter" size="sm">Date:</FieldLabel>
-              <Input
+              <DateInput
                 id="attendance-date-filter"
-                type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 fieldSize="md" className="cursor-pointer"

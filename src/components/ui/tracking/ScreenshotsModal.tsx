@@ -4,7 +4,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, Screenshot, InactivityLog } from '@/lib/hrData';
-import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { Button } from '@/components/ui/Button';
 import { DownloadSimpleIcon as Download, CursorClickIcon as MousePointerClick, MagnifyingGlassPlusIcon as ZoomIn } from '@/components/ui/icons';
 import { formatShortDateNY, formatTimeNY, formatDateTimeNY } from '@/lib/timezone';
@@ -43,8 +43,7 @@ export function ScreenshotsModal({ viewerEmp, setViewerEmp, role, handleRangeCha
             <div className="flex items-center gap-2 flex-wrap">
               <Tabs variant="segmented" compact aria-label="Time range" value={viewerRange} onChange={handleRangeChange} items={[{ value: '2days', label: 'Last 2 Days' }, { value: 'day', label: 'Daily' }, { value: 'week', label: '7 Days' }, { value: 'month', label: '30 Days' }]} />
               {viewerRange === 'day' && (
-                <Input
-                  type="date"
+                <DateInput
                   value={viewerDay}
                   max={localDateString()}
                   onChange={e => handleDayChange(e.target.value)}

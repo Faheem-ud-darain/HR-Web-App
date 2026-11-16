@@ -5,7 +5,7 @@ import { StatusDot } from '@/components/ui/StatusDot';
 import React from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { displayName, Profile, InactivityLog } from '@/lib/hrData';
-import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, THead, Th, TBody, Tr, Td } from '@/components/ui/Table';
 import { formatTimeNY } from '@/lib/timezone';
@@ -38,8 +38,7 @@ export function MouseActivityModal({ mouseEmp, setMouseEmp, role, handleMouseRan
             <div className="flex items-center gap-2 flex-wrap">
               <Tabs variant="segmented" compact aria-label="Time range" value={mouseRange} onChange={handleMouseRangeChange} items={[{ value: 'day', label: 'Daily' }, { value: 'week', label: 'Weekly' }, { value: 'month', label: 'Monthly' }]} />
               {mouseRange === 'day' && (
-                <Input
-                  type="date"
+                <DateInput
                   value={mouseDay}
                   max={localDateString()}
                   onChange={e => handleMouseDayChange(e.target.value)}
