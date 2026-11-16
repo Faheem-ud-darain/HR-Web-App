@@ -10,6 +10,7 @@ import { FieldLabel } from '../FieldLabel';
 import { FormField } from '../FormField';
 import { Input, Select } from '../Input';
 import { PartTimeField } from '../PartTime';
+import { DateInput } from '@/components/ui/DateInput';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -89,12 +90,12 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
       </FormField>
 
       <div className="grid grid-cols-2 gap-3">
-        <FormField label="Joining Date *"><Input type="date" required {...bind('joinedDate')} fieldSize="sm" className={pointer} /></FormField>
-        <FormField label={<span title="Salary tracking starts from this month">Salary Track Month *</span>}><Input type="date" required {...bind('salaryStartDate')} fieldSize="sm" className={pointer} /></FormField>
+        <FormField label="Joining Date *"><DateInput required {...bind('joinedDate')} fieldSize="sm" className={pointer} /></FormField>
+        <FormField label={<span title="Salary tracking starts from this month">Salary Track Month *</span>}><DateInput required {...bind('salaryStartDate')} fieldSize="sm" className={pointer} /></FormField>
       </div>
 
       <FormField label={<span title="PTO accrual is calculated from this date instead of the joining date">Account Creation Date *</span>}>
-        <Input type="date" required {...bind('accountCreationDate')} fieldSize="sm" className={pointer} />
+        <DateInput required {...bind('accountCreationDate')} fieldSize="sm" className={pointer} />
         <p className="text-caption text-slate-400 font-semibold">PTO accrual is calculated from this date, not the joining date.</p>
       </FormField>
 

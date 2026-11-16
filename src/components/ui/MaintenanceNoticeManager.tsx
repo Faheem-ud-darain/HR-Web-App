@@ -12,6 +12,7 @@ import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input, Textarea } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { useNow } from '@/lib/useNow';
 
 interface MaintenanceNoticeManagerProps {
@@ -153,8 +154,7 @@ export function MaintenanceNoticeManager({ createdBy }: MaintenanceNoticeManager
           </FormField>
 
           <FormField label="Maintenance Date *">
-            <Input
-              type="date"
+            <DateInput
               required
               value={date}
               onChange={e => setDate(e.target.value)}
