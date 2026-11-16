@@ -89,9 +89,19 @@ export function ListSkeleton({ rows = 4, className = '' }: { rows?: number; clas
 // App-shell placeholder shown while the dashboard layout resolves the session
 // and loads the signed-in profile (replaces the full-screen spinner so the
 // page frame appears immediately).
-export function DashboardSkeleton() {
+export function DashboardSkeleton({ stalled = false, reason, onRetry, onSignOut }: { stalled?: boolean; reason?: string; onRetry?: () => void; onSignOut?: () => void }) {
   return (
-    <LoadingRegion label="Loading dashboard" className="flex h-screen bg-slate-50">
+    <LoadingRegion label="Loading dashboard" className="relative flex h-screen bg-slate-50">
+      {stalled && (
+        <div role="alert" className="absolute inset-x-0 top-1/3 z-10 mx-auto w-[min(92vw,26rem)] space-y-3 rounded-xl border border-slate-200 bg-white p-5 text-center shadow-lg">
+          <p className="text-sm font-bold text-slate-900">This is taking longer than usual</p>
+          <p className="text-xs leading-relaxed text-slate-500">{reason || 'Your dashboard has not opened yet. Try again, or sign out and sign back in.'}</p>
+          <div className="flex justify-center gap-2">
+            {onRetry && <button type="button" onClick={onRetry} className="rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-700">Try again</button>}
+            {onSignOut && <button type="button" onClick={onSignOut} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Sign out</button>}
+          </div>
+        </div>
+      )}
       <aside className="hidden md:flex w-60 shrink-0 flex-col gap-3 border-r border-slate-200 bg-white p-4">
         <Skeleton className="h-8 w-32" />
         <div className="mt-4 space-y-2.5">
