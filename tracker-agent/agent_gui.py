@@ -1699,7 +1699,7 @@ def upload_inactivity(base_url, employee_email, start_dt, end_dt, device_id=None
 PENDING_SHOTS_DIR = os.path.join(APP_DIR, "pending_screenshots")
 PENDING_SHOTS_MAX = 40
 PENDING_SHOTS_MAX_BYTES = 60 * 1024 * 1024
-PENDING_SHOTS_MAX_AGE_SECONDS = 6 * 3600
+PENDING_SHOTS_MAX_AGE_SECONDS = 4 * 24 * 3600  # the web app re-checks the last 5 days, so older ones would never be used
 OFFLINE_CAPTURE_MAX_SECONDS = 3 * 3600  # keep capturing from the last known shift for at most this long without any server contact
 _pending_shots_lock = threading.Lock()
 
@@ -1805,6 +1805,49 @@ def _save_pending_inactivity(items):
         print(f"[warn] Couldn't save pending inactivity logs: {e}")
 
 
+OPEN_IDLE_FILE = os.path.join(APP_DIR, "open_idle_stretch.json")
+
+
+def journal_open_idle(start_dt, last_seen_dt, employee_email):
+    """Records the idle stretch that is still going on, so a PC restart or crash in the middle of it does not lose it."""
+    try:
+        os.makedirs(APP_DIR, exist_ok=True)
+        tmp = OPEN_IDLE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"start": start_dt.isoformat(), "end": last_seen_dt.isoformat(), "email": employee_email}, f)
+        os.replace(tmp, OPEN_IDLE_FILE)
+    except Exception as e:
+        print(f"[warn] Couldn't journal idle stretch: {e}")
+
+
+def clear_open_idle():
+    try:
+        os.remove(OPEN_IDLE_FILE)
+    except OSError:
+        pass
+
+
+def recover_open_idle(cfg):
+    """At start-up: a stretch left in the journal by a restart/crash is parked as a normal inactivity log (it ends at the last moment
+    the PC was seen idle, never later). The server still counts only the part inside the recorded shift."""
+    try:
+        with open(OPEN_IDLE_FILE, "r", encoding="utf-8") as f:
+            item = json.load(f)
+        start, end = datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"])
+    except Exception:
+        clear_open_idle()
+        return False
+    clear_open_idle()
+    if (end - start).total_seconds() < INACTIVITY_THRESHOLD_SECONDS:
+        return False
+    with _pending_inactivity_lock:
+        items = _load_pending_inactivity()
+        items.append({"start": start.isoformat(), "end": end.isoformat(), "email": item.get("email"),
+                      "device_id": cfg.get("device_id"), "device_label": cfg.get("device_label")})
+        _save_pending_inactivity(items)
+    return True
+
+
 def flush_pending_inactivity(cfg, employee_email):
     """Sends any parked inactivity logs; keeps the ones that still fail."""
     with _pending_inactivity_lock:
@@ -1813,9 +1856,13 @@ def flush_pending_inactivity(cfg, employee_email):
             return
         remaining = []
         for item in items:
+            email = item.get("email") or employee_email
+            if not email:
+                remaining.append(item)  # nobody to attribute it to yet: keep it
+                continue
             try:
                 upload_inactivity(
-                    cfg["url"], employee_email,
+                    cfg["url"], email,
                     datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"]),
                     device_id=item.get("device_id"), device_label=item.get("device_label"),
                     agent_token=cfg.get("token"),
@@ -1846,7 +1893,7 @@ def upload_inactivity_reliably(cfg, employee_email, start_dt, end_dt, max_attemp
     with _pending_inactivity_lock:
         items = _load_pending_inactivity()
         items.append({
-            "start": start_dt.isoformat(), "end": end_dt.isoformat(),
+            "start": start_dt.isoformat(), "end": end_dt.isoformat(), "email": employee_email,
             "device_id": cfg.get("device_id"), "device_label": cfg.get("device_label"),
         })
         _save_pending_inactivity(items)
@@ -3305,6 +3352,8 @@ class TrackerApp:
             employee_email = settings.get("employeeEmail")
             if _pending_shot_files():
                 flush_pending_screenshots(cfg, employee_email, stop_event)  # the server answered: send what was taken while it did not
+            if _load_pending_inactivity() and not _pending_inactivity_lock.locked():
+                threading.Thread(target=flush_pending_inactivity, args=(cfg, employee_email), daemon=True).start()
 
             try:
                 shift_active = check_active_shift(cfg["url"], None, employee_email)
@@ -3637,9 +3686,11 @@ class TrackerApp:
 
         # Send any inactivity logs parked on disk by an earlier failed upload
         # (e.g. the app was closed before the server came back).
+        recover_open_idle(cfg)
         threading.Thread(
             target=flush_pending_inactivity, args=(cfg, cfg.get("employee_email")), daemon=True,
         ).start()
+        journal_at = 0.0  # monotonic time of the last journal write
 
         while not stop_event.is_set():
             stop_event.wait(MOUSE_POLL_SECONDS)
@@ -3678,6 +3729,7 @@ class TrackerApp:
                 last_move_time = now
                 was_enabled = False
                 auto_absent_fired = False
+                clear_open_idle()
                 continue
 
             if not was_enabled or gap > SLEEP_GAP_THRESHOLD_SECONDS:
@@ -3744,6 +3796,14 @@ class TrackerApp:
             # Checked on every poll (not just when activity eventually
             # resumes) so this can trigger DURING the idle stretch instead of
             # waiting for it to end.
+            if not auto_absent_fired and current_idle_seconds >= INACTIVITY_THRESHOLD_SECONDS:
+                if now - journal_at >= 30:  # keep the open stretch on disk, refreshed every 30 s
+                    journal_at = now
+                    wall = datetime.now(timezone.utc)
+                    journal_open_idle(wall - timedelta(seconds=current_idle_seconds), wall, employee_email)
+            elif journal_at:
+                journal_at = 0.0
+                clear_open_idle()  # the stretch ended and was reported (or was never long enough)
             idle_in_shift = self._idle_seconds_in_shift(current_idle_seconds)
             if idle_in_shift >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
                 auto_absent_fired = True

@@ -166,7 +166,7 @@ def test_screenshots_taken_offline_are_parked_and_sent_oldest_first_with_their_r
 def test_parked_screenshots_stay_when_the_server_is_still_down_and_old_ones_are_dropped(agent, monkeypatch, tmp_path):
     monkeypatch.setattr(agent, "PENDING_SHOTS_DIR", str(tmp_path / "shots"))
     now = datetime.now(timezone.utc)
-    agent.park_screenshot(b"old", 1, 1, (now - timedelta(hours=7)).isoformat())
+    agent.park_screenshot(b"old", 1, 1, (now - timedelta(days=5)).isoformat())
     agent.park_screenshot(b"new", 1, 1, (now - timedelta(minutes=5)).isoformat())
 
     def down(*a, **k):
@@ -184,3 +184,33 @@ def test_the_screenshot_queue_is_capped(agent, monkeypatch, tmp_path):
     for i in range(6):
         agent.park_screenshot(b"x", 1, 1, (now - timedelta(minutes=60 - i)).isoformat())
     assert len(agent._pending_shot_files()) == 3
+
+
+def test_parked_inactivity_keeps_its_own_email_and_nothing_is_lost_without_one(agent, monkeypatch):
+    monkeypatch.setattr(agent, "upload_inactivity", MagicMock(side_effect=OSError("down")))
+    monkeypatch.setattr(agent.time, "sleep", lambda s: None)
+    agent.upload_inactivity_reliably(CFG, "a@b.us", START, END)
+    sent = []
+    monkeypatch.setattr(agent, "upload_inactivity", lambda url, email, *a, **k: sent.append(email))
+    agent.flush_pending_inactivity(CFG, None)  # e.g. the start-up flush before the email is known
+    assert sent == ["a@b.us"] and agent._load_pending_inactivity() == []
+
+
+def test_an_idle_stretch_cut_off_by_a_restart_is_recovered_at_next_start(agent, monkeypatch, tmp_path):
+    monkeypatch.setattr(agent, "OPEN_IDLE_FILE", str(tmp_path / "open.json"))
+    now = datetime.now(timezone.utc)
+    agent.journal_open_idle(now - timedelta(minutes=20), now - timedelta(minutes=1), "a@b.us")
+    assert agent.recover_open_idle(CFG) is True
+    parked = agent._load_pending_inactivity()
+    assert len(parked) == 1 and parked[0]["email"] == "a@b.us"
+    assert datetime.fromisoformat(parked[0]["end"]) == now - timedelta(minutes=1)  # ends when it was last seen idle, never later
+    assert not os.path.exists(agent.OPEN_IDLE_FILE)
+
+
+def test_a_too_short_or_broken_journal_is_discarded(agent, monkeypatch, tmp_path):
+    monkeypatch.setattr(agent, "OPEN_IDLE_FILE", str(tmp_path / "open.json"))
+    now = datetime.now(timezone.utc)
+    agent.journal_open_idle(now - timedelta(seconds=60), now, "a@b.us")
+    assert agent.recover_open_idle(CFG) is False and agent._load_pending_inactivity() == []
+    (tmp_path / "open.json").write_text("not json")
+    assert agent.recover_open_idle(CFG) is False
