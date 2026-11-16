@@ -5,7 +5,7 @@
 // whole app (a timezone bug here passes tsc silently while being
 // behaviorally wrong). Plan 015 step 5.
 import { describe, it, expect } from 'vitest';
-import { getNYDateString, formatDateNY, getNYMidnight, formatShortDateNY, formatTimeNY, formatRelativeDateNY } from './timezone';
+import { getNYDateString, formatDateNY, getNYMidnight, formatShortDateNY, formatTimeNY, formatRelativeDateNY, notificationTimeLabel } from './timezone';
 
 describe('getNYDateString', () => {
   it('returns the NY calendar date for a UTC instant that is still the same day in NY', () => {
@@ -101,5 +101,19 @@ describe('formatTimeNY', () => {
   it('renders the NY wall-clock time for a UTC instant, not the UTC time', () => {
     // 2026-09-10T13:05:00Z is 9:05 AM in NY (EDT, UTC-4).
     expect(formatTimeNY(new Date('2026-09-10T13:05:00Z'))).toBe('9:05 AM');
+  });
+});
+
+describe('notificationTimeLabel', () => {
+  it('turns the raw moment the server writes into a time of day in New York', () => {
+    expect(notificationTimeLabel('2026-11-12T18:45:00.153Z')).toBe('1:45 PM'); // 18:45 UTC is 1:45 PM New York time in November
+    expect(notificationTimeLabel('2026-07-01T18:45:00.000Z')).toBe('2:45 PM'); // summer time
+  });
+  it('keeps a time of day the app already wrote, and anything that is not a moment', () => {
+    expect(notificationTimeLabel('3:02 PM')).toBe('3:02 PM');
+    expect(notificationTimeLabel('3:02 PM Nov 12, 2026')).toBe('3:02 PM Nov 12, 2026');
+    expect(notificationTimeLabel('')).toBe('');
+    expect(notificationTimeLabel(undefined)).toBe('');
+    expect(notificationTimeLabel('2026-99-99T99:99:99Z')).toBe('2026-99-99T99:99:99Z');
   });
 });

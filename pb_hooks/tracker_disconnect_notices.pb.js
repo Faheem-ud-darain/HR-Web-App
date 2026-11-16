@@ -99,7 +99,9 @@ cronAdd("tracker_disconnect_notices", "* * * * *", () => {
         const lastSeenMs = hb ? parseMs(hb.lastSeenAt) : NaN;
         if (isNaN(lastSeenMs) || lastSeenMs < clockInMs - CONNECTED_BEFORE_SHIFT_MS) return; // never connected this shift — ambiguous, don't guess
 
-        const open = dao.findRecordsByFilter("hr_tracker_disconnects", 'employee_id = {:e} && status = "open"', "", 5, 0, { e: email });
+        // Oldest first: if two runs ever opened an outage for the same person (see below), the oldest one is the real one.
+        const open = dao.findRecordsByFilter("hr_tracker_disconnects", 'employee_id = {:e} && status = "open"', "created,id", 5, 0, { e: email });
+        open.slice(1).forEach((extra) => { extra.set("status", "duplicate"); dao.saveRecord(extra); });
         const outage = open.length ? open[0] : null;
         const age = now - lastSeenMs;
 
@@ -130,6 +132,13 @@ cronAdd("tracker_disconnect_notices", "* * * * *", () => {
         record.set("reconnected_at", "");
         record.set("duration", "");
         dao.saveRecord(record);
+        // This job can overlap itself when the server is slow, and both runs then find "no open outage". Look again now: the OLDEST open
+        // outage is the real one; a run that lost the race removes its own row and sends nothing, so the person gets one notice, not two.
+        const openNow = dao.findRecordsByFilter("hr_tracker_disconnects", 'employee_id = {:e} && status = "open"', "created,id", 5, 0, { e: email });
+        if (openNow.length > 1 && openNow[0].getId() !== record.getId()) {
+          dao.deleteRecord(record);
+          return;
+        }
         addNotification(dao, email, `Your tracker disconnected. ${reason.text}`, "Tracker disconnected");
       } catch (err) {
         console.log("[tracker_disconnect_notices] shift check failed:", err);

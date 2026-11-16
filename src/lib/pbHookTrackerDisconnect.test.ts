@@ -8,8 +8,13 @@ const NOW = Date.UTC(2026, 10, 11, 18, 0, 0);
 const ago = (min: number) => new Date(NOW - min * 60000).toISOString();
 const EMAIL = 'emp@x.com';
 
+let seq = 0;
 class Rec {
-  constructor(public collection: string, public data: Record<string, unknown> = {}) {}
+  constructor(public collection: string, public data: Record<string, unknown> = {}) {
+    seq += 1;
+    this.data.id ??= `r${String(seq).padStart(4, '0')}`; // unique, and in creation order
+    this.data.created ??= String(seq).padStart(6, '0');
+  }
   get(k: string) { return this.data[k]; }
   getString(k: string) { const v = this.data[k]; return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); }
   getId() { return String(this.data.id ?? 'id1'); }
@@ -18,17 +23,23 @@ class Rec {
 
 type Db = { shifts: Rec[]; signals: Rec[]; outages: Rec[]; tracked?: boolean };
 
-function run(db: Db) {
+// `staleOpenRead` makes the job's FIRST look for an open outage see nothing, like a run that started before the other run saved.
+function run(db: Db, staleOpenRead = false) {
+  let staleLeft = staleOpenRead ? 1 : 0;
   const notes: Rec[] = [];
   const dao = {
     findRecordsByFilter: (c: string, f: string, _s: string, _l: number, _o: number, p: { email?: string; e?: string } = {}) => {
       if (c === 'hr_timesheets') return db.shifts.filter(s => !s.get('clock_out'));
       if (c === 'hr_tracking_settings') return db.tracked === false ? [] : [new Rec(c, { employeeEmail: EMAIL, enabled: true })];
       if (c === 'hr_tracker_signals') return db.signals.filter(r => String(r.get('email')).includes(String(p.email)));
-      if (c === 'hr_tracker_disconnects') return db.outages.filter(o => o.get('status') === 'open' && (p.e === undefined || o.get('employee_id') === p.e));
+      if (c === 'hr_tracker_disconnects') {
+        if (staleLeft > 0 && f.includes('employee_id')) { staleLeft -= 1; return []; }
+        return db.outages.filter(o => o.get('status') === 'open' && (p.e === undefined || o.get('employee_id') === p.e)).sort((a, b) => String(a.get('created')).localeCompare(String(b.get('created'))) || String(a.getId()).localeCompare(String(b.getId())));
+      }
       return [];
     },
     findCollectionByNameOrId: (n: string) => n,
+    deleteRecord: (r: Rec) => { const i = db.outages.indexOf(r); if (i >= 0) db.outages.splice(i, 1); },
     saveRecord: (r: Rec) => {
       if (r.collection === 'hr_notifications') notes.push(r);
       else if (r.collection === 'hr_tracker_disconnects' && !db.outages.includes(r)) db.outages.push(r);
@@ -123,5 +134,22 @@ describe('tracker disconnect hook', () => {
     expect(run({ shifts: [], signals: [signals(6)], outages: [] })).toHaveLength(0);
     expect(run({ shifts: [shift()], signals: [signals(6)], outages: [], tracked: false })).toHaveLength(0);
     expect(run({ shifts: [shift()], signals: [signals(600)], outages: [] })).toHaveLength(0);
+  });
+
+  it('two overlapping runs open ONE outage and send ONE notice (the slow-server duplicate)', () => {
+    const db: Db = { shifts: [shift()], signals: [signals(6)], outages: [] };
+    const first = run(db, true);
+    const second = run(db, true); // started before the first run's outage was visible to it
+    expect(db.outages).toHaveLength(1);
+    expect(first.length + second.length).toBe(1);
+  });
+
+  it('turns a duplicate open outage left behind into a "duplicate", keeping the oldest', () => {
+    const older = outage('open', 20);
+    const newer = outage('open', 19);
+    const db: Db = { shifts: [shift()], signals: [signals(6)], outages: [older, newer] };
+    run(db);
+    expect(older.get('status')).toBe('open');
+    expect(newer.get('status')).toBe('duplicate');
   });
 });
