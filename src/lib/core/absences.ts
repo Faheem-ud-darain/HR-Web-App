@@ -168,6 +168,17 @@ export function deductionLines(records: MyAbsenceRecord[], leaveOn: (date: strin
   return lines;
 }
 
+/**
+ * The absence records to show: one month by default ("YYYY-MM", normally the running month), or every month when `month` is 'all'.
+ * Picking a single day (`date`) shows that day whatever its month, except for an employee's own list (`ownOnly`), which never reaches
+ * back past the chosen month.
+ */
+export function absencesInScope<T extends { date: string }>(records: T[], opts: { month: string; date?: string; ownOnly?: boolean }): T[] {
+  const inMonth = (r: T) => opts.month === 'all' || r.date.startsWith(opts.month);
+  if (opts.date) return records.filter(r => r.date === opts.date && (!opts.ownOnly || inMonth(r)));
+  return records.filter(inMonth);
+}
+
 /** The pay months ("YYYY-MM") that have a deduction, plus the current one, newest first. */
 export function deductionMonths(records: Pick<MyAbsenceRecord, 'date'>[], currentMonth: string): string[] {
   return [...new Set([currentMonth, ...records.map(r => r.date.slice(0, 7))])].sort().reverse();

@@ -9,7 +9,8 @@ import { hrActions, AbsenceRecord, TimesheetEntry, useTimesheets, useProfiles, u
 import { UserMinusIcon as UserX, ClockIcon as Clock, CalendarXIcon as CalendarX2, CheckCircleIcon as CheckCircle2, TrashIcon as Trash2, CalendarBlankIcon as Calendar, FunnelIcon as Filter, UserCheckIcon as UserCheck, ShieldSlashIcon as ShieldX, CalendarCheckIcon as CalendarCheck2, CaretRightIcon as ChevronRight } from '@/components/ui/icons';
 import { formatTimeNY } from '@/lib/timezone';
 import { getLeaveRange, eachLeaveDay } from '@/lib/core/leaves';
-import { absenceDayCharge, recordsOfCurrentEmployees } from '@/lib/core/absences';
+import { absenceDayCharge, absencesInScope, deductionMonths, recordsOfCurrentEmployees } from '@/lib/core/absences';
+import { monthLabel } from '@/lib/core/payrollView';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { NoticeModal } from '@/components/ui/NoticeModal';
@@ -21,7 +22,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Tabs } from '@/components/ui/Tabs';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { LoadMoreHistory } from '@/components/ui/LoadMoreHistory';
-import { daysAgoNYDateString } from '@/lib/timezone';
+import { daysAgoNYDateString, getNYDateString } from '@/lib/timezone';
 import { Input } from '@/components/ui/Input';
 import { FieldLabel } from '@/components/ui/FieldLabel';
 import { useNow } from '@/lib/useNow';
@@ -70,6 +71,9 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   // Date Filter States (defaults to empty -> all dates)
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // Absence records show the running month; HR and Admin can pick an earlier month (or all) with the chips above the list. An employee's own list stays on the running month.
+  const currentMonth = getNYDateString(new Date()).slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth);
 
   const [selectedAttendanceRow, setSelectedAttendanceRow] = useState<AttendanceDayRow | null>(null);
   // HR/Admin views aggregate to one row per employee — these hold which
@@ -97,13 +101,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
   const absenceRecords = useMemo(() => (role === 'employee' || allProfiles.length === 0 ? fetchedRecords : recordsOfCurrentEmployees(fetchedRecords, allProfiles)), [fetchedRecords, allProfiles, role]);
   const loadAbsenceRecords = () => { void refetchAbsences(); };
 
-  // Filter absence records by date and query
+  // Filter absence records by month, date and query
+  const monthOptions = useMemo(() => deductionMonths(absenceRecords, currentMonth), [absenceRecords, currentMonth]);
   const filteredAbsences = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return absenceRecords.filter(a =>
-      (!selectedDate || a.date === selectedDate) &&
-      (!q || a.employeeName.toLowerCase().includes(q) || a.employeeEmail.toLowerCase().includes(q)));
-  }, [absenceRecords, selectedDate, searchQuery]);
+    return absencesInScope(absenceRecords, { month: role === 'employee' ? currentMonth : selectedMonth, date: selectedDate, ownOnly: role === 'employee' })
+      .filter(a => !q || a.employeeName.toLowerCase().includes(q) || a.employeeEmail.toLowerCase().includes(q));
+  }, [absenceRecords, selectedMonth, currentMonth, selectedDate, searchQuery, role]);
 
   const handleDeleteAbsenceRecord = (record: AbsenceRecord) => {
     // Never allow deleting an absence record that is actually an approved leave day —
@@ -322,7 +326,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
 
   const { page: absencePage, setPage: setAbsencePage, totalPages: absenceTotalPages, pageItems: absencePageItems } = usePagination(filteredAbsences, 25);
   const { page: summaryPage, setPage: setSummaryPage, totalPages: summaryTotalPages, pageItems: summaryPageItems } = usePagination(employeeAbsenceSummaries, 25);
-  useEffect(() => { setAbsencePage(1); setSummaryPage(1); }, [selectedDate, searchQuery, setAbsencePage, setSummaryPage]);
+  useEffect(() => { setAbsencePage(1); setSummaryPage(1); }, [selectedDate, selectedMonth, searchQuery, setAbsencePage, setSummaryPage]);
 
   const selectedEmployeeAttendance = selectedEmployeeAttendanceEmail
     ? employeeAttendanceSummaries.find(e => e.employeeEmail.toLowerCase() === selectedEmployeeAttendanceEmail.toLowerCase()) || null
@@ -726,6 +730,18 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       {/* ABSENCES TAB */}
       {activeTab === 'absences' && (
         <div className="space-y-4">
+          {role !== 'employee' && (
+            <Tabs
+              variant="chips"
+              aria-label="Choose a month"
+              value={selectedMonth}
+              onChange={setSelectedMonth}
+              items={[
+                ...monthOptions.map(m => ({ value: m, label: m === currentMonth ? `${monthLabel(m)} (this month)` : monthLabel(m) })),
+                { value: 'all', label: 'All months' },
+              ]}
+            />
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
             <StatCard label="Total Absences" value={filteredAbsences.length} />
             <StatCard label="Total Deducted" value={formatMoney(totalDeducted, 'Pakistan')} valueTone="danger" />
