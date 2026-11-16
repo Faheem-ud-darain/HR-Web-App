@@ -113,6 +113,7 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
     const popup = window.open(authUrl, 'GoogleAuthPopup', 'width=550,height=650');
 
     const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== popup) return; // only our own sign-in pop-up may report a result
       if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
         window.removeEventListener('message', handleMessage);
         popup?.close();

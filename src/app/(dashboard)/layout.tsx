@@ -7,7 +7,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { useRouter, usePathname } from 'next/navigation';
 import { Profile, useProfiles, useMyProfile } from '@/lib/hrData';
-import { getSessionEmail, getSessionRole, clearSession, hydrateSessionFromNativeStorage, isValidRole, dashboardSectionForRole, SessionRole } from '@/lib/session';
+import { getSessionEmail, getSessionRole, getAuthToken, clearSession, hydrateSessionFromNativeStorage, isValidRole, dashboardSectionForRole, SessionRole } from '@/lib/session';
 import { initPush } from '@/lib/push';
 import { Modal } from '@/components/ui/Modal';
 import { AnnouncementPopup } from '@/components/ui/AnnouncementPopup';
@@ -20,6 +20,9 @@ import { NativeBackButtonHandler } from '@/components/layout/NativeBackButtonHan
 import { useAnyModalOpen } from '@/lib/modalStack';
 import { Button } from '@/components/ui/Button';
 import { DashboardSkeleton } from '@/components/ui/Skeleton';
+import { dashboardGate } from '@/lib/core/dashboardGate';
+import { useStalled } from '@/hooks/useStalled';
+import { probeSession, describeProbe, type SessionProbe } from '@/lib/sessionProbe';
 import { OnboardingFlow } from '@/components/layout/OnboardingFlow';
 import { ApprovalGate } from '@/components/layout/onboarding/ApprovalGate';
 import { ConsentOverlay } from '@/components/layout/ConsentOverlay';
@@ -102,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const { data: allProfiles, isLoading: isProfilesLoading } = useProfiles();
   // The user's own profile arrives long before the full roster; the shell only needs this one.
-  const { data: myProfile } = useMyProfile();
+  const { data: myProfile, isFetched: myProfileFetched } = useMyProfile();
 
   // Redirect if unauthorized.
   //
@@ -226,6 +229,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 
 
+  // The shell can only open once it has the person's profile. If it cannot arrive, ask the server why: an invalid saved login (401) goes back to
+  // sign-in; anything else (a firewall refusing the request, the portal down) is shown as the reason, because signing out would not help.
+  const gate = dashboardGate({ role, dbReady, hasProfile: !!profile, myProfileFetched, rosterLoading: isProfilesLoading });
+  const stalled = useStalled(gate === 'loading', 15000);
+  const [probe, setProbe] = useState<SessionProbe | null>(null);
+  const [attempt, setAttempt] = useState(0); // each Try again starts a new look at why, even when the page state itself has not changed
+  const signOutNow = () => { clearSession(); router.replace('/auth'); };
+  const retryLoading = () => { setProbe(null); setAttempt(n => n + 1); void queryClient.invalidateQueries({ queryKey: ['hr_profiles'] }); };
+  useEffect(() => {
+    if (gate !== 'session_rejected' && !stalled) return;
+    let cancelled = false;
+    void probeSession(getAuthToken()).then(result => {
+      if (cancelled) return;
+      if (result.status === 401) signOutNow(); else setProbe(result);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- signOutNow only touches the session and the router
+  }, [gate, stalled, attempt]);
+
   const handleConsentAccept = () => {
     if (email) {
       localStorage.setItem(`consent_accepted_${email}`, 'true');
@@ -233,10 +255,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  if (!dbReady || !role || ((role === 'employee' || role === 'team_lead') && !profile)) {
-    return (
-      <DashboardSkeleton />
-    );
+  if (gate !== 'ready' || !role) {
+    return <DashboardSkeleton stalled={stalled || gate === 'session_rejected'} reason={probe ? describeProbe(probe) : undefined} onRetry={retryLoading} onSignOut={signOutNow} />;
   }
 
   // Force onboarding stepper gate if user is employee (or team_lead, who is

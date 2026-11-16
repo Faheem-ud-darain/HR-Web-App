@@ -13,6 +13,10 @@ name: Fix PocketBase memory (swap, stop unused services, memory cap)
 on:
   workflow_dispatch:
 
+# Least privilege: nothing here needs to write to the repository with the automatic token (the release job asks for its own).
+permissions:
+  contents: read
+
 jobs:
   fix:
     runs-on: ubuntu-latest

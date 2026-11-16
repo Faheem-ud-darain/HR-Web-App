@@ -1,7 +1,6 @@
 'use client';
 
 import { ShiftStatusBadge } from '@/components/ui/StatusBadges';
-import { Input } from '@/components/ui/Input';
 import { EmployeeFilterBar, useEmployeeFilters } from '@/components/ui/EmployeeFilterBar';
 import { exportEmployeesCsv, exportTimesheetCsv } from '@/lib/reportExports';
 import React, { useMemo, useState } from 'react';
@@ -21,6 +20,9 @@ import { TableSkeletonRows, ListSkeleton } from '@/components/ui/Skeleton';
 import { useSessionEmail } from '@/lib/useSession';
 import { useNow } from '@/lib/useNow';
 import { shiftMinutes } from '@/lib/core/timesheets';
+import { getNYDateString } from '@/lib/timezone';
+import { DateSearchInput } from '@/components/ui/DateInput';
+import { resolveDateText } from '@/lib/core/dateKeywords';
 
 export default function ReportsPage() {
   const now = useNow(); // for the running total of still-open shifts (see lib/useNow.ts)
@@ -53,10 +55,8 @@ export default function ReportsPage() {
   const filters = useEmployeeFilters(reportable);
   const filteredEmployees = filters.rows;
 
-  const filteredReviewEntries = reviewEntries.filter(entry => {
-    if (!dateFilter) return true;
-    return entry.date?.includes(dateFilter);
-  });
+  const typedDate = resolveDateText(dateFilter, getNYDateString(new Date())); // "today" and "tomorrow" become that day's date
+  const filteredReviewEntries = reviewEntries.filter(entry => !typedDate || entry.date?.includes(typedDate));
 
   // Summary stats for the modal. Computed directly from each entry's real
   // clockIn/clockOut timestamps (not by re-parsing the stored `duration`
@@ -245,10 +245,7 @@ export default function ReportsPage() {
 
             {/* Date filter + CSV export */}
             <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input type="text" placeholder="Filter by date (e.g. 2026-07-06 or 'Today')" value={dateFilter} onChange={e => setDateFilter(e.target.value)} fieldSize="sm" className="pl-9" />
-              </div>
+              <DateSearchInput wrapperClassName="flex-1" placeholder="Filter by date (type 2026-07-06, today, tomorrow, or pick)" value={dateFilter} onChange={setDateFilter} fieldSize="sm" />
               <Button variant="success" size="sm" onClick={() => selectedReviewEmp && exportTimesheetCsv(selectedReviewEmp, filteredReviewEntries)} disabled={filteredReviewEntries.length === 0} className="whitespace-nowrap"><Download className="h-3.5 w-3.5" /> Export CSV</Button>
             </div>
 

@@ -28,6 +28,10 @@ on:
   # pb_hooks/ itself hasn't changed (e.g. after rotating the SSH key).
   workflow_dispatch:
 
+# Least privilege: nothing here needs to write to the repository with the automatic token (the release job asks for its own).
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

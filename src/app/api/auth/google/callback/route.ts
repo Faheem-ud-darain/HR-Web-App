@@ -1,5 +1,6 @@
 import { adminUpsertByField } from '@/lib/pbAdmin';
 import { errMsg } from '@/lib/errors';
+import { popupResponse } from '@/lib/googlePopup';
 import type { PbRow } from '@/lib/pbTypes';
 
 const GOOGLE_INTEGRATION_COLLECTION = 'hr_google_integrations';
@@ -14,12 +15,7 @@ export async function GET(request: Request) {
   const error = searchParams.get('error');
 
   if (error || !code || !stateRaw) {
-    return new Response(
-      `<html><body><script>
-        window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: '${error || 'Missing code or state'}' }, '*');
-      </script></body></html>`,
-      { headers: { 'content-type': 'text/html' } }
-    );
+    return popupResponse({ type: 'GOOGLE_AUTH_ERROR', error: error || 'Missing code or state' });
   }
 
   let state: PbRow = {};
@@ -89,18 +85,8 @@ export async function GET(request: Request) {
     // or POSTs a new one — no need to duplicate that check here.
     await adminUpsertByField(GOOGLE_INTEGRATION_COLLECTION, 'email', emailKey, kvValue);
 
-    return new Response(
-      `<html><body><script>
-        window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', email: '${userData.email}' }, '*');
-      </script></body></html>`,
-      { headers: { 'content-type': 'text/html' } }
-    );
+    return popupResponse({ type: 'GOOGLE_AUTH_SUCCESS', email: String(userData.email || '') });
   } catch (err) {
-    return new Response(
-      `<html><body><script>
-        window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: ${JSON.stringify(errMsg(err))} }, '*');
-      </script></body></html>`,
-      { headers: { 'content-type': 'text/html' } }
-    );
+    return popupResponse({ type: 'GOOGLE_AUTH_ERROR', error: errMsg(err) });
   }
 }

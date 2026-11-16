@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Task, Profile, hrActions, displayName } from '@/lib/hrData';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { FormField } from '@/components/ui/FormField';
 
 interface TaskModalProps {
@@ -117,8 +118,7 @@ export function TaskModal({ isOpen, onClose, employees, createdBy, onTaskAdded }
 
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Due Date *" size="md">
-            <Input
-              type="date"
+            <DateInput
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
               fieldSize="md"

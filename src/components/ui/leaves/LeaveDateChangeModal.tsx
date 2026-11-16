@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { FormField } from '@/components/ui/FormField';
 import { FormModal } from '@/components/ui/FormModal';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { InfoNote } from '@/components/ui/InfoNote';
 import { getLeaveRange } from '@/lib/core/leaves';
 import { leaveDateChangeAction } from '@/lib/hr/leaveDateChange';
@@ -37,8 +38,8 @@ export function LeaveDateChangeModal({ leave, onClose, onSent }: { leave: LeaveA
     <FormModal title="Change leave dates" onClose={onClose} onSubmit={submit} busy={busy} error={error} submitLabel="Send request" note="HR or Admin will answer. Your leave stays on its current days until they approve the change.">
       <InfoNote>{leave.type} leave now: {leave.duration}</InfoNote>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="New start date *" size="md"><Input type="date" value={start} onChange={e => setStart(e.target.value)} required /></FormField>
-        <FormField label="New end date *" size="md"><Input type="date" value={end} min={start} onChange={e => setEnd(e.target.value)} required /></FormField>
+        <FormField label="New start date *" size="md"><DateInput value={start} onChange={e => setStart(e.target.value)} required /></FormField>
+        <FormField label="New end date *" size="md"><DateInput value={end} min={start} onChange={e => setEnd(e.target.value)} required /></FormField>
       </div>
       <FormField label="Why do the dates need to change? *" size="md"><Textarea rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. My exam was moved to the following week." required /></FormField>
     </FormModal>

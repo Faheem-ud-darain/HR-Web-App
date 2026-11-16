@@ -9,6 +9,7 @@ import { getSessionEmail } from '@/lib/session';
 import { useActionToast } from '@/components/ui/ActionToastHost';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { errMsg } from '@/lib/errors';
 
 interface ScheduleMeetModalProps {
@@ -112,8 +113,7 @@ export function ScheduleMeetModal({ isOpen, onClose }: ScheduleMeetModalProps) {
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Date *">
-            <Input
-              type="date"
+            <DateInput
               required
               value={meetingDate}
               onChange={e => setMeetingDate(e.target.value)}
