@@ -7,10 +7,10 @@ const scriptOf = (html: string) => html.split('<script>')[1].split('</script>')[
 
 describe('Google pop-up result page', () => {
   it('never lets text from the address run as code (reflected XSS)', () => {
-    const attack = `');alert(document.domain)//</script><script>alert(1)</script>`;
+    const attack = `');alert(document.domain)//</script><script>alert(1)</script></SCRIPT><SCRIPT>alert(2)</SCRIPT>`;
     const html = popupResultHtml({ type: 'GOOGLE_AUTH_ERROR', error: attack });
-    expect(html.match(/<script>/g)).toHaveLength(1); // the injected closing/opening tags did not survive
-    expect(html.match(/<\/script>/g)).toHaveLength(1);
+    expect(html.match(/<script/gi)).toHaveLength(1); // the injected closing/opening tags did not survive, in any letter case
+    expect(html.match(/<\/script/gi)).toHaveLength(1);
     // Run the page's script for real: the injected alert must never be called, and the message must arrive exactly as sent.
     let alerted = false;
     const posted: unknown[] = [];
