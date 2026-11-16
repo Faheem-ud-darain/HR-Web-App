@@ -91,7 +91,8 @@ export function ListSkeleton({ rows = 4, className = '' }: { rows?: number; clas
 // page frame appears immediately).
 export function DashboardSkeleton({ stalled = false, reason, onRetry, onSignOut }: { stalled?: boolean; reason?: string; onRetry?: () => void; onSignOut?: () => void }) {
   return (
-    <LoadingRegion label="Loading dashboard" className="relative flex h-screen bg-slate-50">
+    // The recovery message sits OUTSIDE the busy loading region: a screen reader may hold back announcements from inside an aria-busy one.
+    <div className="relative">
       {stalled && (
         <div role="alert" className="absolute inset-x-0 top-1/3 z-10 mx-auto w-[min(92vw,26rem)] space-y-3 rounded-xl border border-slate-200 bg-white p-5 text-center shadow-lg">
           <p className="text-sm font-bold text-slate-900">This is taking longer than usual</p>
@@ -102,6 +103,7 @@ export function DashboardSkeleton({ stalled = false, reason, onRetry, onSignOut 
           </div>
         </div>
       )}
+      <LoadingRegion label="Loading dashboard" className="flex h-screen bg-slate-50">
       <aside className="hidden md:flex w-60 shrink-0 flex-col gap-3 border-r border-slate-200 bg-white p-4">
         <Skeleton className="h-8 w-32" />
         <div className="mt-4 space-y-2.5">
@@ -129,7 +131,8 @@ export function DashboardSkeleton({ stalled = false, reason, onRetry, onSignOut 
           </div>
         </main>
       </div>
-    </LoadingRegion>
+      </LoadingRegion>
+    </div>
   );
 }
 

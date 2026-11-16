@@ -234,8 +234,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const gate = dashboardGate({ role, dbReady, hasProfile: !!profile, myProfileFetched, rosterLoading: isProfilesLoading });
   const stalled = useStalled(gate === 'loading', 15000);
   const [probe, setProbe] = useState<SessionProbe | null>(null);
+  const [attempt, setAttempt] = useState(0); // each Try again starts a new look at why, even when the page state itself has not changed
   const signOutNow = () => { clearSession(); router.replace('/auth'); };
-  const retryLoading = () => { setProbe(null); void queryClient.invalidateQueries({ queryKey: ['hr_profiles'] }); };
+  const retryLoading = () => { setProbe(null); setAttempt(n => n + 1); void queryClient.invalidateQueries({ queryKey: ['hr_profiles'] }); };
   useEffect(() => {
     if (gate !== 'session_rejected' && !stalled) return;
     let cancelled = false;
@@ -245,7 +246,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- signOutNow only touches the session and the router
-  }, [gate, stalled]);
+  }, [gate, stalled, attempt]);
 
   const handleConsentAccept = () => {
     if (email) {
