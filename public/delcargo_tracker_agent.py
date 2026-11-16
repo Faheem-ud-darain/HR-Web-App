@@ -141,7 +141,7 @@ def pb_get_kv(base_url, key):
         row = items[0]
         return row.get("id"), row.get("value")
     except Exception as e:
-        print(f"[warn] pb_get_kv({key}) failed: {e}")
+        print(f"[warn] pb_get_kv failed: {type(e).__name__}")
         return None, None
 
 
@@ -158,7 +158,7 @@ def pb_set_kv(base_url, key, value):
             resp = requests.post(url, headers=JSON_HEADERS, data=payload, timeout=20)
         resp.raise_for_status()
     except Exception as e:
-        print(f"[warn] pb_set_kv({key}) failed: {e}")
+        print(f"[warn] pb_set_kv failed: {type(e).__name__}")
 
 
 def get_tracking_settings(base_url, agent_token):

@@ -25,6 +25,7 @@
 import { formatDateNY, formatTimeNY } from '@/lib/timezone';
 import { pbFilter } from '@/lib/pbFilter';
 import { PB_URL } from '@/lib/pbUrl';
+import { dataUrlToBlob } from '@/lib/dataUrl';
 import { sanitizeForWrite } from './sanitize';
 import type { PbRow, PbJson } from '@/lib/pbTypes';
 import { hasDocs, legacyDocsKey, parseLegacyDocs, type ProfileDocs } from '@/lib/core/profileDocs';
@@ -195,10 +196,9 @@ export async function adminUploadProfilePicture(profileId: string, dataUrl: stri
   if (!dataUrl) {
     formData.append('profile_picture_file', '');
   } else {
-    const blob = await (await fetch(dataUrl)).blob();
-    formData.append('profile_picture_file', blob, `profile_${profileId}.webp`);
+    formData.append('profile_picture_file', dataUrlToBlob(dataUrl), `profile_${profileId}.webp`);
   }
-  const res = await fetch(`${PB_URL}/api/collections/hr_profiles/records/${profileId}`, {
+  const res = await fetch(`${PB_URL}/api/collections/hr_profiles/records/${encodeURIComponent(profileId)}`, {
     method: 'PATCH',
     headers: { Authorization: token },
     body: formData,

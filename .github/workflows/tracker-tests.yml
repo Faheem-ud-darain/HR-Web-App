@@ -9,6 +9,10 @@ on:
   pull_request:
     paths: ['tracker-agent/**']
 
+# Least privilege: nothing here needs to write to the repository with the automatic token (the release job asks for its own).
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
