@@ -739,10 +739,24 @@ def load_config():
         return None
 
 
+def _atomic_write(path, data):
+    """Writes a file so a crash or power cut leaves either the old or the new content, never an empty one: write a temp file,
+    flush it to disk, then rename it over the target."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".tmp"
+    mode = "wb" if isinstance(data, (bytes, bytearray)) else "w"
+    with open(tmp, mode, **({} if mode == "wb" else {"encoding": "utf-8"})) as f:
+        f.write(data)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+    os.replace(tmp, path)
+
+
 def save_config(cfg):
-    os.makedirs(APP_DIR, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(cfg, f)
+    _atomic_write(CONFIG_FILE, json.dumps(cfg))
 
 
 def clear_config():
@@ -850,7 +864,7 @@ class _Backoff:
         self.failures = 0
 
     def next_delay(self):
-        delay = min(self.cap, self.base * (2 ** self.failures))
+        delay = min(self.cap, self.base * (2 ** min(self.failures, 16)))  # the exponent is capped: an unbounded one overflows after ~1000 failures
         self.failures += 1
         return random.uniform(delay * 0.5, delay)
 
@@ -1204,16 +1218,18 @@ def upsert_heartbeat(base_url, _unused_key, employee_email, device_id, device_la
 
 
 def clear_heartbeat(base_url, employee_email):
-    """Nulls this employee's heartbeat field (does NOT delete their whole
-    hr_tracker_signals row — sibling signals may still be live on it; this
-    is the semantic change from the old KV-row version, which deleted the
-    entire tracker_heartbeat_<slug> row) when the app quits. Without this,
-    the web dashboard's "is the tracker connected" checks — including the
-    Start Shift gate on the Employee dashboard (see isHeartbeatLive/
-    hrData.ts) — would keep reporting the agent as connected for up to
-    TRACKER_HEARTBEAT_STALE_MS (3 minutes) after it was actually closed,
-    since nothing had told the server it went away."""
-    clear_tracker_signal_field(base_url, employee_email, "heartbeat")
+    """Tells the server this tracker has stopped, WITHOUT erasing when it was last seen. The heartbeat keeps its lastSeenAt and gains
+    stopped=True, so the web dashboard shows the tracker as not running at once, while the server's auto-close can still end a shift left
+    open (a failed clock-out) at the last real signal. A null heartbeat reads as "never connected" there and would leave that shift
+    open until the 16-hour cap."""
+    current = get_tracker_signal_field(base_url, employee_email, "heartbeat")
+    if isinstance(current, dict) and current.get("lastSeenAt"):
+        stopped = dict(current)
+        stopped["stopped"] = True
+        stopped["stoppedAt"] = datetime.now(timezone.utc).isoformat()
+        set_tracker_signal_field(base_url, employee_email, "heartbeat", stopped)
+    else:
+        clear_tracker_signal_field(base_url, employee_email, "heartbeat")
 
 
 # ── 5-Signal Tracker Reliability System ──────────────────────────────────────
@@ -1711,17 +1727,24 @@ def _pending_shot_files():
         return []
 
 
-def park_screenshot(webp_bytes, width, height, captured_at):
-    """Keeps a screenshot on disk for later; trims the oldest beyond the caps."""
+def _owner_token(email):
+    return base64.urlsafe_b64encode((email or "").strip().lower().encode()).decode().rstrip("=")
+
+
+def _owner_from_token(token):
+    return base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)).decode()
+
+
+def park_screenshot(webp_bytes, width, height, captured_at, owner_email=""):
+    """Keeps a screenshot on disk for later; trims the oldest beyond the caps. The file name carries the owner, so a queued screenshot
+    is always sent under the person it was taken of, whoever is connected when it is sent."""
+    if not webp_bytes:
+        return False
     with _pending_shots_lock:
         try:
-            os.makedirs(PENDING_SHOTS_DIR, exist_ok=True)
             ms = int(datetime.fromisoformat(captured_at).timestamp() * 1000)
-            name = f"{ms:015d}__{width}x{height}__{uuid.uuid4().hex[:6]}.webp"
-            path = os.path.join(PENDING_SHOTS_DIR, name)
-            with open(path + ".tmp", "wb") as f:
-                f.write(webp_bytes)
-            os.replace(path + ".tmp", path)
+            name = f"{ms:015d}__{width}x{height}__{_owner_token(owner_email)}__{uuid.uuid4().hex[:6]}.webp"
+            _atomic_write(os.path.join(PENDING_SHOTS_DIR, name), webp_bytes)
             files = _pending_shot_files()
             total = sum(os.path.getsize(os.path.join(PENDING_SHOTS_DIR, f)) for f in files)
             while files and (len(files) > PENDING_SHOTS_MAX or total > PENDING_SHOTS_MAX_BYTES):
@@ -1735,14 +1758,23 @@ def park_screenshot(webp_bytes, width, height, captured_at):
 
 
 def _parse_parked_name(name):
-    """File names are <capture time in ms>__<w>x<h>__<id>.webp (ms zero-padded so names sort by time)."""
-    ms, dims, _ = name[:-len(".webp")].split("__")
+    """File names are <capture time in ms>__<w>x<h>__<owner>__<id>.webp (ms zero-padded so names sort by time)."""
+    ms, dims, owner, _ = name[:-len(".webp")].split("__")
     w, h = dims.split("x")
-    return datetime.fromtimestamp(int(ms) / 1000, timezone.utc).isoformat(), int(w), int(h)
+    return datetime.fromtimestamp(int(ms) / 1000, timezone.utc).isoformat(), int(w), int(h), _owner_from_token(owner)
 
 
-def flush_pending_screenshots(cfg, employee_email, stop_event=None, max_per_call=10):
-    """Sends parked screenshots oldest-first; stops at the first failure. Too-old ones are dropped."""
+def _remove_quietly(path):
+    try:
+        os.remove(path)
+        return True
+    except OSError:
+        return False  # e.g. an antivirus scan holds the file on Windows: it goes next time, and must never stop the worker
+
+
+def flush_pending_screenshots(cfg, employee_email=None, stop_event=None, max_per_call=10):
+    """Sends parked screenshots oldest-first, each under the person who owns it. A network or server error stops the run (the rest
+    stays for next time); a file the server permanently refuses (4xx) or that cannot be read is dropped so it cannot block the rest."""
     with _pending_shots_lock:
         sent = 0
         for name in _pending_shot_files():
@@ -1750,26 +1782,30 @@ def flush_pending_screenshots(cfg, employee_email, stop_event=None, max_per_call
                 break
             path = os.path.join(PENDING_SHOTS_DIR, name)
             try:
-                captured, w, h = _parse_parked_name(name)
+                captured, w, h, owner = _parse_parked_name(name)
                 too_old = (datetime.now(timezone.utc) - datetime.fromisoformat(captured)).total_seconds() > PENDING_SHOTS_MAX_AGE_SECONDS
                 with open(path, "rb") as f:
                     data = f.read()
+                if not data:
+                    too_old = True
             except (ValueError, OSError):
                 too_old, data = True, None  # unreadable name/file: it can never be sent
             if too_old:
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+                _remove_quietly(path)
                 continue
             try:
                 upload_screenshot(
-                    cfg["url"], employee_email, data, w, h, device_id=cfg.get("device_id"),
+                    cfg["url"], owner or employee_email, data, w, h, device_id=cfg.get("device_id"),
                     device_label=cfg.get("device_label"), agent_token=cfg.get("token"), captured_at=captured,
                 )
-            except Exception:
-                break  # server still unreachable: keep the rest for next time
-            os.remove(path)
+            except Exception as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                if status is not None and 400 <= status < 500 and status not in (408, 429):
+                    print(f"[warn] Server refused a parked screenshot ({status}); dropped")
+                    _remove_quietly(path)
+                    continue
+                break  # server unreachable or struggling: keep the rest for next time
+            _remove_quietly(path)
             sent += 1
         return sent
 
@@ -1796,11 +1832,7 @@ def _load_pending_inactivity():
 
 def _save_pending_inactivity(items):
     try:
-        os.makedirs(APP_DIR, exist_ok=True)
-        tmp = PENDING_INACTIVITY_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(items[-PENDING_INACTIVITY_MAX:], f)
-        os.replace(tmp, PENDING_INACTIVITY_FILE)
+        _atomic_write(PENDING_INACTIVITY_FILE, json.dumps(items[-PENDING_INACTIVITY_MAX:]))
     except Exception as e:
         print(f"[warn] Couldn't save pending inactivity logs: {e}")
 
@@ -1811,11 +1843,7 @@ OPEN_IDLE_FILE = os.path.join(APP_DIR, "open_idle_stretch.json")
 def journal_open_idle(start_dt, last_seen_dt, employee_email):
     """Records the idle stretch that is still going on, so a PC restart or crash in the middle of it does not lose it."""
     try:
-        os.makedirs(APP_DIR, exist_ok=True)
-        tmp = OPEN_IDLE_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"start": start_dt.isoformat(), "end": last_seen_dt.isoformat(), "email": employee_email}, f)
-        os.replace(tmp, OPEN_IDLE_FILE)
+        _atomic_write(OPEN_IDLE_FILE, json.dumps({"start": start_dt.isoformat(), "end": last_seen_dt.isoformat(), "email": employee_email}))
     except Exception as e:
         print(f"[warn] Couldn't journal idle stretch: {e}")
 
@@ -1842,69 +1870,90 @@ def recover_open_idle(cfg):
         return False
     with _pending_inactivity_lock:
         items = _load_pending_inactivity()
-        items.append({"start": start.isoformat(), "end": end.isoformat(), "email": item.get("email"),
+        items.append({"id": uuid.uuid4().hex, "start": start.isoformat(), "end": end.isoformat(), "email": item.get("email"),
                       "device_id": cfg.get("device_id"), "device_label": cfg.get("device_label")})
         _save_pending_inactivity(items)
     return True
 
 
+_inflight_inactivity = set()  # ids of queued logs a delivery thread is sending right now (a flush skips them)
+
+
+def _remove_pending_inactivity(ids):
+    with _pending_inactivity_lock:
+        _save_pending_inactivity([i for i in _load_pending_inactivity() if i.get("id") not in ids])
+
+
 def flush_pending_inactivity(cfg, employee_email):
-    """Sends any parked inactivity logs; keeps the ones that still fail."""
+    """Sends parked inactivity logs, each under its own person; keeps the ones that still fail."""
+    with _pending_inactivity_lock:
+        items = [i for i in _load_pending_inactivity() if i.get("id") not in _inflight_inactivity]
+    delivered = set()
+    for item in items:
+        email = item.get("email") or employee_email
+        if not email:
+            continue  # nobody to attribute it to yet: keep it
+        try:
+            upload_inactivity(
+                cfg["url"], email,
+                datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"]),
+                device_id=item.get("device_id"), device_label=item.get("device_label"),
+                agent_token=cfg.get("token"),
+            )
+            delivered.add(item.get("id"))
+        except Exception as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status is not None and 400 <= status < 500 and status not in (408, 429):
+                delivered.add(item.get("id"))  # permanently refused: it can never be accepted, so it must not stay forever
+    if delivered:
+        _remove_pending_inactivity(delivered)
+
+
+def park_inactivity(cfg, employee_email, start_dt, end_dt):
+    """Writes an inactivity log to disk FIRST (write-ahead), so a restart or crash while it is being sent cannot lose it. Returns the item."""
+    item = {
+        "id": uuid.uuid4().hex, "start": start_dt.isoformat(), "end": end_dt.isoformat(), "email": employee_email,
+        "device_id": cfg.get("device_id"), "device_label": cfg.get("device_label"),
+    }
     with _pending_inactivity_lock:
         items = _load_pending_inactivity()
-        if not items:
-            return
-        remaining = []
-        for item in items:
-            email = item.get("email") or employee_email
-            if not email:
-                remaining.append(item)  # nobody to attribute it to yet: keep it
-                continue
+        items.append(item)
+        _save_pending_inactivity(items)
+    return item
+
+
+def deliver_parked_inactivity(cfg, item, max_attempts=3):
+    """Sends one parked log with bounded, jittered retries and removes it from disk once the server has it. Returns True if delivered."""
+    _inflight_inactivity.add(item["id"])
+    try:
+        for attempt in range(max_attempts):
             try:
                 upload_inactivity(
-                    cfg["url"], email,
-                    datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"]),
-                    device_id=item.get("device_id"), device_label=item.get("device_label"),
-                    agent_token=cfg.get("token"),
+                    cfg["url"], item.get("email"), datetime.fromisoformat(item["start"]), datetime.fromisoformat(item["end"]),
+                    device_id=cfg.get("device_id"), device_label=cfg.get("device_label"), agent_token=cfg.get("token"),
                 )
-            except Exception:
-                remaining.append(item)
-        _save_pending_inactivity(remaining)
+                _remove_pending_inactivity({item["id"]})
+                flush_pending_inactivity(cfg, item.get("email"))  # server is reachable: drain anything parked earlier
+                return True
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    time.sleep(2.0 + random.uniform(0.5, 2.0) * (attempt + 1))
+                else:
+                    print(f"[warn] Inactivity log upload failed after {max_attempts} attempts, kept on disk for later: {e}")
+        return False
+    finally:
+        _inflight_inactivity.discard(item["id"])
 
 
 def upload_inactivity_reliably(cfg, employee_email, start_dt, end_dt, max_attempts=3):
-    """Uploads one inactivity interval with bounded, jittered retries; parks it
-    on disk if every attempt fails. Meant to run on a background thread.
-    Returns True if it was delivered."""
-    for attempt in range(max_attempts):
-        try:
-            upload_inactivity(
-                cfg["url"], employee_email, start_dt, end_dt,
-                device_id=cfg.get("device_id"), device_label=cfg.get("device_label"),
-                agent_token=cfg.get("token"),
-            )
-            flush_pending_inactivity(cfg, employee_email)  # server is reachable — drain anything parked earlier
-            return True
-        except Exception as e:
-            if attempt < max_attempts - 1:
-                time.sleep(2.0 + random.uniform(0.5, 2.0) * (attempt + 1))
-            else:
-                print(f"[warn] Inactivity log upload failed after {max_attempts} attempts, parked for later: {e}")
-    with _pending_inactivity_lock:
-        items = _load_pending_inactivity()
-        items.append({
-            "start": start_dt.isoformat(), "end": end_dt.isoformat(), "email": employee_email,
-            "device_id": cfg.get("device_id"), "device_label": cfg.get("device_label"),
-        })
-        _save_pending_inactivity(items)
-    return False
+    """Parks the log on disk, then sends it (see deliver_parked_inactivity). Returns True if it was delivered."""
+    return deliver_parked_inactivity(cfg, park_inactivity(cfg, employee_email, start_dt, end_dt), max_attempts)
 
 
 def submit_inactivity(cfg, employee_email, start_dt, end_dt):
-    """Fire-and-forget wrapper used by the inactivity loop."""
-    threading.Thread(
-        target=upload_inactivity_reliably, args=(cfg, employee_email, start_dt, end_dt), daemon=True,
-    ).start()
+    """Used by the inactivity loop: the log is on disk before this returns; the sending happens on a background thread."""
+    item = park_inactivity(cfg, employee_email, start_dt, end_dt)
+    threading.Thread(target=deliver_parked_inactivity, args=(cfg, item), daemon=True).start()
 
 
 SHIFT_SEEN_GRACE_SECONDS = 180  # a shift the agent last saw open longer ago than this is not trusted (the server could not be reached)
@@ -1925,18 +1974,21 @@ def end_shift_for_inactivity(base_url, employee_email):
     """Ends the open shift (and tells the web dashboard through the shift-stop signal) once an idle stretch reaches
     AUTO_ABSENT_INACTIVITY_SECONDS. That is all the tracker does about it: the stretch itself is reported to the inactivity log
     first (see _inactivity_loop), and the absence is made from that log by the web app's own check, the one place that decides
-    absences. The tracker never creates an absence or an absence notice, so the two can never disagree."""
+    absences. The tracker never creates an absence or an absence notice, so the two can never disagree.
+    Returns True when the shift is closed (by this call, or it already was) and False when the server could not be reached, so the
+    caller keeps trying instead of telling the employee something that did not happen."""
     try:
-        auto_clock_out(base_url, employee_email)
+        closed_now = auto_clock_out(base_url, employee_email)
     except Exception as e:
         print(f"[warn] auto_clock_out (inactivity) failed: {e}")
-    try:
-        notify_shift_auto_stopped(base_url, employee_email, reason="inactivity_absence")
-    except Exception as e:
-        print(f"[warn] notify_shift_auto_stopped (inactivity) failed: {e}")
+        return False
+    if closed_now:
+        try:
+            notify_shift_auto_stopped(base_url, employee_email, reason="inactivity_absence")
+        except Exception as e:
+            print(f"[warn] shift-stop signal (inactivity) failed: {e}")
+    return True
 
-
-# ─────────────────────────────── tray icon image ─────────────────────────────
 
 def _app_icon_path():
     """Locates the brand icon next to this script in dev mode, or bundled
@@ -2950,14 +3002,26 @@ class TrackerApp:
         )
 
     def _handle_disconnect(self):
-        if not messagebox.askyesno(APP_NAME, "Disconnect this computer from screen tracking? You'll need a new setup code from HR/Admin to reconnect."):
+        with self.state_lock:
+            on_shift = bool(self.state.get("shift_active")) and bool(self.state.get("enabled_by_hr"))
+        warning = "Disconnect this computer from screen tracking? You'll need a new setup code from HR/Admin to reconnect."
+        if on_shift:
+            warning += "\n\nYour shift is running, so disconnecting will also end (clock out) your shift."
+        if not messagebox.askyesno(APP_NAME, warning):
             return
+        shift_closed = True
+        if on_shift and self.cfg:
+            email = self.cfg.get("employee_email")
+            write_quit_intent(self.cfg["url"], email)
+            shift_closed = self._end_open_shift_before_exit(email)
+            if not shift_closed:
+                messagebox.showwarning(APP_NAME, "Couldn't reach the server to end your shift. It will be ended automatically at your last activity once the server sees this computer has gone quiet.")
         self.stop_event.set()
         # Same reasoning as quit_app(): tell the server this device is gone
         # right now rather than leaving the web dashboard's "connected"
         # indicator (and the Start Shift gate) stale for up to
         # TRACKER_HEARTBEAT_STALE_MS after disconnecting.
-        if self.cfg:
+        if self.cfg and shift_closed:
             try:
                 clear_heartbeat(self.cfg["url"], self.cfg.get("employee_email"))
             except Exception as e:
@@ -2985,8 +3049,8 @@ class TrackerApp:
         # (see _worker_loop) rather than reading self.cfg live, specifically
         # so an old thread can never silently keep running against stale
         # credentials after the user connects with a different code.
+        self.stop_event.set()  # always, even when the capture thread already died: the other three threads may still be running
         if self.worker and self.worker.is_alive():
-            self.stop_event.set()
             self.worker.join(timeout=2)
         if self.inactivity_worker and self.inactivity_worker.is_alive():
             self.inactivity_worker.join(timeout=2)
@@ -2996,14 +3060,30 @@ class TrackerApp:
             self.heartbeat_worker.join(timeout=2)
         self.stop_event = threading.Event()
         self.wake_event.clear()
-        self.worker = threading.Thread(target=self._worker_loop, args=(self.cfg, self.stop_event), daemon=True)
+        self.worker = threading.Thread(target=self._run_supervised, args=(self._worker_loop, self.cfg, self.stop_event), daemon=True)
         self.worker.start()
-        self.inactivity_worker = threading.Thread(target=self._inactivity_loop, args=(self.cfg, self.stop_event), daemon=True)
+        self.inactivity_worker = threading.Thread(target=self._run_supervised, args=(self._inactivity_loop, self.cfg, self.stop_event), daemon=True)
         self.inactivity_worker.start()
-        self.realtime_worker = threading.Thread(target=self._realtime_loop, args=(self.cfg, self.stop_event), daemon=True)
+        self.realtime_worker = threading.Thread(target=self._run_supervised, args=(self._realtime_loop, self.cfg, self.stop_event), daemon=True)
         self.realtime_worker.start()
-        self.heartbeat_worker = threading.Thread(target=self._heartbeat_loop, args=(self.cfg, self.stop_event), daemon=True)
+        self.heartbeat_worker = threading.Thread(target=self._run_supervised, args=(self._heartbeat_loop, self.cfg, self.stop_event), daemon=True)
         self.heartbeat_worker.start()
+
+    def _run_supervised(self, loop, cfg, stop_event):
+        """Runs one background loop and starts it again after an unexpected error, so one bad value or one odd failure can never
+        silently end screenshots, idle tracking or the heartbeat for the rest of the session. A loop that returns normally is done."""
+        backoff = _Backoff(5.0, cap_seconds=120.0)
+        while not stop_event.is_set():
+            try:
+                loop(cfg, stop_event)
+                return
+            except Exception as e:
+                import traceback
+                print(f"[error] {getattr(loop, '__name__', 'loop')} crashed and is restarting: {e}\n{traceback.format_exc()}")
+                with self.state_lock:
+                    self.state["worker_restarts"] = self.state.get("worker_restarts", 0) + 1
+                    self.state["last_error"] = _short_error(f"Background task restarted after an error: {e}")
+                stop_event.wait(backoff.next_delay())
 
     def _checkin(self, cfg):
         """Claims (first run / reconnect) or refreshes this device's
@@ -3295,7 +3375,7 @@ class TrackerApp:
                 return
             webp_bytes, w, h = capture_and_encode()
             offline["last_shot"] = now
-            park_screenshot(webp_bytes, w, h, datetime.now(timezone.utc).isoformat())
+            park_screenshot(webp_bytes, w, h, datetime.now(timezone.utc).isoformat(), offline.get("email"))
         except Exception as e:
             print(f"[warn] Offline capture failed: {e}")
 
@@ -3319,6 +3399,7 @@ class TrackerApp:
         # applies once, to that first capture after tracking turns on — not
         # to every loop iteration.
         was_capture_enabled = False
+        next_capture_at = None  # monotonic time of the next screenshot while tracking
         server_backoff = _Backoff(SETTINGS_POLL_SECONDS)
         # What the last successful poll said, so screenshots can keep being taken (and parked on disk) while the server can't be reached.
         offline = {"ok_at": None, "interval": 15.0, "email": None, "last_shot": 0.0}
@@ -3384,32 +3465,17 @@ class TrackerApp:
                 self.state["interval"] = interval_minutes
                 self.state["last_error"] = None
 
-            skip_capture_this_pass = False
+            # Settings and the open-shift check run every SETTINGS_POLL_SECONDS whatever the screenshot interval is, so the shift-seen mark
+            # that the idle-stretch logic trusts stays fresh; screenshots follow their own deadline.
+            now_m = time.monotonic()
             if enabled and not was_capture_enabled:
-                # Just turned on — stagger the FIRST capture by a random
-                # 0–45s offset instead of firing it the instant tracking
-                # starts, which is exactly the moment many employees'
-                # trackers are most likely to all turn on together. Still
-                # interruptible in ~1s increments so a stop/disable arriving
-                # mid-jitter (or the app quitting) doesn't block on it.
-                initial_jitter = random.uniform(0, 45)
-                jitter_waited = 0.0
-                while jitter_waited < initial_jitter and not stop_event.is_set():
-                    if self.wake_event.is_set():
-                        # Something changed (e.g. shift already ended again)
-                        # — clear it and re-evaluate from the top rather than
-                        # capturing into a stale "enabled" state.
-                        self.wake_event.clear()
-                        skip_capture_this_pass = True
-                        break
-                    chunk = min(1.0, initial_jitter - jitter_waited)
-                    stop_event.wait(chunk)
-                    jitter_waited += chunk
-                if stop_event.is_set():
-                    break
+                next_capture_at = now_m + random.uniform(0, 45)  # stagger the first capture of a shift so trackers don't all fire at once
+            elif not enabled:
+                next_capture_at = None
             was_capture_enabled = enabled
 
-            if enabled and not skip_capture_this_pass:
+            if enabled and next_capture_at is not None and now_m >= next_capture_at:
+                next_capture_at = now_m + interval_minutes * 60 + random.uniform(-5, 5)
                 # Check for a locked session BEFORE capturing — this is the
                 # exploit this block closes: previously a locked machine (or
                 # one just sitting at the lock screen for hours) captured
@@ -3437,7 +3503,7 @@ class TrackerApp:
                                 agent_token=cfg.get("token"), stop_event=stop_event, captured_at=captured_at,
                             )
                         except Exception:
-                            park_screenshot(webp_bytes, w, h, captured_at)  # keep it; it is sent when the server answers again
+                            park_screenshot(webp_bytes, w, h, captured_at, settings.get("employeeEmail"))  # keep it; it is sent when the server answers again
                             raise
                         flush_pending_screenshots(cfg, settings.get("employeeEmail"), stop_event)
                         with self.state_lock:
@@ -3459,7 +3525,9 @@ class TrackerApp:
             # +/-5s jitter on the steady-state interval too, so repeated
             # captures don't resettle into lockstep with any other device
             # even when everyone's configured intervalMinutes is identical.
-            remaining = (interval_minutes * 60 + random.uniform(-5, 5)) if enabled else SETTINGS_POLL_SECONDS
+            remaining = SETTINGS_POLL_SECONDS
+            if enabled and next_capture_at is not None:
+                remaining = min(remaining, next_capture_at - time.monotonic())  # wake in time for the next screenshot
             remaining = max(1.0, remaining)
             waited = 0
             while waited < remaining and not stop_event.is_set():
@@ -3683,6 +3751,9 @@ class TrackerApp:
         # activity resumes); this one fires live, while still idle, the
         # moment AUTO_ABSENT_INACTIVITY_SECONDS is crossed.
         auto_absent_fired = False
+        end_pending = False       # the stretch reached the limit and the shift still has to be confirmed closed
+        end_retry_at = 0.0
+        flush_at = 0.0            # monotonic time of the last retry of parked logs
 
         # Send any inactivity logs parked on disk by an earlier failed upload
         # (e.g. the app was closed before the server came back).
@@ -3729,6 +3800,7 @@ class TrackerApp:
                 last_move_time = now
                 was_enabled = False
                 auto_absent_fired = False
+                end_pending = False
                 clear_open_idle()
                 continue
 
@@ -3742,6 +3814,7 @@ class TrackerApp:
                 last_move_time = now
                 was_enabled = True
                 auto_absent_fired = False
+                end_pending = False
                 continue
 
             if use_system_idle:
@@ -3760,6 +3833,7 @@ class TrackerApp:
                         start_wall = end_wall - timedelta(seconds=last_idle_seconds)
                         self._submit_idle_in_shift(cfg, employee_email, start_wall, end_wall)
                     auto_absent_fired = False  # activity resumed — a fresh idle stretch starts from here
+                    end_pending = False
 
                 last_idle_seconds = idle_seconds
                 current_idle_seconds = idle_seconds
@@ -3789,6 +3863,7 @@ class TrackerApp:
                     last_pos = pos
                     last_move_time = now
                     auto_absent_fired = False  # mouse moved — a fresh idle stretch starts from here
+                    end_pending = False
                     current_idle_seconds = 0.0
                 else:
                     current_idle_seconds = now - last_move_time
@@ -3807,17 +3882,31 @@ class TrackerApp:
             idle_in_shift = self._idle_seconds_in_shift(current_idle_seconds)
             if idle_in_shift >= AUTO_ABSENT_INACTIVITY_SECONDS and not auto_absent_fired:
                 auto_absent_fired = True
+                end_pending = True
                 # The stretch is logged now, while the shift is still open: once it ends, tracking is off and nothing would report it.
                 # That log is the only record of it; the absence is made from it by the web app, never here.
                 end_wall = datetime.now(timezone.utc)
                 self._submit_idle_in_shift(cfg, employee_email, end_wall - timedelta(seconds=current_idle_seconds), end_wall)
-                try:
-                    end_shift_for_inactivity(cfg["url"], employee_email)
+            if now - flush_at >= 60.0:
+                # Parked logs are retried from here too, once a minute, so their delivery never depends on the screenshot worker's own
+                # (possibly long) backoff after an outage.
+                flush_at = now
+                if _load_pending_inactivity() and not _pending_inactivity_lock.locked():
+                    threading.Thread(target=flush_pending_inactivity, args=(cfg, employee_email), daemon=True).start()
+            if end_pending and now >= end_retry_at:
+                # Keeps trying (every 15 s) until the server confirms the shift is closed; the employee is only told once it is true.
+                if end_shift_for_inactivity(cfg["url"], employee_email):
+                    end_pending = False
+                    with self.state_lock:
+                        self.state["shift_active"] = False
+                        self.state["enabled"] = False
+                    self.wake_event.set()
                     # Tkinter dialogs must run on the main thread; this loop has its own thread, so the popup is marshaled via root.after.
                     self.root.after(0, lambda m=round(idle_in_shift / 60): self._show_inactivity_absence_popup(m))
-                except Exception as e:
+                else:
+                    end_retry_at = now + 15.0
                     with self.state_lock:
-                        self.state["last_error"] = _short_error(f"Ending the shift for inactivity failed: {e}")
+                        self.state["last_error"] = "Couldn't reach the server to end your shift; retrying"
 
     # ---------- periodic UI refresh ----------
 
@@ -4021,6 +4110,23 @@ class TrackerApp:
         y = self.root.winfo_y() + (self.root.winfo_height() - dlg.winfo_height()) // 2
         dlg.geometry(f"+{max(0, x)}+{max(0, y)}")
 
+    def _end_open_shift_before_exit(self, employee_email):
+        """Clocks the open shift out (3 tries) before this tracker leaves. Returns True when the shift is closed (or there was none)
+        and False when the server could not be reached; the shift is then closed by the server at the last signal instead."""
+        url = self.cfg["url"]
+        for attempt in range(3):
+            try:
+                if auto_clock_out(url, employee_email):
+                    try:
+                        notify_shift_auto_stopped(url, employee_email, reason="tracker_closed")
+                    except Exception as e:
+                        print(f"[warn] shift-stop signal failed: {e}")
+                return True
+            except Exception as e:
+                print(f"[warn] Auto clock-out on exit failed (try {attempt + 1}): {e}")
+                time.sleep(2.0)
+        return False
+
     def quit_app(self):
         # If a shift is currently active and being tracked, quitting the app
         # outright (not just minimizing to tray) would otherwise leave that
@@ -4047,16 +4153,14 @@ class TrackerApp:
             # immediately knows this was a deliberate quit, even if the
             # auto_clock_out call below fails due to server timeouts.
             write_quit_intent(self.cfg["url"], employee_email)
-            try:
-                if auto_clock_out(self.cfg["url"], employee_email):
-                    notify_shift_auto_stopped(self.cfg["url"], employee_email, reason="tracker_closed")
-            except Exception as e:
-                print(f"[warn] Auto clock-out on quit failed: {e}")
+            shift_closed = self._end_open_shift_before_exit(employee_email)
+        else:
+            shift_closed = True
 
-        # Tell the server this device is gone right now, rather than letting
-        # the web dashboard keep showing "connected" until the last
-        # heartbeat ages past its staleness window (see clear_heartbeat).
-        if self.cfg:
+        # Tell the server this device is gone right now, rather than letting the web dashboard keep showing "connected" until the last
+        # heartbeat ages past its staleness window (see clear_heartbeat). If the shift could NOT be closed, the heartbeat is left as it
+        # is: the server then ends the shift at the last real signal once it has been silent for 30 minutes.
+        if self.cfg and shift_closed:
             try:
                 clear_heartbeat(self.cfg["url"], employee_email)
             except Exception as e:

@@ -137,7 +137,7 @@ export const TRACKER_HEARTBEAT_GRACE_MS = 15 * 60 * 1000;
 // interval: the Windows/Mac tracker reports about once a minute (up to every two minutes while retrying) and the Chromebook extension every
 // 15 seconds, whatever interval HR chose. 13 minutes absorbs slow uploads and short network drops; the server's auto-close hook uses the same window.
 export function isHeartbeatLive(hb: TrackerHeartbeat | null, now: number = Date.now()): boolean {
-  if (!hb?.lastSeenAt) return false;
+  if (!hb?.lastSeenAt || hb.stopped) return false; // a tracker that was quit or disconnected keeps its last-seen time but is not running
   return (now - new Date(hb.lastSeenAt).getTime()) < TRACKER_HEARTBEAT_LIVE_DEFAULT_MS;
 }
 
