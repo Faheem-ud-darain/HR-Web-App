@@ -416,3 +416,30 @@ def test_a_supervised_loop_restarts_after_an_unexpected_error(agent):
     stop.wait = lambda s=None: None  # no real sleeping
     agent.TrackerApp._run_supervised(fake, flaky, {}, stop)
     assert len(calls) == 3 and fake.state["worker_restarts"] == 2
+
+
+def test_parked_inactivity_logs_are_retried_every_minute_by_the_inactivity_loop(agent, monkeypatch, tmp_path):
+    """After an outage the screenshot worker may back off for minutes; the inactivity loop must retry parked logs on its own."""
+    agent.park_inactivity(CFG, "a@b.us", START, END)
+    calls = []
+    monkeypatch.setattr(agent, "flush_pending_inactivity", lambda cfg, email: calls.append(1))
+
+    class Inline:  # runs the thread's work immediately so the test can count it
+        def __init__(self, target=None, args=(), **k):
+            self.target, self.args = target, args
+        def start(self):
+            self.target(*self.args)
+
+    import types
+    monkeypatch.setattr(agent, "OPEN_IDLE_FILE", str(tmp_path / "open.json"))
+    monkeypatch.setattr(agent, "recover_open_idle", lambda cfg: False)
+    clock = _Clock(130)  # 130 polls x 5 s = about 11 minutes, no idle at all
+    monkeypatch.setattr(agent.time, "monotonic", lambda: clock.t)
+    monkeypatch.setattr(agent, "_get_system_idle_seconds", lambda: 0.5)
+    monkeypatch.setattr(agent.threading, "Thread", Inline)
+    fake = types.SimpleNamespace(state_lock=agent.threading.Lock(), wake_event=agent.threading.Event(),
+                                 state={"enabled": True, "shift_active": True, "employee_email": "a@b.us"},
+                                 root=types.SimpleNamespace(after=lambda ms, fn: fn()))
+    fake._idle_seconds_in_shift = lambda idle: idle
+    agent.TrackerApp._inactivity_loop(fake, {"url": "http://x", "employee_email": "a@b.us"}, clock)
+    assert 8 <= len(calls) <= 12
