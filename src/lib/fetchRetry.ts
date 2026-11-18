@@ -6,6 +6,27 @@ export function isNetworkFailure(err: unknown): boolean {
   return err instanceof TypeError || name === 'AbortError' || name === 'TimeoutError';
 }
 
+// A signal that aborts after `ms`. AbortSignal.timeout() does not exist on iPhones before iOS 16 or on older Android WebViews, and calling
+// it there throws before any request is sent, so use it only where it exists and fall back to a timer-driven AbortController.
+export function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+// An AbortController and a timer, not AbortSignal.timeout(): that does not exist on iPhones before iOS 16 or on older Android WebViews,
+// and calling it there throws before any request is sent, which would make every attempt fail.
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchWithRetry(
   url: string,
   init: RequestInit,
@@ -14,7 +35,7 @@ export async function fetchWithRetry(
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      return await fetchWithTimeout(url, init, timeoutMs);
     } catch (err) {
       lastError = err;
       if (!isNetworkFailure(err) || attempt === retries) break;

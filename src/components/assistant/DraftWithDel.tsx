@@ -6,6 +6,7 @@ import { getAuthToken } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
 import type { Ticket } from '@/lib/hrData';
 import { ORB_BUSY_DOT_SIZE, ORB_BUSY_SPEED, ORB_COLOR, ORB_DOT_SIZE, ORB_IDLE_SPEED } from './assistantStore';
+import { timeoutSignal } from '@/lib/fetchRetry';
 
 // "Draft with Del" inside the ticket reply box (HR only). It asks the assistant for a draft and puts it in
 // the reply box for the person to edit. It never sends anything: HR reads, edits and presses send.
@@ -21,7 +22,7 @@ export function DraftWithDel({ ticket, onDraft }: { ticket: Ticket; onDraft: (te
     try {
       const res = await fetch(`${API_BASE}/api/assistant`, {
         method: 'POST',
-        signal: AbortSignal.timeout(70_000),
+        signal: timeoutSignal(70_000),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
         body: JSON.stringify({
           ticketDraft: {
