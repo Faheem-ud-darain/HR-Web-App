@@ -111,6 +111,13 @@ const nextConfig: NextConfig = {
 
     return [
       { source: '/:all*(png|jpg|jpeg|webp|svg|ico|gif|avif)', headers: publicAssetCache },
+      // /reset.html is the self-service fix for a browser stuck on old saved data: this header tells the browser to drop everything it
+      // has stored for this site (saved data, offline caches, service workers, the HTTP cache). The page itself needs no script, so it
+      // works even when the portal's scripts never loaded. Only that one page sends the header: normal pages must never clear anything.
+      { source: '/reset.html', headers: [
+        { key: 'Clear-Site-Data', value: '"cache", "storage"' },
+        { key: 'Cache-Control', value: 'no-store' },
+      ] },
       // A service worker must always be re-checked for updates.
       { source: '/OneSignalSDKWorker.js', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
       {

@@ -102,6 +102,13 @@ export function SplashScreenOverlay() {
   if (phase === 'hidden') return null;
 
   return (
+    <>
+    {/* If the page's scripts never finish loading (a slow or dropped connection) this overlay would sit here forever, because only
+        the scripts remove it. This hint appears by CSS alone after 12 s, and its link needs no script: it reloads the page. */}
+    <div className="splash-slow-hint" role="status">
+      <p>Still loading… your connection may be slow.</p>
+      <a href="">Reload</a>
+    </div>
     <div
       className={`fixed inset-0 z-[var(--z-splash)] flex flex-col items-center justify-center gap-5 ${
         phase === 'exiting' ? 'splash-overlay-out' : ''
@@ -186,5 +193,6 @@ export function SplashScreenOverlay() {
         </p>
       </div>
     </div>
+    </>
   );
 }

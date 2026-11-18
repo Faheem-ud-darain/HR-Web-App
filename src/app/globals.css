@@ -1375,3 +1375,33 @@ svg[data-icon='square'] { --icon-pose: scale(1.12); }
   background: white;
   color: black;
 }
+
+
+/* Fallback hint on the splash screen (SplashScreenOverlay.tsx). It appears after 12 s using CSS alone, so it still shows when the page's
+   scripts never loaded and nothing else can remove the splash. Its Reload link is a plain link, which needs no script either. */
+.splash-slow-hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 2.5rem;
+  z-index: calc(var(--z-splash) + 1);
+  text-align: center;
+  color: #e8ecf5;
+  font-size: 0.9rem;
+  visibility: hidden;
+  opacity: 0;
+  animation: splash-slow-hint-in 400ms ease-out 12s forwards;
+}
+.splash-slow-hint a {
+  display: inline-block;
+  margin-top: 0.6rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--splash-gold-2);
+  color: var(--splash-gold-1);
+  font-weight: 600;
+  text-decoration: none;
+}
+@keyframes splash-slow-hint-in {
+  to { visibility: visible; opacity: 1; }
+}
