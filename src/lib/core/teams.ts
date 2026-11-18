@@ -48,7 +48,10 @@ export function leadChanges(teams: Team[], email: string, selectedNames: string[
 }
 
 // Warehouse ids on people and teams that match no current warehouse (left over from the old key-value migration).
+// An EMPTY set of live warehouses never means "every link is stale": it means the list did not load (or there is nothing to compare
+// with), and acting on it would strip every employee's and team's warehouse assignments, which breaks geofence check-in for USA staff.
 export function findStaleWarehouseLinks(profiles: Profile[], teams: Team[], liveIds: ReadonlySet<string>) {
+  if (liveIds.size === 0) return { staleProfiles: [] as Profile[], staleTeams: [] as Team[] };
   const stale = (ids?: string[]) => (ids || []).some(id => !liveIds.has(id));
   return {
     staleProfiles: profiles.filter(p => stale(p.assignedWarehouses) || stale(p.managedWarehouses)),

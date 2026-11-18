@@ -14,7 +14,7 @@ import { pb } from '../pocketbase';
 import type {
   Warehouse, Profile, Team, Message, TeamDocument,
 } from './types';
-import { pbList, pbCreate, pbUpdate, pbDelete, pbGetIdSetMap, pbMarkIdsInField, HR_ADMIN_LINE_TEAM_ID, type ReadScope } from './shared';
+import { pbList, pbListStrict, pbCreate, pbUpdate, pbDelete, pbGetIdSetMap, pbMarkIdsInField, HR_ADMIN_LINE_TEAM_ID, type ReadScope } from './shared';
 import { hrActions, buildNotificationLink, updateProfileAdmin } from '../hrData';
 import { pbFilter } from '../pbFilter';
 import { POLL_MS, POLL_OPTIONS } from './polling';
@@ -75,6 +75,11 @@ function toTeamDocument(d: PbRow): TeamDocument {
     uploadedByRole: d.uploaded_by_role || undefined,
     timestamp: d.created,
   };
+}
+
+// Same read, but a failed request throws instead of returning []. For decisions that treat the list as the truth (the stale-link cleanup).
+export async function fetchWarehousesStrict(): Promise<Warehouse[]> {
+  return (await pbListStrict('hr_warehouses')).map(toWarehouse);
 }
 
 export function useWarehouses(options: { enabled?: boolean } = {}) {
