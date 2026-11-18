@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
 import type { LeaveApplication } from './types';
 import { hrActions } from '../hrData';
-import { pbList, pbCreate, pbUpdate, pbDelete } from './shared';
+import { pbList, pbListStrict, pbCreate, pbUpdate, pbDelete } from './shared';
 import { pbFilter } from '../pbFilter';
 import { daysAgoNYDateString } from '../timezone';
 import { toLeave } from '../core/payrollMappers';
@@ -65,6 +65,16 @@ export async function fetchLeaves(q: LeaveQuery = {}): Promise<LeaveApplication[
     // fall back to the old behaviour rather than breaking every leaves screen.
     return (await pbList('hr_leaves', { fields: LEAVE_FIELDS })).map(toLeave);
   }
+}
+
+// Every leave in the usual window, but a failed read THROWS instead of returning []. The absence sweep uses it: an empty leave list there
+// means "nobody is on approved leave", which would mark people absent (and deduct pay) on days they were on leave.
+export async function fetchLeavesStrict(windowDays: number = DEFAULT_LEAVE_WINDOW_DAYS): Promise<LeaveApplication[]> {
+  const filter = pbFilter(
+    'status = "pending" || status = "hr_approved" || end_date >= {:cutoff} || end_date = ""',
+    { cutoff: daysAgoNYDateString(windowDays) },
+  );
+  return (await pbListStrict('hr_leaves', { fields: LEAVE_FIELDS, sort: '-created', filter })).map(toLeave);
 }
 
 export function useLeaves(options: LeaveQuery & { enabled?: boolean } = {}) {
