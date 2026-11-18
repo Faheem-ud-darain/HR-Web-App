@@ -20,5 +20,6 @@ export function describeProbe(p: SessionProbe): string {
   if (p.status === 403) return 'Your account is not allowed to open the portal (403). Please contact HR.';
   if (p.status === 401) return 'Your saved sign-in is no longer valid. Please sign in again.';
   if (p.status >= 500) return `The portal had a problem (error ${p.status}). Please try again in a few minutes.`;
+  if (p.status >= 200 && p.status < 300) return 'The portal is reachable, but your profile did not finish loading (your connection may be slow or interrupted). Press Try again.';
   return `The portal could not load your profile (answer ${p.status}). Please try again, or contact HR.`;
 }
