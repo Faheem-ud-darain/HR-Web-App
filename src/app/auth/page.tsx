@@ -9,6 +9,7 @@ import { NoticeModal } from '@/components/ui/NoticeModal';
 import { ForgotPasswordModal } from './_components/ForgotPasswordModal';
 import { useRouter } from 'next/navigation';
 import { hrActions } from '@/lib/hrData';
+import { fetchWithRetry, isNetworkFailure } from '@/lib/fetchRetry';
 import {
   setSession,
   setAuthToken,
@@ -128,7 +129,7 @@ export default function AuthPage() {
       // Neither of those things happens here anymore: the browser only ever
       // sends the attempted email/password and gets back a role + a signed
       // session token, never anyone's actual password.
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await fetchWithRetry(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password }),
@@ -210,7 +211,10 @@ export default function AuthPage() {
       }
     } catch (err) {
       console.error(err);
-      setError('An error occurred while logging in.');
+      // A request that never got an answer (after one automatic retry) is a connection problem, not a login problem: say so.
+      setError(isNetworkFailure(err)
+        ? 'Could not reach the server — your internet connection looks slow or unstable. Please try again in a moment.'
+        : 'An error occurred while logging in.');
       setLoading(false);
     }
   };
