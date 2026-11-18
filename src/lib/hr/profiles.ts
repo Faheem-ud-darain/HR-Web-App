@@ -126,23 +126,28 @@ function toProfile(p: PbRow, extras: Partial<Profile> = {}): Profile {
 // roster. Lets the dashboard shell and the user's own data requests start straight away instead of
 // after the (much larger) roster has downloaded. The key starts with 'hr_profiles', so everything
 // that invalidates the roster (profile edits, the realtime listener) refreshes this too.
+// Asks the server for the signed-in person's own profile. Only a definite "no" gives null (not signed in, not allowed, no such profile,
+// or a server too old to have /api/me). Anything that is not an answer (a dropped connection, a timeout, a server error, a web page where
+// JSON was expected) THROWS, so the query retries and the dashboard knows the profile has not been ruled out: a flaky connection must never
+// look like "your saved login was rejected".
+export async function fetchMyProfile(token: string | null): Promise<Profile | null> {
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+  if (res.status === 401 || res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`Profile request failed (${res.status})`);
+  const body = await res.json(); // a firewall or error page instead of JSON throws here
+  return (body?.profile || null) as Profile | null;
+}
+
 export function useMyProfile() {
   const email = (getSessionEmail() || '').toLowerCase();
   return useQuery({
     queryKey: ['hr_profiles', 'me', email],
     enabled: !!email,
     staleTime: 2 * 60 * 1000,
-    queryFn: async (): Promise<Profile | null> => {
-      const token = getAuthToken();
-      if (!token) return null;
-      try {
-        const res = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) return null; // older server without /api/me, or not allowed: the roster path still works
-        return ((await res.json()).profile || null) as Profile | null;
-      } catch {
-        return null;
-      }
-    },
+    retry: 3,
+    refetchInterval: query => (query.state.status === 'error' ? 15000 : false), // after the retries give up, keep trying: the page opens by itself once the connection recovers
+    queryFn: () => fetchMyProfile(getAuthToken()),
   });
 }
 

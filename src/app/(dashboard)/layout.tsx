@@ -105,7 +105,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const { data: allProfiles, isLoading: isProfilesLoading } = useProfiles();
   // The user's own profile arrives long before the full roster; the shell only needs this one.
-  const { data: myProfile, isFetched: myProfileFetched } = useMyProfile();
+  const { data: myProfile, isFetched: myProfileFetchedOnce, isError: myProfileFailed } = useMyProfile();
+  // A request that failed (connection, timeout) has not ruled the profile out: only an actual answer of "no profile" counts as fetched.
+  const myProfileFetched = myProfileFetchedOnce && !myProfileFailed;
 
   // Redirect if unauthorized.
   //
