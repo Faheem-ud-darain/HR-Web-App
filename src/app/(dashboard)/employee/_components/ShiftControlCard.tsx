@@ -9,7 +9,7 @@ import { hrActions, TrackerHeartbeat, localShiftDate, Profile, TimesheetEntry } 
 import { isMobileDevice } from '@/lib/trackerSetup';
 import { shiftStartBlock, type StartBlock } from '@/lib/core/shiftStart';
 import { requiredDayMinutes } from '@/lib/core/workDay';
-import { checkTracker, notifyShift } from '@/lib/hr/shiftActions';
+import { checkTracker, notifyShift, confirmedClockIn, confirmedClockOut } from '@/lib/hr/shiftActions';
 import { Button } from '@/components/ui/Button';
 import { Capacitor } from '@capacitor/core';
 import { openLocationSettings } from '@/lib/backgroundGeolocation';
@@ -40,9 +40,16 @@ interface ShiftControlCardProps {
   /** A second phone takes over attendance from the one that has it. */
   onUseThisDevice: () => void;
   trackerHeartbeat: TrackerHeartbeat | null;
+  /** The person's shifts have loaded, so whether a shift is open is known. Until then neither Start nor End can be trusted. */
+  shiftKnown: boolean;
+  /** Loading the shifts failed (after retries). */
+  shiftLoadFailed: boolean;
+  onRetryShift: () => void;
 }
 
-export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, gpsNote, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onShortShift, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat }: ShiftControlCardProps) {
+export function ShiftControlCard({ shiftActive, userProfile, geoPermission, liveDistance, gpsNote, isTrackingLiveFor, setPingingTracker, setTrackerHeartbeat, onStartBlocked, onShortShift, setShiftActive, openShiftRef, refetchTimesheets, pingingTracker, allTimesheets, geoErrorMsg, onEnableLocation, onUseThisDevice, trackerHeartbeat, shiftKnown, shiftLoadFailed, onRetryShift }: ShiftControlCardProps) {
+  const [actionError, setActionError] = React.useState('');
+  const busyRef = React.useRef(false);
   // Manual Start Shift is never allowed from a phone or tablet, tracked account or not (see isMobileDevice in trackerSetup.ts).
   const isMobileApp = isMobileDevice();
   return (
@@ -79,117 +86,122 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
               <LocateFixed className="h-3.5 w-3.5" /> Auto Geofencing
             </div>
           ) : (
-            <div className="flex gap-2 shrink-0">
-              <Button variant="success" size="lg"
-                onClick={async () => {
-                  if (!userProfile?.email) return;
-    
-                  // Wrapped in try/finally so pingingTracker/checkingTracker
-                  // can never get stuck showing "Connecting to tracker…" /
-                  // "Checking tracker…" forever if anything below throws
-                  // unexpectedly (network blip, a rejected promise, etc.) —
-                  // previously an uncaught error here left the button
-                  // permanently disabled until the page was reloaded.
-                  try {
-                    // May this person start right now? (rules: shiftStartBlock in core/shiftStart.ts). A tracked employee's
-                    // desktop tracker is checked live first (checkTracker): it must answer, or have a live heartbeat.
-                    const tracked = !isMobileApp && isTrackingLiveFor(userProfile);
-                    let tracker = { trackerReplied: false, heartbeat: null as TrackerHeartbeat | null, heartbeatLive: false };
-                    if (tracked) {
-                      setPingingTracker(true);
-                      tracker = await checkTracker(userProfile.email);
-                      setTrackerHeartbeat(tracker.heartbeat);
-                    }
-                    const block = shiftStartBlock({ mobile: isMobileApp, tracked, ...tracker });
-                    if (block) {
-                      onStartBlocked(block);
-                      return;
-                    }
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <div className="flex gap-2">
+                <Button variant="success" size="lg"
+                  onClick={async () => {
+                    if (!userProfile?.email || busyRef.current) return;
+                    busyRef.current = true; // one start or end at a time: a second tap, or a slow reply followed by another tap, can never run twice
+                    setActionError('');
+                    try {
+                      // May this person start right now? (rules: shiftStartBlock in core/shiftStart.ts). A tracked employee's
+                      // desktop tracker is checked live first (checkTracker): it must answer, or have a live heartbeat.
+                      const tracked = !isMobileApp && isTrackingLiveFor(userProfile);
+                      let tracker = { trackerReplied: false, heartbeat: null as TrackerHeartbeat | null, heartbeatLive: false, heartbeatReadFailed: false };
+                      if (tracked) {
+                        setPingingTracker(true);
+                        tracker = await checkTracker(userProfile.email);
+                        setTrackerHeartbeat(tracker.heartbeat);
+                      }
+                      const block = shiftStartBlock({ mobile: isMobileApp, tracked, ...tracker });
+                      if (block) {
+                        onStartBlocked(block);
+                        return;
+                      }
 
-                    // ── Clock In ────────────────────────────────────────────
-                    setShiftActive(true);
-                    const started = await hrActions.clockIn(userProfile.email);
-                    openShiftRef.current = { id: started.id, clockIn: started.clockIn };
-                    await hrActions.touchShiftTabHeartbeat(userProfile.email);
-                    await refetchTimesheets();
-                    await notifyShift(userProfile, 'Shift started manually. Screen tracking is now active for this shift.', name => `${name} started shift manually.`);
-                  } finally {
-                    setPingingTracker(false);
-                  }
-                }}
-                disabled={
-                  shiftActive ||
-                  pingingTracker ||
-                  isMobileApp
-                  // Heartbeat-dead no longer disables the button — the ping/pong
-                  // handshake in onClick is the authoritative live check now.
-                }
-              >
-                {pingingTracker ? 'Connecting to tracker…' : 'Start Shift'}
-              </Button>
-              <Button variant="danger" size="lg"
-                onClick={async () => {
-                  if (!userProfile?.email) return;
-    
-                  // IMPORTANT: End Shift must ALWAYS write clock_out
-                  // immediately, no matter how many hours were worked.
-                  // This used to gate the actual clockOut() call behind
-                  // an "Under 8 Hours" confirmation modal — if the
-                  // employee didn't notice/click through that second
-                  // step (its "Keep Shift Running" button was the more
-                  // prominent green one), the shift silently stayed open
-                  // in hr_timesheets with clock_out still empty, closing
-                  // the tracker app didn't help either (the tracker-stop
-                  // signal only fires inside clockOut()), and the shift
-                  // just sat open until the 16-hour hard-cap cron
-                  // eventually caught it. Fixed 2026-09-01: the click
-                  // always ends the shift now; the under-8-hour modal is
-                  // now purely informational (shown after the fact), not
-                  // a gate.
-                  const doClockOut = async () => {
-                    setShiftActive(false);
-                    openShiftRef.current = null;
-                    await hrActions.clockOut(userProfile.email);
-                    await refetchTimesheets();
-                    await notifyShift(userProfile, 'Shift ended manually. Screen tracking has stopped.', name => `${name} ended shift manually.`);
-                  };
-    
-                  // Calculate total worked shift minutes for today (including completed shifts and current open shift)
-                  const todayStr = localShiftDate(new Date().toISOString());
-                  const myTodayShifts = (allTimesheets || []).filter(t => 
-                    t.employeeEmail.toLowerCase() === userProfile.email.toLowerCase() &&
-                    localShiftDate(t.clockIn, t.date) === todayStr
-                  );
-    
-                  let totalWorkedMs = 0;
-                  const nowMs = Date.now();
-                  for (const shift of myTodayShifts) {
-                    const startMs = new Date(shift.clockIn).getTime();
-                    if (shift.clockOut) {
-                      const endMs = new Date(shift.clockOut).getTime();
-                      totalWorkedMs += Math.max(0, endMs - startMs);
-                    } else {
-                      totalWorkedMs += Math.max(0, nowMs - startMs);
+                      // ── Clock In ────────────────────────────────────────────
+                      // The screen says "On Shift" only once the server has confirmed it. If it cannot be confirmed the person is told so
+                      // and can press Start again: starting twice is safe (an already-open shift is returned, not duplicated).
+                      let started;
+                      try {
+                        started = await confirmedClockIn(userProfile.email);
+                      } catch {
+                        setActionError("We couldn't confirm your shift started. Check your connection and press Start Shift again. It will not start twice.");
+                        return;
+                      }
+                      setShiftActive(true);
+                      openShiftRef.current = { id: started.id, clockIn: started.clockIn };
+                      // The shift IS started: everything after this is best-effort and must never make it look like it failed.
+                      try {
+                        await hrActions.touchShiftTabHeartbeat(userProfile.email);
+                        await refetchTimesheets();
+                        await notifyShift(userProfile, 'Shift started manually. Screen tracking is now active for this shift.', name => `${name} started shift manually.`);
+                      } catch { /* the shift is recorded; the next refresh and the heartbeat catch up */ }
+                    } finally {
+                      setPingingTracker(false);
+                      busyRef.current = false;
                     }
+                  }}
+                  disabled={
+                    shiftActive ||
+                    pingingTracker ||
+                    isMobileApp ||
+                    !shiftKnown // never offer Start before we know whether a shift is already open (a second one must not be started)
+                    // Heartbeat-dead no longer disables the button — the ping/pong
+                    // handshake in onClick is the authoritative live check now.
                   }
-    
-                  const totalWorkedMins = Math.floor(totalWorkedMs / 60000);
-    
-                  // End the shift first — always — then, separately,
-                  // surface the under-8-hour heads-up as a plain
-                  // informational modal if it applies. The shift is never
-                  // left open waiting on this.
-                  await doClockOut();
-    
-                  const requiredMinutes = requiredDayMinutes(userProfile);
-                  if (totalWorkedMins < requiredMinutes) {
-                    onShortShift({ workedMinutes: totalWorkedMins, remainingMinutes: requiredMinutes - totalWorkedMins, requiredMinutes });
-                  }
-                }}
-                disabled={!shiftActive}
-              >
-                End Shift
-              </Button>
+                >
+                  {pingingTracker ? 'Connecting to tracker…' : 'Start Shift'}
+                </Button>
+                <Button variant="danger" size="lg"
+                  onClick={async () => {
+                    if (!userProfile?.email || busyRef.current) return;
+                    busyRef.current = true;
+                    setActionError('');
+                    try {
+                      // IMPORTANT: End Shift must ALWAYS write clock_out immediately, no matter how many hours were worked. (It once sat
+                      // behind an "Under 8 Hours" confirmation; employees who missed it left shifts open until the 16-hour cap. The
+                      // under-8-hour modal is purely informational and shown after the fact.)
+                      //
+                      // The screen says "Off Shift" only once the server has confirmed the end. Before, it flipped first and never went
+                      // back, so a timed-out request left the shift open and paid with the End button disabled and no message.
+                      const todayStr = localShiftDate(new Date().toISOString());
+                      const myTodayShifts = (allTimesheets || []).filter(t =>
+                        t.employeeEmail.toLowerCase() === userProfile.email.toLowerCase() &&
+                        localShiftDate(t.clockIn, t.date) === todayStr
+                      );
+                      let totalWorkedMs = 0;
+                      const nowMs = Date.now();
+                      for (const shift of myTodayShifts) {
+                        const startMs = new Date(shift.clockIn).getTime();
+                        const endMs = shift.clockOut ? new Date(shift.clockOut).getTime() : nowMs;
+                        totalWorkedMs += Math.max(0, endMs - startMs);
+                      }
+                      const totalWorkedMins = Math.floor(totalWorkedMs / 60000);
+
+                      try {
+                        await confirmedClockOut(userProfile.email);
+                      } catch {
+                        setActionError("We couldn't confirm your shift ended, so it is still running. Check your connection and press End Shift again.");
+                        return;
+                      }
+                      setShiftActive(false);
+                      openShiftRef.current = null;
+                      try {
+                        await refetchTimesheets();
+                        await notifyShift(userProfile, 'Shift ended manually. Screen tracking has stopped.', name => `${name} ended shift manually.`);
+                      } catch { /* the shift is ended; the next refresh catches up */ }
+
+                      const requiredMinutes = requiredDayMinutes(userProfile);
+                      if (totalWorkedMins < requiredMinutes) {
+                        onShortShift({ workedMinutes: totalWorkedMins, remainingMinutes: requiredMinutes - totalWorkedMins, requiredMinutes });
+                      }
+                    } finally {
+                      busyRef.current = false;
+                    }
+                  }}
+                  disabled={!shiftActive}
+                >
+                  End Shift
+                </Button>
+              </div>
+              {!shiftKnown && (
+                <p className="text-caption font-semibold text-amber-700 text-right">
+                  {shiftLoadFailed ? "Couldn't load your shift. " : 'Checking your shift… '}
+                  {shiftLoadFailed && <button type="button" className="underline" onClick={onRetryShift}>Try again</button>}
+                </p>
+              )}
+              {actionError && <p role="alert" className="max-w-xs text-caption font-semibold text-rose-700 text-right">{actionError}</p>}
             </div>
           )}
         </div>

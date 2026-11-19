@@ -5,7 +5,7 @@ import { needsTrackerUpdate } from '../trackerSetup';
 import type { TrackerHeartbeat } from '../hr/types';
 import { hasStaleTrackerToken } from './timesheets';
 
-export type StartBlock = 'mobile' | 'tracker_missing' | 'tracker_outdated' | 'tracker_reconnect';
+export type StartBlock = 'mobile' | 'connection' | 'tracker_missing' | 'tracker_outdated' | 'tracker_reconnect';
 
 export function shiftStartBlock(input: {
   /** A phone or tablet (see isMobileDevice). */
@@ -18,9 +18,12 @@ export function shiftStartBlock(input: {
   heartbeat: TrackerHeartbeat | null;
   /** That heartbeat is recent enough to count as running. */
   heartbeatLive: boolean;
+  /** The heartbeat could not be READ (connection or server trouble). That is "could not check", not "tracker not running". */
+  heartbeatReadFailed?: boolean;
 }): StartBlock | null {
   if (input.mobile) return 'mobile';
   if (!input.tracked) return null;
+  if (!input.trackerReplied && input.heartbeatReadFailed) return 'connection';
   if (!input.trackerReplied && !input.heartbeatLive) return 'tracker_missing';
   if (needsTrackerUpdate(input.heartbeat?.agentVersion, input.heartbeat?.deviceLabel)) return 'tracker_outdated';
   if (hasStaleTrackerToken(input.heartbeat)) return 'tracker_reconnect';

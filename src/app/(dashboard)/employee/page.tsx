@@ -53,7 +53,7 @@ export default function EmployeeDashboard() {
   const { data: allAnnouncements } = useAnnouncements();
   const { data: allWarehouses } = useWarehouses();
   // Own shifts only (server-side) — not the whole company's 60-day history.
-  const { data: allTimesheets, refetch: refetchTimesheets } = useTimesheets({ email: sessionEmail, enabled: !!sessionEmail });
+  const { data: allTimesheets, refetch: refetchTimesheets, isError: timesheetsFailed } = useTimesheets({ email: sessionEmail, enabled: !!sessionEmail });
   // Live tracking-enabled source of truth, same hr_tracking_settings
   // collection Sidebar.tsx checks — hr_profiles.trackingEnabled can lag
   // behind this if tracking was toggled from the Tracking Monitor page, so
@@ -483,7 +483,7 @@ export default function EmployeeDashboard() {
 
       {/* Shift control: starting and ending a shift is the most frequent, highest-stakes action here, so it gets one
           unmissable full-width place above everything else. */}
-      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} gpsNote={geo.gpsNote} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onShortShift={setShortShift} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} />
+      <ShiftControlCard shiftActive={shiftActive} userProfile={userProfile} geoPermission={geo.permission} liveDistance={geo.liveDistance} gpsNote={geo.gpsNote} isTrackingLiveFor={isTrackingLiveFor} setPingingTracker={setPingingTracker} setTrackerHeartbeat={setTrackerHeartbeat} onStartBlocked={setStartBlock} onShortShift={setShortShift} setShiftActive={setShiftActive} openShiftRef={openShiftRef} refetchTimesheets={refetchTimesheets} pingingTracker={pingingTracker} allTimesheets={allTimesheets} geoErrorMsg={geo.error} onEnableLocation={geo.accept} onUseThisDevice={geo.useThisDevice} trackerHeartbeat={trackerHeartbeat} shiftKnown={allTimesheets !== undefined} shiftLoadFailed={timesheetsFailed && allTimesheets === undefined} onRetryShift={() => { void refetchTimesheets(); }} />
 
 
       <EmployeeStats profile={userProfile} leaves={allLeaves} tasksNeedingAttention={tasksNeedingAttention} payroll={payrollSelf} />
@@ -507,6 +507,13 @@ export default function EmployeeDashboard() {
       {startBlock === 'mobile' && (
         <NoticeModal title="Desktop Required for This Shift" tone="rose" icon={Smartphone} onClose={() => setStartBlock(null)}>
           Manual Start Shift isn&apos;t available on a phone or tablet. Please start your shift from a desktop or laptop browser instead.
+        </NoticeModal>
+      )}
+
+      {/* The tracker could not be checked because the connection to the server failed: not the same as a missing tracker. */}
+      {startBlock === 'connection' && (
+        <NoticeModal title="Can't Reach the Server" tone="amber" icon={WifiOff} onClose={() => setStartBlock(null)}>
+          We couldn&apos;t check your tracker because the connection to the server failed. Your tracker may be running fine. Check your internet connection and press Start Shift again.
         </NoticeModal>
       )}
 
