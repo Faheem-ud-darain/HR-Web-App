@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { displayName, hrActions, updateProfileAdmin, type Profile, type Team, type Warehouse } from '@/lib/hrData';
+import { displayName, hrActions, updateProfileAdmin, fetchWarehousesStrict, type Profile, type Team, type Warehouse } from '@/lib/hrData';
 import { findStaleWarehouseLinks, membersOfTeam, toggleInList } from '@/lib/core/teams';
 
 interface Args {
@@ -16,9 +16,8 @@ interface Args {
 // Everything that links warehouses to people and teams: assigning a warehouse to an employee or a whole team, naming
 // warehouse managers, and the clean-up of links to warehouses that no longer exist.
 export function useWarehouseActions({ profiles, teams, warehouses, refetchTeams, refetchProfiles, flash }: Args) {
-  const [pendingCleanup, setPendingCleanup] = useState<ReturnType<typeof findStaleWarehouseLinks> | null>(null);
+  const [pendingCleanup, setPendingCleanup] = useState<(ReturnType<typeof findStaleWarehouseLinks> & { live: ReadonlySet<string> }) | null>(null);
   const [cleaning, setCleaning] = useState(false);
-  const liveIds = () => new Set(warehouses.map(w => w.id));
 
   const toggleAssignment = async (emp: Profile, whId: string) => {
     await updateProfileAdmin(emp.id, { assignedWarehouses: toggleInList(emp.assignedWarehouses || [], whId) });
@@ -46,16 +45,25 @@ export function useWarehouseActions({ profiles, teams, warehouses, refetchTeams,
     return `${displayName(emp, 'hr')} is now Warehouse Manager for: ${selection.map(id => warehouses.find(w => w.id === id)?.name || id).join(', ') || '(none)'}`;
   };
 
-  const requestCleanup = () => {
-    const stale = findStaleWarehouseLinks(profiles, teams, liveIds());
+  // The warehouse list is read fresh and strictly here: a copy that failed to load is an empty list, and an empty list would make every
+  // assignment look stale and strip them all (breaking geofence check-in for USA staff).
+  const requestCleanup = async () => {
+    let live: Set<string>;
+    try {
+      live = new Set((await fetchWarehousesStrict()).map(w => w.id));
+    } catch {
+      flash('Could not read the warehouse list, so nothing was changed. Check your connection and try again.', 4000);
+      return;
+    }
+    if (live.size === 0) { flash('No warehouses were found, so nothing was changed.', 4000); return; }
+    const stale = findStaleWarehouseLinks(profiles, teams, live);
     if (stale.staleProfiles.length === 0 && stale.staleTeams.length === 0) flash('No unrecognized warehouse links found — nothing to clean up.');
-    else setPendingCleanup(stale);
+    else setPendingCleanup({ ...stale, live });
   };
 
   const confirmCleanup = async () => {
     if (!pendingCleanup) return;
-    const { staleProfiles, staleTeams } = pendingCleanup;
-    const live = liveIds();
+    const { staleProfiles, staleTeams, live } = pendingCleanup; // the list the confirmation was based on, not a later copy
     setPendingCleanup(null);
     setCleaning(true);
     try {

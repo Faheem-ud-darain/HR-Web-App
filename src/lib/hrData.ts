@@ -75,7 +75,7 @@ export {
   countApprovedLeaveRequestsInMonth, getPTOAccrualDate,
 } from './hr/leaves';
 export {
-  useWarehouses, useTeams, useMessages, useTeamDocuments,
+  useWarehouses, fetchWarehousesStrict, useTeams, useMessages, useTeamDocuments,
   } from './hr/teams';
 export {
   useTickets, TICKET_PRESENCE_STALE_MS, TYPING_STALE_MS,
