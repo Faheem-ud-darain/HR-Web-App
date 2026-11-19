@@ -23,6 +23,15 @@ export function formatTimeNY(date: Date | string | number): string {
   });
 }
 
+/**
+ * The time a notification shows. The app writes it as a ready time of day ("3:02 PM"); the server's own jobs (automatic shift ends, tracker
+ * notices) write the raw UTC moment ("2026-11-12T18:45:00.153Z"). Raw moments become a time of day in America/New_York; anything else is kept.
+ */
+export function notificationTimeLabel(value: string | null | undefined): string {
+  const text = String(value ?? '');
+  return /^\d{4}-\d{2}-\d{2}T/.test(text) && !isNaN(new Date(text).getTime()) ? formatTimeNY(text) : text;
+}
+
 /** e.g. "Aug 3, 2026" — always in America/New_York, regardless of device. */
 export function formatDateNY(date: Date | string | number): string {
   const d = date instanceof Date ? date : new Date(date);

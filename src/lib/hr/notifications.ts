@@ -9,7 +9,7 @@
 import { recordCommunication } from './audit';
 import { useQuery } from '@tanstack/react-query';
 import { pb } from '../pocketbase';
-import { formatTimeNY, formatDateNY } from '../timezone';
+import { formatTimeNY, formatDateNY, notificationTimeLabel } from '../timezone';
 import type {
   Announcement, Profile, MaintenanceNotice, NotificationCategory,
   NotificationPrefs, Notification, NotificationReadMap,
@@ -107,7 +107,7 @@ export function buildNotificationLink(role: string, kind: 'ticket' | 'leave' | '
 }
 
 function toNotification(n: PbRow): Notification {
-  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: n.timestamp, created: n.created, read: !!n.read, link: n.link || undefined, category: n.category || undefined };
+  return { id: n.id, recipientEmail: n.recipient_email, recipientRole: n.recipient_role, message: n.message, timestamp: notificationTimeLabel(n.timestamp), created: n.created, read: !!n.read, link: n.link || undefined, category: n.category || undefined };
 }
 
 function toAnnouncement(a: PbRow): Announcement {
