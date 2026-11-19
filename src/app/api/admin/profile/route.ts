@@ -7,8 +7,10 @@ import {
   adminDeleteByField,
   adminMergeExtras,
   adminMergeDocs,
+  adminGetProfileIdentity,
   pbAdminFetch,
 } from '@/lib/pbAdmin';
+import { canChangeProfile, canCreateWithRole, isPbId } from '@/lib/server/profileGuards';
 import { splitProfileUpdate, fromProfileFields } from '@/lib/profileFields';
 import type { PbRow } from '@/lib/pbTypes';
 
@@ -69,7 +71,7 @@ async function requireHrOrAdmin(request: Request) {
 // covering role/teams/leadTeams/warehouses/baseSalary/offboarding/etc. via
 // the same splitProfileUpdate() classification used by updateProfileSelf.
 export async function POST(request: Request) {
-  const { error } = await requireHrOrAdmin(request);
+  const { session, error } = await requireHrOrAdmin(request);
   if (error) return error;
 
   let body: PbRow;
@@ -83,8 +85,21 @@ export async function POST(request: Request) {
   if (!profileId || typeof profileId !== 'string' || !updates || typeof updates !== 'object') {
     return NextResponse.json({ error: 'profileId and updates are required.' }, { status: 400 });
   }
+  if (!isPbId(profileId)) return NextResponse.json({ error: 'Invalid profileId.' }, { status: 400 });
 
   try {
+    // Who may change a role or a password: see lib/server/profileGuards. The target's CURRENT role comes from the database, not the request.
+    // Only looked up when the request touches one of those two things; if it cannot be read, nothing is saved.
+    if (session!.role !== 'admin' && (('role' in updates) || (updates.password !== undefined && updates.password !== null && updates.password !== ''))) {
+      const decision = canChangeProfile({
+        session: { email: session!.email, role: session!.role },
+        target: await adminGetProfileIdentity(profileId),
+        updates,
+        settingPassword: updates.password !== undefined && updates.password !== null && updates.password !== '',
+      });
+      if (!decision.ok) return NextResponse.json({ error: decision.reason }, { status: 403 });
+    }
+
     // `password` is intentionally pulled out of the generic updates object
     // before splitProfileUpdate/fromProfileFields ever see it. The old
     // client-side UserProfileModal edit form pre-filled a plaintext password
@@ -159,6 +174,7 @@ export async function PUT(request: Request) {
   if (!profileId || typeof profileId !== 'string') {
     return NextResponse.json({ error: 'profileId is required.' }, { status: 400 });
   }
+  if (!isPbId(profileId)) return NextResponse.json({ error: 'Invalid profileId.' }, { status: 400 });
 
   try {
     if (action === 'approveOnboarding') {
@@ -194,6 +210,11 @@ export async function PUT(request: Request) {
       if (!body.newPassword || typeof body.newPassword !== 'string' || body.newPassword.length < 6) {
         return NextResponse.json({ error: 'New password must be at least 6 characters.' }, { status: 400 });
       }
+      // Only an Admin may set the password of an HR or Admin account (otherwise HR could take over an Admin account).
+      if (session!.role !== 'admin') {
+        const decision = canChangeProfile({ session: { email: session!.email, role: session!.role }, target: await adminGetProfileIdentity(profileId), settingPassword: true });
+        if (!decision.ok) return NextResponse.json({ error: decision.reason }, { status: 403 });
+      }
       const hashed = await hashPassword(body.newPassword);
       await adminUpdateProfile(profileId, { password: hashed });
       // Same reasoning as approveOnboarding above — an admin-issued
@@ -228,7 +249,7 @@ export async function PUT(request: Request) {
 // since it creates a record rather than updating one.
 // PATCH { action: 'addEmployee', profile: {...} }
 export async function PATCH(request: Request) {
-  const { error } = await requireHrOrAdmin(request);
+  const { session, error } = await requireHrOrAdmin(request);
   if (error) return error;
 
   let body: PbRow;
@@ -241,6 +262,9 @@ export async function PATCH(request: Request) {
   if (body?.action !== 'addEmployee' || !body.profile) {
     return NextResponse.json({ error: 'action must be addEmployee, with a profile payload.' }, { status: 400 });
   }
+
+  const creation = canCreateWithRole({ email: session!.email, role: session!.role }, body.profile.role);
+  if (!creation.ok) return NextResponse.json({ error: creation.reason }, { status: 403 });
 
   try {
     const fields = fromProfileFields(body.profile);
