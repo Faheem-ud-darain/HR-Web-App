@@ -121,12 +121,16 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                       }
                       setShiftActive(true);
                       openShiftRef.current = { id: started.id, clockIn: started.clockIn };
-                      // The shift IS started: everything after this is best-effort and must never make it look like it failed.
-                      try {
-                        await hrActions.touchShiftTabHeartbeat(userProfile.email);
-                        await refetchTimesheets();
-                        await notifyShift(userProfile, 'Shift started manually. Screen tracking is now active for this shift.', name => `${name} started shift manually.`);
-                      } catch { /* the shift is recorded; the next refresh and the heartbeat catch up */ }
+                      // The shift IS started and confirmed, so the lock is released now: the person can press End straight away. Everything
+                      // after this is best-effort follow-up, run on its own and never allowed to make the start look like it failed.
+                      busyRef.current = false;
+                      void (async () => {
+                        try {
+                          await hrActions.touchShiftTabHeartbeat(userProfile.email);
+                          await refetchTimesheets();
+                          await notifyShift(userProfile, 'Shift started manually. Screen tracking is now active for this shift.', name => `${name} started shift manually.`);
+                        } catch { /* the shift is recorded; the next refresh and the heartbeat catch up */ }
+                      })();
                     } finally {
                       setPingingTracker(false);
                       busyRef.current = false;
@@ -177,15 +181,17 @@ export function ShiftControlCard({ shiftActive, userProfile, geoPermission, live
                       }
                       setShiftActive(false);
                       openShiftRef.current = null;
-                      try {
-                        await refetchTimesheets();
-                        await notifyShift(userProfile, 'Shift ended manually. Screen tracking has stopped.', name => `${name} ended shift manually.`);
-                      } catch { /* the shift is ended; the next refresh catches up */ }
-
+                      busyRef.current = false; // confirmed: the lock is released; the follow-up below runs on its own
                       const requiredMinutes = requiredDayMinutes(userProfile);
                       if (totalWorkedMins < requiredMinutes) {
                         onShortShift({ workedMinutes: totalWorkedMins, remainingMinutes: requiredMinutes - totalWorkedMins, requiredMinutes });
                       }
+                      void (async () => {
+                        try {
+                          await refetchTimesheets();
+                          await notifyShift(userProfile, 'Shift ended manually. Screen tracking has stopped.', name => `${name} ended shift manually.`);
+                        } catch { /* the shift is ended; the next refresh catches up */ }
+                      })();
                     } finally {
                       busyRef.current = false;
                     }
