@@ -77,12 +77,31 @@ export async function fetchLeavesStrict(windowDays: number = DEFAULT_LEAVE_WINDO
   return (await pbListStrict('hr_leaves', { fields: LEAVE_FIELDS, sort: '-created', filter })).map(toLeave);
 }
 
+// The leaves a screen shows, read so that a failed request is an ERROR (retried, never cached as "no leaves"). An empty leave list on screen
+// reads as "nothing taken": the leave balance shows the full allowance and the list says "No leave history".
+export async function fetchLeavesChecked(q: LeaveQuery = {}): Promise<LeaveApplication[]> {
+  if (q.employeeName) {
+    const wanted = q.employeeName.trim();
+    const rows = await pbListStrict('hr_leaves', { filter: pbFilter('employee_name ~ {:name}', { name: wanted }), fields: LEAVE_FIELDS });
+    return rows.filter(r => sameEmployeeName(r.employee_name, wanted)).map(toLeave);
+  }
+  const days = q.windowDays ?? DEFAULT_LEAVE_WINDOW_DAYS;
+  if (days <= 0) return (await pbListStrict('hr_leaves', { fields: LEAVE_FIELDS })).map(toLeave);
+  try {
+    return await fetchLeavesStrict(days);
+  } catch {
+    // The start_date/end_date columns may not exist yet on an old database: fall back to the whole table, still strictly (so a real outage still throws).
+    return (await pbListStrict('hr_leaves', { fields: LEAVE_FIELDS })).map(toLeave);
+  }
+}
+
 export function useLeaves(options: LeaveQuery & { enabled?: boolean } = {}) {
   const { enabled = true, employeeName, windowDays } = options;
   return useQuery({
     enabled: enabled && employeeName !== null,
     queryKey: ['hr_leaves', employeeName === undefined ? 'all' : employeeName, windowDays ?? DEFAULT_LEAVE_WINDOW_DAYS],
-    queryFn: () => fetchLeaves({ employeeName: employeeName ?? undefined, windowDays }),
+    queryFn: () => fetchLeavesChecked({ employeeName: employeeName ?? undefined, windowDays }),
+    retry: 2,
   });
 }
 

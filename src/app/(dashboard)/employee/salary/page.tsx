@@ -44,8 +44,8 @@ export default function EmployeeSalaryPage() {
   // no auth required. `userProfile` below is now just the handful of
   // salary-relevant fields the server route actually returns, not a full
   // Profile.
-  const { data: payrollSelf } = usePayrollSelf();
-  const { data: myAbsenceRecords = [] } = useMyAbsenceRecords();
+  const { data: payrollSelf, isLoading: payLoading, isError: payFailed, refetch: refetchPay } = usePayrollSelf();
+  const { data: myAbsenceRecords = [], isError: absencesFailed, refetch: refetchAbsences } = useMyAbsenceRecords();
   // Needed only to re-check live leave coverage for each absence record below
   // (see reasonLabel's comment) — a leave approved AFTER runAbsenceCheck
   // already scanned that day leaves a stale no-show/under-4h/inactivity
@@ -120,6 +120,25 @@ export default function EmployeeSalaryPage() {
   // this month".
   const reservedBalance = (payrollSelf?.reservedSalaryBalance || 0) + (payrollSelf?.manualReservedAmount || 0);
 
+  // Until the pay is really loaded, show that: never a salary of 0 and "no salary slips recorded" (which reads as "you have no pay record").
+  if (!payrollSelf) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center space-y-3">
+          {payFailed ? (
+            <>
+              <p className="font-semibold text-slate-800">We couldn&apos;t load your pay.</p>
+              <p className="text-sm text-slate-500">Your salary and slips are not affected. This is only the page failing to load, usually a slow connection.</p>
+              <Button variant="primary" onClick={() => { void refetchPay(); void refetchAbsences(); }}>Try again</Button>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">{payLoading ? 'Loading your pay…' : 'No pay record was found for your account. Please contact HR.'}</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div>
@@ -176,7 +195,15 @@ export default function EmployeeSalaryPage() {
         </div>
       )}
 
-      <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} floorMinutes={absenceFloorMinutes(userProfile)} monthlyPay={baseSalary} slip={payrollRecord?.month ? { month: payrollRecord.month, deductions: payrollRecord.deductions, deductionBreakdown: payrollRecord.deductionBreakdown || [] } : null} />
+      {absencesFailed ? (
+        <Card><CardContent className="py-6 text-center space-y-2">
+          <p className="font-semibold text-slate-800">We couldn&apos;t load your deductions.</p>
+          <p className="text-sm text-slate-500">This does not mean nothing was deducted. Try again in a moment.</p>
+          <Button variant="primary" size="sm" onClick={() => { void refetchAbsences(); }}>Try again</Button>
+        </CardContent></Card>
+      ) : (
+        <DailyDeductionsCard records={myAbsenceRecords} leaves={leaves} fullName={userProfile?.fullName} region={userProfile?.region} floorMinutes={absenceFloorMinutes(userProfile)} monthlyPay={baseSalary} slip={payrollRecord?.month ? { month: payrollRecord.month, deductions: payrollRecord.deductions, deductionBreakdown: payrollRecord.deductionBreakdown || [] } : null} />
+      )}
 
       <h2 className="text-base md:text-xl font-bold text-slate-900 mt-6 md:mt-8 mb-3 md:mb-4">Historical Pay slips</h2>
       <Card className="overflow-hidden p-0 border border-slate-200">

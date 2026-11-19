@@ -77,7 +77,7 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
     return () => window.removeEventListener('globalSearch', onSearch);
   }, []);
 
-  const { records, employees, rawPayroll, loading, refetchPayroll, refetchProfiles } = usePayrollView({ previous: showPrevious });
+  const { records, employees, rawPayroll, loading, failed, retry, refetchPayroll, refetchProfiles } = usePayrollView({ previous: showPrevious });
   const profileById = useMemo(() => new Map(employees.map(e => [e.id, e])), [employees]);
   const currentMonth = records[0]?.month || '';
 
@@ -277,6 +277,13 @@ export function PayrollScreen({ role }: { role: 'hr' | 'admin' }) {
 
           {loading ? (
             <ListSkeleton rows={6} />
+          ) : failed ? (
+            // Not a total worked out from part of the data: pay, leave, shifts and absences must ALL have loaded.
+            <Card><CardContent className="py-10 text-center space-y-3">
+              <p className="font-semibold text-slate-800">The payroll could not be loaded completely.</p>
+              <p className="text-sm text-slate-500">Nothing is shown rather than a total that could be wrong. Check the connection and try again.</p>
+              <Button variant="primary" onClick={retry}>Try again</Button>
+            </CardContent></Card>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
