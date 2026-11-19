@@ -256,10 +256,18 @@ export default function EmployeeDashboard() {
   useEffect(() => {
     if (!userEmail) return;
     let cancelled = false;
+    let lastCheckAt = 0;
     const check = async () => {
-      const hb = await hrActions.getTrackerHeartbeat(userEmail);
+      // A failed read is "could not check", never "the tracker is dead": nothing changes, and the next poll tries again.
+      let hb: TrackerHeartbeat | null;
+      try { hb = await hrActions.getTrackerHeartbeatStrict(userEmail); } catch { return; }
       if (cancelled) return;
       setTrackerHeartbeat(hb);
+      // This tab was frozen or offline for a while (a laptop that slept): the "dead since" clock must not run across that gap, or the first
+      // poll after waking would find the grace period already expired and end the shift at once.
+      const gapMs = lastCheckAt ? Date.now() - lastCheckAt : 0;
+      lastCheckAt = Date.now();
+      if (gapMs > 2 * 60 * 1000) setHeartbeatFirstDeadAt(null);
 
       const profile = profileRef.current;
       const trackingEnabled = !!profile && isTrackingLiveForRef.current(profile);
@@ -290,10 +298,14 @@ export default function EmployeeDashboard() {
         return;
       }
 
-      // Deliberate quit confirmed OR grace period expired — clock out
+      // Deliberate quit confirmed OR grace period expired — clock out, at the moment the tracker was last seen (or the quit), not at "now":
+      // closing at "now" paid the whole quiet stretch.
+      const endedAt = quitIntentRecent ? quitIntent!.timestamp : hb?.lastSeenAt;
+      try {
+        await hrActions.clockOut(userEmail, endedAt);
+      } catch { return; } // not confirmed: nothing changes on screen, and the next poll tries again
       setShiftActive(false);
       openShiftRef.current = null;
-      await hrActions.clockOut(userEmail);
       await refetchTimesheets();
       // Clean up quit intent so it doesn't re-trigger on the next poll
       try { await hrActions.clearTrackerQuitIntent(userEmail); } catch { /* best-effort */ }

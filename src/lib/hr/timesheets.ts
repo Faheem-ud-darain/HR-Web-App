@@ -14,7 +14,7 @@ import type {
   TrackerStopCommand, TrackerCommand, TrackerDiagnostics, TrackingSettings,
 } from './types';
 import {
-  pbList, pbListStrict, pbCreate, pbUpdate, pbUpsertByField, pbFindByField, pbDeleteByField,
+  pbList, pbListStrict, pbCreate, pbUpdate, pbUpsertByField, pbFindByFieldStrict, pbDeleteByField,
   withTimeout,
   pbGetTrackerSignal, pbGetTrackerSignalStrict, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields, formatDurationBetween,
 } from './shared';
@@ -29,6 +29,7 @@ import { isMobileDevice } from '../trackerSetup';
 import {
   hasStaleTrackerToken, getCaptureHealth, getCaptureGap, isHeartbeatLive, isShiftTabHeartbeatLive, toTimesheet,
   TRACKER_HEARTBEAT_STALE_MS, SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS, ORPHAN_SHIFT_GRACE_MS, MIN_SHIFT_AGE_MS, MAX_SHIFT_DURATION_MS,
+  shiftCloseTime,
 } from '../core/timesheets';
 import { every } from '../idle';
 import type { PbRow } from '@/lib/pbTypes';
@@ -47,8 +48,9 @@ export {
 // Purely app-internal (confirmed: tracker-agent/agent_gui.py never
 // references this key), unlike the 5-Signal tracker system above, so
 // safe to migrate without any agent-side coordination.
-async function getShiftTabHeartbeatRow(email: string): Promise<ShiftTabHeartbeat | null> {
-  const row = await pbFindByField('hr_shift_tab_heartbeats', 'email', (email || '').toLowerCase());
+// The strict twin: a failed read throws instead of looking like "no heartbeat".
+async function getShiftTabHeartbeatRowStrict(email: string): Promise<ShiftTabHeartbeat | null> {
+  const row = await pbFindByFieldStrict('hr_shift_tab_heartbeats', 'email', (email || '').toLowerCase());
   return row ? { employeeEmail: row.email, lastSeenAt: row.last_seen_at } : null;
 }
 
@@ -450,12 +452,21 @@ export const timesheetActions = {
     try { trackingSettings = await hrActions.getTrackingSettingsFor(profile.email); } catch { return false; }
     // Either switch counts, so one bad value can't make a tracked employee look untracked.
     if (isTrackingOn(profile.trackingEnabled, trackingSettings)) return false;
-    const [tabHb, trackerHb] = await Promise.all([
-      getShiftTabHeartbeatRow(profile.email),
-      hrActions.getTrackerHeartbeat(profile.email),
-    ]);
+    // Both heartbeats are read STRICTLY: a read that failed is "could not check", never "nothing is alive". Closing on a failed read ended the
+    // shift of a person who was working (and credited the time since the last real signal as "now").
+    let tabHb: ShiftTabHeartbeat | null;
+    let trackerHb: TrackerHeartbeat | null;
+    try {
+      [tabHb, trackerHb] = await Promise.all([
+        getShiftTabHeartbeatRowStrict(profile.email),
+        hrActions.getTrackerHeartbeatStrict(profile.email),
+      ]);
+    } catch { return false; }
     if (hrActions.isShiftTabHeartbeatLive(tabHb) || hrActions.isHeartbeatLive(trackerHb)) return false;
-    await hrActions.clockOut(profile.email);
+    // Ended at the last moment either heartbeat was seen, not at "now".
+    const seen = [tabHb?.lastSeenAt, trackerHb?.lastSeenAt].filter(Boolean) as string[];
+    const lastSeen = seen.sort().pop();
+    await hrActions.clockOut(profile.email, lastSeen ?? open.clockIn);
     await hrActions.clearShiftTabHeartbeat(profile.email);
     await hrActions.addNotification(profile.email, 'employee', 'Your shift was automatically ended because the DelCargo portal (browser tab or mobile app) was closed or stopped responding. If this looks wrong, contact HR.');
     // 'shift' category + pushTitle/senderEmail so this actually reaches
@@ -661,10 +672,12 @@ export const timesheetActions = {
     });
     return toTimesheet(created);
   },
-  clockOut: async (employeeEmail: string): Promise<TimesheetEntry | null> => {
+  // `endedAtIso`: when a safety net ends the shift, the moment the person was last seen (see shiftCloseTime), so the quiet gap is not paid.
+  // Left out for a normal End Shift, which ends it now.
+  clockOut: async (employeeEmail: string, endedAtIso?: string): Promise<TimesheetEntry | null> => {
     const open = await hrActions.getOpenShift(employeeEmail);
     if (!open) return null;
-    const nowIso = new Date().toISOString();
+    const nowIso = endedAtIso ? shiftCloseTime(open.clockIn, endedAtIso, Date.now()) : new Date().toISOString();
     const updated = await pbUpdate('hr_timesheets', open.id, { clock_out: nowIso, duration: formatDurationBetween(open.clockIn, nowIso) });
     // Clean up tab heartbeat (existing) and write Signal 5 stop command so the
     // tracker agent stops capturing immediately via realtime SSE — both are
