@@ -28,6 +28,7 @@ import { PB_URL } from '@/lib/pbUrl';
 import { dataUrlToBlob } from '@/lib/dataUrl';
 import { sanitizeForWrite } from './sanitize';
 import type { PbRow, PbJson } from '@/lib/pbTypes';
+import { timeoutSignal } from '@/lib/fetchRetry';
 import { hasDocs, legacyDocsKey, parseLegacyDocs, type ProfileDocs } from '@/lib/core/profileDocs';
 
 
@@ -40,10 +41,21 @@ import { hasDocs, legacyDocsKey, parseLegacyDocs, type ProfileDocs } from '@/lib
 // different from any other API call.
 let cachedToken: string | null = null;
 let cachedTokenExpiresAt = 0;
+let tokenInFlight: Promise<string> | null = null; // concurrent requests share one sign-in instead of each making their own
+
+// Every call to PocketBase from the server gets a time limit. Without one, a PocketBase that is slow or restarting holds each request until
+// Cloudflare gives up, the person sees a spinner, and the rate limiter's "let them in if the lookup fails" never gets the chance to run.
+const PB_TIMEOUT_MS = 8000;
 
 async function getAdminToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && now < cachedTokenExpiresAt) return cachedToken;
+  if (!tokenInFlight) tokenInFlight = signInAdmin().finally(() => { tokenInFlight = null; });
+  return tokenInFlight;
+}
+
+async function signInAdmin(): Promise<string> {
+  const now = Date.now();
 
   const email = process.env.PB_ADMIN_EMAIL;
   const password = process.env.PB_ADMIN_PASSWORD;
@@ -59,6 +71,7 @@ async function getAdminToken(): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ identity: email, password }),
     cache: 'no-store',
+    signal: timeoutSignal(PB_TIMEOUT_MS),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -76,7 +89,16 @@ async function getAdminToken(): Promise<string> {
 
 // Generic authenticated PocketBase REST call. `path` is anything after the
 // base URL, e.g. `/api/collections/hr_profiles/records?filter=...`.
+// A path that climbs out of the collection (".." in any form) could aim the superuser token at another PocketBase endpoint such as /api/admins.
+function assertSafePath(path: string): void {
+  const beforeQuery = path.split('?')[0];
+  if (/(^|\/)\.\.?(\/|$)|%2e|%2f|%5c|\\/i.test(beforeQuery)) throw new Error(`Refusing PocketBase path: ${beforeQuery}`);
+}
+
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
 export async function pbAdminFetch(path: string, init?: RequestInit): Promise<PbJson> {
+  assertSafePath(path);
   const token = await getAdminToken();
   // Every JSON write made on the server passes through here, so strip control/
   // spoofing characters from its strings once, centrally (see sanitizeForWrite:
@@ -84,7 +106,7 @@ export async function pbAdminFetch(path: string, init?: RequestInit): Promise<Pb
   if (typeof init?.body === 'string' && init.body.startsWith('{')) {
     try { init = { ...init, body: JSON.stringify(sanitizeForWrite(JSON.parse(init.body))) }; } catch { /* not JSON — send as-is */ }
   }
-  const res = await fetch(`${PB_URL}${path}`, {
+  const send = () => fetch(`${PB_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -92,7 +114,19 @@ export async function pbAdminFetch(path: string, init?: RequestInit): Promise<Pb
       ...(init?.headers || {}),
     },
     cache: 'no-store',
+    signal: timeoutSignal(PB_TIMEOUT_MS),
   });
+  // A read is safe to repeat once after a dropped connection, a timeout, or a gateway error; a write is never repeated here (it might have
+  // succeeded and only the answer was lost).
+  const isRead = !init?.method || init.method.toUpperCase() === 'GET';
+  let res: Response;
+  try {
+    res = await send();
+    if (isRead && RETRYABLE_STATUS.has(res.status)) res = await send();
+  } catch (err) {
+    if (!isRead) throw err;
+    res = await send();
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`PocketBase ${path} failed: ${res.status} ${body}`);
@@ -145,8 +179,14 @@ export async function adminGetProfileDocs(profileId: string): Promise<PbRow> {
   return parseLegacyDocs(legacy?.value) as PbRow;
 }
 
+/** The profile's CURRENT email and role, read from the database (never from the request). Throws if it cannot be read. */
+export async function adminGetProfileIdentity(profileId: string): Promise<{ email: string; role: string }> {
+  const rec = await pbAdminFetch(`/api/collections/hr_profiles/records/${encodeURIComponent(profileId)}?fields=id,email,role`);
+  return { email: String(rec?.email || ''), role: String(rec?.role || '') };
+}
+
 export async function adminUpdateProfile(profileId: string, fields: PbRow): Promise<void> {
-  await pbAdminFetch(`/api/collections/hr_profiles/records/${profileId}`, {
+  await pbAdminFetch(`/api/collections/hr_profiles/records/${encodeURIComponent(profileId)}`, {
     method: 'PATCH',
     body: JSON.stringify(fields),
   });
@@ -202,6 +242,7 @@ export async function adminUploadProfilePicture(profileId: string, dataUrl: stri
     method: 'PATCH',
     headers: { Authorization: token },
     body: formData,
+    signal: timeoutSignal(20000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -336,6 +377,7 @@ export async function adminGetFileToken(): Promise<string> {
   const res = await fetch(`${PB_URL}/api/files/token`, {
     method: 'POST',
     headers: { Authorization: token },
+    signal: timeoutSignal(PB_TIMEOUT_MS),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
