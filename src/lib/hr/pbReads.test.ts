@@ -21,3 +21,13 @@ describe('pbList vs pbListStrict', () => {
     await expect(pbListStrict('hr_x')).rejects.toThrow('network');
   });
 });
+
+describe('the absence sweep reads', () => {
+  it('fetchTimesheetsStrict and fetchLeavesStrict let a failed read surface instead of returning an empty list', async () => {
+    const { fetchTimesheetsStrict } = await import('./timesheets');
+    const { fetchLeavesStrict } = await import('./leaves');
+    getFullList.mockRejectedValue(new Error('network'));
+    await expect(fetchTimesheetsStrict({ days: 10 })).rejects.toThrow('network');
+    await expect(fetchLeavesStrict()).rejects.toThrow('network');
+  });
+});
