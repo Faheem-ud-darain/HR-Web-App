@@ -79,6 +79,20 @@ export async function clearRateLimit(key: string): Promise<void> {
   }
 }
 
+// Gives one attempt back. A failure that was the SERVER's (a database timeout, an unexpected error) is not a wrong password and must not
+// count towards a lockout: otherwise a few clicks during a slow spell lock out someone who typed the right password, for 15 minutes.
+// Best-effort and never throws; the counter is not atomic, which is fine for a refund of a single attempt.
+export async function refundRateLimit(key: string): Promise<void> {
+  try {
+    const existing = await adminFindByField(RATE_LIMIT_COLLECTION, 'rate_key', key);
+    const record = existing?.data as RateLimitRecord | undefined;
+    if (!record || !(record.count > 0)) return;
+    await adminUpsertByField(RATE_LIMIT_COLLECTION, 'rate_key', key, { ...record, count: record.count - 1 });
+  } catch (err) {
+    console.error('[rateLimit] refundRateLimit storage error (non-fatal):', err);
+  }
+}
+
 // ── Per-client-address limiting ────────────────────────────────────────────
 // Login also limits per EMAIL (above), which stops one account being guessed
 // but not one machine trying many accounts, and which can't protect the

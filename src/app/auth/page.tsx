@@ -10,6 +10,7 @@ import { ForgotPasswordModal } from './_components/ForgotPasswordModal';
 import { useRouter } from 'next/navigation';
 import { hrActions } from '@/lib/hrData';
 import { fetchWithRetry, isNetworkFailure } from '@/lib/fetchRetry';
+import { loginFailureMessage } from '@/lib/loginMessages';
 import {
   setSession,
   setAuthToken,
@@ -136,7 +137,7 @@ export default function AuthPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data?.error || 'Invalid email or password.');
+        setError(loginFailureMessage(res.status, data));
         setLoading(false);
         return;
       }
