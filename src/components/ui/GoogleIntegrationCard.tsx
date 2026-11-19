@@ -104,13 +104,25 @@ export function GoogleIntegrationCard({ profile, onUpdate }: GoogleIntegrationCa
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
     const redirectUri = `${window.location.origin}/api/auth/google/callback`;
     const scope = encodeURIComponent('openid email profile https://www.googleapis.com/auth/calendar.events');
-    const state = encodeURIComponent(JSON.stringify({ email: profile.email }));
 
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=code&scope=${scope}&state=${state}&access_type=offline&prompt=consent`;
-
-    const popup = window.open(authUrl, 'GoogleAuthPopup', 'width=550,height=650');
+    // Opened right away (a blocker only allows a pop-up opened by the click itself), then pointed at Google once the server has signed the
+    // request: the `state` that says whose account this is comes from the server, not from this page.
+    const popup = window.open('about:blank', 'GoogleAuthPopup', 'width=550,height=650');
+    void (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/google/link-state`, { method: 'POST', headers: { Authorization: `Bearer ${getAuthToken() || ''}` } });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || !body?.state) throw new Error(body?.error || 'Could not start linking your Google account.');
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+          redirectUri
+        )}&response_type=code&scope=${scope}&state=${encodeURIComponent(body.state)}&access_type=offline&prompt=consent`;
+        if (popup) popup.location.href = authUrl;
+      } catch (err) {
+        popup?.close();
+        setConnecting(false);
+        setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Could not start linking your Google account.' });
+      }
+    })();
 
     const handleMessage = async (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== popup) return; // only our own sign-in pop-up may report a result

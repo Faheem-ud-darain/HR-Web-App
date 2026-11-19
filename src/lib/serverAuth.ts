@@ -115,6 +115,33 @@ export async function verifySessionToken(token: string | null | undefined): Prom
   }
 }
 
+// The `state` of a Google account-link request. Before, `state` was the plain JSON {"email": ...}, and the callback trusted it: anyone could
+// start the Google flow with THEIR OWN Google account and somebody else's email in `state`, and the callback stored their Google account
+// (and its tokens) against the other person. Now the signed-in person asks this server for the state, it is signed, short-lived and carries
+// a purpose claim, and the callback accepts nothing else. A session token cannot be used as a link state (it has no purpose) and a link
+// state cannot be used as a session token (it has no role), so the two can never stand in for each other.
+const GOOGLE_LINK_TTL_SECONDS = 10 * 60;
+
+export async function signGoogleLinkState(email: string): Promise<string> {
+  return new SignJWT({ email, purpose: 'google_link' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + GOOGLE_LINK_TTL_SECONDS)
+    .sign(getSecret());
+}
+
+/** The email a valid, unexpired link state was issued to, or null for anything else. */
+export async function verifyGoogleLinkState(state: string | null | undefined): Promise<string | null> {
+  if (!state) return null;
+  try {
+    const { payload } = await jwtVerify(state, getSecret());
+    if (payload.purpose !== 'google_link' || typeof payload.email !== 'string' || !payload.email) return null;
+    return payload.email;
+  } catch {
+    return null;
+  }
+}
+
 // Extracts and verifies the bearer token from a standard `Authorization:
 // Bearer <token>` header. Used by every protected API route added as part
 // of this refactor (currently just /api/payroll/me) instead of duplicating
