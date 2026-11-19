@@ -67,6 +67,17 @@ export async function pbListStrict(collection: string, opts: { sort?: string; fi
   return await pb.collection(collection).getFullList({ requestKey: null, batch: 200, ...opts });
 }
 
+// Like pbFindByField, but only "no such row" gives null: any other failure (dropped connection, timeout, server error) THROWS. Use it where a
+// failed read must not be mistaken for "nothing there" (is this person's tracker alive? is their shift open?).
+export async function pbFindByFieldStrict(collection: string, field: string, value: string): Promise<PbJson | null> {
+  try {
+    return await pb.collection(collection).getFirstListItem(pbFilter(`${field} = {:value}`, { value }), { requestKey: null });
+  } catch (err) {
+    if ((err as { status?: number })?.status === 404) return null;
+    throw err;
+  }
+}
+
 // Looks up all rows in `collection` whose `field` matches `email`,
 // case-insensitively — a case-insensitive `~` filter narrows server-side,
 // then an exact (still case-insensitive) client-side check drops any
@@ -277,6 +288,14 @@ export async function pbGetTrackerSignal(email: string, field: string): Promise<
   // Short TTL on purpose: the agent writes pong/command externally and the
   // portal polls them, so this must stay fresher than that poll.
   const row = await coalesce(`tsrow:${key}`, 500, () => pbFindByField('hr_tracker_signals', 'email', key));
+  return row ? (row[field] ?? null) : null;
+}
+
+// The strict twin of pbGetTrackerSignal: a failed read throws instead of looking like "no signal".
+export async function pbGetTrackerSignalStrict(email: string, field: string): Promise<PbJson | null> {
+  const key = (email || '').toLowerCase();
+  if (!key) return null;
+  const row = await pbFindByFieldStrict('hr_tracker_signals', 'email', key);
   return row ? (row[field] ?? null) : null;
 }
 

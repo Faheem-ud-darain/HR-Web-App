@@ -127,14 +127,20 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       await hrActions.deleteAbsenceRecord(record.id);
       setSelectedIds(prev => { const next = new Set(prev); next.delete(record.id); return next; });
       loadAbsenceRecords();
+    } catch (err) {
+      console.error('Removing an absence record failed:', err);
+      alert('Could not remove this absence record. It is still on the books; please check your connection and try again.');
     } finally {
       setDeletingRecordId(null);
     }
   };
 
-  const handleBulkDelete = () => {
-    if (selectedIds.size === 0) return;
-    const selectedRecords = filteredAbsences.filter(r => selectedIds.has(r.id));
+  // The records the confirmation names, fixed when it opens: exactly what is shown, ticked and checked against approved leave, so what is
+  // deleted is always what the person was asked about (the ticks of another employee, or ones hidden by a filter, are never swept in).
+  const [bulkRecords, setBulkRecords] = useState<AbsenceRecord[]>([]);
+
+  const handleBulkDelete = (selectedRecords: AbsenceRecord[] = filteredAbsences.filter(r => selectedIds.has(r.id))) => {
+    if (selectedRecords.length === 0) return;
     // If ANY selected record is actually an approved leave day, block the whole
     // bulk action and explain — safer than silently skipping just that one record.
     const leaveCovered = selectedRecords.find(r => isApprovedLeaveOnDate(leaves, r.employeeName, r.date));
@@ -142,6 +148,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
       setLeaveBlockedNotice({ employeeName: leaveCovered.employeeName, date: leaveCovered.date });
       return;
     }
+    setBulkRecords(selectedRecords);
     setShowBulkDeleteConfirm(true);
   };
 
@@ -149,8 +156,13 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
     setShowBulkDeleteConfirm(false);
     setBulkDeleting(true);
     try {
-      await hrActions.bulkDeleteAbsenceRecords(Array.from(selectedIds));
-      setSelectedIds(new Set());
+      const ids = bulkRecords.map(r => r.id);
+      await hrActions.bulkDeleteAbsenceRecords(ids);
+      setSelectedIds(prev => { const next = new Set(prev); ids.forEach(id => next.delete(id)); return next; });
+      loadAbsenceRecords();
+    } catch (err) {
+      console.error('Bulk removal of absence records failed:', err);
+      alert('Could not remove the selected records. Some may not have been removed; please reload the list and check before trying again.');
       loadAbsenceRecords();
     } finally {
       setBulkDeleting(false);
@@ -924,7 +936,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
                   </div>
                   <div className="flex items-center gap-2">
                     <Button type="button" variant="ghost" size="xs" onClick={() => setSelectedIds(prev => { const next = new Set(prev); empIds.forEach(id => next.delete(id)); return next; })}>Cancel</Button>
-                    <Button type="button" variant="danger" size="md" onClick={handleBulkDelete} loading={bulkDeleting} disabled={bulkDeleting}>
+                    <Button type="button" variant="danger" size="md" onClick={() => handleBulkDelete(records.filter(r => selectedIds.has(r.id)))} loading={bulkDeleting} disabled={bulkDeleting}>
                       {!bulkDeleting && <Trash2 className="h-3.5 w-3.5" />}
                       {bulkDeleting ? 'Removing…' : `Remove ${empSelectedCount} Record${empSelectedCount > 1 ? 's' : ''}`}
                     </Button>
@@ -970,7 +982,7 @@ export function AbsenceDetailsView({ role, filterEmail }: AbsenceDetailsViewProp
         onClose={() => setShowBulkDeleteConfirm(false)}
         onConfirm={confirmBulkDelete}
         title="Remove selected absence records?"
-        message={`Remove ${selectedIds.size} absence record${selectedIds.size > 1 ? 's' : ''} and reverse ${formatMoney(filteredAbsences.filter(r => selectedIds.has(r.id)).reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} in deductions? This cannot be undone.`}
+        message={`Remove ${bulkRecords.length} absence record${bulkRecords.length > 1 ? 's' : ''} and reverse ${formatMoney(bulkRecords.reduce((s, r) => s + effectiveDeductionAmount(r), 0), 'Pakistan')} in deductions? This cannot be undone.`}
         confirmLabel={bulkDeleting ? 'Removing…' : 'Remove'}
         variant="danger"
         loading={bulkDeleting}

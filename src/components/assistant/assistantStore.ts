@@ -8,6 +8,7 @@ import { getAuthToken } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
 import type { SavedUsage } from '@/lib/assistant/history';
 import { ageText, findEarlierAnswer, repeatNote } from '@/lib/assistant/repeatQuestion';
+import { timeoutSignal } from '@/lib/fetchRetry';
 
 export interface AssistantAction { type: 'open_page' | 'ask_followup'; label: string; page?: string; search?: string; text?: string }
 export interface AssistantMessage { id: string; role: 'user' | 'assistant'; content: string; toolsUsed?: string[]; actions?: AssistantAction[]; usage?: SavedUsage; at?: number; repeatOf?: string; demo?: boolean; error?: boolean }
@@ -75,7 +76,7 @@ async function saveCurrentChat(at: number): Promise<void> {
   const sent = state.messages.filter(m => !m.error);
   if (!sent.some(m => m.role === 'user')) return;
   try {
-    const res = await fetch(`${API_BASE}/api/assistant/history`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id: state.chatId, messages: sent }), signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(`${API_BASE}/api/assistant/history`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ id: state.chatId, messages: sent }), signal: timeoutSignal(15_000) });
     if (res.status === 503) { historyOff = true; return; }
     const data = await res.json().catch(() => ({})) as { id?: string };
     if (at === epoch && res.ok && data.id && data.id !== state.chatId) set({ ...state, chatId: data.id });
@@ -84,7 +85,7 @@ async function saveCurrentChat(at: number): Promise<void> {
 
 export async function listSavedChats(): Promise<{ available: boolean; chats: SavedChatRow[] }> {
   try {
-    const res = await fetch(`${API_BASE}/api/assistant/history`, { headers: authHeaders(), signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(`${API_BASE}/api/assistant/history`, { headers: authHeaders(), signal: timeoutSignal(15_000) });
     const data = await res.json().catch(() => ({})) as { available?: boolean; chats?: SavedChatRow[] };
     if (!res.ok) return { available: true, chats: [] };
     return { available: data.available !== false, chats: data.chats ?? [] };
@@ -94,7 +95,7 @@ export async function listSavedChats(): Promise<{ available: boolean; chats: Sav
 export async function openSavedChat(id: string): Promise<boolean> {
   const mine = ++openGen;
   try {
-    const res = await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { headers: authHeaders(), signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { headers: authHeaders(), signal: timeoutSignal(15_000) });
     const data = await res.json().catch(() => ({})) as { chat?: { id: string; messages: AssistantMessage[] } };
     if (!res.ok || !data.chat || mine !== openGen) return false;
     epoch++;
@@ -106,7 +107,7 @@ export async function openSavedChat(id: string): Promise<boolean> {
 /** True only when the server confirmed the chat is gone. */
 export async function deleteSavedChat(id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(), signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(`${API_BASE}/api/assistant/history?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(), signal: timeoutSignal(15_000) });
     if (!res.ok) return false;
   } catch { return false; }
   load();
@@ -140,7 +141,7 @@ export async function sendAssistantMessage(text: string, opts: { fresh?: boolean
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ messages: history }),
-      signal: AbortSignal.timeout(70_000),
+      signal: timeoutSignal(70_000),
     });
     const data = await res.json().catch(() => ({})) as { answer?: string; toolsUsed?: string[]; actions?: AssistantAction[]; usage?: SavedUsage; demo?: boolean; error?: string };
     if (!res.ok || !data.answer) throw new Error(data.error || 'The assistant could not answer.');

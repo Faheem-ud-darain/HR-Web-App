@@ -16,7 +16,7 @@ import { getLeaveRange } from '../core/leaves';
 import type { AbsenceRecord, MyAbsenceRecord, InactivityLog, Profile, TimesheetEntry, LeaveApplication } from './types';
 import { pb } from '../pocketbase';
 import { pbList, pbListStrict, pbCreate, pbUpdate, formatMoney } from './shared';
-import { hrActions, fetchTimesheetsFresh, displayName } from '../hrData';
+import { hrActions, fetchTimesheetsStrict, displayName } from '../hrData';
 
 export { countAbsentWeekdays };
 import { pbFilter } from '../pbFilter';
@@ -28,19 +28,22 @@ import { toAbsenceRecord, toLeave } from '../core/payrollMappers';
 const ABSENCE_FIELDS = 'id,employeeEmail,employeeName,date,reason,inactivityMinutes,workedMinutes,deductionAmount,createdAt,created,acknowledged,deleted,deletedAt';
 
 
+// The signed-in person's own absence records. A failed request THROWS: "no absences, nothing deducted" must never be what a dropped
+// connection looks like.
+export async function fetchMyAbsenceRecords(token: string | null): Promise<MyAbsenceRecord[]> {
+  if (!token) return [];
+  const res = await fetch(`${API_BASE}/api/absences/me`, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401 || res.status === 403) return [];
+  if (!res.ok) throw new Error(`Absence request failed (${res.status})`);
+  const data = await res.json();
+  return (data.items || []) as MyAbsenceRecord[];
+}
+
 export function useMyAbsenceRecords() {
   return useQuery({
     queryKey: ['absences_me'],
-    queryFn: async (): Promise<MyAbsenceRecord[]> => {
-      const token = getAuthToken();
-      if (!token) return [];
-      const res = await fetch(`${API_BASE}/api/absences/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data.items || []) as MyAbsenceRecord[];
-    },
+    retry: 2,
+    queryFn: () => fetchMyAbsenceRecords(getAuthToken()),
   });
 }
 
@@ -69,6 +72,12 @@ export const absenceActions = {
     const rows = (await pbList('hr_absence_records', { filter: parts.join(' && '), fields: ABSENCE_FIELDS })).map(toAbsenceRecord);
     const wanted = opts.email?.toLowerCase();
     return wanted ? rows.filter(r => r.employeeEmail.toLowerCase() === wanted) : rows;
+  },
+  // The same list as getAbsenceRecords, but a failed read THROWS (payroll totals must not be worked out from a list that failed to load).
+  getAbsenceRecordsStrict: async (opts: { sinceDate?: string } = {}): Promise<AbsenceRecord[]> => {
+    const parts = ['deleted = false'];
+    if (opts.sinceDate) parts.push(pbFilter('date >= {:since}', { since: opts.sinceDate }));
+    return (await pbListStrict('hr_absence_records', { filter: parts.join(' && '), fields: ABSENCE_FIELDS })).map(toAbsenceRecord);
   },
   // pbListStrict: this is the history runAbsenceCheck de-duplicates against. A failed read must be an error, not "no history",
   // or every absence in the window would be created a second time (and deducted twice).
@@ -135,7 +144,12 @@ export const absenceActions = {
     // someone's attendance from out-of-date shift data.
     // detectAbsences only looks ABSENCE_LOOKBACK_DAYS back; a small margin on top
     // of that keeps this to a single page instead of the 60-day default.
-    const timesheets = await fetchTimesheetsFresh({ days: 10 });
+    const timesheets = await fetchTimesheetsStrict({ days: 10 }); // strict: a failed read must stop the check, not read as "nobody clocked in"
+    // Last line of defence: a company with several employees always has shifts in 10 days. An empty list means the read did not really
+    // work (or the data is gone), and acting on it would mark every employee absent.
+    if (employees.length >= 3 && timesheets.length === 0) {
+      throw new Error('runAbsenceCheck: no shifts at all in the last 10 days; refusing to create absences from an empty list');
+    }
     // The check only creates records inside its 5-day lookback, and its
     // self-healing cleanups only matter for recent mistakes — so it never needs
     // the whole table: 60 days of active records for the cleanups, 10 days
@@ -289,7 +303,7 @@ export const absenceActions = {
 
   // ── Mouse inactivity logs (hr_inactivity_logs — see
   // migration_data/create_inactivity_logs_collection.py) ──────────────────
-  getInactivityLogs: async (filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string; minDurationSeconds?: number }): Promise<InactivityLog[]> => {
+  getInactivityLogs: async (filters?: { employeeEmail?: string; sinceISO?: string; untilISO?: string; minDurationSeconds?: number; strict?: boolean }): Promise<InactivityLog[]> => {
     // Same case-insensitive-email pattern as getScreenshots — `~` narrows
     // server-side, exact check below guards against substring false-matches.
     const filterParts: string[] = [];
@@ -298,7 +312,7 @@ export const absenceActions = {
     if (filters?.sinceISO) filterParts.push(pbFilter('start_at >= {:since}', { since: toPbDate(filters.sinceISO) }));
     if (filters?.untilISO) filterParts.push(pbFilter('start_at <= {:until}', { until: toPbDate(filters.untilISO) }));
     if (filters?.minDurationSeconds) filterParts.push(pbFilter('duration_seconds >= {:min}', { min: filters.minDurationSeconds }));
-    const records = await pbList('hr_inactivity_logs', {
+    const records = await (filters?.strict ? pbListStrict : pbList)('hr_inactivity_logs', {
       sort: '-start_at',
       fields: 'id,employee_email,start_at,end_at,duration_seconds,device_label',
       ...(filterParts.length ? { filter: filterParts.join(' && ') } : {}),

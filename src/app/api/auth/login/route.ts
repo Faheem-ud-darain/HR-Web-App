@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminFindProfileByEmail, adminFindByField, adminUpdateProfile } from '@/lib/pbAdmin';
 import { signSessionToken, verifyPassword, isBcryptHash, hashPassword } from '@/lib/serverAuth';
-import { checkRateLimit, clearRateLimit, rateLimitByIp, tooManyRequests } from '@/lib/rateLimit';
+import { checkRateLimit, clearRateLimit, refundRateLimit, rateLimitByIp, tooManyRequests } from '@/lib/rateLimit';
 import type { PbRow } from '@/lib/pbTypes';
 
 export const runtime = 'edge';
@@ -166,6 +166,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ role, email: profile.email, token });
   } catch (err) {
     console.error('[login] error:', err);
+    // The failure was ours, not a wrong password: give the attempt back so it cannot add up to a lockout.
+    await refundRateLimit(rateLimitKey);
     return NextResponse.json({ error: 'An error occurred while logging in. Please try again.' }, { status: 500 });
   }
 }

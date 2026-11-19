@@ -71,7 +71,8 @@ export default function AdminDashboard() {
   // summed into a single number, so this stays split by currency.
   // Uses the very same hook as the Payroll page (usePayrollView: the same inputs, shifts and absences included), so the two
   // can never disagree. It used to call the engine without shifts or absences and overstate pay.
-  const { records: compiledPayroll } = usePayrollView();
+  const { records: compiledPayroll, loading: payrollLoading, failed: payrollFailed } = usePayrollView();
+  const payrollKnown = !payrollLoading && !payrollFailed; // a total from partial data would be wrong, so show a dash instead
   const totalPayrollUSD = compiledPayroll
     .filter(emp => emp.region === 'USA')
     .reduce((acc, emp) => acc + netPay(emp), 0);
@@ -97,7 +98,7 @@ export default function AdminDashboard() {
         <StatCardSkeletonGrid count={4} className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" />
       ) : (
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <StatCard label="Monthly Payroll" value={formatMoney(totalPayrollUSD, 'USA')} size="md" sub={formatMoney(totalPayrollPKR, 'Pakistan')} chip={{ icon: DollarSign, tone: 'emerald' }} />
+        <StatCard label="Monthly Payroll" value={payrollKnown ? formatMoney(totalPayrollUSD, 'USA') : '—'} size="md" sub={payrollKnown ? formatMoney(totalPayrollPKR, 'Pakistan') : (payrollFailed ? 'Could not load' : 'Loading…')} chip={{ icon: DollarSign, tone: 'emerald' }} />
         <StatCard label="Total Employees" value={employees.length} size="xl" chip={{ icon: Users, tone: 'indigo' }} onClick={() => router.push('/hr/teams')} />
         <StatCard label="Awaiting CEO Approval" value={hrApprovedLeaves.length} size="xl" chip={{ icon: Clock, tone: 'amber' }} onClick={() => router.push('/admin/leaves')} />
         <AvgHoursWorkedCard employees={employees} timesheets={timesheets} viewerRole="admin" />

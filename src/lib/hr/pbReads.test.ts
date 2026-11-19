@@ -21,3 +21,28 @@ describe('pbList vs pbListStrict', () => {
     await expect(pbListStrict('hr_x')).rejects.toThrow('network');
   });
 });
+
+describe('the absence sweep reads', () => {
+  it('fetchTimesheetsStrict and fetchLeavesStrict let a failed read surface instead of returning an empty list', async () => {
+    const { fetchTimesheetsStrict } = await import('./timesheets');
+    const { fetchLeavesStrict } = await import('./leaves');
+    getFullList.mockRejectedValue(new Error('network'));
+    await expect(fetchTimesheetsStrict({ days: 10 })).rejects.toThrow('network');
+    await expect(fetchLeavesStrict()).rejects.toThrow('network');
+  });
+});
+
+describe('pbFindByFieldStrict', () => {
+  it('returns null only for "no such row" and throws on every other failure', async () => {
+    const { pbFindByFieldStrict } = await import('./shared');
+    const getFirstListItem = vi.fn();
+    const pbm = await import('../pocketbase');
+    (pbm.pb as unknown as { collection: () => unknown }).collection = () => ({ getFirstListItem });
+    getFirstListItem.mockRejectedValueOnce({ status: 404 });
+    expect(await pbFindByFieldStrict('hr_x', 'email', 'a@b.us')).toBeNull();
+    getFirstListItem.mockRejectedValueOnce(new Error('network'));
+    await expect(pbFindByFieldStrict('hr_x', 'email', 'a@b.us')).rejects.toThrow('network');
+    getFirstListItem.mockResolvedValueOnce({ id: 'r1' });
+    expect(await pbFindByFieldStrict('hr_x', 'email', 'a@b.us')).toEqual({ id: 'r1' });
+  });
+});

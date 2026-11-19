@@ -30,4 +30,10 @@ describe('shiftStartBlock', () => {
   it('blocks a current tracker that still uses an old setup code', () => {
     expect(shiftStartBlock({ ...base, heartbeat: hb({ captureEnabled: false, lastCaptureError: 'Setup token not recognized' }) })).toBe('tracker_reconnect');
   });
+  it('says connection, not tracker_missing, when the heartbeat could not be READ (a failed check is not a missing tracker)', () => {
+    expect(shiftStartBlock({ ...base, trackerReplied: false, heartbeat: null, heartbeatLive: false, heartbeatReadFailed: true })).toBe('connection');
+  });
+  it('lets a tracker that answered start even if the heartbeat read failed', () => {
+    expect(shiftStartBlock({ ...base, trackerReplied: true, heartbeatReadFailed: true })).toBeNull();
+  });
 });

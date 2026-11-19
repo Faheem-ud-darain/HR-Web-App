@@ -11,6 +11,7 @@ import { FormField } from '../FormField';
 import { Input, Select } from '../Input';
 import { PartTimeField } from '../PartTime';
 import { DateInput } from '@/components/ui/DateInput';
+import { parseBaseSalary } from '@/lib/core/baseSalary';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -36,9 +37,14 @@ export function EditProfileForm({ profile, viewerRole, warehouses, onCancel, onS
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.fullName.trim() || !form.email.trim() || saving) return;
+    const baseSalary = parseBaseSalary(form.baseSalary);
+    if (baseSalary === null) {
+      alert('Base salary must be a number, 0 or more. Nothing was saved. (A blank or mistyped box used to be saved as 0.)');
+      return;
+    }
     setSaving(true);
     try {
-      await updateProfileAdmin(profile.id, { ...form, baseSalary: Number(form.baseSalary) || 0, alias: form.alias.trim() || undefined });
+      await updateProfileAdmin(profile.id, { ...form, baseSalary, alias: form.alias.trim() || undefined });
       onSaved();
     } catch (err) {
       // The server can refuse a save (e.g. a password under 6 characters), so say so instead of doing nothing.

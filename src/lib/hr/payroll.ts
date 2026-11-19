@@ -25,7 +25,8 @@ export function usePayroll(options: { enabled?: boolean } = {}) {
       const res = await fetch(`${API_BASE}/api/admin/payroll`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return [];
+      if (res.status === 401 || res.status === 403) return [];
+      if (!res.ok) throw new Error(`Payroll request failed (${res.status})`); // not "no payroll": a failed read must not look empty
       const data = await res.json();
       return data.records || [];
     },
@@ -66,22 +67,24 @@ export async function deletePayrollForEmployeeAdmin(employeeId: string): Promise
 // and base pay into the browser just to filter down to one person's own
 // numbers. Requires a valid session JWT (src/lib/session.ts's
 // getAuthToken()) from the new server-side login — see src/app/auth/page.tsx.
+// The signed-in person's own pay. Only a definite "no" gives null; a failed or half-answered request THROWS, so the screen shows an error and
+// retries instead of a salary of 0 and "no salary slips" (which reads as "you have no pay record").
+export async function fetchPayrollSelf(token: string | null): Promise<PayrollSelf | null> {
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/payroll/me`, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401 || res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`Pay request failed (${res.status})`);
+  // Route responds as { profile: {...}, pendingIncrement, payrollRecord } — flattened here into one PayrollSelf object for callers.
+  const data = await res.json();
+  if (!data?.profile) return null;
+  return { ...data.profile, pendingIncrement: data.pendingIncrement || 0, payrollRecord: data.payrollRecord || null };
+}
+
 export function usePayrollSelf() {
   return useQuery({
     queryKey: ['payroll_self'],
-    queryFn: async (): Promise<PayrollSelf | null> => {
-      const token = getAuthToken();
-      if (!token) return null;
-      const res = await fetch(`${API_BASE}/api/payroll/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return null;
-      // Route responds as { profile: {...}, pendingIncrement, payrollRecord }
-      // — flattened here into one PayrollSelf object for callers.
-      const data = await res.json();
-      if (!data?.profile) return null;
-      return { ...data.profile, pendingIncrement: data.pendingIncrement || 0, payrollRecord: data.payrollRecord || null };
-    },
+    retry: 2,
+    queryFn: () => fetchPayrollSelf(getAuthToken()),
   });
 }
 

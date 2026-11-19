@@ -12,7 +12,7 @@ const TIMEOUT_MS = 8000;
  * that is plainly running. The wait is measured on the clock, not by counting polls, so a slow connection cannot stretch it
  * (it once left "Connecting to tracker…" showing for 11+ minutes).
  */
-export async function checkTracker(email: string): Promise<{ trackerReplied: boolean; heartbeat: TrackerHeartbeat | null; heartbeatLive: boolean }> {
+export async function checkTracker(email: string): Promise<{ trackerReplied: boolean; heartbeat: TrackerHeartbeat | null; heartbeatLive: boolean; heartbeatReadFailed: boolean }> {
   const requestId = Math.random().toString(36).slice(2) + Date.now().toString(36);
   let trackerReplied = false;
   try {
@@ -32,9 +32,29 @@ export async function checkTracker(email: string): Promise<{ trackerReplied: boo
     hrActions.clearTrackerPing(email).catch(() => {});
     hrActions.clearTrackerPong(email).catch(() => {});
   }
-  const heartbeat = (await hrActions.getTrackerHeartbeat(email).catch(() => null)) ?? null;
-  return { trackerReplied, heartbeat, heartbeatLive: hrActions.isHeartbeatLive(heartbeat) };
+  // A read that FAILED is not "the tracker is not running": it is "could not check", reported separately so the employee is told to check
+  // their connection instead of being sent to install a tracker that is running fine.
+  let heartbeat: TrackerHeartbeat | null = null;
+  let heartbeatReadFailed = false;
+  try { heartbeat = (await hrActions.getTrackerHeartbeatStrict(email)) ?? null; } catch { heartbeatReadFailed = true; }
+  return { trackerReplied, heartbeat, heartbeatLive: hrActions.isHeartbeatLive(heartbeat), heartbeatReadFailed };
 }
+
+/** Runs a write that is safe to repeat (clockIn returns the shift already open; clockOut does nothing when none is open) once more after a failure. */
+export async function withOneRetry<T>(run: () => Promise<T>, delayMs = 1500): Promise<T> {
+  try {
+    return await run();
+  } catch {
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    return await run();
+  }
+}
+
+/** Starts the shift and returns it only once the server has confirmed; throws if it could not be confirmed (after one retry). */
+export function confirmedClockIn(email: string) { return withOneRetry(() => hrActions.clockIn(email)); }
+
+/** Ends the shift and returns only once the server has confirmed; throws if it could not be confirmed (after one retry). */
+export function confirmedClockOut(email: string) { return withOneRetry(() => hrActions.clockOut(email)); }
 
 /**
  * Tells the employee and then HR and Admin that a shift started or ended. `staffMessage` gets the employee's display name.

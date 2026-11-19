@@ -15,7 +15,7 @@ import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import { pbFilter } from '../pbFilter';
 import {
-  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys, pbGetKV,
+  pbList, pbListStrict, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys, pbGetKV,
   looksLikeRealId,
 } from './shared';
 import {
@@ -126,23 +126,28 @@ function toProfile(p: PbRow, extras: Partial<Profile> = {}): Profile {
 // roster. Lets the dashboard shell and the user's own data requests start straight away instead of
 // after the (much larger) roster has downloaded. The key starts with 'hr_profiles', so everything
 // that invalidates the roster (profile edits, the realtime listener) refreshes this too.
+// Asks the server for the signed-in person's own profile. Only a definite "no" gives null (not signed in, not allowed, no such profile,
+// or a server too old to have /api/me). Anything that is not an answer (a dropped connection, a timeout, a server error, a web page where
+// JSON was expected) THROWS, so the query retries and the dashboard knows the profile has not been ruled out: a flaky connection must never
+// look like "your saved login was rejected".
+export async function fetchMyProfile(token: string | null): Promise<Profile | null> {
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+  if (res.status === 401 || res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`Profile request failed (${res.status})`);
+  const body = await res.json(); // a firewall or error page instead of JSON throws here
+  return (body?.profile || null) as Profile | null;
+}
+
 export function useMyProfile() {
   const email = (getSessionEmail() || '').toLowerCase();
   return useQuery({
     queryKey: ['hr_profiles', 'me', email],
     enabled: !!email,
     staleTime: 2 * 60 * 1000,
-    queryFn: async (): Promise<Profile | null> => {
-      const token = getAuthToken();
-      if (!token) return null;
-      try {
-        const res = await fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) return null; // older server without /api/me, or not allowed: the roster path still works
-        return ((await res.json()).profile || null) as Profile | null;
-      } catch {
-        return null;
-      }
-    },
+    retry: 3,
+    refetchInterval: query => (query.state.status === 'error' ? 15000 : false), // after the retries give up, keep trying: the page opens by itself once the connection recovers
+    queryFn: () => fetchMyProfile(getAuthToken()),
   });
 }
 
@@ -168,9 +173,10 @@ export function useProfiles() {
       }
       // Fallback for a server that doesn't have /api/roster yet (e.g. a native
       // app talking to an older deployment): the previous direct read.
+      // Strict reads: if even this fails the query ERRORS (and retries) instead of caching an empty company for two minutes.
       const [records, extraRows] = await Promise.all([
-        pbList('hr_profiles', { sort: 'full_name' }),
-        pbList(PROFILE_EXTRAS_COLLECTION),
+        pbListStrict('hr_profiles', { sort: 'full_name' }),
+        pbListStrict(PROFILE_EXTRAS_COLLECTION),
       ]);
       const extrasById: Record<string, Partial<Profile>> = {};
       extraRows.forEach((row: PbRow) => { extrasById[row.profile_id] = row.data || {}; });
@@ -813,7 +819,9 @@ export const profileActions = {
       try {
         const open = await hrActions.getOpenShift(email);
         if (open) {
-          await hrActions.clockOut(email);
+          // One repeat after a failure (ending an open shift is safe to repeat). If it still cannot be confirmed the shift is left for the
+          // server's safety net, which ends it at the last time the tab was seen: nothing is credited for the time after the person left.
+          try { await hrActions.clockOut(email); } catch { await new Promise(r => setTimeout(r, 1500)); await hrActions.clockOut(email); }
           shiftStopped = true;
           await hrActions.addNotification(email, 'employee', 'Your shift was automatically ended because you logged out.');
           // performLogout only ever gets a bare email/role — unlike the other

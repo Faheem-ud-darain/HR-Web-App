@@ -3,6 +3,7 @@
 // attendance, and only one of them at a time (core/attendanceDevice.ts): desktops just show the status, a second phone is told which device has it.
 // Owns the permission explanation, the location watch, and the clock-in/out calls. A failed clock-in/out is rolled back and
 // retried, so the screen can never claim a shift the server does not have.
+import { singleFlight } from './singleFlight';
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { hrActions, type Profile, type Warehouse } from '@/lib/hrData';
 import { notifyShift } from '@/lib/hr/shiftActions';
@@ -43,6 +44,7 @@ export function useGeofenceShift(args: {
   useEffect(() => { latest.current = { profile, warehouses, refetchTimesheets }; });
   const lastFix = useRef<GeoFix | null>(null);
   const owner = useRef(false);
+  const flight = useRef(singleFlight()); // one check-in/out at a time
   const [blockedBy, setBlockedBy] = useState<string | null>(null);
   // Asks the server whether this phone is the one that marks attendance. If the server cannot be reached, the last answer stands.
   const claim = useCallback(async (force = false): Promise<boolean> => {
@@ -81,28 +83,34 @@ export function useGeofenceShift(args: {
       if (d.ignored || !d.nearest || d.distanceMeters === null) return;
       lastFix.current = fix;
       setLiveDistance({ meters: Math.round(d.distanceMeters), warehouseName: d.nearest.name, isInside: d.isInside });
-      if (d.action === 'none' || !(await claim())) return; // another phone owns attendance: show the distance, change nothing
-
-      const starting = d.action === 'in';
-      shiftActiveRef.current = starting; // set first so two quick fixes cannot both act
-      setShiftActive(starting);
-      try {
-        if (starting) {
-          await hrActions.clockIn(p.email, 'gps');
-          void hrActions.touchShiftTabHeartbeat(p.email); // reporting starts now, so a phone closed within the first minute is still caught by the server's 10-minute check
-        } else await hrActions.clockOut(p.email);
-      } catch (err) {
-        console.error('[geofence] could not save the shift change, will retry:', err);
-        shiftActiveRef.current = !starting;
-        setShiftActive(!starting);
-        return;
-      }
-      await refetch();
-      const name = d.nearest.name;
-      await (starting
-        ? notifyShift(p, `Auto Shift ON: Checked-in at ${name} via GPS geofencing.`, who => `${who} checked-in at ${name} via geofencing.`)
-        : notifyShift(p, `Auto Shift OFF: Left the geofence at ${name}.`, who => `${who} checked-out (left warehouse geofence at ${name}).`)
-      ).catch(() => { /* the shift is already saved; a missed notice must not undo it */ });
+      if (d.action === 'none') return; // nothing to do
+      // One check-in or check-out at a time. Two location updates that arrive together would both have decided "start" before either had saved
+      // anything, and both would clock in: two open shifts, with the time counted twice. The decision is made again once this one has the turn.
+      await flight.current(async () => {
+        if (!(await claim())) return; // another phone owns attendance: show the distance, change nothing
+        const fresh = decideGeoAction(fix, assigned, shiftActiveRef.current);
+        if (fresh.action === 'none') return;
+        const starting = fresh.action === 'in';
+        shiftActiveRef.current = starting;
+        setShiftActive(starting);
+        try {
+          if (starting) {
+            await hrActions.clockIn(p.email, 'gps');
+            void hrActions.touchShiftTabHeartbeat(p.email); // reporting starts now, so a phone closed within the first minute is still caught by the server's 10-minute check
+          } else await hrActions.clockOut(p.email);
+        } catch (err) {
+          console.error('[geofence] could not save the shift change, will retry:', err);
+          shiftActiveRef.current = !starting;
+          setShiftActive(!starting);
+          return;
+        }
+        await refetch();
+        const name = d.nearest!.name;
+        await (starting
+          ? notifyShift(p, `Auto Shift ON: Checked-in at ${name} via GPS geofencing.`, who => `${who} checked-in at ${name} via geofencing.`)
+          : notifyShift(p, `Auto Shift OFF: Left the geofence at ${name}.`, who => `${who} checked-out (left warehouse geofence at ${name}).`)
+        ).catch(() => { /* the shift is already saved; a missed notice must not undo it */ });
+      });
     };
 
     const onFix = (point: GeoPoint) => {

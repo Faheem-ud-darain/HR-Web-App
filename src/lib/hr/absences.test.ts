@@ -39,7 +39,7 @@ vi.mock('../hrData', async () => {
   return {
     isWeekday: actualLeaves.isWeekday,
     isApprovedLeaveOnDate: actualLeaves.isApprovedLeaveOnDate,
-    fetchTimesheetsFresh: vi.fn(async () => mockFreshTimesheets),
+    fetchTimesheetsStrict: vi.fn(async () => mockFreshTimesheets),
     displayName: (profile: { fullName: string } | null | undefined) => profile?.fullName || '',
     hrActions: {
       getAbsenceRecords: vi.fn(async () => mockAbsenceHistory),
@@ -213,6 +213,15 @@ describe('runAbsenceCheck — dedup against existing history', () => {
       { id: 'existing1', employeeEmail: emp.email, employeeName: emp.fullName, date: '2026-09-15', reason: 'no_clock_in', deductionAmount: 2000, createdAt: '2026-09-15T00:00:00Z', acknowledged: false },
     ];
     await absenceActions.runAbsenceCheck([emp], [], [], []);
+    expect(pbCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('runAbsenceCheck — an empty shift list creates nothing', () => {
+  it('refuses to create absences when no shifts at all come back for a company with several employees', async () => {
+    mockFreshTimesheets = [];
+    const staff = [makeProfile({ id: 'a', email: 'a@delcargo.us' }), makeProfile({ id: 'b', email: 'b@delcargo.us' }), makeProfile({ id: 'c', email: 'c@delcargo.us' })];
+    await expect(absenceActions.runAbsenceCheck(staff, [], [], [])).rejects.toThrow(/no shifts at all/);
     expect(pbCreateMock).not.toHaveBeenCalled();
   });
 });

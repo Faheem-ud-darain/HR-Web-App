@@ -81,3 +81,16 @@ describe('findStaleWarehouseLinks', () => {
     expect(r).toEqual({ staleProfiles: [], staleTeams: [] });
   });
 });
+
+describe('findStaleWarehouseLinks with no known warehouses', () => {
+  it('never treats an empty set of live warehouses as "every link is stale"', () => {
+    const profiles = [{ id: 'p1', assignedWarehouses: ['w1', 'w2'], managedWarehouses: ['w1'] }] as unknown as Profile[];
+    const teams = [{ id: 't1', name: 'A', warehouseId: 'w1' }] as unknown as Team[];
+    expect(findStaleWarehouseLinks(profiles, teams, new Set())).toEqual({ staleProfiles: [], staleTeams: [] });
+  });
+  it('still finds a genuinely stale link when the live list is known', () => {
+    const profiles = [{ id: 'p1', assignedWarehouses: ['w1', 'gone'] }] as unknown as Profile[];
+    const r = findStaleWarehouseLinks(profiles, [], new Set(['w1']));
+    expect(r.staleProfiles.map(p => p.id)).toEqual(['p1']);
+  });
+});
