@@ -39,7 +39,7 @@ import {
 export {
   hasStaleTrackerToken, getCaptureHealth, getCaptureGap, TRACKER_HEARTBEAT_STALE_MS,
   SHIFT_TAB_HEARTBEAT_STALE_MS, TRACKER_HEARTBEAT_GRACE_MS,
-  useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, fetchTimesheetsFresh,
+  useTimesheets, useTrackingSettings, useAllTrackerHeartbeats, fetchTimesheetsFresh, fetchTimesheetsStrict,
 } from './hr/timesheets';
 import { absenceActions } from './hr/absences';
 export { useMyAbsenceRecords, countAbsentWeekdays } from './hr/absences';

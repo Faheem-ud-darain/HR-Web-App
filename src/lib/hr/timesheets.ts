@@ -119,19 +119,33 @@ export interface TimesheetQuery {
 // how old: runAbsenceCheck/autoCloseStaleOpenShifts/
 // autoCloseOrphanTrackedShifts depend on seeing every currently open shift,
 // so a busy roster can't silently lose track of a stuck-open one.
+function timesheetWindowFilter(opts: TimesheetQuery): string {
+  const days = opts.days ?? 60;
+  const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+  const cutoff = since.toISOString().replace('T', ' ').replace('Z', '');
+  const windowFilter = pbFilter('clock_out = "" || date >= {:cutoff}', { cutoff });
+  return opts.email
+    ? `(${windowFilter}) && ${pbFilter('employee_id ~ {:email}', { email: opts.email })}`
+    : windowFilter;
+}
+
+// `~` is a case-insensitive "contains" — drop substring false-matches.
+function toTimesheets(items: PbRow[], opts: TimesheetQuery): TimesheetEntry[] {
+  const wanted = opts.email?.toLowerCase();
+  return items.map(toTimesheet).filter(t => !wanted || (t.employeeEmail || '').toLowerCase() === wanted);
+}
+
+// Same read, but a failed request THROWS instead of returning []. Use it wherever "no shifts" would be read as a fact and acted on
+// (the absence sweep: an empty list there means "nobody clocked in", which creates absences and pay deductions).
+export async function fetchTimesheetsStrict(opts: TimesheetQuery = {}): Promise<TimesheetEntry[]> {
+  const items = await pbListStrict('hr_timesheets', { sort: '-created', filter: timesheetWindowFilter(opts), fields: TIMESHEET_FIELDS });
+  return toTimesheets(items, opts);
+}
+
 export async function fetchTimesheetsFresh(opts: TimesheetQuery = {}): Promise<TimesheetEntry[]> {
   try {
-    const days = opts.days ?? 60;
-    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
-    const cutoff = since.toISOString().replace('T', ' ').replace('Z', '');
-    const windowFilter = pbFilter('clock_out = "" || date >= {:cutoff}', { cutoff });
-    const filter = opts.email
-      ? `(${windowFilter}) && ${pbFilter('employee_id ~ {:email}', { email: opts.email })}`
-      : windowFilter;
-    const items = await pbList('hr_timesheets', { sort: '-created', filter, fields: TIMESHEET_FIELDS });
-    const wanted = opts.email?.toLowerCase();
-    // `~` is a case-insensitive "contains" — drop substring false-matches.
-    return items.map(toTimesheet).filter(t => !wanted || (t.employeeEmail || '').toLowerCase() === wanted);
+    const items = await pbList('hr_timesheets', { sort: '-created', filter: timesheetWindowFilter(opts), fields: TIMESHEET_FIELDS });
+    return toTimesheets(items, opts);
   } catch (err) {
     console.error('[hrData] getList error in hr_timesheets:', err);
     return [];
