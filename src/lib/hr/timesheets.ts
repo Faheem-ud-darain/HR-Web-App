@@ -16,7 +16,7 @@ import type {
 import {
   pbList, pbListStrict, pbCreate, pbUpdate, pbUpsertByField, pbFindByField, pbDeleteByField,
   withTimeout,
-  pbGetTrackerSignal, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields, formatDurationBetween,
+  pbGetTrackerSignal, pbGetTrackerSignalStrict, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields, formatDurationBetween,
 } from './shared';
 import { hrActions, displayName } from '../hrData';
 import { pbFilter } from '../pbFilter';
@@ -156,7 +156,8 @@ export function useTimesheets(opts: TimesheetQuery & { enabled?: boolean } = {})
   const { enabled = true, email, days } = opts;
   return useQuery({
     queryKey: ['hr_timesheets', email?.toLowerCase() ?? 'all', days ?? 60],
-    queryFn: () => fetchTimesheetsFresh({ email, days }),
+    queryFn: () => fetchTimesheetsStrict({ email, days }), // a failed read is an error state (retried), never a cached empty list
+    retry: 2,
     enabled,
   });
 }
@@ -275,6 +276,9 @@ export const timesheetActions = {
   },
   getTrackerHeartbeat: (email: string): Promise<TrackerHeartbeat | null> =>
     pbGetTrackerSignal(email, 'heartbeat'),
+  // A failed read throws (see pbGetTrackerSignalStrict): for decisions that must not read "could not check" as "tracker not running".
+  getTrackerHeartbeatStrict: (email: string): Promise<TrackerHeartbeat | null> =>
+    pbGetTrackerSignalStrict(email, 'heartbeat'),
   getAllTrackerHeartbeats: async (): Promise<TrackerHeartbeat[]> =>
     (await pbGetAllTrackerSignals('heartbeat')).map(row => row.value as TrackerHeartbeat),
   // See ShiftStopSignal above — the tracker agent writes this the instant it
