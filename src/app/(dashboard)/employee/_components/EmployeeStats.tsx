@@ -16,7 +16,9 @@ export function EmployeeStats({ profile, leaves, tasksNeedingAttention, payroll 
   return (
     <div className={`grid grid-cols-2 gap-3 md:gap-4 ${record ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
       <StatCard label="Leave Balance" size="md" chip={{ icon: Clock, tone: 'orange' }} onClick={() => router.push('/employee/leaves')}
-        value={<>{profile && accrual ? getRemainingPTO(leaves || [], profile.fullName, accrual) : 0} <span className="text-sm font-medium">days</span></>} />
+        value={leaves === undefined || !profile
+          ? <span className="text-slate-400">—</span> // not loaded (yet, or the request failed): never the full allowance, which reads as "no leave taken"
+          : <>{accrual ? getRemainingPTO(leaves, profile.fullName, accrual) : 0} <span className="text-sm font-medium">days</span></>} />
       <StatCard label="Accrued PTO" size="md" chip={{ icon: CheckCircle2, tone: 'emerald' }}
         value={<>{accrual ? getAccruedPTOForDisplay(accrual) : 0} <span className="text-sm font-medium">days</span></>} />
       <StatCard label="Tasks Needing Attention" size="md" chip={{ icon: AlertTriangle, tone: 'amber' }} valueTone={tasksNeedingAttention > 0 ? 'danger' : 'default'}

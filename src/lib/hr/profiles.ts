@@ -15,7 +15,7 @@ import { API_BASE } from '../apiBase';
 import type { Profile, UserSessionSlot, Screenshot, ProfileSelf } from './types';
 import { pbFilter } from '../pbFilter';
 import {
-  pbList, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys, pbGetKV,
+  pbList, pbListStrict, pbListByEmailField, pbCreate, pbUpdate, pbDelete, pbFindByField, pbUpsertByField, pbDeleteByField, pbDeleteKVByKeys, pbGetKV,
   looksLikeRealId,
 } from './shared';
 import {
@@ -173,9 +173,10 @@ export function useProfiles() {
       }
       // Fallback for a server that doesn't have /api/roster yet (e.g. a native
       // app talking to an older deployment): the previous direct read.
+      // Strict reads: if even this fails the query ERRORS (and retries) instead of caching an empty company for two minutes.
       const [records, extraRows] = await Promise.all([
-        pbList('hr_profiles', { sort: 'full_name' }),
-        pbList(PROFILE_EXTRAS_COLLECTION),
+        pbListStrict('hr_profiles', { sort: 'full_name' }),
+        pbListStrict(PROFILE_EXTRAS_COLLECTION),
       ]);
       const extrasById: Record<string, Partial<Profile>> = {};
       extraRows.forEach((row: PbRow) => { extrasById[row.profile_id] = row.data || {}; });

@@ -102,6 +102,16 @@ export default function EmployeeLeavesPage() {
     setError('');
 
     if (isSubmittingLeave) return;
+    // The request is filed under the person's name and checked against their leave history, so both must have loaded. Without this a request
+    // made before the roster arrived was stored under the name "Employee": it never appeared in the person's own list, and HR saw "Employee".
+    if (!userProfile?.fullName) {
+      setError('Your profile has not finished loading. Please wait a moment and submit again.');
+      return;
+    }
+    if (allLeaves === undefined) {
+      setError('Your leave history has not finished loading. Please wait a moment and submit again.');
+      return;
+    }
     if (!startDate || !endDate || !reason) {
       setError('Please fill in all required fields.');
       return;
@@ -167,7 +177,7 @@ export default function EmployeeLeavesPage() {
 
     const newLeaveType: LeaveApplication['type'] = leaveType === 'normal' ? 'Normal' : 'Urgent';
     const newLeave: Omit<LeaveApplication, 'id'> = {
-      employeeName: userProfile?.fullName || 'Employee',
+      employeeName: userProfile.fullName,
       type: newLeaveType,
       duration: durationStr,
       reason,
@@ -281,7 +291,7 @@ export default function EmployeeLeavesPage() {
 
       {/* Dynamic PTO balances */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Remaining Bank (PTO + Sick)" value={<>{remainingPTO} Days</>} size="xl" valueTone="accent" sub="Capped at 30 days maximum ceiling" />
+        <StatCard label="Remaining Bank (PTO + Sick)" value={allLeaves === undefined ? <span className="text-slate-400">—</span> : <>{remainingPTO} Days</>} size="xl" valueTone="accent" sub="Capped at 30 days maximum ceiling" />
         <StatCard label="Total Accrued" value={<>{accruedPTO} Days</>} size="xl" sub="Accumulated at individual anniversary date" />
         <StatCard label="Approved Days Taken" value={<>{takenPTO} Days</>} size="xl" sub="PTO + Sick Leave, upon official CEO validation" />
       </div>
@@ -462,7 +472,7 @@ export default function EmployeeLeavesPage() {
 
           <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
             <Button type="button" variant="outline" size="md" disabled={isSubmittingLeave} onClick={() => setIsLeaveOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={isSubmittingLeave}  size="lg" loading={isSubmittingLeave}>
+            <Button type="submit" disabled={isSubmittingLeave || !userProfile || allLeaves === undefined} size="lg" loading={isSubmittingLeave}>
               {isSubmittingLeave ? 'Submitting…' : 'Submit Request'}
             </Button>
           </div>

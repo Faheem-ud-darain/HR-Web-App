@@ -28,19 +28,22 @@ import { toAbsenceRecord, toLeave } from '../core/payrollMappers';
 const ABSENCE_FIELDS = 'id,employeeEmail,employeeName,date,reason,inactivityMinutes,workedMinutes,deductionAmount,createdAt,created,acknowledged,deleted,deletedAt';
 
 
+// The signed-in person's own absence records. A failed request THROWS: "no absences, nothing deducted" must never be what a dropped
+// connection looks like.
+export async function fetchMyAbsenceRecords(token: string | null): Promise<MyAbsenceRecord[]> {
+  if (!token) return [];
+  const res = await fetch(`${API_BASE}/api/absences/me`, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401 || res.status === 403) return [];
+  if (!res.ok) throw new Error(`Absence request failed (${res.status})`);
+  const data = await res.json();
+  return (data.items || []) as MyAbsenceRecord[];
+}
+
 export function useMyAbsenceRecords() {
   return useQuery({
     queryKey: ['absences_me'],
-    queryFn: async (): Promise<MyAbsenceRecord[]> => {
-      const token = getAuthToken();
-      if (!token) return [];
-      const res = await fetch(`${API_BASE}/api/absences/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data.items || []) as MyAbsenceRecord[];
-    },
+    retry: 2,
+    queryFn: () => fetchMyAbsenceRecords(getAuthToken()),
   });
 }
 
@@ -69,6 +72,12 @@ export const absenceActions = {
     const rows = (await pbList('hr_absence_records', { filter: parts.join(' && '), fields: ABSENCE_FIELDS })).map(toAbsenceRecord);
     const wanted = opts.email?.toLowerCase();
     return wanted ? rows.filter(r => r.employeeEmail.toLowerCase() === wanted) : rows;
+  },
+  // The same list as getAbsenceRecords, but a failed read THROWS (payroll totals must not be worked out from a list that failed to load).
+  getAbsenceRecordsStrict: async (opts: { sinceDate?: string } = {}): Promise<AbsenceRecord[]> => {
+    const parts = ['deleted = false'];
+    if (opts.sinceDate) parts.push(pbFilter('date >= {:since}', { since: opts.sinceDate }));
+    return (await pbListStrict('hr_absence_records', { filter: parts.join(' && '), fields: ABSENCE_FIELDS })).map(toAbsenceRecord);
   },
   // pbListStrict: this is the history runAbsenceCheck de-duplicates against. A failed read must be an error, not "no history",
   // or every absence in the window would be created a second time (and deducted twice).
