@@ -1,7 +1,7 @@
 import { adminUpsertByField } from '@/lib/pbAdmin';
+import { verifyGoogleLinkState } from '@/lib/serverAuth';
 import { errMsg } from '@/lib/errors';
 import { popupResponse } from '@/lib/googlePopup';
-import type { PbRow } from '@/lib/pbTypes';
 
 const GOOGLE_INTEGRATION_COLLECTION = 'hr_google_integrations';
 
@@ -18,11 +18,11 @@ export async function GET(request: Request) {
     return popupResponse({ type: 'GOOGLE_AUTH_ERROR', error: error || 'Missing code or state' });
   }
 
-  let state: PbRow = {};
-  try {
-    state = JSON.parse(decodeURIComponent(stateRaw));
-  } catch {
-    // fallback
+  // Who this link is for comes ONLY from the signed state the portal issued to the signed-in person. A plain {"email": ...} (what this used to
+  // accept) lets anyone link their own Google account to somebody else's profile.
+  const linkEmail = await verifyGoogleLinkState(stateRaw);
+  if (!linkEmail) {
+    return popupResponse({ type: 'GOOGLE_AUTH_ERROR', error: 'This link request is not valid or has expired. Please start again from your profile page.' });
   }
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     });
     const userData = await userRes.json();
 
-    const targetEmail = state.email || userData.email;
+    const targetEmail = linkEmail;
 
     // 3. Store Google integration overlay payload server side in PocketBase KV
     const kvValue = {
