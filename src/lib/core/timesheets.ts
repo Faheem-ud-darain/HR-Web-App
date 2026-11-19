@@ -207,3 +207,19 @@ export function toTimesheet(t: any): TimesheetEntry {
     approvalStatus: t.status || 'pending',
   };
 }
+
+
+/**
+ * When a shift ended by a safety net (the tab or tracker went quiet) should be recorded as ending: at the last moment the person was known to
+ * be there, never at "now". Closing at "now" credited the whole gap (a laptop asleep for 3 hours was paid for those hours). A last-seen time
+ * from before the shift started means nothing was seen during it (0 minutes); one in the future is capped at now. Returns an ISO time.
+ * Dates may be PocketBase style ("2026-11-12 18:45:00.153Z") or ISO.
+ */
+export function shiftCloseTime(clockIn: string, lastSeen: string | null | undefined, nowMs: number): string {
+  const parse = (v: string | null | undefined) => new Date(String(v || '').replace(' ', 'T')).getTime();
+  const inMs = parse(clockIn);
+  const seenMs = parse(lastSeen);
+  if (!Number.isFinite(inMs)) return new Date(nowMs).toISOString();
+  if (!Number.isFinite(seenMs)) return new Date(Math.min(inMs, nowMs)).toISOString(); // nothing was ever seen: no minutes credited
+  return new Date(Math.min(Math.max(seenMs, inMs), nowMs)).toISOString();
+}

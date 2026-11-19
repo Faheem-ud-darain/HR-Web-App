@@ -819,7 +819,9 @@ export const profileActions = {
       try {
         const open = await hrActions.getOpenShift(email);
         if (open) {
-          await hrActions.clockOut(email);
+          // One repeat after a failure (ending an open shift is safe to repeat). If it still cannot be confirmed the shift is left for the
+          // server's safety net, which ends it at the last time the tab was seen: nothing is credited for the time after the person left.
+          try { await hrActions.clockOut(email); } catch { await new Promise(r => setTimeout(r, 1500)); await hrActions.clockOut(email); }
           shiftStopped = true;
           await hrActions.addNotification(email, 'employee', 'Your shift was automatically ended because you logged out.');
           // performLogout only ever gets a bare email/role — unlike the other
