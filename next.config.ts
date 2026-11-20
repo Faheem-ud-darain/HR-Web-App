@@ -75,7 +75,9 @@ const nextConfig: NextConfig = {
       // for fetch/XHR, but script-src (which gates actual <script> tags)
       // did not.
       `script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://api.onesignal.com https://static.cloudflareinsights.com${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
-      "style-src 'self' 'unsafe-inline'",
+      // OneSignal's notification prompt loads its own stylesheet from onesignal.com; without this entry the browser blocks it (a
+      // "style-src-elem" violation on every page for every employee, as the Problem Reports page showed on 2026-11-20).
+      "style-src 'self' 'unsafe-inline' https://onesignal.com https://*.onesignal.com",
       // data:/blob: cover this app's many inline/base64 avatars, cropper
       // output, and document/screenshot previews (see AvatarCropperModal,
       // DocumentPreviewModal, TrackingView, etc.) — none of those are a

@@ -63,7 +63,8 @@ export async function buildReport(input: ReportInput, withProbe = true): Promise
     email: String(context.email || ''),
     role: String(context.role || ''),
     build_id: BUILD_ID,
-    fingerprint: fingerprintOf(input.kind, message || input.title, route),
+    // A blocked-by-policy message names what was blocked, not where: the same block on every page is one problem.
+    fingerprint: fingerprintOf(input.kind, message || input.title, /^blocked by security policy/i.test(message) ? '' : route),
     status: 'new',
     occurred_at: new Date().toISOString(),
     context,
