@@ -76,7 +76,9 @@ export async function buildReport(input: ReportInput, withProbe = true): Promise
   return report;
 }
 
-async function post(report: StoredReport): Promise<'sent' | 'rejected' | 'failed'> {
+type PostResult = 'sent' | 'rejected' | 'failed';
+
+async function post(report: StoredReport): Promise<PostResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
   try {
@@ -87,9 +89,12 @@ async function post(report: StoredReport): Promise<'sent' | 'rejected' | 'failed
       signal: controller.signal,
     });
     if (res.ok) return 'sent';
-    // A 4xx means the database refused this report for good (a retry would only repeat it); a 5xx is worth trying again.
-    // A "duplicate client_id" answer means an earlier attempt did get through.
-    return res.status >= 400 && res.status < 500 ? 'rejected' : 'failed';
+    if (res.status >= 400 && res.status < 500) {
+      // "client_id is not unique" means an earlier attempt did get through (only its answer was lost): that report is delivered.
+      const body = await res.json().catch(() => null) as { data?: { client_id?: { code?: string } } } | null;
+      return body?.data?.client_id?.code === 'validation_not_unique' ? 'sent' : 'rejected';
+    }
+    return 'failed'; // a 5xx is worth trying again later
   } catch {
     return 'failed';
   } finally {
@@ -100,39 +105,52 @@ async function post(report: StoredReport): Promise<'sent' | 'rejected' | 'failed
 function readQueue(): StoredReport[] {
   try { return JSON.parse(window.localStorage.getItem(QUEUE_KEY) || '[]') as StoredReport[]; } catch { return []; }
 }
-function writeQueue(items: StoredReport[]): void {
-  try { window.localStorage.setItem(QUEUE_KEY, JSON.stringify(items.slice(-MAX_QUEUED))); } catch { /* storage full or blocked: nothing more to do */ }
+/** False when the device refused to store the queue (storage full or blocked). */
+function writeQueue(items: StoredReport[]): boolean {
+  try { window.localStorage.setItem(QUEUE_KEY, JSON.stringify(items.slice(-MAX_QUEUED))); return true; } catch { return false; }
 }
 
-/** Sends the report; if it cannot be delivered it is kept and retried later. Resolves to whether it reached the database. */
-export async function deliver(report: StoredReport): Promise<boolean> {
+/** The kept reports after a flush: everything now in the queue except those the flush finished with. Reports added during the flush stay. */
+export function reconcileQueue(latest: StoredReport[], finishedIds: Set<string>): StoredReport[] {
+  return latest.filter(r => !finishedIds.has(r.client_id));
+}
+
+/**
+ * 'sent'     reached the database.
+ * 'queued'   could not be sent now; kept on this device and retried later.
+ * 'rejected' the database refused it for good (a retry would only repeat that).
+ * 'lost'     could not be sent and the device would not keep it either.
+ */
+export type DeliveryResult = 'sent' | 'queued' | 'rejected' | 'lost';
+
+export async function deliver(report: StoredReport): Promise<DeliveryResult> {
   const result = await post(report);
-  if (result === 'failed') {
-    writeQueue([...readQueue().filter(r => r.client_id !== report.client_id), report]);
-    addCrumb('note', 'a problem report could not be sent and was kept for later');
-    return false;
-  }
-  return result === 'sent';
+  if (result === 'sent') return 'sent';
+  if (result === 'rejected') return 'rejected';
+  if (!writeQueue([...readQueue().filter(r => r.client_id !== report.client_id), report])) return 'lost';
+  addCrumb('note', 'a problem report could not be sent and was kept for later');
+  return 'queued';
 }
 
 let flushing = false;
 /** Tries every report kept on this device. Safe to call often. */
 export async function flushPendingReports(): Promise<void> {
   if (flushing || typeof window === 'undefined') return;
-  const queued = readQueue();
-  if (queued.length === 0) return;
+  const snapshot = readQueue();
+  if (snapshot.length === 0) return;
   flushing = true;
   try {
-    const remaining: StoredReport[] = [];
-    for (const report of queued) {
-      if ((await post(report)) === 'failed') remaining.push(report);
+    const finished = new Set<string>();
+    for (const report of snapshot) {
+      if ((await post(report)) !== 'failed') finished.add(report.client_id);
     }
-    writeQueue(remaining);
+    // Re-read the queue now: a report may have been added while the sends were in flight, and must not be overwritten.
+    writeQueue(reconcileQueue(readQueue(), finished));
   } finally {
     flushing = false;
   }
 }
 
-export async function submitReport(input: ReportInput): Promise<boolean> {
+export async function submitReport(input: ReportInput): Promise<DeliveryResult> {
   return deliver(await buildReport(input));
 }

@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { getAuthToken } from '@/lib/session';
 import { API_BASE } from '@/lib/apiBase';
 import { BUILD_ID } from '@/lib/issueReports/context';
-import { groupReports, type IssueGroup, type IssueReport } from '@/lib/issueReports/group';
+import { groupReports, recentSteps, type IssueGroup, type IssueReport } from '@/lib/issueReports/group';
 
 const KIND_LABEL: Record<IssueReport['kind'], string> = { crash: 'Screen crash', error: 'Error', network: 'Connection', manual: 'Reported by employee' };
 const KIND_TONE: Record<IssueReport['kind'], BadgeVariant> = { crash: 'danger', error: 'warning', network: 'info', manual: 'indigo' };
@@ -36,7 +36,7 @@ function probeText(v: unknown): string {
 function reportAsText(r: IssueReport): string {
   const ctx = asObj(r.context);
   const reach = asObj(ctx.reachability);
-  const steps = (Array.isArray(ctx.recentSteps) ? ctx.recentSteps : []) as { at: string; type: string; text: string }[];
+  const steps = recentSteps(ctx);
   return [
     `${KIND_LABEL[r.kind]}: ${r.title}`, `When: ${when(r.occurred_at || r.created)}`, `Who: ${r.email || 'unknown'} (${r.role || '?'})`, `Page: ${r.route}`,
     r.note ? `Their note: ${r.note}` : '', `Message: ${r.message}`, `Release: ${r.build_id} | App ${String(ctx.appVersion || '')}`,
@@ -51,7 +51,7 @@ function reportAsText(r: IssueReport): string {
 function Detail({ report }: { report: IssueReport }) {
   const ctx = asObj(report.context);
   const reach = asObj(ctx.reachability);
-  const steps = (Array.isArray(ctx.recentSteps) ? ctx.recentSteps : []) as { at: string; type: string; text: string }[];
+  const steps = recentSteps(ctx);
   const failed = asObj(ctx.failedRequests5min);
   const row = (label: string, value: React.ReactNode) => value ? <div className="flex gap-2 text-xs"><dt className="w-28 shrink-0 font-semibold text-slate-500">{label}</dt><dd className="min-w-0 break-words text-slate-800">{value}</dd></div> : null;
   return (
@@ -96,14 +96,17 @@ export function ProblemReportsView() {
 
   const act = async (group: IssueGroup, method: 'PATCH' | 'DELETE', status?: 'seen' | 'resolved') => {
     setActionError('');
-    const res = await fetch(`${API_BASE}/api/admin/issue-reports`, { method, headers: authHeaders(), body: JSON.stringify({ ids: group.reports.map(r => r.id), status }) }).catch(() => null);
-    if (!res?.ok) { setActionError('Could not update these reports. Check your connection and try again.'); return; }
+    const ids = group.reports.map(r => r.id);
+    for (let i = 0; i < ids.length; i += 300) { // the server takes at most 300 at a time
+      const res = await fetch(`${API_BASE}/api/admin/issue-reports`, { method, headers: authHeaders(), body: JSON.stringify({ ids: ids.slice(i, i + 300), status }) }).catch(() => null);
+      if (!res?.ok) { setActionError('Could not update these reports. Check your connection and try again.'); await qc.invalidateQueries({ queryKey: ['issue_reports'] }); return; }
+    }
     await qc.invalidateQueries({ queryKey: ['issue_reports'] });
   };
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Problem Reports" subtitle="Crashes, errors and connection problems sent automatically from employees' devices, plus reports they send themselves. Kept for 30 days." />
+      <PageHeader title="Problem Reports" subtitle="Crashes, errors and connection problems sent automatically from employees' devices, plus reports they send themselves. Showing reports from the last 30 days." />
       <Tabs value={filter} onChange={setFilter} variant="segmented" items={[{ value: 'open', label: 'Open', count: groups.filter(g => g.status !== 'resolved').length }, { value: 'resolved', label: 'Resolved' }]} aria-label="Report status" />
       {actionError && <p role="alert" className="text-sm font-semibold text-rose-700">{actionError}</p>}
       {isLoading && <EmptyState py={10}>Loading reports…</EmptyState>}

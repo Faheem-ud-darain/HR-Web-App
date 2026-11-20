@@ -32,7 +32,7 @@ export function ErrorPanel({ error, onRetry, fullScreen = false }: { error: Erro
           {/* A full page load on purpose: if the router itself is what broke, this still works. */}
           <Button type="button" variant="outline" size="lg" onClick={() => window.location.assign('/')}>Go to the start page</Button>
         </div>
-        <p className="mt-4 text-caption text-slate-500">The details of this problem were sent to HR automatically. <button type="button" onClick={openProblemReport} className="font-semibold text-orange-700 underline">Add a note</button></p>
+        <p className="mt-4 text-caption text-slate-500">The details of this problem are sent to HR automatically when your connection allows. <button type="button" onClick={openProblemReport} className="font-semibold text-orange-700 underline">Add a note</button></p>
       </div>
     </div>
   );

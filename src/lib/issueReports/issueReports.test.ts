@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { scrub, hostAndPath, fingerprintOf, isNoise } from './sanitize';
+import { scrub, hostAndPath, hostOf, fingerprintOf, isNoise } from './sanitize';
 import { addCrumb, getCrumbs, clearCrumbs, recordFailure, failureSummary, recentNoReplyCount, clearFailures } from './breadcrumbs';
-import { groupReports, diagnose, type IssueReport } from './group';
+import { groupReports, diagnose, recentSteps, type IssueReport } from './group';
+import { reconcileQueue, type StoredReport } from './send';
 
 describe('scrub', () => {
   it('removes login tokens and passwords before anything is stored', () => {
@@ -81,5 +82,45 @@ describe('groupReports', () => {
     expect(groups.map(g => g.fingerprint)).toEqual(['a', 'b']);
     expect(groups[0]).toMatchObject({ count: 2, status: 'new', people: ['josh@x', 'alex@x'] });
     expect(groups[0].reports[0].id).toBe('2');
+  });
+});
+
+describe('scrub credentials outside URLs', () => {
+  it('hides credential values in free text and in objects, and keeps ordinary fields', () => {
+    expect(scrub('password=Example-Secret-42 failed')).toBe('password=[hidden] failed');
+    expect(scrub('login failed, token: abc123')).toBe('login failed, token: [hidden]');
+    expect(scrub({ password: 'hunter2', user: 'alex' })).toBe('{"password":[hidden],"user":"alex"}');
+    expect(scrub('Authorization: Bearer abc.def-123')).toBe('Authorization: Bearer [token]');
+  });
+});
+
+describe('hostOf', () => {
+  it('resolves relative addresses against the given page and keeps absolute hosts', () => {
+    expect(hostOf('/api/me', 'https://hub.delcargo.us')).toBe('hub.delcargo.us');
+    expect(hostOf('https://pb.delcargo.us/api/x', 'https://hub.delcargo.us')).toBe('pb.delcargo.us');
+  });
+});
+
+describe('diagnose: an HTTP error is not a cut connection', () => {
+  it('blames our side when the portal answered with 503', () => {
+    const r = report({ context: { reachability: { portal: { ok: false, status: 503, ms: 90 }, database: { ok: true } } } });
+    expect(diagnose(r)).toMatch(/HTTP 503.*our side/);
+  });
+});
+
+describe('recentSteps', () => {
+  it('drops malformed entries so a bad report cannot break the page', () => {
+    const steps = recentSteps({ recentSteps: [null, 5, { at: 'x' }, { at: '2026-11-20T10:00:00Z', type: 'page', text: 'opened /a' }] });
+    expect(steps).toEqual([{ at: '2026-11-20T10:00:00Z', type: 'page', text: 'opened /a' }]);
+    expect(recentSteps({ recentSteps: 'nope' })).toEqual([]);
+    expect(recentSteps(undefined)).toEqual([]);
+  });
+});
+
+describe('reconcileQueue', () => {
+  const q = (id: string) => ({ client_id: id }) as StoredReport;
+  it('keeps a report added while the flush was running and drops only the finished ones', () => {
+    expect(reconcileQueue([q('A'), q('B')], new Set(['A'])).map(r => r.client_id)).toEqual(['B']);
+    expect(reconcileQueue([q('A'), q('B')], new Set()).map(r => r.client_id)).toEqual(['A', 'B']);
   });
 });

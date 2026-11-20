@@ -34,12 +34,24 @@ export interface IssueGroup {
 interface Probe { ok?: boolean; ms?: number; status?: number; error?: string }
 const asProbe = (v: unknown): Probe | null => (v && typeof v === 'object' ? (v as Probe) : null);
 
+export interface Step { at: string; type: string; text: string }
+/** The report's "recent steps", keeping only well-formed entries: reports can be added by anyone, so never trust their shape. */
+export function recentSteps(context: Record<string, unknown> | undefined): Step[] {
+  const raw = context?.recentSteps;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((s): s is Step => !!s && typeof s === 'object' && typeof (s as Step).at === 'string' && typeof (s as Step).text === 'string')
+    .map(s => ({ at: s.at, type: typeof s.type === 'string' ? s.type : 'note', text: s.text }));
+}
+
 /** A plain-words guess at the cause from the details the device sent. Always a guess: it says what the evidence points to. */
 export function diagnose(report: IssueReport, currentBuild?: string): string {
   const ctx = (report.context || {}) as Record<string, unknown>;
   const reach = (ctx.reachability || {}) as { portal?: unknown; database?: unknown };
   const portal = asProbe(reach.portal);
   const database = asProbe(reach.database);
+  // A probe with an HTTP status got an answer from the server: that is a fault on our side, not a connection that was cut.
+  if (portal?.status && !portal.ok) return `The portal answered with an error (HTTP ${portal.status}). This is a problem on our side, not on their network.`;
+  if (database?.status && !database.ok) return `The database answered with an error (HTTP ${database.status}). This is a problem on our side, not on their network.`;
   if (portal && database && !portal.ok && database.ok) return 'Their device can reach the database but not the portal site (hub.delcargo.us). This is a network or provider problem on their side, not a bug in the app.';
   if (portal && database && !portal.ok && !database.ok) return 'Their device could reach neither the portal nor the database: no working internet, or a firewall blocking both.';
   if (portal?.ok && database && !database.ok) return 'The portal loads but the database (pb.delcargo.us) is unreachable from their device.';

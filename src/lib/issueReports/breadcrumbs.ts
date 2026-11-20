@@ -1,6 +1,6 @@
 // A short rolling diary of what the page did just before something went wrong: pages opened, requests that failed,
 // the connection dropping. It lives in memory only and is attached to a report when one is sent.
-import { hostAndPath, scrub } from './sanitize';
+import { hostOf, scrub } from './sanitize';
 
 export interface Crumb { at: string; type: 'page' | 'request' | 'network' | 'error' | 'note'; text: string }
 
@@ -20,7 +20,7 @@ const FAILURE_WINDOW_MS = 5 * 60 * 1000;
 let failures: { at: number; host: string; kind: 'network' | 'http'; status?: number }[] = [];
 
 export function recordFailure(url: string, kind: 'network' | 'http', status?: number, now = Date.now()): void {
-  const host = hostAndPath(url).split('/')[0];
+  const host = hostOf(url) || 'unknown';
   failures = failures.filter(f => now - f.at < FAILURE_WINDOW_MS);
   failures.push({ at: now, host, kind, status });
 }

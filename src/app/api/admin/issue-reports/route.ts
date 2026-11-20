@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/serverAuth';
-import { pbAdminFetch } from '@/lib/pbAdmin';
+import { adminListAll, pbAdminFetch } from '@/lib/pbAdmin';
 import { pbFilter } from '@/lib/pbFilter';
 import type { PbRow } from '@/lib/pbTypes';
 
@@ -29,8 +29,9 @@ export async function GET(request: Request) {
   const filters = [pbFilter('created >= {:since}', { since })];
   if (email) filters.push(pbFilter('email ~ {:email}', { email }));
   try {
-    const list = await pbAdminFetch(`/api/collections/hr_issue_reports/records?perPage=300&sort=-created&filter=${encodeURIComponent(filters.join(' && '))}`);
-    return NextResponse.json({ items: (list?.items || []) as PbRow[] });
+    // Every page (up to 5,000 reports): an older open report must never be hidden behind a newer page of resolved ones.
+    const items = await adminListAll('hr_issue_reports', `sort=-created&filter=${encodeURIComponent(filters.join(' && '))}`);
+    return NextResponse.json({ items: items as PbRow[] });
   } catch (err) {
     console.error('[issue-reports] list error:', err);
     return NextResponse.json({ error: 'Could not load problem reports.' }, { status: 500 });
@@ -64,8 +65,10 @@ export async function DELETE(request: Request) {
   const ids = Array.isArray(body?.ids) ? body.ids.filter(isPbId).slice(0, 300) : [];
   if (ids.length === 0) return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   try {
-    await Promise.allSettled(ids.map(id => pbAdminFetch(`/api/collections/hr_issue_reports/records/${id}`, { method: 'DELETE' })));
-    return NextResponse.json({ ok: true });
+    const results = await Promise.allSettled(ids.map(id => pbAdminFetch(`/api/collections/hr_issue_reports/records/${id}`, { method: 'DELETE' })));
+    // A report that is already gone (404) counts as deleted; anything else is a real failure to report.
+    const failed = results.filter(r => r.status === 'rejected' && !/ 404 /.test(String((r as PromiseRejectedResult).reason?.message))).length;
+    return failed ? NextResponse.json({ error: `${failed} of ${ids.length} reports could not be deleted.` }, { status: 502 }) : NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[issue-reports] delete error:', err);
     return NextResponse.json({ error: 'Could not delete the reports.' }, { status: 500 });

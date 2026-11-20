@@ -37,6 +37,9 @@ export async function probeReachability(): Promise<{ portal: Probe; database: Pr
   return { portal, database };
 }
 
+// Reading the session touches browser storage, which can throw (blocked storage, private mode): a report must still be built then.
+const safely = (read: () => string | null): string => { try { return read() || ''; } catch { return ''; } };
+
 interface NetworkInfo { effectiveType?: string; downlink?: number; rtt?: number; saveData?: boolean }
 
 export function collectContext(): Record<string, unknown> {
@@ -52,8 +55,8 @@ export function collectContext(): Record<string, unknown> {
     referrer: window.document.referrer ? hostAndPath(window.document.referrer) : '',
     appVersion: APP_VERSIONS.web,
     buildId: BUILD_ID,
-    email: getSessionEmail() || '',
-    role: getSessionRole() || '',
+    email: safely(getSessionEmail),
+    role: safely(getSessionRole),
     userAgent: scrub(nav.userAgent, 300),
     platform: scrub(nav.platform, 60),
     language: nav.language,
