@@ -3,14 +3,19 @@
 import { Button } from '@/components/ui/Button';
 import React, { useEffect } from 'react';
 import { WarningIcon as AlertTriangle } from '@/components/ui/icons';
+import { isStaleBuildError } from '@/lib/staleBuildError';
+import { reportCrash } from '@/lib/issueReports/capture';
+import { openProblemReport } from '@/lib/issueReports/open';
 
 // What every error page shows: plain words, a retry, and a way home. Used by app/error.tsx and
 // app/(dashboard)/error.tsx so a crash in one screen never leaves a blank page.
 export function ErrorPanel({ error, onRetry, fullScreen = false }: { error: Error & { digest?: string }; onRetry: () => void; fullScreen?: boolean }) {
   useEffect(() => {
     console.error('[app error]', error);
-  }, [error]);
+    reportCrash(error, fullScreen ? 'app' : 'dashboard'); // HR sees what crashed, on whose device, without the person having to explain
+  }, [error, fullScreen]);
 
+  // After a new release, re-rendering cannot fetch the old script files again: reload the page instead.
   return (
     <div role="alert" className={`${fullScreen ? 'min-h-screen' : 'min-h-[60vh]'} flex items-center justify-center bg-slate-50 p-6`}>
       <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 text-center shadow-sm">
@@ -23,10 +28,11 @@ export function ErrorPanel({ error, onRetry, fullScreen = false }: { error: Erro
         </p>
         {error.digest && <p className="mt-2 text-caption text-slate-400">Reference: {error.digest}</p>}
         <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
-          <Button type="button" size="lg" onClick={onRetry}>Try again</Button>
+          <Button type="button" size="lg" onClick={() => (isStaleBuildError(error) ? window.location.reload() : onRetry())}>Try again</Button>
           {/* A full page load on purpose: if the router itself is what broke, this still works. */}
           <Button type="button" variant="outline" size="lg" onClick={() => window.location.assign('/')}>Go to the start page</Button>
         </div>
+        <p className="mt-4 text-caption text-slate-500">The details of this problem were sent to HR automatically. <button type="button" onClick={openProblemReport} className="font-semibold text-orange-700 underline">Add a note</button></p>
       </div>
     </div>
   );

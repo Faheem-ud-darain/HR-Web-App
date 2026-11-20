@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { getSessionEmail } from '@/lib/session';
 import { restorePersistedCache, startPersistingCache } from '@/lib/persistedCache';
 import { onResumeFromIdle } from '@/lib/idle';
+import { ProblemReporter } from '@/components/ui/ProblemReporter';
 
 // The queries that poll in the background. They run 3x slower while the person is
 // idle, so when they come back they get one immediate refresh instead of waiting
@@ -38,6 +39,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
+      <ProblemReporter />
     </QueryClientProvider>
   );
 }

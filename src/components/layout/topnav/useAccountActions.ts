@@ -8,6 +8,7 @@ import { logoutPush } from '@/lib/push';
 import { setThemePreference, originOf, useResolvedTheme } from '@/lib/theme';
 import { triggerHaptic } from '@/lib/haptics';
 import { signOutSafely } from '@/lib/signOut';
+import { openProblemReport } from '@/lib/issueReports/open';
 
 // What the account menus do: open the profile page, sign out, flip light and dark. Shared by the avatar menu in the
 // top bar (tablet and desktop) and the phone menu, so the two can never drift apart.
@@ -20,6 +21,7 @@ export function useAccountActions({ role, email }: { role: string | null; email:
     dark,
     roleLabel: role === 'hr' ? 'HR' : (role || '').replace('_', ' '),
     goToProfile: () => router.push(`${role === 'admin' ? '/admin' : role === 'hr' ? '/hr' : '/employee'}/profile`),
+    reportProblem: openProblemReport,
     toggleTheme: (origin: HTMLElement) => { triggerHaptic.light(); setThemePreference(dark ? 'light' : 'dark', originOf(origin)); },
     signOut: async () => {
       if (signingOut.current) return; // a second tap while the first is still finishing
