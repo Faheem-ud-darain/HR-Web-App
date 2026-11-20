@@ -129,6 +129,7 @@ describe('timesheets', () => {
     expect(isHeartbeatLive(seen(12), now)).toBe(true);
     expect(isHeartbeatLive(seen(14), now)).toBe(false);
     expect(isHeartbeatLive(null, now)).toBe(false);
+    expect(isHeartbeatLive({ ...seen(1), stopped: true }, now)).toBe(false); // quit or disconnected on purpose: last-seen is kept for the server, but it is not running
     expect(isShiftTabHeartbeatLive({ employeeEmail: 'a', lastSeenAt: new Date(now - 5 * 60000).toISOString() }, now)).toBe(true);
     expect(isShiftTabHeartbeatLive({ employeeEmail: 'a', lastSeenAt: new Date(now - 20 * 60000).toISOString() }, now)).toBe(false);
   });

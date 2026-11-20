@@ -242,6 +242,8 @@ export interface TrackerHeartbeat {
   employeeEmail: string; deviceId: string; deviceLabel?: string; connectedAt: string; lastSeenAt: string;
   /** Written by the desktop agent since v6 — used by the web portal to detect outdated builds. */
   agentVersion?: string;
+  /** Set when the tracker was quit or disconnected on purpose; lastSeenAt is kept so the server can still close an open shift at the last real signal. */
+  stopped?: boolean; stoppedAt?: string;
   // ── Capture-health fields, written by the desktop agent since v14 ──────
   // Added because "Connected" (a live heartbeat) previously meant nothing
   // about whether screenshots were actually being captured — an employee
