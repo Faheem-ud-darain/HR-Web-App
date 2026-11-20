@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CaretDownIcon as ChevronDown, SignOutIcon as LogOut, UserCircleIcon as UserCircle } from '@/components/ui/icons';
+import { CaretDownIcon as ChevronDown, SignOutIcon as LogOut, UserCircleIcon as UserCircle, FlagIcon as Flag } from '@/components/ui/icons';
 import { compactName } from '@/lib/core/names';
 import { Avatar } from '@/components/ui/Avatar';
 import { DismissibleArea } from '@/components/ui/DismissibleArea';
@@ -12,7 +12,7 @@ interface ProfileMenuProps { name: string; picture: string | null; email: string
 // The avatar button with its small menu: View Profile and Sign Out. Tablet and desktop only: on a phone the same
 // actions are in the menu opened from the menu button.
 export function ProfileMenu({ name, picture, email, role, open, onOpenChange }: ProfileMenuProps) {
-  const { roleLabel, goToProfile, signOut } = useAccountActions({ role, email });
+  const { roleLabel, goToProfile, reportProblem, signOut } = useAccountActions({ role, email });
 
   return (
     <DismissibleArea open={open} onClose={() => onOpenChange(false)} className="relative max-md:hidden">
@@ -35,6 +35,9 @@ export function ProfileMenu({ name, picture, email, role, open, onOpenChange }: 
           <div className="py-1.5">
             <button onClick={() => { onOpenChange(false); goToProfile(); }} className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors min-h-[44px]">
               <UserCircle className="h-4 w-4 text-slate-500" /> View Profile
+            </button>
+            <button onClick={() => { onOpenChange(false); reportProblem(); }} className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors min-h-[44px]">
+              <Flag className="h-4 w-4 text-slate-500" /> Report a problem
             </button>
             <button onClick={signOut} className="w-full flex items-center gap-2.5 px-4 py-3 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors border-t border-slate-100 min-h-[44px]">
               <LogOut className="h-4 w-4 text-rose-500" /> Sign Out

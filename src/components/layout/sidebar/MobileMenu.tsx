@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from 'framer-motion';
-import { XIcon as X, UserCircleIcon as UserCircle, SunIcon as Sun, MoonIcon as Moon, SignOutIcon as SignOut } from '@/components/ui/icons';
+import { XIcon as X, UserCircleIcon as UserCircle, SunIcon as Sun, MoonIcon as Moon, SignOutIcon as SignOut, FlagIcon as Flag } from '@/components/ui/icons';
 import { Avatar } from '@/components/ui/Avatar';
 import { compactName } from '@/lib/core/names';
 import { useAccountActions } from '../topnav/useAccountActions';
@@ -28,7 +28,7 @@ interface MobileMenuProps {
 // The phone's menu: opened from the button in the top bar, it slides in from the right (the side the button is on) over the page with the same
 // grouped pages as the desktop sidebar. Closes on a tap outside, on Escape, and on choosing a page.
 export function MobileMenu({ role, pathname, open, onClose, groups, policy, dots, account }: MobileMenuProps) {
-  const { dark, roleLabel, goToProfile, toggleTheme, signOut } = useAccountActions({ role, email: account.email });
+  const { dark, roleLabel, goToProfile, reportProblem, toggleTheme, signOut } = useAccountActions({ role, email: account.email });
   const panelRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   useDialogFocus(panelRef, open);
@@ -105,6 +105,9 @@ export function MobileMenu({ role, pathname, open, onClose, groups, policy, dots
                 {link(policy)}
                 <button type="button" onClick={() => { onClose(); goToProfile(); }} className={row}>
                   <UserCircle className="h-5 w-5 text-slate-500" aria-hidden="true" /> My profile
+                </button>
+                <button type="button" onClick={() => { onClose(); reportProblem(); }} className={row}>
+                  <Flag className="h-5 w-5 text-slate-500" aria-hidden="true" /> Report a problem
                 </button>
                 <button type="button" onClick={e => toggleTheme(e.currentTarget)} className={row}>
                   {dark ? <Sun className="h-5 w-5 text-slate-500" aria-hidden="true" /> : <Moon className="h-5 w-5 text-slate-500" aria-hidden="true" />} {dark ? 'Light mode' : 'Dark mode'}

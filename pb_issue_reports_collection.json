@@ -1,0 +1,228 @@
+[
+  {
+    "id": "hrissuerep0001x",
+    "name": "hr_issue_reports",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "system": false,
+        "id": "client_i",
+        "name": "client_id",
+        "type": "text",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 64,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "kindxxxx",
+        "name": "kind",
+        "type": "text",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 20,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "titlexxx",
+        "name": "title",
+        "type": "text",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 200,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "messagex",
+        "name": "message",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1600,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "stackxxx",
+        "name": "stack",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 5200,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "notexxxx",
+        "name": "note",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 2100,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "routexxx",
+        "name": "route",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 300,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "emailxxx",
+        "name": "email",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 200,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "rolexxxx",
+        "name": "role",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 30,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "build_id",
+        "name": "build_id",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 40,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "fingerpr",
+        "name": "fingerprint",
+        "type": "text",
+        "required": true,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 40,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "statusxx",
+        "name": "status",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 20,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "admin_no",
+        "name": "admin_note",
+        "type": "text",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": 1000,
+          "pattern": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "occurred",
+        "name": "occurred_at",
+        "type": "date",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "min": "",
+          "max": ""
+        }
+      },
+      {
+        "system": false,
+        "id": "contextx",
+        "name": "context",
+        "type": "json",
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {
+          "maxSize": 60000
+        }
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_issue_client_id` ON `hr_issue_reports` (`client_id`)",
+      "CREATE INDEX `idx_issue_fingerprint` ON `hr_issue_reports` (`fingerprint`)",
+      "CREATE INDEX `idx_issue_created` ON `hr_issue_reports` (`created`)"
+    ],
+    "listRule": null,
+    "viewRule": null,
+    "createRule": "",
+    "updateRule": null,
+    "deleteRule": null,
+    "options": {}
+  }
+]

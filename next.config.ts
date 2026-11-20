@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
     // domain too means it keeps working even if the droplet's IP ever
     // changes — no redeploy needed, just a DNS update.
     NEXT_PUBLIC_PB_URL: 'https://pb.delcargo.us',
+    // Which release this browser tab is running (Cloudflare Pages sets the commit), so a problem report shows whether a tab is out of date.
+    NEXT_PUBLIC_BUILD_ID: (process.env.CF_PAGES_COMMIT_SHA || process.env.GITHUB_SHA || 'dev').slice(0, 8),
   },
 
   images: {

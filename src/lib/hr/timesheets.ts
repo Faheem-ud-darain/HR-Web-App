@@ -14,7 +14,7 @@ import type {
   TrackerStopCommand, TrackerCommand, TrackerDiagnostics, TrackingSettings,
 } from './types';
 import {
-  pbList, pbListStrict, pbCreate, pbUpdate, pbUpsertByField, pbFindByFieldStrict, pbDeleteByField,
+  pbList, pbListStrict, pbCreate, pbUpdate, pbUpsertByField, pbFindByFieldStrict, pbFindByField, pbDeleteByField,
   withTimeout,
   pbGetTrackerSignal, pbGetTrackerSignalStrict, pbGetAllTrackerSignals, pbSetTrackerSignal, pbClearTrackerSignal, pbClearTrackerSignalFields, formatDurationBetween,
 } from './shared';
@@ -33,6 +33,7 @@ import {
 } from '../core/timesheets';
 import { every } from '../idle';
 import type { PbRow } from '@/lib/pbTypes';
+import { waitUpTo } from '../waitUpTo';
 
 // Pure tracker-health / heartbeat / timesheet-mapping logic lives in
 // ../core/timesheets (shared with the server); re-exported so existing
@@ -394,7 +395,17 @@ export const timesheetActions = {
       await pbUpsertByField('hr_shift_tab_heartbeats', 'email', email.toLowerCase(), { last_seen_at: new Date().toISOString() });
     } catch { /* best-effort — a missed heartbeat just means one earlier stale-check window */ }
   },
-  clearShiftTabHeartbeat: async (email: string): Promise<void> => {
+  // `endedAtIso`: the moment the shift ended. A heartbeat written AFTER that belongs to the next shift (the row is one per person, shared by every
+  // shift), so it is left alone; without this a slow clean-up of the old shift could delete the new shift's heartbeat.
+  clearShiftTabHeartbeat: async (email: string, endedAtIso?: string): Promise<void> => {
+    if (endedAtIso) {
+      const row = await pbFindByField('hr_shift_tab_heartbeats', 'email', email.toLowerCase());
+      if (!row) return;
+      const seen = Date.parse(String(row.last_seen_at || '').replace(' ', 'T'));
+      if (Number.isFinite(seen) && seen > Date.parse(endedAtIso)) return;
+      try { await pb.collection('hr_shift_tab_heartbeats').delete(row.id, { requestKey: null }); } catch { /* already gone */ }
+      return;
+    }
     await pbDeleteByField('hr_shift_tab_heartbeats', 'email', email.toLowerCase());
   },
   isShiftTabHeartbeatLive: (hb: ShiftTabHeartbeat | null): boolean => isShiftTabHeartbeatLive(hb),
@@ -682,8 +693,12 @@ export const timesheetActions = {
     // Clean up tab heartbeat (existing) and write Signal 5 stop command so the
     // tracker agent stops capturing immediately via realtime SSE — both are
     // best-effort: a failure here must never block the clock-out itself.
-    try { await pbDeleteByField('hr_shift_tab_heartbeats', 'email', employeeEmail.toLowerCase()); } catch { /* best-effort */ }
-    try { await hrActions.writeTrackerStopCmd(employeeEmail); } catch { /* best-effort */ }
+    // The shift is already saved as ended. These two follow-ups run together and the caller waits at most 3 s for them: on a slow connection they
+    // used to keep the screen on "On Shift" (End Shift appearing stuck) long after the shift was really closed. They carry on in the background.
+    await waitUpTo([
+      hrActions.clearShiftTabHeartbeat(employeeEmail, nowIso),
+      hrActions.writeTrackerStopCmd(employeeEmail),
+    ], 3000);
     return toTimesheet(updated);
   },
 };
