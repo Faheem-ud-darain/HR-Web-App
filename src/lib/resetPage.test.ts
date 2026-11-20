@@ -20,3 +20,13 @@ describe('/reset.html (self-service browser reset)', () => {
     expect(html).toContain('href="/auth"');
   });
 });
+
+describe('nothing but the reset page itself may touch /reset.html', () => {
+  it('the problem-report reachability probe never fetches it (the browser would wipe the saved login and sign the person out)', async () => {
+    const { PORTAL_PROBE_PATH } = await import('./issueReports/context');
+    expect(PORTAL_PROBE_PATH).not.toMatch(/reset/);
+    const config = readFileSync('next.config.ts', 'utf8');
+    const clearing = [...config.matchAll(/source: '([^']+)', headers: \[\s*\{ key: 'Clear-Site-Data'/g)].map(m => m[1]);
+    expect(clearing).not.toContain(PORTAL_PROBE_PATH);
+  });
+});

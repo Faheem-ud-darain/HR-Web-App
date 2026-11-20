@@ -14,6 +14,10 @@ export const sendFetch = (input: RequestInfo | URL, init?: RequestInit): Promise
   return nativeFetch(input, init);
 };
 
+// A small static file on the portal host. NEVER /reset.html: that page answers with Clear-Site-Data, so fetching it makes the browser wipe the
+// saved login and signs the person out.
+export const PORTAL_PROBE_PATH = '/manifest.webmanifest';
+
 interface Probe { ok: boolean; ms: number; status?: number; error?: string }
 
 async function probe(url: string, timeoutMs = 6000): Promise<Probe> {
@@ -33,7 +37,7 @@ async function probe(url: string, timeoutMs = 6000): Promise<Probe> {
 /** Can this device reach the portal and the database right now, and how fast? Shows at a glance which side is broken. */
 export async function probeReachability(): Promise<{ portal: Probe; database: Probe }> {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const [portal, database] = await Promise.all([probe(`${origin}/reset.html?probe=${Date.now()}`), probe(`${DEFAULT_PB_URL}/api/health`)]);
+  const [portal, database] = await Promise.all([probe(`${origin}${PORTAL_PROBE_PATH}?probe=${Date.now()}`), probe(`${DEFAULT_PB_URL}/api/health`)]);
   return { portal, database };
 }
 
