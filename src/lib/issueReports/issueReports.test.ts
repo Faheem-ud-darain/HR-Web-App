@@ -124,3 +124,11 @@ describe('reconcileQueue', () => {
     expect(reconcileQueue([q('A'), q('B')], new Set()).map(r => r.client_id)).toEqual(['A', 'B']);
   });
 });
+
+describe('policy blocks group across pages', () => {
+  it('the same blocked address on different pages is one problem', () => {
+    const m = 'Blocked by security policy: style-src-elem onesignal.com/sdks/web/v16/OneSignalSDK.page.styles.css';
+    expect(fingerprintOf('error', m, '')).toBe(fingerprintOf('error', m, ''));
+    expect(fingerprintOf('error', m, '/employee')).not.toBe(fingerprintOf('error', m, '/employee/leaves')); // why send.ts passes '' for these
+  });
+});
