@@ -17,7 +17,7 @@ export default function SupportPage() {
   return (
     <DocPage badge="Support" title="Support" meta={<>
           <p>Delcargo Internal — DelCargo HR Operations Platform</p>
-          <p>Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <p suppressHydrationWarning>Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </>}>
 
         <DocNotice>

@@ -121,6 +121,13 @@ export async function pbDelete(collection: string, id: string): Promise<void> {
 // repeat upsert for the same entity skip the lookup round trip.
 const upsertIdCache = new Map<string, string>();
 
+// A lookup that failed because the server could not be reached (no reply, 429, 5xx) says nothing about whether the row exists. Treating that as
+// "no row" and creating one is wrong: the row is usually there, so the create is rejected as a duplicate (the 400s in the problem reports).
+function isUnreachable(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status !== 'number' || status === 0 || status === 429 || status >= 500;
+}
+
 // Generic "find the one row where `field` = `value`, update it; otherwise
 // create a new row" — the same shape as pbSetKV's lookup-then-create/update
 // pattern, but against a real collection with a unique index on `field`
@@ -148,12 +155,23 @@ export async function pbUpsertByField(collection: string, field: string, value: 
       upsertIdCache.set(cacheKey, existing.id);
       return await pb.collection(collection).update(existing.id, data);
     }
-  } catch {
+  } catch (err) {
+    if (isUnreachable(err)) throw err; // could not look: do not guess that the row is missing
     // fall through to create
   }
-  const created = await pb.collection(collection).create({ [field]: value, ...data });
-  upsertIdCache.set(cacheKey, created.id);
-  return created;
+  try {
+    const created = await pb.collection(collection).create({ [field]: value, ...data });
+    upsertIdCache.set(cacheKey, created.id);
+    return created;
+  } catch (err) {
+    // A create the server already took (its reply was lost, or another tab got there first) is rejected as a duplicate: update that row instead.
+    if (isUnreachable(err)) throw err;
+    const matches = await pb.collection(collection).getFullList({ filter: pbFilter(`${field} ~ {:value}`, { value }), requestKey: null });
+    const existing = (matches as PbRow[]).find(r => (r[field] || '').toLowerCase() === value.toLowerCase());
+    if (!existing) throw err;
+    upsertIdCache.set(cacheKey, existing.id);
+    return await pb.collection(collection).update(existing.id, data);
+  }
 }
 
 // Finds one row by an exact field match (used for ticketId lookups, which
@@ -438,7 +456,8 @@ export async function pbMarkIdsInField(collection: string, field: string, entity
   let existing: PbJson = null;
   try {
     existing = await pb.collection(collection).getFirstListItem(pbFilter('email = {:email}', { email: emailLower }), { requestKey: null });
-  } catch {
+  } catch (err) {
+    if (isUnreachable(err)) throw err; // could not look: creating a row now would collide with the existing one
     existing = null;
   }
   const current: string[] = existing && Array.isArray(existing[field]) ? existing[field] : [];
@@ -447,7 +466,17 @@ export async function pbMarkIdsInField(collection: string, field: string, entity
     if (merged.length === current.length) return; // nothing new to persist
     await pb.collection(collection).update(existing.id, { [field]: merged }, { requestKey: null });
   } else {
-    await pb.collection(collection).create({ email: emailLower, [field]: merged }, { requestKey: null });
+    try {
+      await pb.collection(collection).create({ email: emailLower, [field]: merged }, { requestKey: null });
+    } catch (err) {
+      // The row appeared meanwhile (a lost reply, or another tab): add to it instead.
+      if (isUnreachable(err)) throw err;
+      const row = await pb.collection(collection).getFirstListItem(pbFilter('email = {:email}', { email: emailLower }), { requestKey: null }).catch(() => null);
+      if (!row) throw err;
+      const have: string[] = Array.isArray(row[field]) ? row[field] : [];
+      const all = Array.from(new Set([...have, ...entityIds]));
+      if (all.length !== have.length) await pb.collection(collection).update(row.id, { [field]: all }, { requestKey: null });
+    }
   }
   // Next read of this map must see the write.
   invalidateCache(`idset:${collection}:`);
